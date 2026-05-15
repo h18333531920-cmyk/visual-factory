@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marketing Visual Super Factory</title>
+<style>
+  /* === 全局与视觉品牌变量 === */
+  :root {
+    --bg-color: #0b0d10;
+    --panel-bg: #111318;
+    --card-bg: #1a1d24;
+    --border-color: #1f2329;
+    --primary-accent: #ffe41f; /* 亮柠檬黄 */
+    --secondary-accent: #11cc9a; /* 薄荷绿 */
+    --text-main: #ffffff;
+    --text-sub: #8a919f;
+    --danger: #ff1493; /* 荧光粉 */
+    --warning: #faad14;
+    --sidebar-width: 260px;
+  }
+
+  body, html {
+    margin: 0; padding: 0; width: 100%; height: 100vh;
+    background-color: var(--bg-color); color: var(--text-main);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    overflow: hidden;
+  }
+
+  /* 电影感/赛博朋克光晕背景 */
+  .bg-glow {
+    position: fixed; top: -200px; left: 50%; transform: translateX(-50%); width: 1400px; height: 900px;
+    background: radial-gradient(circle, rgba(255, 228, 31, 0.08) 0%, rgba(17, 204, 154, 0.03) 40%, rgba(0, 0, 0, 0) 70%);
+    border-radius: 50%; z-index: 0; pointer-events: none;
+    animation: ambientBreathe 10s ease-in-out infinite alternate;
+  }
+  @keyframes ambientBreathe { 0% { transform: translate(-50%, 0) scale(1); opacity: 0.7; } 100% { transform: translate(-50%, 40px) scale(1.05); opacity: 1; } }
+
+  /* === 登录弹窗 === */
+  #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(11,13,16,0.9); backdrop-filter: blur(10px); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+  .login-card { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 24px; padding: 40px; width: 360px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.8); }
+  .login-card h2 { margin: 0 0 10px 0; font-size: 24px; color: var(--primary-accent); }
+  .login-card p { color: var(--text-sub); font-size: 14px; margin-bottom: 30px; }
+  .login-btn { width: 100%; padding: 14px; margin-bottom: 12px; border-radius: 12px; border: 1px solid #333; background: #1a1d24; color: #fff; cursor: pointer; font-size: 15px; font-weight: 600; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .login-btn:hover { border-color: var(--primary-accent); background: rgba(255, 228, 31, 0.05); color: var(--primary-accent);}
+  .login-btn.admin:hover { border-color: var(--danger); background: rgba(255, 20, 147, 0.05); color: var(--danger); }
+  .login-btn.viewer:hover { border-color: var(--secondary-accent); background: rgba(17, 204, 154, 0.05); color: var(--secondary-accent); }
+
+  /* === 整体布局 === */
+  .app-container { display: flex; height: 100vh; width: 100vw; display: none; position: relative; z-index: 1;}
+  
+  /* --- 左侧边栏 --- */
+  .sidebar { width: var(--sidebar-width); background: var(--panel-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 24px 0; box-sizing: border-box; z-index: 10;}
+  .logo-area { padding: 0 24px 30px 24px; border-bottom: 1px solid #1f2329; margin-bottom: 20px; }
+  .editable-header-title { background: transparent; border: 1px dashed transparent; border-bottom: 1px dashed transparent; color: var(--primary-accent); font-size: 24px; font-weight: 900; letter-spacing: -0.5px; text-shadow: 0 0 20px rgba(255,228,31,0.2); outline: none; width: 100%; padding: 4px; margin: 0; margin-left: -4px; transition: all 0.2s; font-family: inherit; }
+  .editable-header-title:hover, .editable-header-title:focus { border-bottom-color: var(--primary-accent); background: rgba(0,0,0,0.2); }
+  
+  .nav-menu { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 0 16px; }
+  .nav-item { padding: 14px 18px; border-radius: 12px; color: var(--text-sub); font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 12px; position: relative;}
+  .nav-item:hover { color: #fff; background: rgba(255,255,255,0.03); }
+  .nav-item.active { color: var(--primary-accent); background: rgba(255, 228, 31, 0.08); }
+  /* 数量角标 */
+  .nav-badge { margin-left: auto; background: #1f2329; color: var(--text-sub); font-size: 12px; padding: 2px 8px; border-radius: 10px; font-weight: bold; transition: all 0.2s;}
+  .nav-item.active .nav-badge { background: var(--primary-accent); color: #000; }
+  
+  .sidebar-footer { padding: 20px 24px 0 24px; border-top: 1px solid #1f2329; display: flex; flex-direction: column; gap: 12px; }
+  .user-badge { background: #1a1d24; border: 1px solid #333; padding: 10px 14px; border-radius: 12px; font-size: 13px; display: flex; justify-content: space-between; align-items: center;}
+  .logout-btn { color: var(--danger); cursor: pointer; font-size: 12px; font-weight: bold; background: none; border: none; padding: 0; }
+  .lang-switch { display: flex; gap: 12px; font-size: 13px; font-weight: 600; color: var(--text-sub); align-items: center; justify-content: center; }
+  .lang-btn { cursor: pointer; transition: color 0.2s; }
+  .lang-btn:hover { color: #fff; }
+  .lang-btn.active { color: var(--primary-accent); }
+
+  /* --- 右侧工作区 --- */
+  .workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+  .view-section { display: none; flex-direction: column; height: 100%; padding: 30px 40px; box-sizing: border-box; overflow: hidden; }
+  .view-section.active { display: flex; }
+
+  /* 顶部操作区 */
+  .panel-header-wrap { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .panel-header-wrap h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; display: flex; align-items: center; gap: 12px;}
+  .header-actions { display: flex; align-items: center; gap: 16px; }
+  
+  .controls-row { display: flex; gap: 12px; align-items: center; }
+  .search-wrap { display: flex; align-items: center; background: rgba(0,0,0,0.3); border: 1px solid #2d3139; border-radius: 12px; padding: 4px 12px; height: 36px; box-sizing: border-box; transition: all 0.3s;}
+  .search-wrap:focus-within { border-color: var(--primary-accent); box-shadow: 0 0 10px rgba(255,228,31,0.1); }
+  .search-wrap input { background: transparent; border: none; color: #fff; outline: none; font-size: 13px; margin-left: 6px; width: 140px; transition: width 0.3s; }
+  .search-wrap input:focus { width: 200px; }
+  
+  .sort-controls { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-sub); background: rgba(0,0,0,0.3); padding: 0 10px; border-radius: 12px; border: 1px solid #2d3139; height: 36px; box-sizing: border-box;}
+  .sort-btn { cursor: pointer; padding: 4px 10px; border-radius: 8px; transition: 0.2s; font-weight: 600;}
+  .sort-btn.active { background: rgba(255, 228, 31, 0.1); color: var(--primary-accent); }
+
+  button { cursor: pointer; font-weight: 600; outline: none; transition: all 0.2s; border: none; }
+  .btn-ghost { background: transparent; border: 1px solid #333; color: var(--text-sub); padding: 8px 16px; font-size: 13px; border-radius: 18px;}
+  .btn-ghost:hover { border-color: var(--danger); color: var(--danger); }
+  .btn-primary { background-color: var(--primary-accent); color: #000; padding: 8px 24px; font-size: 14px; border-radius: 18px; box-shadow: 0 0 15px rgba(255, 228, 31, 0.3); display: flex; align-items: center; gap: 6px;}
+  .btn-primary:hover { background-color: #fff; box-shadow: 0 0 20px rgba(255, 255, 255, 0.4); }
+  .btn-primary:disabled { background-color: #333; color: #666; box-shadow: none; cursor: not-allowed; }
+
+  /* 标签筛选栏 */
+  .tabs-container { margin-bottom: 24px; display: flex; flex-direction: column; gap: 14px; background: var(--panel-bg); padding: 16px 20px; border-radius: 16px; border: 1px solid var(--border-color); flex-shrink: 0;}
+  .tags-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .filter-tag, .sub-filter-tag { padding: 6px 18px; border-radius: 18px; font-size: 13px; cursor: pointer; transition: all 0.2s; user-select: none; }
+  .filter-tag { background-color: var(--card-bg); color: var(--text-sub); border: 1px solid transparent; }
+  .filter-tag.active { background-color: rgba(255, 228, 31, 0.1); color: var(--primary-accent); border-color: rgba(255, 228, 31, 0.3); }
+  .sub-filter-tag { background: transparent; color: #5a606d; border: 1px solid #2a2d35; font-size: 12px; padding: 4px 16px; }
+  .sub-filter-tag.active { background: #2a2d35; color: var(--secondary-accent); border-color: var(--secondary-accent); }
+  .tab-divider { width: 100%; height: 1px; background-color: #1f2329; margin: 2px 0; }
+
+  /* 画廊区域 */
+  .gallery-scroll-area { flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 8px; width: 100%; border: 2px dashed transparent; border-radius: 16px; }
+  .gallery-scroll-area.drag-over { border-color: var(--secondary-accent); background: rgba(17, 204, 154, 0.02); }
+  .gallery-scroll-area::-webkit-scrollbar { width: 6px; }
+  .gallery-scroll-area::-webkit-scrollbar-thumb { background: #2d3139; border-radius: 10px; }
+
+  .gallery-masonry { column-count: 5; column-gap: 20px; width: 100%; }
+  @media (max-width: 1700px) { .gallery-masonry { column-count: 4; } }
+  @media (max-width: 1300px) { .gallery-masonry { column-count: 3; } }
+  @media (max-width: 900px) { .gallery-masonry { column-count: 2; } }
+
+  .image-card { break-inside: avoid; margin-bottom: 20px; background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; display: flex; flex-direction: column; position: relative; animation: slideFadeIn 0.4s ease forwards; transition: transform 0.2s, border-color 0.2s;}
+  .image-card:hover { border-color: #333; transform: translateY(-4px); box-shadow: 0 10px 30px rgba(0,0,0,0.5);}
+  @keyframes slideFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  
+  .card-img-wrap { width: 100%; position: relative; background: #000; border-radius: 16px 16px 0 0; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 160px; cursor: zoom-in;}
+  .card-img-wrap img { width: 100%; height: auto; display: block; transition: opacity 0.2s;}
+  .card-img-wrap:hover img { opacity: 0.8; }
+  .file-icon-placeholder { color: #4a505e; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 0;}
+  .card-img-wrap:hover .file-icon-placeholder { opacity: 0.8; }
+  .file-icon-placeholder svg { width: 40px; height: 40px; }
+
+  /* 极简卡片内容区 */
+  .card-content { padding: 14px; display: flex; flex-direction: column; gap: 6px; background: var(--card-bg); border-radius: 0 0 16px 16px; }
+  .brand-input { background: transparent; color: #fff; border: none; border-bottom: 1px dashed transparent; padding: 4px 0; font-size: 15px; font-weight: 600; outline: none; width: 100%; transition: border-color 0.2s; text-align: center;}
+  .brand-input:focus { border-bottom-color: var(--primary-accent); }
+
+  /* === 标签动态管理后台 === */
+  .tag-admin-container { display: flex; gap: 40px; background: var(--card-bg); padding: 30px; border-radius: 20px; border: 1px solid var(--border-color); overflow-y: auto;}
+  .tag-col { flex: 1; display: flex; flex-direction: column; gap: 30px; }
+  .tag-group { display: flex; flex-direction: column; gap: 12px; }
+  .tag-group h3 { margin: 0; font-size: 15px; color: var(--text-main); font-weight: 600; border-bottom: 1px solid #2d3139; padding-bottom: 8px;}
+  .tag-list { display: flex; flex-wrap: wrap; gap: 10px; }
+  .tag-edit-item { display: flex; align-items: center; gap: 6px; background: var(--panel-bg); border: 1px solid #2d3139; padding: 6px 10px 6px 14px; border-radius: 20px; font-size: 13px; transition: border-color 0.2s;}
+  .tag-edit-item:hover { border-color: var(--primary-accent); }
+  .tag-edit-item.locked { color: #5c6370; border-color: transparent; background: #1f2329; padding-right: 14px; pointer-events: none;}
+  .btn-del-tag { background: none; border: none; color: #5c6370; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; padding: 0; transition: color 0.2s;}
+  .btn-del-tag:hover { color: var(--danger); }
+  .add-tag-box { display: flex; align-items: center; gap: 8px; margin-top: 4px; max-width: 300px;}
+  .add-tag-input { background: #0b0d10; border: 1px solid #2d3139; color: #fff; padding: 8px 12px; border-radius: 8px; outline: none; font-size: 13px; flex: 1; transition: border-color 0.2s;}
+  .add-tag-input:focus { border-color: var(--primary-accent); }
+  .btn-add-tag { background: var(--panel-bg); border: 1px solid #333; color: #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-weight: bold; font-size: 13px;}
+  .btn-add-tag:hover { background: var(--secondary-accent); color: #000; border-color: var(--secondary-accent);}
+
+  /* 状态与全局工具 */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; grid-column: 1 / -1; height: 500px; border: 2px dashed #2d3139; border-radius: 20px; color: #4a505e; cursor: pointer; width: 100%; transition: border-color 0.2s, color 0.2s; }
+  .empty-state:hover { border-color: var(--primary-accent); color: var(--primary-accent); }
+  .loading-state { grid-column: 1 / -1; display: flex; justify-content: center; align-items: center; height: 300px; color: var(--primary-accent); font-size: 16px; font-weight: bold;}
+  .icon-svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .readonly-input { pointer-events: none; border-bottom-color: transparent !important; }
+
+  /* === 详情/上传 交互弹窗通用样式 === */
+  .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); backdrop-filter: blur(10px); z-index: 10000; align-items: center; justify-content: center; }
+  .modal-overlay.show { display: flex; }
+  .modal-container { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 24px; width: 85%; max-width: 1100px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 40px 80px rgba(0,0,0,0.8); animation: modalIn 0.3s ease; }
+  @keyframes modalIn { from { opacity: 0; transform: scale(0.95) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  
+  .modal-header { padding: 20px 30px; border-bottom: 1px solid #1f2329; display: flex; justify-content: space-between; align-items: center; background: var(--panel-bg);}
+  .modal-header h3 { margin: 0; font-size: 22px; color: var(--primary-accent); font-weight: 800;}
+  .btn-close { background: none; border: none; color: var(--text-sub); cursor: pointer; font-size: 32px; padding: 0; transition: color 0.2s; line-height: 1; }
+  .btn-close:hover { color: var(--danger); }
+  
+  .modal-body { flex: 1; overflow: auto; padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0b0d10; min-height: 450px;}
+  .modal-body img { max-width: 100%; max-height: 60vh; object-fit: contain; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.6);}
+  .modal-body .file-placeholder { color: #4a505e; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .modal-body .file-placeholder svg { width: 80px; height: 80px; }
+
+  .glass-select { appearance: none; -webkit-appearance: none; background: #1f2329; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; padding: 6px 24px 6px 12px; cursor: pointer; outline: none; transition: border-color 0.2s;}
+  .glass-select:focus { border-color: var(--primary-accent); }
+  .glass-select.primary { font-size: 13px; font-weight: 600; color: var(--primary-accent); }
+  .glass-select.secondary { font-size: 13px; color: var(--secondary-accent); }
+  .glass-select.tertiary { font-size: 12px; color: #fff; }
+  
+  .modal-footer { padding: 20px 30px; border-top: 1px solid #1f2329; display: flex; justify-content: space-between; align-items: center; background: var(--panel-bg); gap: 20px; flex-wrap: wrap;}
+  
+  .modal-logo-section { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #0b0d10; border: 1px dashed #2d3139; border-radius: 16px; padding: 10px 20px; flex: 1; max-width: 450px; transition: border-color 0.2s; cursor: pointer;}
+  .modal-logo-section:hover { border-color: var(--primary-accent); }
+  .logo-preview-area { display: flex; align-items: center; gap: 12px; flex: 1; height: 40px;}
+  .logo-placeholder-text { font-size: 14px; color: #5c6370; font-weight: 600;}
+  .logo-thumbnail { height: 100%; width: auto; max-width: 150px; object-fit: contain; border-radius: 6px; }
+  
+  .btn-download-small { background: #1f2329; border: 1px solid #333; color: var(--text-main); padding: 8px 16px; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap;}
+  .btn-download-small:hover { background: rgba(17, 204, 154, 0.15); color: var(--secondary-accent); border-color: var(--secondary-accent); }
+  .btn-download-small:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+
+  .modal-right-actions { display: flex; align-items: center; gap: 24px; }
+  .btn-download-large { background: var(--primary-accent); color: #000; padding: 14px 32px; border-radius: 24px; font-weight: 800; font-size: 15px; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: all 0.2s; white-space: nowrap; box-shadow: 0 0 20px rgba(255,228,31,0.2);}
+  .btn-download-large:hover { background: #fff; box-shadow: 0 0 30px rgba(255, 255, 255, 0.5); transform: translateY(-2px);}
+
+  /* 上传强制预览区样式 */
+  .upload-source-info { background: #1a1d24; padding: 16px 20px; border-radius: 12px; border: 1px solid #2d3139; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
+  .upload-source-info strong { color: var(--primary-accent); font-size: 18px; word-break: break-all; }
+  .upload-source-info span { color: var(--text-sub); font-size: 13px; }
+  
+  #preview-drop-zone { border: 2px dashed #2d3139; padding: 40px; text-align: center; border-radius: 16px; cursor: pointer; transition: all 0.3s; background: rgba(0,0,0,0.2); width: 100%; box-sizing: border-box; }
+  #preview-drop-zone:hover, #preview-drop-zone.drag-over { border-color: var(--primary-accent); background: rgba(255, 228, 31, 0.05); }
+  
+  .preview-thumbnails-container { display: flex; gap: 12px; margin-top: 20px; overflow-x: auto; width: 100%; padding-bottom: 10px; }
+  .preview-thumb-box { position: relative; width: 100px; height: 100px; border-radius: 8px; overflow: hidden; border: 1px solid #333; flex-shrink: 0; }
+  .preview-thumb-box img { width: 100%; height: 100%; object-fit: cover; }
+  .preview-thumb-remove { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.8); color: var(--danger); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; border: none; padding: 0; }
+</style>
+</head>
+<body>
+
+<div class="bg-glow"></div>
+
+<div id="login-overlay">
+  <div class="login-card">
+    <h2 id="txt-login-title">Visual Factory Auth</h2>
+    <p id="txt-login-sub">请选择测试角色登录系统</p>
+    <button class="login-btn admin" onclick="login('admin')"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>视觉负责人 (Admin)</button>
+    <button class="login-btn" onclick="login('designer')"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>AI设计师-张三 (Designer)</button>
+    <button class="login-btn viewer" onclick="login('viewer')"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>营销运营-李四 (Viewer)</button>
+  </div>
+</div>
+
+<div class="app-container" id="app-main">
+  <aside class="sidebar">
+    <div class="logo-area">
+      <input type="text" id="editable-title" class="editable-header-title" value="Visual Factory" placeholder="主标题...">
+      <p style="margin: 8px 0 0 0; font-size: 12px; color: var(--secondary-accent); text-transform: uppercase; letter-spacing: 1px;">Super Factory</p>
+    </div>
+    
+    <nav class="nav-menu">
+      <div class="nav-item active" onclick="switchView('assets')" id="nav-assets">
+        <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+        <span id="txt-nav-assets">成图图库</span>
+        <span class="nav-badge" id="badge-assets">0</span>
+      </div>
+      <div class="nav-item hide-for-viewer" onclick="switchView('sources')" id="nav-sources">
+        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+        <span id="txt-nav-sources">源文件库</span>
+        <span class="nav-badge" id="badge-sources">0</span>
+      </div>
+      <div class="nav-item hide-for-viewer" onclick="switchView('tags')" id="nav-tags" style="margin-top: 20px;">
+        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+        <span id="txt-nav-tags">标签配置后台</span>
+      </div>
+    </nav>
+    
+    <div class="sidebar-footer">
+      <div class="user-badge">
+        <span id="current-user-name" style="font-weight: bold;">未登录</span>
+        <button class="logout-btn" onclick="logout()" id="txt-logout">退出</button>
+      </div>
+      <div class="lang-switch"><span class="lang-btn active" data-lang="zh">中</span> / <span class="lang-btn" data-lang="en">EN</span></div>
+    </div>
+  </aside>
+
+  <main class="workspace">
+    <section class="view-section active" id="view-gallery">
+      <div class="panel-header-wrap">
+        <h2 id="txt-library-title">成图图库</h2>
+        <div class="header-actions">
+          <div class="controls-row">
+            <div class="search-wrap">
+              <svg class="icon-svg" style="color:var(--text-sub)" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="search-input" placeholder="搜索品牌...">
+            </div>
+            <div class="sort-controls">
+              <span class="sort-btn active" data-sort="time" id="txt-sort-time" onclick="changeSort('time', this)">最新</span>
+              <span class="sort-btn" data-sort="az" id="txt-sort-az" onclick="changeSort('az', this)">A-Z</span>
+              <span class="sort-btn" data-sort="downloads" id="txt-sort-dl" onclick="changeSort('downloads', this)">热门</span>
+            </div>
+          </div>
+          <button class="btn-primary auth-require-write hide-for-viewer" id="btn-trigger-upload" onclick="document.getElementById('hidden-file-input').click()">
+            <svg class="icon-svg" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span id="txt-btn-upload">上传素材</span>
+          </button>
+        </div>
+      </div>
+      
+      <div class="tabs-container" id="filter-tabs-container">
+        </div>
+
+      <div class="gallery-scroll-area" id="gallery-scroll-area">
+        <div class="gallery-masonry" id="gallery-container"><div class="loading-state">Loading...</div></div>
+      </div>
+    </section>
+
+    <section class="view-section" id="view-tags">
+      <div class="panel-header-wrap"><h2 id="txt-tags-title">标签配置后台</h2></div>
+      
+      <div class="tag-admin-container">
+        <div class="tag-col">
+          <h2 style="color: var(--primary-accent); margin:0; font-size: 18px; display:flex; align-items:center; gap:8px;">
+            <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            成图图库标签
+          </h2>
+          <div class="tag-group">
+            <h3 id="txt-tag-g-l1">一级标签 (国家/地区)</h3>
+            <div class="tag-list" id="admin-g-l1-list"></div>
+            <div class="add-tag-box"><input type="text" id="input-add-g-l1" class="add-tag-input" placeholder="输入新标签..."><button class="btn-add-tag" onclick="addNewTag('g_l1')">添加</button></div>
+          </div>
+          <div class="tag-group">
+            <h3 id="txt-tag-g-l2">二级标签 (内容品类)</h3>
+            <div class="tag-list" id="admin-g-l2-list"></div>
+            <div class="add-tag-box"><input type="text" id="input-add-g-l2" class="add-tag-input" placeholder="输入新标签..."><button class="btn-add-tag" onclick="addNewTag('g_l2')">添加</button></div>
+          </div>
+        </div>
+
+        <div style="width: 1px; background: #2d3139;"></div>
+
+        <div class="tag-col">
+          <h2 style="color: #fff; margin:0; font-size: 18px; display:flex; align-items:center; gap:8px;">
+            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+            源文件库标签
+          </h2>
+          <div class="tag-group">
+            <h3 id="txt-tag-s-l1">一级标签 (业务线/场景)</h3>
+            <div class="tag-list" id="admin-s-l1-list"></div>
+            <div class="add-tag-box"><input type="text" id="input-add-s-l1" class="add-tag-input" placeholder="输入新标签..."><button class="btn-add-tag" onclick="addNewTag('s_l1')">添加</button></div>
+          </div>
+          <div class="tag-group">
+            <h3 id="txt-tag-s-l2">二级标签 (素材类型/版式)</h3>
+            <div class="tag-list" id="admin-s-l2-list"></div>
+            <div class="add-tag-box"><input type="text" id="input-add-s-l2" class="add-tag-input" placeholder="输入新标签..."><button class="btn-add-tag" onclick="addNewTag('s_l2')">添加</button></div>
+          </div>
+          <div class="tag-group">
+            <h3 id="txt-tag-s-l3">三级标签 (适用国家/通用)</h3>
+            <div class="tag-list" id="admin-s-l3-list"></div>
+            <div class="add-tag-box"><input type="text" id="input-add-s-l3" class="add-tag-input" placeholder="输入新标签..."><button class="btn-add-tag" onclick="addNewTag('s_l3')">添加</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <input type="file" id="hidden-file-input" multiple accept="image/*, .psd, application/pdf, .ai, .eps, application/postscript" style="display: none !important;">
+    <input type="file" id="hidden-logo-input" accept="image/*" style="display: none !important;">
+    <input type="file" id="hidden-single-cover-input" accept="image/png, image/jpeg, image/webp" style="display: none !important;">
+  </main>
+</div>
+
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal-container">
+    <div class="modal-header"><h3 id="modal-title">详情</h3><button class="btn-close" onclick="closeDetailModal()">&times;</button></div>
+    <div class="modal-body" id="modal-media-container"></div>
+    <div class="modal-footer" id="modal-footer-controls"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="upload-source-modal">
+  <div class="modal-container" style="max-width: 600px; min-height: auto;">
+    <div class="modal-header"><h3 style="color: #fff;">上传源文件 <span style="color: var(--primary-accent); font-size: 14px; margin-left: 10px;">需关联预览图入库</span></h3><button class="btn-close" onclick="cancelUploadSource()">&times;</button></div>
+    <div class="modal-body" style="min-height: auto; padding: 24px 30px;">
+      <div class="upload-source-info">
+        <strong id="pending-file-name">filename.psd</strong>
+        <span id="pending-file-size">0 MB</span>
+      </div>
+      
+      <div id="preview-drop-zone" onclick="document.getElementById('hidden-modal-preview-input').click()">
+        <svg class="icon-svg" style="width: 48px; height: 48px; color: var(--primary-accent); margin-bottom: 12px;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+        <div style="font-size: 16px; font-weight: bold; color: #fff;">点击或拖拽上传 JPG/PNG 预览图</div>
+        <div style="font-size: 13px; color: var(--text-sub); margin-top: 6px;">支持一次性选择多张，将自动为您裂变出多张独立卡片</div>
+      </div>
+      
+      <div class="preview-thumbnails-container" id="preview-thumbnails-container"></div>
+    </div>
+    <div class="modal-footer" style="justify-content: flex-end;">
+      <button class="btn-ghost" onclick="cancelUploadSource()">取消上传</button>
+      <button class="btn-primary" id="btn-confirm-upload" disabled onclick="confirmSourceUpload()">确认入库</button>
+    </div>
+  </div>
+  <input type="file" id="hidden-modal-preview-input" multiple accept="image/png, image/jpeg, image/webp" style="display: none;">
+</div>
+
+<script>
+  // 保持数据库配置绝对不变，确保过往历史数据完全保留！
+  const DB_NAME = 'MarketingVisualFactoryDB_V4'; 
+  const DB_VERSION = 1;
+  const STORE_NAME = 'assets';
+  let db;
+
+  const MOCK_USERS = {
+    'admin': { id: 'u_admin_001', name: '视觉负责人', role: 'admin' },
+    'designer': { id: 'u_design_002', name: 'AI设计师-张三', role: 'designer' },
+    'viewer': { id: 'u_viewer_003', name: '营销运营-李四', role: 'viewer' }
+  };
+  let currentUser = null;
+
+  const i18n = {
+    zh: {
+      nav_assets: "成图图库", nav_sources: "源文件库", nav_tags: "标签配置后台",
+      btn_upload: "上传素材", search_ph: "搜索品牌名称...", 
+      sort_time: "最新", sort_az: "A-Z", sort_dl: "热门", 
+      empty_state: "当前无素材，拖拽图片/文件上传", empty_viewer: "当前图库为空", logo_ph: "+ 点击上传 Logo", brand_ph: "点击输入品牌名称...",
+      menu_del: "删除素材", logout: "退出", btn_replace_cover: "替换预览图", modal_default: "未命名素材",
+      uploader_prefix: "上传者: ", unsupported: "此格式暂不支持在线预览，请下载源文件查看",
+      btn_dl_main: "下载源文件", btn_dl_logo: "下载 Logo", add_btn: "添加",
+      g_l1: "一级标签 (国家/地区)", g_l2: "二级标签 (内容品类)",
+      s_l1: "一级标签 (业务线/场景)", s_l2: "二级标签 (素材类型/版式)", s_l3: "三级标签 (适用国家/通用)"
+    },
+    en: {
+      nav_assets: "Gallery", nav_sources: "Source Files", nav_tags: "Tag Settings",
+      btn_upload: "Upload", search_ph: "Search brand...", 
+      sort_time: "New", sort_az: "A-Z", sort_dl: "Hot", 
+      empty_state: "Drag files to upload", empty_viewer: "Library is empty", logo_ph: "+ Upload Logo", brand_ph: "Brand name...",
+      menu_del: "Delete Asset", logout: "Logout", btn_replace_cover: "Replace Preview", modal_default: "Unnamed Asset",
+      uploader_prefix: "By: ", unsupported: "Preview not supported. Please download source.",
+      btn_dl_main: "Download File", btn_dl_logo: "Download Logo", add_btn: "Add",
+      g_l1: "Primary Tags (Region)", g_l2: "Secondary Tags (Category)",
+      s_l1: "Primary (Business Line)", s_l2: "Secondary (Asset Type)", s_l3: "Tertiary (Region)"
+    }
+  };
+
+  let imageLibrary = []; 
+  let currentView = 'assets'; 
+  let currentSort = 'time', currentSearch = '', currentLang = 'zh';
+  let currentModalImgId = null, targetLogoCardId = null, targetCoverCardId = null;
+
+  // 上传源文件状态管理
+  let pendingSourceFile = null;
+  let pendingPreviewFiles = [];
+
+  // 字节换算工具
+  function formatBytes(bytes) {
+      if (bytes === 0 || !bytes) return '0 Bytes';
+      const k = 1024; const dm = 2; const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+  }
+
+  // === 独立双轨标签持久化存储 ===
+  let g_l1_tags = JSON.parse(localStorage.getItem('factory_g_l1')) || ['未分类', '通用', '科威特', '阿联酋', '卡塔尔', '巴林', '阿曼', '沙特阿拉伯'];
+  let g_l2_tags = JSON.parse(localStorage.getItem('factory_g_l2')) || ['全部', '科威特菜', '快餐', '甜品', '饮品', '健康餐'];
+  
+  let s_l1_tags = JSON.parse(localStorage.getItem('factory_s_l1')) || ['全部', '日常运营', '大促营销', '异业合作', '品牌规范'];
+  let s_l2_tags = JSON.parse(localStorage.getItem('factory_s_l2')) || ['全部', 'KV主视觉', 'Banner', 'Popup弹窗', '海报', '社媒图'];
+  let s_l3_tags = JSON.parse(localStorage.getItem('factory_s_l3')) || ['通用', '科威特', '阿联酋', '卡塔尔', '巴林', '阿曼', '沙特阿拉伯'];
+
+  let cur_g_l1 = '通用', cur_g_l2 = '全部';
+  let cur_s_l1 = '全部', cur_s_l2 = '全部', cur_s_l3 = '通用';
+
+  function saveTags() {
+    localStorage.setItem('factory_g_l1', JSON.stringify(g_l1_tags));
+    localStorage.setItem('factory_g_l2', JSON.stringify(g_l2_tags));
+    localStorage.setItem('factory_s_l1', JSON.stringify(s_l1_tags));
+    localStorage.setItem('factory_s_l2', JSON.stringify(s_l2_tags));
+    localStorage.setItem('factory_s_l3', JSON.stringify(s_l3_tags));
+  }
+
+  const galleryContainer = document.getElementById('gallery-container');
+  const scrollArea = document.getElementById('gallery-scroll-area');
+  const fileInput = document.getElementById('hidden-file-input');
+  const searchInput = document.getElementById('search-input');
+
+  const dlIconSVG = `<svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`;
+  const deleteIconSVG = `<svg class="icon-svg" style="width:16px;height:16px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+  const filePlaceholderSVG = `<svg class="icon-svg" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>`;
+
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', e => e.preventDefault());
+
+  function login(roleKey) {
+    currentUser = MOCK_USERS[roleKey];
+    document.getElementById('login-overlay').style.display = 'none';
+    document.getElementById('app-main').style.display = 'flex';
+    document.getElementById('current-user-name').innerText = currentUser.name + ` (${currentUser.role})`;
+    applyRolePermissions();
+    initDB().then(() => loadDataFromDB().then(() => { updateI18nTexts(); switchView('assets'); }));
+  }
+
+  function logout() {
+    currentUser = null;
+    document.getElementById('login-overlay').style.display = 'flex';
+    document.getElementById('app-main').style.display = 'none';
+  }
+
+  function applyRolePermissions() {
+    const hideNodes = document.querySelectorAll('.hide-for-viewer');
+    if(currentUser.role === 'viewer') {
+        hideNodes.forEach(n => n.style.display = 'none');
+        scrollArea.style.border = "none";
+        if(currentView !== 'assets') switchView('assets'); 
+    } else {
+        hideNodes.forEach(n => n.style.display = '');
+    }
+  }
+
+  window.switchView = (viewName) => {
+    currentView = viewName;
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    document.getElementById('nav-' + viewName).classList.add('active');
+    
+    document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+    if(viewName === 'assets' || viewName === 'sources') {
+        document.getElementById('view-gallery').classList.add('active');
+        document.getElementById('txt-library-title').innerText = viewName === 'assets' ? i18n[currentLang].nav_assets : i18n[currentLang].nav_sources;
+        renderTabs();
+        renderGallery();
+    } else if (viewName === 'tags') {
+        document.getElementById('view-tags').classList.add('active');
+        renderTagManager();
+    }
+  }
+
+  function updateI18nTexts() {
+    const t = i18n[currentLang];
+    document.getElementById('txt-nav-assets').innerText = t.nav_assets;
+    document.getElementById('txt-nav-sources').innerText = t.nav_sources;
+    document.getElementById('txt-nav-tags').innerText = t.nav_tags;
+    document.getElementById('txt-tags-title').innerText = t.nav_tags;
+    
+    document.getElementById('txt-btn-upload').innerText = t.btn_upload;
+    document.getElementById('txt-sort-time').innerText = t.sort_time;
+    document.getElementById('txt-sort-az').innerText = t.sort_az;
+    document.getElementById('txt-sort-dl').innerText = t.sort_dl;
+    document.getElementById('txt-logout').innerText = t.logout;
+    searchInput.placeholder = t.search_ph;
+
+    document.getElementById('txt-tag-g-l1').innerText = t.g_l1; document.getElementById('txt-tag-g-l2').innerText = t.g_l2;
+    document.getElementById('txt-tag-s-l1').innerText = t.s_l1; document.getElementById('txt-tag-s-l2').innerText = t.s_l2; document.getElementById('txt-tag-s-l3').innerText = t.s_l3;
+    document.querySelectorAll('.btn-add-tag').forEach(b => b.innerText = t.add_btn);
+
+    if(currentView === 'assets' || currentView === 'sources') {
+        document.getElementById('txt-library-title').innerText = currentView === 'assets' ? t.nav_assets : t.nav_sources;
+        renderTabs(); renderGallery();
+    } else { renderTagManager(); }
+    if(currentModalImgId) renderModal(); 
+  }
+
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active');
+      currentLang = e.target.dataset.lang; updateI18nTexts(); 
+    });
+  });
+  searchInput.addEventListener('input', (e) => { currentSearch = e.target.value.trim().toLowerCase(); renderGallery(); });
+
+  // 严格保留的 DB 初始化逻辑，防止旧数据丢失
+  function initDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onerror = () => reject();
+      request.onupgradeneeded = (e) => { if (!e.target.result.objectStoreNames.contains(STORE_NAME)) e.target.result.createObjectStore(STORE_NAME, { keyPath: 'id' }); };
+      request.onsuccess = (e) => { db = e.target.result; resolve(); };
+    });
+  }
+  function saveAssetToDB(assetData) { db.transaction([STORE_NAME], 'readwrite').objectStore(STORE_NAME).put(assetData); }
+  function deleteAssetFromDB(id) { db.transaction([STORE_NAME], 'readwrite').objectStore(STORE_NAME).delete(id); }
+  
+  function loadDataFromDB() {
+    return new Promise((resolve, reject) => {
+      const request = db.transaction([STORE_NAME], 'readonly').objectStore(STORE_NAME).getAll();
+      request.onsuccess = () => {
+        try {
+          imageLibrary = request.result.map(record => {
+            let safeUrl = null, safeLogoUrl = null, safeCoverUrl = null;
+            if(record.mainBlob) { try{ safeUrl = URL.createObjectURL(record.mainBlob); }catch(e){} }
+            if(record.logoBlob) { try{ safeLogoUrl = URL.createObjectURL(record.logoBlob); }catch(e){} }
+            if(record.coverBlob) { try{ safeCoverUrl = URL.createObjectURL(record.coverBlob); }catch(e){} }
+            let retroType = record.fileType || (record.mainBlob && record.mainBlob.type ? record.mainBlob.type : 'image/png');
+            let retroName = record.fileName || (record.mainBlob && record.mainBlob.name ? record.mainBlob.name : 'Asset');
+            
+            return {
+              ...record, url: safeUrl, logoUrl: safeLogoUrl, coverUrl: safeCoverUrl, fileType: retroType, fileName: retroName,
+              fileSize: record.fileSize || (record.mainBlob ? record.mainBlob.size : 0),
+              g_l1: record.g_l1 || '通用', g_l2: record.g_l2 || '全部',
+              s_l1: record.s_l1 || '全部', s_l2: record.s_l2 || '全部', s_l3: record.s_l3 || '通用'
+            };
+          });
+          resolve();
+        } catch(err) { resolve(); }
+      }; 
+      request.onerror = () => reject();
+    });
+  }
+
+  window.changeFilter = (type, val) => {
+    if(type === 'g_l1') cur_g_l1 = val; else if(type === 'g_l2') cur_g_l2 = val;
+    else if(type === 's_l1') cur_s_l1 = val; else if(type === 's_l2') cur_s_l2 = val; else if(type === 's_l3') cur_s_l3 = val;
+    renderTabs(); renderGallery();
+  }
+
+  function renderTabs() {
+    const container = document.getElementById('filter-tabs-container');
+    if(!g_l1_tags.includes(cur_g_l1)) cur_g_l1 = '未分类'; if(!g_l2_tags.includes(cur_g_l2)) cur_g_l2 = '全部';
+    if(!s_l1_tags.includes(cur_s_l1)) cur_s_l1 = '全部'; if(!s_l2_tags.includes(cur_s_l2)) cur_s_l2 = '全部'; if(!s_l3_tags.includes(cur_s_l3)) cur_s_l3 = '通用';
+
+    if (currentView === 'assets') {
+        container.innerHTML = `
+            <div class="tags-row">${g_l1_tags.map(tag => `<span class="filter-tag ${tag === cur_g_l1 ? 'active' : ''}" onclick="changeFilter('g_l1', '${tag}')">${tag}</span>`).join('')}</div>
+            <div class="tab-divider"></div>
+            <div class="tags-row">${g_l2_tags.map(tag => `<span class="sub-filter-tag ${tag === cur_g_l2 ? 'active' : ''}" onclick="changeFilter('g_l2', '${tag}')">${tag}</span>`).join('')}</div>
+        `;
+    } else {
+        container.innerHTML = `
+            <div class="tags-row">${s_l1_tags.map(tag => `<span class="filter-tag ${tag === cur_s_l1 ? 'active' : ''}" onclick="changeFilter('s_l1', '${tag}')">${tag}</span>`).join('')}</div>
+            <div class="tab-divider"></div>
+            <div class="tags-row">${s_l2_tags.map(tag => `<span class="sub-filter-tag ${tag === cur_s_l2 ? 'active' : ''}" onclick="changeFilter('s_l2', '${tag}')">${tag}</span>`).join('')}</div>
+            <div class="tab-divider"></div>
+            <div class="tags-row">${s_l3_tags.map(tag => `<span class="sub-filter-tag ${tag === cur_s_l3 ? 'active' : ''}" style="font-size:11px; padding: 2px 12px; border-radius:12px;" onclick="changeFilter('s_l3', '${tag}')">${tag}</span>`).join('')}</div>
+        `;
+    }
+  }
+
+  function renderTagManager() {
+    const buildList = (arr, type, lockWord) => arr.map(tag => {
+        if(tag === lockWord || tag === '未分类') return `<div class="tag-edit-item locked">${tag}</div>`;
+        return `<div class="tag-edit-item">${tag} <button class="btn-del-tag" onclick="deleteTag('${type}', '${tag}')">&times;</button></div>`;
+    }).join('');
+
+    document.getElementById('admin-g-l1-list').innerHTML = buildList(g_l1_tags, 'g_l1', '通用');
+    document.getElementById('admin-g-l2-list').innerHTML = buildList(g_l2_tags, 'g_l2', '全部');
+    document.getElementById('admin-s-l1-list').innerHTML = buildList(s_l1_tags, 's_l1', '全部');
+    document.getElementById('admin-s-l2-list').innerHTML = buildList(s_l2_tags, 's_l2', '全部');
+    document.getElementById('admin-s-l3-list').innerHTML = buildList(s_l3_tags, 's_l3', '通用');
+  }
+
+  window.addNewTag = (type) => {
+    const input = document.getElementById('input-add-' + type.replace('_', '-'));
+    const val = input.value.trim();
+    if(!val) return;
+    
+    if(type === 'g_l1' && !g_l1_tags.includes(val)) g_l1_tags.push(val);
+    else if(type === 'g_l2' && !g_l2_tags.includes(val)) g_l2_tags.push(val);
+    else if(type === 's_l1' && !s_l1_tags.includes(val)) s_l1_tags.push(val);
+    else if(type === 's_l2' && !s_l2_tags.includes(val)) s_l2_tags.push(val);
+    else if(type === 's_l3' && !s_l3_tags.includes(val)) s_l3_tags.push(val);
+    
+    saveTags(); input.value = ''; renderTagManager();
+  }
+
+  window.deleteTag = (type, tag) => {
+    if(confirm(`确定要删除标签 [${tag}] 吗？\n所有属于此标签的素材将被退回至默认分类。`)) {
+        let defaultVal = '全部'; if(type === 'g_l1') defaultVal = '未分类'; if(type === 's_l3') defaultVal = '通用';
+        
+        if(type === 'g_l1') g_l1_tags = g_l1_tags.filter(t => t !== tag);
+        else if(type === 'g_l2') g_l2_tags = g_l2_tags.filter(t => t !== tag);
+        else if(type === 's_l1') s_l1_tags = s_l1_tags.filter(t => t !== tag);
+        else if(type === 's_l2') s_l2_tags = s_l2_tags.filter(t => t !== tag);
+        else if(type === 's_l3') s_l3_tags = s_l3_tags.filter(t => t !== tag);
+
+        imageLibrary.forEach(img => { if(img[type] === tag) { img[type] = defaultVal; updateAssetField(img.id, type, defaultVal); } });
+        saveTags(); renderTagManager();
+    }
+  }
+
+  function renderGallery() {
+    const t = i18n[currentLang];
+    galleryContainer.innerHTML = ''; 
+    
+    const countAssets = imageLibrary.filter(img => img.libType === 'assets').length;
+    const countSources = imageLibrary.filter(img => img.libType === 'sources').length;
+    document.getElementById('badge-assets').innerText = countAssets;
+    document.getElementById('badge-sources').innerText = countSources;
+
+    let filteredImages = imageLibrary.filter(img => {
+      if(img.libType !== currentView) return false;
+      if (currentSearch !== '' && !(img.brandName || '').toLowerCase().includes(currentSearch)) return false;
+
+      if (currentView === 'assets') {
+          return (cur_g_l1 === '未分类' || img.g_l1 === cur_g_l1) && (cur_g_l2 === '全部' || img.g_l2 === cur_g_l2);
+      } else {
+          return (cur_s_l1 === '全部' || img.s_l1 === cur_s_l1) && (cur_s_l2 === '全部' || img.s_l2 === cur_s_l2) && (cur_s_l3 === '通用' || img.s_l3 === cur_s_l3);
+      }
+    }).sort((a, b) => {
+      if (currentSort === 'az') return (a.brandName || 'zzzz').toLowerCase().localeCompare((b.brandName || 'zzzz').toLowerCase());
+      if (currentSort === 'downloads') return b.downloads - a.downloads;
+      return b.timestamp - a.timestamp;
+    });
+
+    if (filteredImages.length === 0) {
+      galleryContainer.style.columnCount = 1; 
+      const emptyTxt = currentUser.role === 'viewer' ? t.empty_viewer : t.empty_state;
+      const clickEvt = currentUser.role === 'viewer' ? '' : `onclick="document.getElementById('hidden-file-input').click()"`;
+      galleryContainer.innerHTML = `<div class="empty-state" ${clickEvt}><p>${emptyTxt}</p></div>`; return;
+    }
+
+    galleryContainer.style.columnCount = ''; 
+    const fragment = document.createDocumentFragment();
+
+    filteredImages.forEach(imgData => {
+      const card = document.createElement('div');
+      card.className = 'image-card';
+      
+      const isOwner = imgData.uploader_id === currentUser.id;
+      const canEdit = currentUser.role === 'admin' || (currentUser.role === 'designer' && isOwner);
+      const readOnlyAttr = !canEdit ? 'readonly class="brand-input readonly-input"' : 'class="brand-input"';
+
+      let mediaHTML = '';
+      if (imgData.coverUrl) { mediaHTML = `<img src="${imgData.coverUrl}" loading="lazy">`; } 
+      else if (imgData.libType === 'assets') { mediaHTML = `<img src="${imgData.url}" loading="lazy">`; } 
+      else {
+          mediaHTML = `
+            <div class="file-icon-placeholder">
+              ${filePlaceholderSVG}
+              <span style="font-size:12px;font-weight:bold;max-width:80%;text-align:center;word-break:break-all;">${imgData.fileName || 'DOCUMENT'}</span>
+              <span style="font-size:10px;color:var(--text-sub);">${formatBytes(imgData.fileSize)}</span>
+            </div>
+          `;
+      }
+
+      card.innerHTML = `
+        <div class="card-img-wrap" onclick="openDetailModal('${imgData.id}')">
+          ${mediaHTML}
+        </div>
+        <div class="card-content">
+          <input type="text" ${readOnlyAttr} placeholder="${t.brand_ph}" value="${imgData.brandName || ''}" oninput="updateAssetField('${imgData.id}', 'brandName', this.value)">
+        </div>
+      `;
+      fragment.appendChild(card);
+    });
+    galleryContainer.appendChild(fragment);
+  }
+
+  // === 详情弹窗 ===
+  window.openDetailModal = (id) => { currentModalImgId = id; renderModal(); document.getElementById('detail-modal').classList.add('show'); };
+  window.closeDetailModal = () => { document.getElementById('detail-modal').classList.remove('show'); currentModalImgId = null; renderGallery(); };
+  document.getElementById('detail-modal').addEventListener('click', (e) => { if(e.target === document.getElementById('detail-modal')) closeDetailModal(); });
+
+  window.renderModal = () => {
+    if(!currentModalImgId) return;
+    const t = i18n[currentLang];
+    const img = imageLibrary.find(i => i.id === currentModalImgId); 
+    if(!img) return closeDetailModal();
+    
+    document.getElementById('modal-title').innerText = img.brandName || t.modal_default;
+
+    const mediaContainer = document.getElementById('modal-media-container');
+    if (img.coverUrl) { mediaContainer.innerHTML = `<img src="${img.coverUrl}">`; } 
+    else if (img.libType === 'assets') { mediaContainer.innerHTML = `<img src="${img.url}">`; } 
+    else { mediaContainer.innerHTML = `<div class="file-placeholder">${filePlaceholderSVG}<span style="font-size:20px;font-weight:bold;text-align:center;">${img.fileName}</span><span style="font-size:13px;">${t.unsupported}</span></div>`; }
+
+    const isOwner = img.uploader_id === currentUser.id;
+    const canEdit = currentUser.role === 'admin' || (currentUser.role === 'designer' && isOwner);
+    const logoContent = img.logoUrl ? `<img src="${img.logoUrl}" class="logo-thumbnail">` : `<span class="logo-placeholder-text">${canEdit ? t.logo_ph : '暂无 Logo'}</span>`;
+
+    let tagsSelectHTML = '';
+    if(img.libType === 'assets') {
+        const safeL1 = g_l1_tags.includes(img.g_l1) ? img.g_l1 : '未分类';
+        const safeL2 = g_l2_tags.includes(img.g_l2) ? img.g_l2 : '全部';
+        tagsSelectHTML = `
+          <select class="glass-select primary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 'g_l1', this.value)">${g_l1_tags.map(tag => `<option value="${tag}" ${safeL1 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
+          <select class="glass-select secondary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 'g_l2', this.value)">${g_l2_tags.map(tag => `<option value="${tag}" ${safeL2 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
+        `;
+    } else {
+        const safeL1 = s_l1_tags.includes(img.s_l1) ? img.s_l1 : '全部';
+        const safeL2 = s_l2_tags.includes(img.s_l2) ? img.s_l2 : '全部';
+        const safeL3 = s_l3_tags.includes(img.s_l3) ? img.s_l3 : '通用';
+        tagsSelectHTML = `
+          <select class="glass-select primary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l1', this.value)">${s_l1_tags.map(tag => `<option value="${tag}" ${safeL1 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
+          <select class="glass-select secondary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l2', this.value)">${s_l2_tags.map(tag => `<option value="${tag}" ${safeL2 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
+          <select class="glass-select tertiary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l3', this.value)">${s_l3_tags.map(tag => `<option value="${tag}" ${safeL3 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
+        `;
+    }
+    
+    mediaContainer.innerHTML += `<div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; width: 100%;">${tagsSelectHTML}</div>`;
+
+    // 详情内动作区
+    const deleteBtnHTML = canEdit ? `<button class="btn-ghost" style="border-color:var(--danger); color:var(--danger); display:flex; align-items:center; gap:6px;" onclick="deleteImage('${img.id}'); closeDetailModal();">${deleteIconSVG} ${t.menu_del}</button>` : '';
+    const replaceCoverBtnHTML = canEdit ? `<button class="btn-ghost" style="display:flex; align-items:center; margin-right:auto; margin-left: 10px;" onclick="triggerSingleCoverReplace('${img.id}')">${t.btn_replace_cover}</button>` : '';
+
+    document.getElementById('modal-footer-controls').innerHTML = `
+      <div style="display: flex; gap: 16px; flex: 1;">
+          <div class="modal-logo-section" ${canEdit ? `onclick="triggerLogoUpload('${img.id}')"` : ''} title="${canEdit ? '点击上传/更换 Logo' : ''}">
+            <div class="logo-preview-area">${logoContent}</div>
+            <button class="btn-download-small" onclick="event.stopPropagation(); triggerDownload('${img.id}', 'logo', 'logo.png')" ${!img.logoUrl ? 'disabled' : ''}>${t.btn_dl_logo}</button>
+          </div>
+          ${replaceCoverBtnHTML}
+      </div>
+      <div class="modal-right-actions">
+        ${deleteBtnHTML}
+        <div style="font-size: 12px; color: #8a919f; text-align: right;">${t.uploader_prefix} <span style="color:#fff; font-weight:bold;">${img.uploader_name || 'System'}</span><br><span style="font-size: 11px;">${img.fileName} (${formatBytes(img.fileSize)})</span></div>
+        <button class="btn-download-large" onclick="triggerDownload('${img.id}', 'main', '${img.fileName}')">${dlIconSVG} ${t.btn_dl_main}</button>
+      </div>
+    `;
+  };
+
+  window.updateAssetField = (id, field, value) => {
+    const img = imageLibrary.find(i => i.id === id);
+    if (img) { img[field] = value; const dbObj = { ...img }; delete dbObj.url; delete dbObj.logoUrl; delete dbObj.coverUrl; saveAssetToDB(dbObj); if(currentModalImgId === id && field === 'brandName') renderModal(); }
+  };
+  window.changeSort = (type, el) => { currentSort = type; document.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active')); el.classList.add('active'); renderGallery(); };
+
+  window.deleteImage = (id) => {
+    const index = imageLibrary.findIndex(i => i.id === id);
+    if(index > -1) {
+      if(imageLibrary[index].url) URL.revokeObjectURL(imageLibrary[index].url);
+      if(imageLibrary[index].coverUrl) URL.revokeObjectURL(imageLibrary[index].coverUrl);
+      if(imageLibrary[index].logoUrl) URL.revokeObjectURL(imageLibrary[index].logoUrl);
+      imageLibrary.splice(index, 1); deleteAssetFromDB(id); renderGallery();
+    }
+  };
+
+  window.triggerDownload = (id, type, originalName) => {
+    const img = imageLibrary.find(i => i.id === id); if(!img) return;
+    const url = type === 'main' ? img.url : img.logoUrl; if(!url || url === 'null') return;
+    const a = document.createElement('a'); a.href = url; 
+    let ext = '.png';
+    if(originalName && originalName.includes('.')){ ext = originalName.substring(originalName.lastIndexOf('.')); }
+    a.download = (img.brandName || 'Asset') + '_' + type + ext; 
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    img.downloads += 1; updateAssetField(id, 'downloads', img.downloads); if(currentSort === 'downloads') renderGallery();
+  };
+
+  // === 核心：上传拦截与源文件强制预览弹窗逻辑 ===
+  function handleFilesAdded(files) {
+    if (currentUser.role === 'viewer' || !files || files.length === 0) return;
+    
+    let sourceFiles = [];
+    let standardImages = [];
+
+    Array.from(files).forEach(file => {
+      const ext = file.name.split('.').pop().toLowerCase();
+      const validImages = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
+      
+      const isImage = file.type.startsWith('image/') || validImages.includes(ext);
+      const isPSD = ext === 'psd';
+      const isAI = ext === 'ai' || ext === 'eps';
+      const isPDF = ext === 'pdf';
+      
+      if (isPSD || isAI || isPDF) sourceFiles.push(file);
+      else if (isImage) standardImages.push(file);
+    });
+
+    // 1. 如果有源文件，拦截并拉起强制预览框 (仅取第一个源文件处理)
+    if (sourceFiles.length > 0) {
+      if(sourceFiles.length > 1) alert("检测到拖入了多个源文件，为保证预览图严格匹配，系统已为您载入第一个。请逐个上传源文件。");
+      pendingSourceFile = sourceFiles[0];
+      pendingPreviewFiles = [];
+      document.getElementById('pending-file-name').innerText = pendingSourceFile.name;
+      document.getElementById('pending-file-size').innerText = formatBytes(pendingSourceFile.size);
+      document.getElementById('preview-thumbnails-container').innerHTML = '';
+      document.getElementById('btn-confirm-upload').disabled = true;
+      document.getElementById('upload-source-modal').classList.add('show');
+    }
+
+    // 2. 普通图片直接入成图图库
+    standardImages.forEach(file => {
+      const newId = 'img-' + Date.now() + Math.random().toString(36).substr(2, 5);
+      const memoryObj = { 
+        id: newId, url: URL.createObjectURL(file), mainBlob: file, 
+        fileName: file.name, fileType: file.type, libType: 'assets', fileSize: file.size,
+        g_l1: currentView === 'assets' ? cur_g_l1 : '未分类', g_l2: currentView === 'assets' ? cur_g_l2 : '全部', 
+        s_l1: '全部', s_l2: '全部', s_l3: '通用',
+        brandName: '', logoUrl: null, logoBlob: null, coverUrl: null, coverBlob: null, 
+        timestamp: Date.now(), downloads: 0, uploader_id: currentUser.id, uploader_name: currentUser.name 
+      };
+      imageLibrary.push(memoryObj);
+      const dbObj = { ...memoryObj }; delete dbObj.url; delete dbObj.logoUrl; delete dbObj.coverUrl; saveAssetToDB(dbObj);
+    });
+    if(standardImages.length > 0) { if(currentView === 'tags') switchView('assets'); else renderGallery(); }
+  }
+
+  scrollArea.addEventListener('drop', e => { e.preventDefault(); scrollArea.classList.remove('drag-over'); if(currentUser.role !== 'viewer') handleFilesAdded(e.dataTransfer.files); });
+  document.getElementById('hidden-file-input').addEventListener('change', e => { handleFilesAdded(e.target.files); e.target.value = ''; });
+
+  // === 强制预览窗内部交互 ===
+  window.cancelUploadSource = () => {
+    pendingSourceFile = null;
+    pendingPreviewFiles.forEach(pf => URL.revokeObjectURL(pf.previewUrl));
+    pendingPreviewFiles = [];
+    document.getElementById('upload-source-modal').classList.remove('show');
+    document.getElementById('hidden-modal-preview-input').value = '';
+  }
+
+  function handlePreviewAdd(files) {
+    if(!files || files.length === 0) return;
+    Array.from(files).forEach(file => {
+        if(file.type.startsWith('image/')) {
+            pendingPreviewFiles.push({ file: file, previewUrl: URL.createObjectURL(file) });
+        }
+    });
+    renderPreviewThumbnails();
+  }
+  
+  function renderPreviewThumbnails() {
+    const container = document.getElementById('preview-thumbnails-container');
+    container.innerHTML = pendingPreviewFiles.map((pf, index) => `
+        <div class="preview-thumb-box">
+            <img src="${pf.previewUrl}">
+            <button class="preview-thumb-remove" onclick="event.stopPropagation(); removePendingPreview(${index})">&times;</button>
+        </div>
+    `).join('');
+    document.getElementById('btn-confirm-upload').disabled = pendingPreviewFiles.length === 0;
+  }
+
+  window.removePendingPreview = (index) => {
+      URL.revokeObjectURL(pendingPreviewFiles[index].previewUrl);
+      pendingPreviewFiles.splice(index, 1);
+      renderPreviewThumbnails();
+  }
+
+  const modalDropZone = document.getElementById('preview-drop-zone');
+  modalDropZone.ondragover = e => { e.preventDefault(); modalDropZone.classList.add('drag-over'); };
+  modalDropZone.ondragleave = e => { e.preventDefault(); modalDropZone.classList.remove('drag-over'); };
+  modalDropZone.ondrop = e => { e.preventDefault(); modalDropZone.classList.remove('drag-over'); handlePreviewAdd(e.dataTransfer.files); };
+  document.getElementById('hidden-modal-preview-input').addEventListener('change', e => { handlePreviewAdd(e.target.files); e.target.value = ''; });
+
+  // 确认入库触发资产裂变
+  window.confirmSourceUpload = () => {
+    if(!pendingSourceFile || pendingPreviewFiles.length === 0) return;
+
+    let fileTypeTag = '';
+    const ext = pendingSourceFile.name.split('.').pop().toLowerCase();
+    if(ext === 'psd') fileTypeTag = 'image/vnd.adobe.photoshop'; else if(ext === 'ai' || ext === 'eps') fileTypeTag = 'application/illustrator'; else fileTypeTag = pendingSourceFile.type;
+
+    pendingPreviewFiles.forEach((preview, i) => {
+        const newId = 'img-' + Date.now() + Math.random().toString(36).substr(2, 5) + '-' + i;
+        const memoryObj = { 
+            id: newId, url: null, mainBlob: pendingSourceFile, 
+            fileName: pendingSourceFile.name, fileType: fileTypeTag, libType: 'sources', fileSize: pendingSourceFile.size,
+            g_l1: '未分类', g_l2: '全部', s_l1: currentView === 'sources' ? cur_s_l1 : '全部', s_l2: currentView === 'sources' ? cur_s_l2 : '全部', s_l3: currentView === 'sources' ? cur_s_l3 : '通用',
+            brandName: '', logoUrl: null, logoBlob: null, coverUrl: preview.previewUrl, coverBlob: preview.file, 
+            timestamp: Date.now() + i, downloads: 0, uploader_id: currentUser.id, uploader_name: currentUser.name 
+        };
+        imageLibrary.push(memoryObj);
+        const dbObj = { ...memoryObj }; delete dbObj.url; delete dbObj.logoUrl; delete dbObj.coverUrl; saveAssetToDB(dbObj);
+    });
+
+    cancelUploadSource();
+    if(currentView !== 'sources') switchView('sources'); else renderGallery();
+  }
+
+  // === 替换详情页封面交互 ===
+  window.triggerSingleCoverReplace = (id) => { targetCoverCardId = id; document.getElementById('hidden-single-cover-input').click(); };
+  document.getElementById('hidden-single-cover-input').addEventListener('change', e => {
+    if (!targetCoverCardId || e.target.files.length === 0) return;
+    const img = imageLibrary.find(i => i.id === targetCoverCardId);
+    if (img) {
+      if (img.coverUrl) URL.revokeObjectURL(img.coverUrl);
+      img.coverUrl = URL.createObjectURL(e.target.files[0]); img.coverBlob = e.target.files[0];
+      const dbObj = { ...img }; delete dbObj.url; delete dbObj.logoUrl; delete dbObj.coverUrl; saveAssetToDB(dbObj); 
+      if(currentModalImgId === img.id) renderModal(); renderGallery();
+    }
+    e.target.value = '';
+  });
+
+  window.triggerLogoUpload = (id) => { targetLogoCardId = id; document.getElementById('hidden-logo-input').click(); };
+  document.getElementById('hidden-logo-input').addEventListener('change', e => {
+    if (!targetLogoCardId || e.target.files.length === 0) return;
+    const img = imageLibrary.find(i => i.id === targetLogoCardId);
+    if (img) {
+      if (img.logoUrl) URL.revokeObjectURL(img.logoUrl);
+      img.logoUrl = URL.createObjectURL(e.target.files[0]); img.logoBlob = e.target.files[0];
+      const dbObj = { ...img }; delete dbObj.url; delete dbObj.logoUrl; delete dbObj.coverUrl; saveAssetToDB(dbObj); 
+      if(currentModalImgId === img.id) renderModal(); renderGallery();
+    }
+    e.target.value = '';
+  });
+</script>
+</body>
+</html>
