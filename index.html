@@ -397,7 +397,7 @@
   const supabaseUrl = 'https://juuqvjmhzdgfggzrivbb.supabase.co';
   const supabaseKey = 'sb_publishable_PIa3V0LGlOn1K6G1nBUeqw_kiFB6fjt';
   const SUPABASE_BACKUP_CDN = 'https://unpkg.com/@supabase/supabase-js@2';
-  let supabase = null;
+  let vfSupabaseClient = null;
   let realtimeChannel = null;
   let cloudPollTimer = null;
   let lastSyncAt = 0;
@@ -426,7 +426,7 @@
 
   function closeCloudSync() {
     if(realtimeChannel) {
-      supabase.removeChannel(realtimeChannel);
+      vfSupabaseClient.removeChannel(realtimeChannel);
       realtimeChannel = null;
     }
     if(cloudPollTimer) {
@@ -436,7 +436,7 @@
   }
 
   async function ensureSupabaseClient() {
-    if(supabase) return supabase;
+    if(vfSupabaseClient) return vfSupabaseClient;
     if(!window.supabase || typeof window.supabase.createClient !== 'function') {
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
@@ -450,15 +450,15 @@
     if(!window.supabase || typeof window.supabase.createClient !== 'function') {
       throw new Error('Supabase SDK 未成功加载');
     }
-    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-    return supabase;
+    vfSupabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+    return vfSupabaseClient;
   }
 
   async function setupCloudSync() {
-    if(!supabase) return;
+    if(!vfSupabaseClient) return;
     closeCloudSync();
 
-    realtimeChannel = supabase.channel('assets-library-realtime')
+    realtimeChannel = vfSupabaseClient.channel('assets-library-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'assets_library' }, async () => {
         if(cloudSyncBusy) return;
         cloudSyncBusy = true;
@@ -651,7 +651,7 @@
   async function loadDataFromCloud(silent = false) {
     if(!silent) galleryContainer.innerHTML = '<div class="loading-state">🚀 正在通过云端引擎同步资产...</div>';
     await ensureSupabaseClient();
-    const { data, error } = await supabase
+    const { data, error } = await vfSupabaseClient
       .from('assets_library')
       .select('*')
       .order('created_at', { ascending: false });
@@ -902,7 +902,7 @@
         
         if (Object.values(dbFieldMap).includes(dbField)) {
           await ensureSupabaseClient();
-          const { error } = await supabase.from('assets_library').update({ [dbField]: value }).eq('id', id);
+          const { error } = await vfSupabaseClient.from('assets_library').update({ [dbField]: value }).eq('id', id);
           if(error) throw error;
         }
         if(currentModalImgId === id && field === 'brandName') renderModal(); 
@@ -928,8 +928,8 @@
           extractStoragePathFromUrl(img.coverUrl, 'visual-assets'),
           extractStoragePathFromUrl(img.logoUrl, 'visual-assets')
         ].filter(Boolean);
-        if(removePaths.length > 0) await supabase.storage.from('visual-assets').remove(removePaths);
-        const { error } = await supabase.from('assets_library').delete().eq('id', id);
+        if(removePaths.length > 0) await vfSupabaseClient.storage.from('visual-assets').remove(removePaths);
+        const { error } = await vfSupabaseClient.from('assets_library').delete().eq('id', id);
         if(error) throw error;
         showCloudStatus('云端状态：素材删除成功', 'ok');
       } catch (error) {
@@ -986,11 +986,11 @@
           const ext = file.name.split('.').pop().toLowerCase();
           const filePath = `assets/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
           
-          const { error: uploadError } = await supabase.storage.from('visual-assets').upload(filePath, file, { upsert: false });
+          const { error: uploadError } = await vfSupabaseClient.storage.from('visual-assets').upload(filePath, file, { upsert: false });
           if(uploadError) throw uploadError;
-          const { data: urlData } = supabase.storage.from('visual-assets').getPublicUrl(filePath);
+          const { data: urlData } = vfSupabaseClient.storage.from('visual-assets').getPublicUrl(filePath);
 
-          const { error: insertError } = await supabase.from('assets_library').insert([{
+          const { error: insertError } = await vfSupabaseClient.from('assets_library').insert([{
               file_url: urlData.publicUrl,
               file_name: file.name,
               file_type: file.type || ext,
@@ -1069,20 +1069,20 @@
       if(srcExt === 'psd') fileTypeTag = 'image/vnd.adobe.photoshop'; else if(srcExt === 'ai' || srcExt === 'eps') fileTypeTag = 'application/illustrator'; else fileTypeTag = pendingSourceFile.type;
 
       const srcPath = `sources/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${srcExt}`;
-      const { error: srcUploadError } = await supabase.storage.from('visual-assets').upload(srcPath, pendingSourceFile, { upsert: false });
+      const { error: srcUploadError } = await vfSupabaseClient.storage.from('visual-assets').upload(srcPath, pendingSourceFile, { upsert: false });
       if(srcUploadError) throw srcUploadError;
-      const { data: srcUrlData } = supabase.storage.from('visual-assets').getPublicUrl(srcPath);
+      const { data: srcUrlData } = vfSupabaseClient.storage.from('visual-assets').getPublicUrl(srcPath);
 
       for(let i=0; i<pendingPreviewFiles.length; i++) {
           const preview = pendingPreviewFiles[i];
           const prevExt = preview.file.name.split('.').pop().toLowerCase();
           const prevPath = `covers/${Date.now()}_${Math.random().toString(36).substr(2, 5)}_${i}.${prevExt}`;
           
-          const { error: prevUploadError } = await supabase.storage.from('visual-assets').upload(prevPath, preview.file, { upsert: false });
+          const { error: prevUploadError } = await vfSupabaseClient.storage.from('visual-assets').upload(prevPath, preview.file, { upsert: false });
           if(prevUploadError) throw prevUploadError;
-          const { data: prevUrlData } = supabase.storage.from('visual-assets').getPublicUrl(prevPath);
+          const { data: prevUrlData } = vfSupabaseClient.storage.from('visual-assets').getPublicUrl(prevPath);
 
-          const { error: insertError } = await supabase.from('assets_library').insert([{
+          const { error: insertError } = await vfSupabaseClient.from('assets_library').insert([{
               file_url: srcUrlData.publicUrl,
               cover_url: prevUrlData.publicUrl,
               file_name: pendingSourceFile.name,
@@ -1120,11 +1120,11 @@
       const ext = file.name.split('.').pop().toLowerCase();
       const filePath = `covers/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
 
-      const { error: uploadError } = await supabase.storage.from('visual-assets').upload(filePath, file, { upsert: false });
+      const { error: uploadError } = await vfSupabaseClient.storage.from('visual-assets').upload(filePath, file, { upsert: false });
       if(uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from('visual-assets').getPublicUrl(filePath);
+      const { data: urlData } = vfSupabaseClient.storage.from('visual-assets').getPublicUrl(filePath);
 
-      const { error } = await supabase.from('assets_library').update({ cover_url: urlData.publicUrl }).eq('id', targetCoverCardId);
+      const { error } = await vfSupabaseClient.from('assets_library').update({ cover_url: urlData.publicUrl }).eq('id', targetCoverCardId);
       if(error) throw error;
       
       e.target.value = '';
@@ -1147,11 +1147,11 @@
       const ext = file.name.split('.').pop().toLowerCase();
       const filePath = `logos/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
 
-      const { error: uploadError } = await supabase.storage.from('visual-assets').upload(filePath, file, { upsert: false });
+      const { error: uploadError } = await vfSupabaseClient.storage.from('visual-assets').upload(filePath, file, { upsert: false });
       if(uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from('visual-assets').getPublicUrl(filePath);
+      const { data: urlData } = vfSupabaseClient.storage.from('visual-assets').getPublicUrl(filePath);
 
-      const { error } = await supabase.from('assets_library').update({ logo_url: urlData.publicUrl }).eq('id', targetLogoCardId);
+      const { error } = await vfSupabaseClient.from('assets_library').update({ logo_url: urlData.publicUrl }).eq('id', targetLogoCardId);
       if(error) throw error;
       
       e.target.value = '';
