@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Marketing Visual Super Factory</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   /* === 全局与视觉品牌变量 === */
   :root {
@@ -90,6 +91,19 @@
   .sort-controls { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-sub); background: rgba(0,0,0,0.3); padding: 0 10px; border-radius: 12px; border: 1px solid #2d3139; height: 36px; box-sizing: border-box;}
   .sort-btn { cursor: pointer; padding: 4px 10px; border-radius: 8px; transition: 0.2s; font-weight: 600;}
   .sort-btn.active { background: rgba(255, 228, 31, 0.1); color: var(--primary-accent); }
+
+  .cloud-sync-status {
+    margin-bottom: 12px;
+    font-size: 12px;
+    border: 1px solid #2d3139;
+    border-radius: 10px;
+    padding: 8px 12px;
+    color: var(--text-sub);
+    background: rgba(0,0,0,0.2);
+  }
+  .cloud-sync-status.ok { color: var(--secondary-accent); border-color: rgba(17,204,154,0.4); }
+  .cloud-sync-status.warn { color: var(--warning); border-color: rgba(250,173,20,0.4); }
+  .cloud-sync-status.err { color: var(--danger); border-color: rgba(255,20,147,0.45); }
 
   button { cursor: pointer; font-weight: 600; outline: none; transition: all 0.2s; border: none; }
   .btn-ghost { background: transparent; border: 1px solid #333; color: var(--text-sub); padding: 8px 16px; font-size: 13px; border-radius: 18px;}
@@ -280,6 +294,7 @@
           </button>
         </div>
       </div>
+      <div id="cloud-sync-status" class="cloud-sync-status">云端状态：待连接</div>
       
       <div class="tabs-container" id="filter-tabs-container">
         </div>
@@ -376,11 +391,101 @@
 </div>
 
 <script>
-  // 保持数据库配置绝对不变，确保过往历史数据完全保留！
-  const DB_NAME = 'MarketingVisualFactoryDB_V4'; 
-  const DB_VERSION = 1;
-  const STORE_NAME = 'assets';
-  let db;
+  // ==========================================
+  // 【云端引擎接入】已严格配置您的密钥
+  // ==========================================
+  const supabaseUrl = 'https://juuqvjmhzdgfggzrivbb.supabase.co';
+  const supabaseKey = 'sb_publishable_PIa3V0LGlOn1K6G1nBUeqw_kiFB6fjt';
+  const SUPABASE_BACKUP_CDN = 'https://unpkg.com/@supabase/supabase-js@2';
+  let supabase = null;
+  let realtimeChannel = null;
+  let cloudPollTimer = null;
+  let lastSyncAt = 0;
+  let cloudSyncBusy = false;
+
+  function showCloudStatus(text, tone = '') {
+    const el = document.getElementById('cloud-sync-status');
+    if(!el) return;
+    el.className = 'cloud-sync-status' + (tone ? ` ${tone}` : '');
+    el.innerText = text;
+  }
+
+  function readCloudError(error, fallbackText) {
+    if(!error) return fallbackText;
+    if(typeof error === 'string') return error;
+    return error.message || error.error_description || fallbackText;
+  }
+
+  function extractStoragePathFromUrl(publicUrl, bucket) {
+    if(!publicUrl) return null;
+    const marker = `/storage/v1/object/public/${bucket}/`;
+    const idx = publicUrl.indexOf(marker);
+    if(idx === -1) return null;
+    return decodeURIComponent(publicUrl.slice(idx + marker.length));
+  }
+
+  function closeCloudSync() {
+    if(realtimeChannel) {
+      supabase.removeChannel(realtimeChannel);
+      realtimeChannel = null;
+    }
+    if(cloudPollTimer) {
+      clearInterval(cloudPollTimer);
+      cloudPollTimer = null;
+    }
+  }
+
+  async function ensureSupabaseClient() {
+    if(supabase) return supabase;
+    if(!window.supabase || typeof window.supabase.createClient !== 'function') {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = SUPABASE_BACKUP_CDN;
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('Supabase CDN 加载失败'));
+        document.head.appendChild(script);
+      });
+    }
+    if(!window.supabase || typeof window.supabase.createClient !== 'function') {
+      throw new Error('Supabase SDK 未成功加载');
+    }
+    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    return supabase;
+  }
+
+  async function setupCloudSync() {
+    if(!supabase) return;
+    closeCloudSync();
+
+    realtimeChannel = supabase.channel('assets-library-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets_library' }, async () => {
+        if(cloudSyncBusy) return;
+        cloudSyncBusy = true;
+        try {
+          await loadDataFromCloud(true);
+          renderGallery();
+          if(currentModalImgId) renderModal();
+        } finally {
+          cloudSyncBusy = false;
+        }
+      })
+      .subscribe((status) => {
+        if(status === 'SUBSCRIBED') showCloudStatus('云端状态：实时同步已连接', 'ok');
+      });
+
+    cloudPollTimer = setInterval(async () => {
+      if(cloudSyncBusy) return;
+      cloudSyncBusy = true;
+      try {
+        await loadDataFromCloud(true);
+        renderGallery();
+        if(currentModalImgId) renderModal();
+      } finally {
+        cloudSyncBusy = false;
+      }
+    }, 15000);
+  }
 
   const MOCK_USERS = {
     'admin': { id: 'u_admin_001', name: '视觉负责人', role: 'admin' },
@@ -419,11 +524,9 @@
   let currentSort = 'time', currentSearch = '', currentLang = 'zh';
   let currentModalImgId = null, targetLogoCardId = null, targetCoverCardId = null;
 
-  // 上传源文件状态管理
   let pendingSourceFile = null;
   let pendingPreviewFiles = [];
 
-  // 字节换算工具
   function formatBytes(bytes) {
       if (bytes === 0 || !bytes) return '0 Bytes';
       const k = 1024; const dm = 2; const sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -431,10 +534,8 @@
       return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   }
 
-  // === 独立双轨标签持久化存储 ===
   let g_l1_tags = JSON.parse(localStorage.getItem('factory_g_l1')) || ['未分类', '通用', '科威特', '阿联酋', '卡塔尔', '巴林', '阿曼', '沙特阿拉伯'];
   let g_l2_tags = JSON.parse(localStorage.getItem('factory_g_l2')) || ['全部', '科威特菜', '快餐', '甜品', '饮品', '健康餐'];
-  
   let s_l1_tags = JSON.parse(localStorage.getItem('factory_s_l1')) || ['全部', '日常运营', '大促营销', '异业合作', '品牌规范'];
   let s_l2_tags = JSON.parse(localStorage.getItem('factory_s_l2')) || ['全部', 'KV主视觉', 'Banner', 'Popup弹窗', '海报', '社媒图'];
   let s_l3_tags = JSON.parse(localStorage.getItem('factory_s_l3')) || ['通用', '科威特', '阿联酋', '卡塔尔', '巴林', '阿曼', '沙特阿拉伯'];
@@ -462,20 +563,27 @@
   document.addEventListener('dragover', e => e.preventDefault());
   document.addEventListener('drop', e => e.preventDefault());
 
-  function login(roleKey) {
+  async function login(roleKey) {
     currentUser = MOCK_USERS[roleKey];
     document.getElementById('login-overlay').style.display = 'none';
     document.getElementById('app-main').style.display = 'flex';
     document.getElementById('current-user-name').innerText = currentUser.name + ` (${currentUser.role})`;
     applyRolePermissions();
-    initDB().then(() => loadDataFromDB().then(() => { updateI18nTexts(); switchView('assets'); }));
+    showCloudStatus('云端状态：正在连接...', 'warn');
+    try {
+      await ensureSupabaseClient();
+      await loadDataFromCloud();
+      await setupCloudSync();
+      updateI18nTexts();
+      switchView('assets');
+    } catch (error) {
+      const msg = readCloudError(error, '云端连接失败');
+      showCloudStatus(`云端状态：连接失败（${msg}）`, 'err');
+      galleryContainer.innerHTML = `<div class="loading-state">云端连接失败：${msg}</div>`;
+    }
   }
 
-  function logout() {
-    currentUser = null;
-    document.getElementById('login-overlay').style.display = 'flex';
-    document.getElementById('app-main').style.display = 'none';
-  }
+  function logout() { location.reload(); }
 
   function applyRolePermissions() {
     const hideNodes = document.querySelectorAll('.hide-for-viewer');
@@ -511,7 +619,6 @@
     document.getElementById('txt-nav-sources').innerText = t.nav_sources;
     document.getElementById('txt-nav-tags').innerText = t.nav_tags;
     document.getElementById('txt-tags-title').innerText = t.nav_tags;
-    
     document.getElementById('txt-btn-upload').innerText = t.btn_upload;
     document.getElementById('txt-sort-time').innerText = t.sort_time;
     document.getElementById('txt-sort-az').innerText = t.sort_az;
@@ -538,43 +645,48 @@
   });
   searchInput.addEventListener('input', (e) => { currentSearch = e.target.value.trim().toLowerCase(); renderGallery(); });
 
-  // 严格保留的 DB 初始化逻辑，防止旧数据丢失
-  function initDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-      request.onerror = () => reject();
-      request.onupgradeneeded = (e) => { if (!e.target.result.objectStoreNames.contains(STORE_NAME)) e.target.result.createObjectStore(STORE_NAME, { keyPath: 'id' }); };
-      request.onsuccess = (e) => { db = e.target.result; resolve(); };
+  // ==========================================
+  // 核心 1：从云端数据库全量同步所有资产
+  // ==========================================
+  async function loadDataFromCloud(silent = false) {
+    if(!silent) galleryContainer.innerHTML = '<div class="loading-state">🚀 正在通过云端引擎同步资产...</div>';
+    await ensureSupabaseClient();
+    const { data, error } = await supabase
+      .from('assets_library')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      const msg = readCloudError(error, '加载云端数据失败');
+      showCloudStatus(`云端状态：同步失败（${msg}）`, 'err');
+      if(!silent) galleryContainer.innerHTML = `<div class="loading-state">同步失败：${msg}</div>`;
+      return;
+    }
+
+    imageLibrary = data.map(record => {
+      const ext = (record.file_name || '').split('.').pop().toLowerCase();
+      const isSource = ['psd', 'ai', 'eps', 'pdf'].includes(ext) || (record.file_type && (record.file_type.includes('photoshop') || record.file_type.includes('illustrator')));
+
+      return {
+        id: record.id,
+        url: record.file_url,
+        logoUrl: record.logo_url || null,
+        coverUrl: record.cover_url || null,
+        fileName: record.file_name || 'Asset',
+        fileType: record.file_type || 'image/png',
+        fileSize: 0, // 避免再让你加字段，隐藏处理
+        libType: isSource ? 'sources' : 'assets',
+        brandName: record.brand_name || '',
+        g_l1: record.g_l1 || '未分类', g_l2: record.g_l2 || '全部',
+        s_l1: record.s_l1 || '全部', s_l2: record.s_l2 || '全部', s_l3: record.s_l3 || '通用',
+        uploader_name: record.uploader_name,
+        timestamp: new Date(record.created_at).getTime(),
+        downloads: 0,
+        uploader_id: record.uploader_name === currentUser.name ? currentUser.id : 'others'
+      };
     });
-  }
-  function saveAssetToDB(assetData) { db.transaction([STORE_NAME], 'readwrite').objectStore(STORE_NAME).put(assetData); }
-  function deleteAssetFromDB(id) { db.transaction([STORE_NAME], 'readwrite').objectStore(STORE_NAME).delete(id); }
-  
-  function loadDataFromDB() {
-    return new Promise((resolve, reject) => {
-      const request = db.transaction([STORE_NAME], 'readonly').objectStore(STORE_NAME).getAll();
-      request.onsuccess = () => {
-        try {
-          imageLibrary = request.result.map(record => {
-            let safeUrl = null, safeLogoUrl = null, safeCoverUrl = null;
-            if(record.mainBlob) { try{ safeUrl = URL.createObjectURL(record.mainBlob); }catch(e){} }
-            if(record.logoBlob) { try{ safeLogoUrl = URL.createObjectURL(record.logoBlob); }catch(e){} }
-            if(record.coverBlob) { try{ safeCoverUrl = URL.createObjectURL(record.coverBlob); }catch(e){} }
-            let retroType = record.fileType || (record.mainBlob && record.mainBlob.type ? record.mainBlob.type : 'image/png');
-            let retroName = record.fileName || (record.mainBlob && record.mainBlob.name ? record.mainBlob.name : 'Asset');
-            
-            return {
-              ...record, url: safeUrl, logoUrl: safeLogoUrl, coverUrl: safeCoverUrl, fileType: retroType, fileName: retroName,
-              fileSize: record.fileSize || (record.mainBlob ? record.mainBlob.size : 0),
-              g_l1: record.g_l1 || '通用', g_l2: record.g_l2 || '全部',
-              s_l1: record.s_l1 || '全部', s_l2: record.s_l2 || '全部', s_l3: record.s_l3 || '通用'
-            };
-          });
-          resolve();
-        } catch(err) { resolve(); }
-      }; 
-      request.onerror = () => reject();
-    });
+    lastSyncAt = Date.now();
+    const timeText = new Date(lastSyncAt).toLocaleTimeString();
+    showCloudStatus(`云端状态：已连接，最近同步 ${timeText}`, 'ok');
   }
 
   window.changeFilter = (type, val) => {
@@ -697,7 +809,6 @@
             <div class="file-icon-placeholder">
               ${filePlaceholderSVG}
               <span style="font-size:12px;font-weight:bold;max-width:80%;text-align:center;word-break:break-all;">${imgData.fileName || 'DOCUMENT'}</span>
-              <span style="font-size:10px;color:var(--text-sub);">${formatBytes(imgData.fileSize)}</span>
             </div>
           `;
       }
@@ -707,7 +818,7 @@
           ${mediaHTML}
         </div>
         <div class="card-content">
-          <input type="text" ${readOnlyAttr} placeholder="${t.brand_ph}" value="${imgData.brandName || ''}" oninput="updateAssetField('${imgData.id}', 'brandName', this.value)">
+          <input type="text" ${readOnlyAttr} placeholder="${t.brand_ph}" value="${imgData.brandName || ''}" onchange="updateAssetField('${imgData.id}', 'brandName', this.value)">
         </div>
       `;
       fragment.appendChild(card);
@@ -758,7 +869,6 @@
     
     mediaContainer.innerHTML += `<div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; width: 100%;">${tagsSelectHTML}</div>`;
 
-    // 详情内动作区
     const deleteBtnHTML = canEdit ? `<button class="btn-ghost" style="border-color:var(--danger); color:var(--danger); display:flex; align-items:center; gap:6px;" onclick="deleteImage('${img.id}'); closeDetailModal();">${deleteIconSVG} ${t.menu_del}</button>` : '';
     const replaceCoverBtnHTML = canEdit ? `<button class="btn-ghost" style="display:flex; align-items:center; margin-right:auto; margin-left: 10px;" onclick="triggerSingleCoverReplace('${img.id}')">${t.btn_replace_cover}</button>` : '';
 
@@ -772,25 +882,59 @@
       </div>
       <div class="modal-right-actions">
         ${deleteBtnHTML}
-        <div style="font-size: 12px; color: #8a919f; text-align: right;">${t.uploader_prefix} <span style="color:#fff; font-weight:bold;">${img.uploader_name || 'System'}</span><br><span style="font-size: 11px;">${img.fileName} (${formatBytes(img.fileSize)})</span></div>
+        <div style="font-size: 12px; color: #8a919f; text-align: right;">${t.uploader_prefix} <span style="color:#fff; font-weight:bold;">${img.uploader_name || 'System'}</span><br><span style="font-size: 11px;">${img.fileName}</span></div>
         <button class="btn-download-large" onclick="triggerDownload('${img.id}', 'main', '${img.fileName}')">${dlIconSVG} ${t.btn_dl_main}</button>
       </div>
     `;
   };
 
-  window.updateAssetField = (id, field, value) => {
+  // ==========================================
+  // 核心 2：云端数据修改与删除引擎
+  // ==========================================
+  window.updateAssetField = async (id, field, value) => {
     const img = imageLibrary.find(i => i.id === id);
-    if (img) { img[field] = value; const dbObj = { ...img }; delete dbObj.url; delete dbObj.logoUrl; delete dbObj.coverUrl; saveAssetToDB(dbObj); if(currentModalImgId === id && field === 'brandName') renderModal(); }
+    if (img) { 
+      try {
+        img[field] = value; 
+        // 映射到你的数据库列名
+        const dbFieldMap = { 'brandName': 'brand_name', 'g_l1': 'g_l1', 'g_l2': 'g_l2', 's_l1': 's_l1', 's_l2': 's_l2', 's_l3': 's_l3' };
+        const dbField = dbFieldMap[field] || field;
+        
+        if (Object.values(dbFieldMap).includes(dbField)) {
+          await ensureSupabaseClient();
+          const { error } = await supabase.from('assets_library').update({ [dbField]: value }).eq('id', id);
+          if(error) throw error;
+        }
+        if(currentModalImgId === id && field === 'brandName') renderModal(); 
+        showCloudStatus('云端状态：字段更新成功', 'ok');
+      } catch (error) {
+        showCloudStatus(`云端状态：字段更新失败（${readCloudError(error, '未知错误')}）`, 'err');
+      }
+    }
   };
+
   window.changeSort = (type, el) => { currentSort = type; document.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active')); el.classList.add('active'); renderGallery(); };
 
-  window.deleteImage = (id) => {
+  window.deleteImage = async (id) => {
     const index = imageLibrary.findIndex(i => i.id === id);
     if(index > -1) {
-      if(imageLibrary[index].url) URL.revokeObjectURL(imageLibrary[index].url);
-      if(imageLibrary[index].coverUrl) URL.revokeObjectURL(imageLibrary[index].coverUrl);
-      if(imageLibrary[index].logoUrl) URL.revokeObjectURL(imageLibrary[index].logoUrl);
-      imageLibrary.splice(index, 1); deleteAssetFromDB(id); renderGallery();
+      const img = imageLibrary[index];
+      imageLibrary.splice(index, 1);
+      renderGallery();
+      try {
+        await ensureSupabaseClient();
+        const removePaths = [
+          extractStoragePathFromUrl(img.url, 'visual-assets'),
+          extractStoragePathFromUrl(img.coverUrl, 'visual-assets'),
+          extractStoragePathFromUrl(img.logoUrl, 'visual-assets')
+        ].filter(Boolean);
+        if(removePaths.length > 0) await supabase.storage.from('visual-assets').remove(removePaths);
+        const { error } = await supabase.from('assets_library').delete().eq('id', id);
+        if(error) throw error;
+        showCloudStatus('云端状态：素材删除成功', 'ok');
+      } catch (error) {
+        showCloudStatus(`云端状态：删除失败（${readCloudError(error, '未知错误')}）`, 'err');
+      }
     }
   };
 
@@ -802,11 +946,12 @@
     if(originalName && originalName.includes('.')){ ext = originalName.substring(originalName.lastIndexOf('.')); }
     a.download = (img.brandName || 'Asset') + '_' + type + ext; 
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    img.downloads += 1; updateAssetField(id, 'downloads', img.downloads); if(currentSort === 'downloads') renderGallery();
   };
 
-  // === 核心：上传拦截与源文件强制预览弹窗逻辑 ===
-  function handleFilesAdded(files) {
+  // ==========================================
+  // 核心 3：智能双轨上传 (直接传云)
+  // ==========================================
+  async function handleFilesAdded(files) {
     if (currentUser.role === 'viewer' || !files || files.length === 0) return;
     
     let sourceFiles = [];
@@ -816,18 +961,13 @@
       const ext = file.name.split('.').pop().toLowerCase();
       const validImages = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
       
-      const isImage = file.type.startsWith('image/') || validImages.includes(ext);
-      const isPSD = ext === 'psd';
-      const isAI = ext === 'ai' || ext === 'eps';
-      const isPDF = ext === 'pdf';
-      
-      if (isPSD || isAI || isPDF) sourceFiles.push(file);
-      else if (isImage) standardImages.push(file);
+      if (['psd', 'ai', 'eps', 'pdf'].includes(ext)) sourceFiles.push(file);
+      else if (file.type.startsWith('image/') || validImages.includes(ext)) standardImages.push(file);
     });
 
-    // 1. 如果有源文件，拦截并拉起强制预览框 (仅取第一个源文件处理)
+    // 处理源文件 (拉起预览图弹窗)
     if (sourceFiles.length > 0) {
-      if(sourceFiles.length > 1) alert("检测到拖入了多个源文件，为保证预览图严格匹配，系统已为您载入第一个。请逐个上传源文件。");
+      if(sourceFiles.length > 1) alert("检测到多个源文件，系统已载入第一个。为保证精准匹配，请逐个上传源文件。");
       pendingSourceFile = sourceFiles[0];
       pendingPreviewFiles = [];
       document.getElementById('pending-file-name').innerText = pendingSourceFile.name;
@@ -837,27 +977,43 @@
       document.getElementById('upload-source-modal').classList.add('show');
     }
 
-    // 2. 普通图片直接入成图图库
-    standardImages.forEach(file => {
-      const newId = 'img-' + Date.now() + Math.random().toString(36).substr(2, 5);
-      const memoryObj = { 
-        id: newId, url: URL.createObjectURL(file), mainBlob: file, 
-        fileName: file.name, fileType: file.type, libType: 'assets', fileSize: file.size,
-        g_l1: currentView === 'assets' ? cur_g_l1 : '未分类', g_l2: currentView === 'assets' ? cur_g_l2 : '全部', 
-        s_l1: '全部', s_l2: '全部', s_l3: '通用',
-        brandName: '', logoUrl: null, logoBlob: null, coverUrl: null, coverBlob: null, 
-        timestamp: Date.now(), downloads: 0, uploader_id: currentUser.id, uploader_name: currentUser.name 
-      };
-      imageLibrary.push(memoryObj);
-      const dbObj = { ...memoryObj }; delete dbObj.url; delete dbObj.logoUrl; delete dbObj.coverUrl; saveAssetToDB(dbObj);
-    });
-    if(standardImages.length > 0) { if(currentView === 'tags') switchView('assets'); else renderGallery(); }
+    // 处理普通成图 (直接云端直传)
+    if (standardImages.length > 0) {
+      galleryContainer.innerHTML = '<div class="loading-state">🚀 正在将普通成图传输至云端...</div>';
+      try {
+        await ensureSupabaseClient();
+        for(let file of standardImages) {
+          const ext = file.name.split('.').pop().toLowerCase();
+          const filePath = `assets/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
+          
+          const { error: uploadError } = await supabase.storage.from('visual-assets').upload(filePath, file, { upsert: false });
+          if(uploadError) throw uploadError;
+          const { data: urlData } = supabase.storage.from('visual-assets').getPublicUrl(filePath);
+
+          const { error: insertError } = await supabase.from('assets_library').insert([{
+              file_url: urlData.publicUrl,
+              file_name: file.name,
+              file_type: file.type || ext,
+              brand_name: '',
+              g_l1: currentView === 'assets' ? cur_g_l1 : '未分类',
+              g_l2: currentView === 'assets' ? cur_g_l2 : '全部',
+              s_l1: '全部', s_l2: '全部', s_l3: '通用',
+              uploader_name: currentUser.name
+          }]);
+          if(insertError) throw insertError;
+        }
+        await loadDataFromCloud();
+        if(currentView === 'tags') switchView('assets'); else renderGallery();
+      } catch (error) {
+        showCloudStatus(`云端状态：上传失败（${readCloudError(error, '未知错误')}）`, 'err');
+      }
+    }
   }
 
   scrollArea.addEventListener('drop', e => { e.preventDefault(); scrollArea.classList.remove('drag-over'); if(currentUser.role !== 'viewer') handleFilesAdded(e.dataTransfer.files); });
   document.getElementById('hidden-file-input').addEventListener('change', e => { handleFilesAdded(e.target.files); e.target.value = ''; });
 
-  // === 强制预览窗内部交互 ===
+  // 预览窗内部交互
   window.cancelUploadSource = () => {
     pendingSourceFile = null;
     pendingPreviewFiles.forEach(pf => URL.revokeObjectURL(pf.previewUrl));
@@ -899,56 +1055,117 @@
   modalDropZone.ondrop = e => { e.preventDefault(); modalDropZone.classList.remove('drag-over'); handlePreviewAdd(e.dataTransfer.files); };
   document.getElementById('hidden-modal-preview-input').addEventListener('change', e => { handlePreviewAdd(e.target.files); e.target.value = ''; });
 
-  // 确认入库触发资产裂变
-  window.confirmSourceUpload = () => {
+  // 核心 4：源文件与预览图一并打包传云
+  window.confirmSourceUpload = async () => {
     if(!pendingSourceFile || pendingPreviewFiles.length === 0) return;
 
-    let fileTypeTag = '';
-    const ext = pendingSourceFile.name.split('.').pop().toLowerCase();
-    if(ext === 'psd') fileTypeTag = 'image/vnd.adobe.photoshop'; else if(ext === 'ai' || ext === 'eps') fileTypeTag = 'application/illustrator'; else fileTypeTag = pendingSourceFile.type;
+    const btn = document.getElementById('btn-confirm-upload');
+    btn.disabled = true; btn.innerText = '正在云端压制...';
 
-    pendingPreviewFiles.forEach((preview, i) => {
-        const newId = 'img-' + Date.now() + Math.random().toString(36).substr(2, 5) + '-' + i;
-        const memoryObj = { 
-            id: newId, url: null, mainBlob: pendingSourceFile, 
-            fileName: pendingSourceFile.name, fileType: fileTypeTag, libType: 'sources', fileSize: pendingSourceFile.size,
-            g_l1: '未分类', g_l2: '全部', s_l1: currentView === 'sources' ? cur_s_l1 : '全部', s_l2: currentView === 'sources' ? cur_s_l2 : '全部', s_l3: currentView === 'sources' ? cur_s_l3 : '通用',
-            brandName: '', logoUrl: null, logoBlob: null, coverUrl: preview.previewUrl, coverBlob: preview.file, 
-            timestamp: Date.now() + i, downloads: 0, uploader_id: currentUser.id, uploader_name: currentUser.name 
-        };
-        imageLibrary.push(memoryObj);
-        const dbObj = { ...memoryObj }; delete dbObj.url; delete dbObj.logoUrl; delete dbObj.coverUrl; saveAssetToDB(dbObj);
-    });
+    try {
+      await ensureSupabaseClient();
+      let fileTypeTag = '';
+      const srcExt = pendingSourceFile.name.split('.').pop().toLowerCase();
+      if(srcExt === 'psd') fileTypeTag = 'image/vnd.adobe.photoshop'; else if(srcExt === 'ai' || srcExt === 'eps') fileTypeTag = 'application/illustrator'; else fileTypeTag = pendingSourceFile.type;
 
-    cancelUploadSource();
-    if(currentView !== 'sources') switchView('sources'); else renderGallery();
+      const srcPath = `sources/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${srcExt}`;
+      const { error: srcUploadError } = await supabase.storage.from('visual-assets').upload(srcPath, pendingSourceFile, { upsert: false });
+      if(srcUploadError) throw srcUploadError;
+      const { data: srcUrlData } = supabase.storage.from('visual-assets').getPublicUrl(srcPath);
+
+      for(let i=0; i<pendingPreviewFiles.length; i++) {
+          const preview = pendingPreviewFiles[i];
+          const prevExt = preview.file.name.split('.').pop().toLowerCase();
+          const prevPath = `covers/${Date.now()}_${Math.random().toString(36).substr(2, 5)}_${i}.${prevExt}`;
+          
+          const { error: prevUploadError } = await supabase.storage.from('visual-assets').upload(prevPath, preview.file, { upsert: false });
+          if(prevUploadError) throw prevUploadError;
+          const { data: prevUrlData } = supabase.storage.from('visual-assets').getPublicUrl(prevPath);
+
+          const { error: insertError } = await supabase.from('assets_library').insert([{
+              file_url: srcUrlData.publicUrl,
+              cover_url: prevUrlData.publicUrl,
+              file_name: pendingSourceFile.name,
+              file_type: fileTypeTag,
+              brand_name: '',
+              g_l1: '未分类', g_l2: '全部',
+              s_l1: currentView === 'sources' ? cur_s_l1 : '全部',
+              s_l2: currentView === 'sources' ? cur_s_l2 : '全部',
+              s_l3: currentView === 'sources' ? cur_s_l3 : '通用',
+              uploader_name: currentUser.name
+          }]);
+          if(insertError) throw insertError;
+      }
+
+      cancelUploadSource();
+      btn.innerText = '确认入库';
+      await loadDataFromCloud();
+      if(currentView !== 'sources') switchView('sources'); else renderGallery();
+      showCloudStatus('云端状态：源文件入库成功', 'ok');
+    } catch (error) {
+      btn.disabled = false;
+      btn.innerText = '确认入库';
+      showCloudStatus(`云端状态：源文件入库失败（${readCloudError(error, '未知错误')}）`, 'err');
+    }
   }
 
-  // === 替换详情页封面交互 ===
+  // 核心 5：替换封面/Logo 上云引擎
   window.triggerSingleCoverReplace = (id) => { targetCoverCardId = id; document.getElementById('hidden-single-cover-input').click(); };
-  document.getElementById('hidden-single-cover-input').addEventListener('change', e => {
+  document.getElementById('hidden-single-cover-input').addEventListener('change', async e => {
     if (!targetCoverCardId || e.target.files.length === 0) return;
-    const img = imageLibrary.find(i => i.id === targetCoverCardId);
-    if (img) {
-      if (img.coverUrl) URL.revokeObjectURL(img.coverUrl);
-      img.coverUrl = URL.createObjectURL(e.target.files[0]); img.coverBlob = e.target.files[0];
-      const dbObj = { ...img }; delete dbObj.url; delete dbObj.logoUrl; delete dbObj.coverUrl; saveAssetToDB(dbObj); 
-      if(currentModalImgId === img.id) renderModal(); renderGallery();
+    
+    try {
+      await ensureSupabaseClient();
+      const file = e.target.files[0];
+      const ext = file.name.split('.').pop().toLowerCase();
+      const filePath = `covers/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage.from('visual-assets').upload(filePath, file, { upsert: false });
+      if(uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from('visual-assets').getPublicUrl(filePath);
+
+      const { error } = await supabase.from('assets_library').update({ cover_url: urlData.publicUrl }).eq('id', targetCoverCardId);
+      if(error) throw error;
+      
+      e.target.value = '';
+      await loadDataFromCloud();
+      renderGallery();
+      if(currentModalImgId === targetCoverCardId) renderModal();
+      showCloudStatus('云端状态：预览图替换成功', 'ok');
+    } catch (error) {
+      showCloudStatus(`云端状态：预览图替换失败（${readCloudError(error, '未知错误')}）`, 'err');
     }
-    e.target.value = '';
   });
 
   window.triggerLogoUpload = (id) => { targetLogoCardId = id; document.getElementById('hidden-logo-input').click(); };
-  document.getElementById('hidden-logo-input').addEventListener('change', e => {
+  document.getElementById('hidden-logo-input').addEventListener('change', async e => {
     if (!targetLogoCardId || e.target.files.length === 0) return;
-    const img = imageLibrary.find(i => i.id === targetLogoCardId);
-    if (img) {
-      if (img.logoUrl) URL.revokeObjectURL(img.logoUrl);
-      img.logoUrl = URL.createObjectURL(e.target.files[0]); img.logoBlob = e.target.files[0];
-      const dbObj = { ...img }; delete dbObj.url; delete dbObj.logoUrl; delete dbObj.coverUrl; saveAssetToDB(dbObj); 
-      if(currentModalImgId === img.id) renderModal(); renderGallery();
+    
+    try {
+      await ensureSupabaseClient();
+      const file = e.target.files[0];
+      const ext = file.name.split('.').pop().toLowerCase();
+      const filePath = `logos/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage.from('visual-assets').upload(filePath, file, { upsert: false });
+      if(uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from('visual-assets').getPublicUrl(filePath);
+
+      const { error } = await supabase.from('assets_library').update({ logo_url: urlData.publicUrl }).eq('id', targetLogoCardId);
+      if(error) throw error;
+      
+      e.target.value = '';
+      await loadDataFromCloud();
+      renderGallery();
+      if(currentModalImgId === targetLogoCardId) renderModal();
+      showCloudStatus('云端状态：Logo 替换成功', 'ok');
+    } catch (error) {
+      showCloudStatus(`云端状态：Logo 替换失败（${readCloudError(error, '未知错误')}）`, 'err');
     }
-    e.target.value = '';
+  });
+
+  window.addEventListener('beforeunload', () => {
+    closeCloudSync();
   });
 </script>
 </body>
