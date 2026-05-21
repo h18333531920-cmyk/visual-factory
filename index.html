@@ -403,6 +403,10 @@
   let lastSyncAt = 0;
   let cloudSyncBusy = false;
 
+  function sameId(a, b) {
+    return String(a) === String(b);
+  }
+
   function showCloudStatus(text, tone = '') {
     const el = document.getElementById('cloud-sync-status');
     if(!el) return;
@@ -651,10 +655,23 @@
   async function loadDataFromCloud(silent = false) {
     if(!silent) galleryContainer.innerHTML = '<div class="loading-state">🚀 正在通过云端引擎同步资产...</div>';
     await ensureSupabaseClient();
-    const { data, error } = await vfSupabaseClient
+    let data = null;
+    let error = null;
+
+    ({ data, error } = await vfSupabaseClient
       .from('assets_library')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false }));
+
+    if (error && /created_at.*does not exist/i.test(readCloudError(error, ''))) {
+      ({ data, error } = await vfSupabaseClient
+        .from('assets_library')
+        .select('*'));
+      if (!error) {
+        showCloudStatus('云端状态：字段兼容模式（建议补齐 created_at）', 'warn');
+      }
+    }
+
     if (error) {
       const msg = readCloudError(error, '加载云端数据失败');
       showCloudStatus(`云端状态：同步失败（${msg}）`, 'err');
@@ -665,9 +682,11 @@
     imageLibrary = data.map(record => {
       const ext = (record.file_name || '').split('.').pop().toLowerCase();
       const isSource = ['psd', 'ai', 'eps', 'pdf'].includes(ext) || (record.file_type && (record.file_type.includes('photoshop') || record.file_type.includes('illustrator')));
+      const rawTs = record.created_at ? Date.parse(record.created_at) : NaN;
+      const safeTs = Number.isFinite(rawTs) ? rawTs : Date.now();
 
       return {
-        id: record.id,
+        id: String(record.id),
         url: record.file_url,
         logoUrl: record.logo_url || null,
         coverUrl: record.cover_url || null,
@@ -679,7 +698,7 @@
         g_l1: record.g_l1 || '未分类', g_l2: record.g_l2 || '全部',
         s_l1: record.s_l1 || '全部', s_l2: record.s_l2 || '全部', s_l3: record.s_l3 || '通用',
         uploader_name: record.uploader_name,
-        timestamp: new Date(record.created_at).getTime(),
+        timestamp: safeTs,
         downloads: 0,
         uploader_id: record.uploader_name === currentUser.name ? currentUser.id : 'others'
       };
@@ -827,72 +846,85 @@
   }
 
   // === 详情弹窗 ===
-  window.openDetailModal = (id) => { currentModalImgId = id; renderModal(); document.getElementById('detail-modal').classList.add('show'); };
+  window.openDetailModal = (id) => { currentModalImgId = String(id); renderModal(); document.getElementById('detail-modal').classList.add('show'); };
   window.closeDetailModal = () => { document.getElementById('detail-modal').classList.remove('show'); currentModalImgId = null; renderGallery(); };
   document.getElementById('detail-modal').addEventListener('click', (e) => { if(e.target === document.getElementById('detail-modal')) closeDetailModal(); });
 
   window.renderModal = () => {
-    if(!currentModalImgId) return;
-    const t = i18n[currentLang];
-    const img = imageLibrary.find(i => i.id === currentModalImgId); 
-    if(!img) return closeDetailModal();
-    
-    document.getElementById('modal-title').innerText = img.brandName || t.modal_default;
+    try {
+      if(!currentModalImgId) return;
+      const t = i18n[currentLang];
+      const img = imageLibrary.find(i => sameId(i.id, currentModalImgId)); 
+      const mediaContainer = document.getElementById('modal-media-container');
+      const footerContainer = document.getElementById('modal-footer-controls');
 
-    const mediaContainer = document.getElementById('modal-media-container');
-    if (img.coverUrl) { mediaContainer.innerHTML = `<img src="${img.coverUrl}">`; } 
-    else if (img.libType === 'assets') { mediaContainer.innerHTML = `<img src="${img.url}">`; } 
-    else { mediaContainer.innerHTML = `<div class="file-placeholder">${filePlaceholderSVG}<span style="font-size:20px;font-weight:bold;text-align:center;">${img.fileName}</span><span style="font-size:13px;">${t.unsupported}</span></div>`; }
+      if(!img) {
+        document.getElementById('modal-title').innerText = t.modal_default;
+        mediaContainer.innerHTML = `<div class="file-placeholder"><span style="font-size:16px;">素材不存在或刚被同步替换，请关闭后重试。</span></div>`;
+        footerContainer.innerHTML = '';
+        return;
+      }
+      
+      document.getElementById('modal-title').innerText = img.brandName || t.modal_default;
 
-    const isOwner = img.uploader_id === currentUser.id;
-    const canEdit = currentUser.role === 'admin' || (currentUser.role === 'designer' && isOwner);
-    const logoContent = img.logoUrl ? `<img src="${img.logoUrl}" class="logo-thumbnail">` : `<span class="logo-placeholder-text">${canEdit ? t.logo_ph : '暂无 Logo'}</span>`;
+      if (img.coverUrl) { mediaContainer.innerHTML = `<img src="${img.coverUrl}">`; } 
+      else if (img.libType === 'assets') { mediaContainer.innerHTML = `<img src="${img.url}">`; } 
+      else { mediaContainer.innerHTML = `<div class="file-placeholder">${filePlaceholderSVG}<span style="font-size:20px;font-weight:bold;text-align:center;">${img.fileName}</span><span style="font-size:13px;">${t.unsupported}</span></div>`; }
 
-    let tagsSelectHTML = '';
-    if(img.libType === 'assets') {
-        const safeL1 = g_l1_tags.includes(img.g_l1) ? img.g_l1 : '未分类';
-        const safeL2 = g_l2_tags.includes(img.g_l2) ? img.g_l2 : '全部';
-        tagsSelectHTML = `
-          <select class="glass-select primary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 'g_l1', this.value)">${g_l1_tags.map(tag => `<option value="${tag}" ${safeL1 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
-          <select class="glass-select secondary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 'g_l2', this.value)">${g_l2_tags.map(tag => `<option value="${tag}" ${safeL2 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
-        `;
-    } else {
-        const safeL1 = s_l1_tags.includes(img.s_l1) ? img.s_l1 : '全部';
-        const safeL2 = s_l2_tags.includes(img.s_l2) ? img.s_l2 : '全部';
-        const safeL3 = s_l3_tags.includes(img.s_l3) ? img.s_l3 : '通用';
-        tagsSelectHTML = `
-          <select class="glass-select primary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l1', this.value)">${s_l1_tags.map(tag => `<option value="${tag}" ${safeL1 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
-          <select class="glass-select secondary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l2', this.value)">${s_l2_tags.map(tag => `<option value="${tag}" ${safeL2 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
-          <select class="glass-select tertiary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l3', this.value)">${s_l3_tags.map(tag => `<option value="${tag}" ${safeL3 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
-        `;
+      const isOwner = img.uploader_id === currentUser.id;
+      const canEdit = currentUser.role === 'admin' || (currentUser.role === 'designer' && isOwner);
+      const logoContent = img.logoUrl ? `<img src="${img.logoUrl}" class="logo-thumbnail">` : `<span class="logo-placeholder-text">${canEdit ? t.logo_ph : '暂无 Logo'}</span>`;
+
+      let tagsSelectHTML = '';
+      if(img.libType === 'assets') {
+          const safeL1 = g_l1_tags.includes(img.g_l1) ? img.g_l1 : '未分类';
+          const safeL2 = g_l2_tags.includes(img.g_l2) ? img.g_l2 : '全部';
+          tagsSelectHTML = `
+            <select class="glass-select primary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 'g_l1', this.value)">${g_l1_tags.map(tag => `<option value="${tag}" ${safeL1 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
+            <select class="glass-select secondary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 'g_l2', this.value)">${g_l2_tags.map(tag => `<option value="${tag}" ${safeL2 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
+          `;
+      } else {
+          const safeL1 = s_l1_tags.includes(img.s_l1) ? img.s_l1 : '全部';
+          const safeL2 = s_l2_tags.includes(img.s_l2) ? img.s_l2 : '全部';
+          const safeL3 = s_l3_tags.includes(img.s_l3) ? img.s_l3 : '通用';
+          tagsSelectHTML = `
+            <select class="glass-select primary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l1', this.value)">${s_l1_tags.map(tag => `<option value="${tag}" ${safeL1 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
+            <select class="glass-select secondary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l2', this.value)">${s_l2_tags.map(tag => `<option value="${tag}" ${safeL2 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
+            <select class="glass-select tertiary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l3', this.value)">${s_l3_tags.map(tag => `<option value="${tag}" ${safeL3 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
+          `;
+      }
+      
+      mediaContainer.innerHTML += `<div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; width: 100%;">${tagsSelectHTML}</div>`;
+
+      const deleteBtnHTML = canEdit ? `<button class="btn-ghost" style="border-color:var(--danger); color:var(--danger); display:flex; align-items:center; gap:6px;" onclick="deleteImage('${img.id}'); closeDetailModal();">${deleteIconSVG} ${t.menu_del}</button>` : '';
+      const replaceCoverBtnHTML = canEdit ? `<button class="btn-ghost" style="display:flex; align-items:center; margin-right:auto; margin-left: 10px;" onclick="triggerSingleCoverReplace('${img.id}')">${t.btn_replace_cover}</button>` : '';
+
+      footerContainer.innerHTML = `
+        <div style="display: flex; gap: 16px; flex: 1;">
+            <div class="modal-logo-section" ${canEdit ? `onclick="triggerLogoUpload('${img.id}')"` : ''} title="${canEdit ? '点击上传/更换 Logo' : ''}">
+              <div class="logo-preview-area">${logoContent}</div>
+              <button class="btn-download-small" onclick="event.stopPropagation(); triggerDownload('${img.id}', 'logo', 'logo.png')" ${!img.logoUrl ? 'disabled' : ''}>${t.btn_dl_logo}</button>
+            </div>
+            ${replaceCoverBtnHTML}
+        </div>
+        <div class="modal-right-actions">
+          ${deleteBtnHTML}
+          <div style="font-size: 12px; color: #8a919f; text-align: right;">${t.uploader_prefix} <span style="color:#fff; font-weight:bold;">${img.uploader_name || 'System'}</span><br><span style="font-size: 11px;">${img.fileName}</span></div>
+          <button class="btn-download-large" onclick="triggerDownload('${img.id}', 'main', '${img.fileName}')">${dlIconSVG} ${t.btn_dl_main}</button>
+        </div>
+      `;
+    } catch (error) {
+      document.getElementById('modal-media-container').innerHTML = `<div class="file-placeholder"><span style="font-size:16px;">详情渲染失败，请关闭后重试。</span></div>`;
+      document.getElementById('modal-footer-controls').innerHTML = '';
+      showCloudStatus(`云端状态：详情渲染失败（${readCloudError(error, '未知错误')}）`, 'err');
     }
-    
-    mediaContainer.innerHTML += `<div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; width: 100%;">${tagsSelectHTML}</div>`;
-
-    const deleteBtnHTML = canEdit ? `<button class="btn-ghost" style="border-color:var(--danger); color:var(--danger); display:flex; align-items:center; gap:6px;" onclick="deleteImage('${img.id}'); closeDetailModal();">${deleteIconSVG} ${t.menu_del}</button>` : '';
-    const replaceCoverBtnHTML = canEdit ? `<button class="btn-ghost" style="display:flex; align-items:center; margin-right:auto; margin-left: 10px;" onclick="triggerSingleCoverReplace('${img.id}')">${t.btn_replace_cover}</button>` : '';
-
-    document.getElementById('modal-footer-controls').innerHTML = `
-      <div style="display: flex; gap: 16px; flex: 1;">
-          <div class="modal-logo-section" ${canEdit ? `onclick="triggerLogoUpload('${img.id}')"` : ''} title="${canEdit ? '点击上传/更换 Logo' : ''}">
-            <div class="logo-preview-area">${logoContent}</div>
-            <button class="btn-download-small" onclick="event.stopPropagation(); triggerDownload('${img.id}', 'logo', 'logo.png')" ${!img.logoUrl ? 'disabled' : ''}>${t.btn_dl_logo}</button>
-          </div>
-          ${replaceCoverBtnHTML}
-      </div>
-      <div class="modal-right-actions">
-        ${deleteBtnHTML}
-        <div style="font-size: 12px; color: #8a919f; text-align: right;">${t.uploader_prefix} <span style="color:#fff; font-weight:bold;">${img.uploader_name || 'System'}</span><br><span style="font-size: 11px;">${img.fileName}</span></div>
-        <button class="btn-download-large" onclick="triggerDownload('${img.id}', 'main', '${img.fileName}')">${dlIconSVG} ${t.btn_dl_main}</button>
-      </div>
-    `;
   };
 
   // ==========================================
   // 核心 2：云端数据修改与删除引擎
   // ==========================================
   window.updateAssetField = async (id, field, value) => {
-    const img = imageLibrary.find(i => i.id === id);
+    const img = imageLibrary.find(i => sameId(i.id, id));
     if (img) { 
       try {
         img[field] = value; 
@@ -905,7 +937,7 @@
           const { error } = await vfSupabaseClient.from('assets_library').update({ [dbField]: value }).eq('id', id);
           if(error) throw error;
         }
-        if(currentModalImgId === id && field === 'brandName') renderModal(); 
+        if(currentModalImgId && sameId(currentModalImgId, id) && field === 'brandName') renderModal(); 
         showCloudStatus('云端状态：字段更新成功', 'ok');
       } catch (error) {
         showCloudStatus(`云端状态：字段更新失败（${readCloudError(error, '未知错误')}）`, 'err');
@@ -916,7 +948,7 @@
   window.changeSort = (type, el) => { currentSort = type; document.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active')); el.classList.add('active'); renderGallery(); };
 
   window.deleteImage = async (id) => {
-    const index = imageLibrary.findIndex(i => i.id === id);
+    const index = imageLibrary.findIndex(i => sameId(i.id, id));
     if(index > -1) {
       const img = imageLibrary[index];
       imageLibrary.splice(index, 1);
@@ -939,7 +971,7 @@
   };
 
   window.triggerDownload = (id, type, originalName) => {
-    const img = imageLibrary.find(i => i.id === id); if(!img) return;
+    const img = imageLibrary.find(i => sameId(i.id, id)); if(!img) return;
     const url = type === 'main' ? img.url : img.logoUrl; if(!url || url === 'null') return;
     const a = document.createElement('a'); a.href = url; 
     let ext = '.png';
@@ -969,6 +1001,9 @@
     if (sourceFiles.length > 0) {
       if(sourceFiles.length > 1) alert("检测到多个源文件，系统已载入第一个。为保证精准匹配，请逐个上传源文件。");
       pendingSourceFile = sourceFiles[0];
+      if (pendingSourceFile.size > 200 * 1024 * 1024) {
+        showCloudStatus('云端状态：源文件较大（>200MB），上传可能较慢，请耐心等待', 'warn');
+      }
       pendingPreviewFiles = [];
       document.getElementById('pending-file-name').innerText = pendingSourceFile.name;
       document.getElementById('pending-file-size').innerText = formatBytes(pendingSourceFile.size);
@@ -1060,7 +1095,7 @@
     if(!pendingSourceFile || pendingPreviewFiles.length === 0) return;
 
     const btn = document.getElementById('btn-confirm-upload');
-    btn.disabled = true; btn.innerText = '正在云端压制...';
+    btn.disabled = true; btn.innerText = '上传源文件(1/2)...';
 
     try {
       await ensureSupabaseClient();
@@ -1073,6 +1108,7 @@
       if(srcUploadError) throw srcUploadError;
       const { data: srcUrlData } = vfSupabaseClient.storage.from('visual-assets').getPublicUrl(srcPath);
 
+      btn.innerText = '上传预览图并入库(2/2)...';
       for(let i=0; i<pendingPreviewFiles.length; i++) {
           const preview = pendingPreviewFiles[i];
           const prevExt = preview.file.name.split('.').pop().toLowerCase();
@@ -1130,7 +1166,7 @@
       e.target.value = '';
       await loadDataFromCloud();
       renderGallery();
-      if(currentModalImgId === targetCoverCardId) renderModal();
+      if(currentModalImgId && sameId(currentModalImgId, targetCoverCardId)) renderModal();
       showCloudStatus('云端状态：预览图替换成功', 'ok');
     } catch (error) {
       showCloudStatus(`云端状态：预览图替换失败（${readCloudError(error, '未知错误')}）`, 'err');
@@ -1157,7 +1193,7 @@
       e.target.value = '';
       await loadDataFromCloud();
       renderGallery();
-      if(currentModalImgId === targetLogoCardId) renderModal();
+      if(currentModalImgId && sameId(currentModalImgId, targetLogoCardId)) renderModal();
       showCloudStatus('云端状态：Logo 替换成功', 'ok');
     } catch (error) {
       showCloudStatus(`云端状态：Logo 替换失败（${readCloudError(error, '未知错误')}）`, 'err');
