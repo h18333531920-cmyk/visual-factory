@@ -427,10 +427,25 @@
 
   function extractStoragePathFromUrl(publicUrl, bucket) {
     if(!publicUrl) return null;
-    const marker = `/storage/v1/object/public/${bucket}/`;
-    const idx = publicUrl.indexOf(marker);
-    if(idx === -1) return null;
-    return decodeURIComponent(publicUrl.slice(idx + marker.length));
+    const markers = [
+      `/storage/v1/object/public/${bucket}/`,
+      `/storage/v1/object/sign/${bucket}/`,
+      `/storage/v1/object/authenticated/${bucket}/`
+    ];
+    for(const marker of markers) {
+      const idx = publicUrl.indexOf(marker);
+      if(idx === -1) continue;
+      const raw = publicUrl.slice(idx + marker.length);
+      const noQuery = raw.split('?')[0].split('#')[0];
+      return decodeURIComponent(noQuery);
+    }
+    return null;
+  }
+
+  function buildDownloadUrl(url, filename) {
+    if(!url) return url;
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}download=${encodeURIComponent(filename || 'asset')}`;
   }
 
   function closeCloudSync() {
@@ -1055,6 +1070,19 @@
       URL.revokeObjectURL(localUrl);
       showCloudStatus('云端状态：下载已开始', 'ok');
     };
+
+    try {
+      const directUrl = buildDownloadUrl(url, downloadName);
+      const directA = document.createElement('a');
+      directA.href = directUrl;
+      directA.download = downloadName;
+      directA.rel = 'noopener';
+      document.body.appendChild(directA);
+      directA.click();
+      document.body.removeChild(directA);
+      showCloudStatus('云端状态：下载已开始', 'ok');
+      return;
+    } catch (_) {}
 
     try {
       await ensureSupabaseClient();
