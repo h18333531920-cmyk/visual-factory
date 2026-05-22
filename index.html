@@ -419,6 +419,11 @@
     if(typeof error === 'string') return error;
     return error.message || error.error_description || fallbackText;
   }
+  function safeDownloadName(baseName, fallbackExt = '') {
+    const safe = String(baseName || '').replace(/[\\/:*?"<>|]/g, '_').trim();
+    if(!safe) return `asset${fallbackExt}`;
+    return safe;
+  }
 
   function extractStoragePathFromUrl(publicUrl, bucket) {
     if(!publicUrl) return null;
@@ -498,6 +503,41 @@
   };
   let currentUser = null;
 
+  function mapRoleToFallbackUser(roleKey) {
+    return MOCK_USERS[roleKey] || MOCK_USERS.viewer;
+  }
+
+  async function tryServerLogin(roleKey) {
+    const passcode = window.prompt(`请输入 ${roleKey} 登录口令`);
+    if (passcode === null) return { cancelled: true };
+    const resp = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ role: roleKey, passcode })
+    });
+
+    if (resp.status === 404) return { fallback: true };
+    let json = {};
+    try { json = await resp.json(); } catch (_) {}
+    if (!resp.ok || !json.user) {
+      throw new Error(json.message || '登录失败，请检查口令');
+    }
+    return { user: json.user };
+  }
+
+  async function tryRestoreServerSession() {
+    try {
+      const resp = await fetch('/api/session', { credentials: 'include' });
+      if (!resp.ok) return null;
+      const json = await resp.json();
+      if (!json || !json.user) return null;
+      return json.user;
+    } catch (_) {
+      return null;
+    }
+  }
+
   const i18n = {
     zh: {
       nav_assets: "成图图库", nav_sources: "源文件库", nav_tags: "标签配置后台",
@@ -568,7 +608,25 @@
   document.addEventListener('drop', e => e.preventDefault());
 
   async function login(roleKey) {
-    currentUser = MOCK_USERS[roleKey];
+    let resolvedUser = null;
+    try {
+      const serverLogin = await tryServerLogin(roleKey);
+      if (serverLogin.cancelled) return;
+      if (serverLogin.user) {
+        resolvedUser = {
+          id: serverLogin.user.id || `u_${serverLogin.user.role || roleKey}`,
+          name: serverLogin.user.name || mapRoleToFallbackUser(roleKey).name,
+          role: serverLogin.user.role || roleKey
+        };
+      } else if (serverLogin.fallback) {
+        resolvedUser = mapRoleToFallbackUser(roleKey);
+      }
+    } catch (error) {
+      alert(`登录失败：${readCloudError(error, '未知错误')}`);
+      return;
+    }
+
+    currentUser = resolvedUser || mapRoleToFallbackUser(roleKey);
     document.getElementById('login-overlay').style.display = 'none';
     document.getElementById('app-main').style.display = 'flex';
     document.getElementById('current-user-name').innerText = currentUser.name + ` (${currentUser.role})`;
@@ -587,7 +645,12 @@
     }
   }
 
-  function logout() { location.reload(); }
+  async function logout() {
+    try {
+      await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+    } catch (_) {}
+    location.reload();
+  }
 
   function applyRolePermissions() {
     const hideNodes = document.querySelectorAll('.hide-for-viewer');
@@ -970,14 +1033,53 @@
     }
   };
 
-  window.triggerDownload = (id, type, originalName) => {
+  window.triggerDownload = async (id, type, originalName) => {
     const img = imageLibrary.find(i => sameId(i.id, id)); if(!img) return;
-    const url = type === 'main' ? img.url : img.logoUrl; if(!url || url === 'null') return;
-    const a = document.createElement('a'); a.href = url; 
+    const url = type === 'main' ? img.url : img.logoUrl;
+    if(!url || url === 'null') {
+      showCloudStatus('云端状态：下载失败（文件链接为空）', 'err');
+      return;
+    }
     let ext = '.png';
-    if(originalName && originalName.includes('.')){ ext = originalName.substring(originalName.lastIndexOf('.')); }
-    a.download = (img.brandName || 'Asset') + '_' + type + ext; 
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    if(originalName && originalName.includes('.')) ext = originalName.substring(originalName.lastIndexOf('.'));
+    const downloadName = safeDownloadName((img.brandName || 'Asset') + '_' + type + ext, ext);
+
+    const triggerBlobDownload = (blob) => {
+      const localUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = localUrl;
+      a.download = downloadName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(localUrl);
+      showCloudStatus('云端状态：下载已开始', 'ok');
+    };
+
+    try {
+      await ensureSupabaseClient();
+      const storagePath = extractStoragePathFromUrl(url, 'visual-assets');
+      if (storagePath) {
+        const { data: fileBlob, error: fileErr } = await vfSupabaseClient.storage.from('visual-assets').download(storagePath);
+        if(!fileErr && fileBlob) {
+          triggerBlobDownload(fileBlob);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    fetch(url, { mode: 'cors' })
+      .then(resp => {
+        if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return resp.blob();
+      })
+      .then(blob => {
+        triggerBlobDownload(blob);
+      })
+      .catch(() => {
+        window.open(url, '_blank', 'noopener');
+        showCloudStatus('云端状态：下载回退为新窗口打开（浏览器跨域限制）', 'warn');
+      });
   };
 
   // ==========================================
@@ -1001,6 +1103,9 @@
     if (sourceFiles.length > 0) {
       if(sourceFiles.length > 1) alert("检测到多个源文件，系统已载入第一个。为保证精准匹配，请逐个上传源文件。");
       pendingSourceFile = sourceFiles[0];
+      if (pendingSourceFile.size > 50 * 1024 * 1024) {
+        showCloudStatus('云端状态：大文件上传建议改用分片上传（TUS），当前方式可能较慢', 'warn');
+      }
       if (pendingSourceFile.size > 200 * 1024 * 1024) {
         showCloudStatus('云端状态：源文件较大（>200MB），上传可能较慢，请耐心等待', 'warn');
       }
@@ -1202,6 +1307,33 @@
 
   window.addEventListener('beforeunload', () => {
     closeCloudSync();
+  });
+
+  window.addEventListener('load', async () => {
+    const sessionUser = await tryRestoreServerSession();
+    if (!sessionUser) return;
+    const roleKey = sessionUser.role || 'viewer';
+    currentUser = {
+      id: sessionUser.id || `u_${roleKey}`,
+      name: sessionUser.name || mapRoleToFallbackUser(roleKey).name,
+      role: roleKey
+    };
+    document.getElementById('login-overlay').style.display = 'none';
+    document.getElementById('app-main').style.display = 'flex';
+    document.getElementById('current-user-name').innerText = currentUser.name + ` (${currentUser.role})`;
+    applyRolePermissions();
+    showCloudStatus('云端状态：正在连接...', 'warn');
+    try {
+      await ensureSupabaseClient();
+      await loadDataFromCloud();
+      await setupCloudSync();
+      updateI18nTexts();
+      switchView('assets');
+    } catch (error) {
+      const msg = readCloudError(error, '云端连接失败');
+      showCloudStatus(`云端状态：连接失败（${msg}）`, 'err');
+      galleryContainer.innerHTML = `<div class="loading-state">云端连接失败：${msg}</div>`;
+    }
   });
 </script>
 </body>
