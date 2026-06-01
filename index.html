@@ -536,6 +536,14 @@
   }
 
   async function tryServerLogin(roleKey) {
+    const isLocalEnv =
+      location.protocol === 'file:' ||
+      location.hostname === 'localhost' ||
+      location.hostname === '127.0.0.1';
+    const passwordlessHosts = ['visual-factory-phi.vercel.app'];
+    const isPasswordlessHost = passwordlessHosts.includes(location.hostname);
+    if (isLocalEnv || isPasswordlessHost) return { fallback: true };
+
     const passcode = window.prompt(`请输入 ${roleKey} 登录口令`);
     if (passcode === null) return { cancelled: true };
     const resp = await fetch('/api/login', {
