@@ -644,18 +644,29 @@
   document.addEventListener('drop', e => e.preventDefault());
 
   async function login(roleKey) {
+    const isLocalEnv =
+      location.protocol === 'file:' ||
+      location.hostname === 'localhost' ||
+      location.hostname === '127.0.0.1';
+    const isVercelHost = location.hostname.endsWith('.vercel.app');
+    const forcePasswordless = isLocalEnv || isVercelHost;
+
     let resolvedUser = null;
     try {
-      const serverLogin = await tryServerLogin(roleKey);
-      if (serverLogin.cancelled) return;
-      if (serverLogin.user) {
-        resolvedUser = {
-          id: serverLogin.user.id || `u_${serverLogin.user.role || roleKey}`,
-          name: serverLogin.user.name || mapRoleToFallbackUser(roleKey).name,
-          role: serverLogin.user.role || roleKey
-        };
-      } else if (serverLogin.fallback) {
+      if (forcePasswordless) {
         resolvedUser = mapRoleToFallbackUser(roleKey);
+      } else {
+        const serverLogin = await tryServerLogin(roleKey);
+        if (serverLogin.cancelled) return;
+        if (serverLogin.user) {
+          resolvedUser = {
+            id: serverLogin.user.id || `u_${serverLogin.user.role || roleKey}`,
+            name: serverLogin.user.name || mapRoleToFallbackUser(roleKey).name,
+            role: serverLogin.user.role || roleKey
+          };
+        } else if (serverLogin.fallback) {
+          resolvedUser = mapRoleToFallbackUser(roleKey);
+        }
       }
     } catch (error) {
       alert(`登录失败：${readCloudError(error, '未知错误')}`);
