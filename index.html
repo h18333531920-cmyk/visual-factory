@@ -425,6 +425,19 @@
     return safe;
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function escapeAttr(value) {
+    return escapeHtml(value);
+  }
+
   function extractStoragePathFromUrl(publicUrl, bucket) {
     if(!publicUrl) return null;
     const markers = [
@@ -899,13 +912,13 @@
       const readOnlyAttr = !canEdit ? 'readonly class="brand-input readonly-input"' : 'class="brand-input"';
 
       let mediaHTML = '';
-      if (imgData.coverUrl) { mediaHTML = `<img src="${imgData.coverUrl}" loading="lazy">`; } 
-      else if (imgData.libType === 'assets') { mediaHTML = `<img src="${imgData.url}" loading="lazy">`; } 
+      if (imgData.coverUrl) { mediaHTML = `<img src="${escapeAttr(imgData.coverUrl)}" loading="lazy">`; } 
+      else if (imgData.libType === 'assets') { mediaHTML = `<img src="${escapeAttr(imgData.url)}" loading="lazy">`; } 
       else {
           mediaHTML = `
             <div class="file-icon-placeholder">
               ${filePlaceholderSVG}
-              <span style="font-size:12px;font-weight:bold;max-width:80%;text-align:center;word-break:break-all;">${imgData.fileName || 'DOCUMENT'}</span>
+              <span style="font-size:12px;font-weight:bold;max-width:80%;text-align:center;word-break:break-all;">${escapeHtml(imgData.fileName || 'DOCUMENT')}</span>
             </div>
           `;
       }
@@ -915,7 +928,7 @@
           ${mediaHTML}
         </div>
         <div class="card-content">
-          <input type="text" ${readOnlyAttr} placeholder="${t.brand_ph}" value="${imgData.brandName || ''}" onchange="updateAssetField('${imgData.id}', 'brandName', this.value)">
+          <input type="text" ${readOnlyAttr} placeholder="${escapeAttr(t.brand_ph)}" value="${escapeAttr(imgData.brandName || '')}" onchange="updateAssetField('${imgData.id}', 'brandName', this.value)">
         </div>
       `;
       fragment.appendChild(card);
@@ -945,53 +958,56 @@
       
       document.getElementById('modal-title').innerText = img.brandName || t.modal_default;
 
-      if (img.coverUrl) { mediaContainer.innerHTML = `<img src="${img.coverUrl}">`; } 
-      else if (img.libType === 'assets') { mediaContainer.innerHTML = `<img src="${img.url}">`; } 
-      else { mediaContainer.innerHTML = `<div class="file-placeholder">${filePlaceholderSVG}<span style="font-size:20px;font-weight:bold;text-align:center;">${img.fileName}</span><span style="font-size:13px;">${t.unsupported}</span></div>`; }
+      if (img.coverUrl) { mediaContainer.innerHTML = `<img src="${escapeAttr(img.coverUrl)}">`; } 
+      else if (img.libType === 'assets') { mediaContainer.innerHTML = `<img src="${escapeAttr(img.url)}">`; } 
+      else { mediaContainer.innerHTML = `<div class="file-placeholder">${filePlaceholderSVG}<span style="font-size:20px;font-weight:bold;text-align:center;">${escapeHtml(img.fileName || 'DOCUMENT')}</span><span style="font-size:13px;">${escapeHtml(t.unsupported)}</span></div>`; }
 
       const isOwner = img.uploader_id === currentUser.id;
       const canEdit = currentUser.role === 'admin' || (currentUser.role === 'designer' && isOwner);
-      const logoContent = img.logoUrl ? `<img src="${img.logoUrl}" class="logo-thumbnail">` : `<span class="logo-placeholder-text">${canEdit ? t.logo_ph : '暂无 Logo'}</span>`;
+      const logoContent = img.logoUrl ? `<img src="${escapeAttr(img.logoUrl)}" class="logo-thumbnail">` : `<span class="logo-placeholder-text">${escapeHtml(canEdit ? t.logo_ph : '暂无 Logo')}</span>`;
 
       let tagsSelectHTML = '';
       if(img.libType === 'assets') {
           const safeL1 = g_l1_tags.includes(img.g_l1) ? img.g_l1 : '未分类';
           const safeL2 = g_l2_tags.includes(img.g_l2) ? img.g_l2 : '全部';
           tagsSelectHTML = `
-            <select class="glass-select primary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 'g_l1', this.value)">${g_l1_tags.map(tag => `<option value="${tag}" ${safeL1 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
-            <select class="glass-select secondary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 'g_l2', this.value)">${g_l2_tags.map(tag => `<option value="${tag}" ${safeL2 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
+            <select class="glass-select primary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 'g_l1', this.value)">${g_l1_tags.map(tag => `<option value="${escapeAttr(tag)}" ${safeL1 === tag ? 'selected' : ''}>${escapeHtml(tag)}</option>`).join('')}</select>
+            <select class="glass-select secondary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 'g_l2', this.value)">${g_l2_tags.map(tag => `<option value="${escapeAttr(tag)}" ${safeL2 === tag ? 'selected' : ''}>${escapeHtml(tag)}</option>`).join('')}</select>
           `;
       } else {
           const safeL1 = s_l1_tags.includes(img.s_l1) ? img.s_l1 : '全部';
           const safeL2 = s_l2_tags.includes(img.s_l2) ? img.s_l2 : '全部';
           const safeL3 = s_l3_tags.includes(img.s_l3) ? img.s_l3 : '通用';
           tagsSelectHTML = `
-            <select class="glass-select primary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l1', this.value)">${s_l1_tags.map(tag => `<option value="${tag}" ${safeL1 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
-            <select class="glass-select secondary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l2', this.value)">${s_l2_tags.map(tag => `<option value="${tag}" ${safeL2 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
-            <select class="glass-select tertiary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l3', this.value)">${s_l3_tags.map(tag => `<option value="${tag}" ${safeL3 === tag ? 'selected' : ''}>${tag}</option>`).join('')}</select>
+            <select class="glass-select primary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l1', this.value)">${s_l1_tags.map(tag => `<option value="${escapeAttr(tag)}" ${safeL1 === tag ? 'selected' : ''}>${escapeHtml(tag)}</option>`).join('')}</select>
+            <select class="glass-select secondary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l2', this.value)">${s_l2_tags.map(tag => `<option value="${escapeAttr(tag)}" ${safeL2 === tag ? 'selected' : ''}>${escapeHtml(tag)}</option>`).join('')}</select>
+            <select class="glass-select tertiary" ${!canEdit?'disabled':''} onchange="updateAssetField('${img.id}', 's_l3', this.value)">${s_l3_tags.map(tag => `<option value="${escapeAttr(tag)}" ${safeL3 === tag ? 'selected' : ''}>${escapeHtml(tag)}</option>`).join('')}</select>
           `;
       }
       
       mediaContainer.innerHTML += `<div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; width: 100%;">${tagsSelectHTML}</div>`;
 
-      const deleteBtnHTML = canEdit ? `<button class="btn-ghost" style="border-color:var(--danger); color:var(--danger); display:flex; align-items:center; gap:6px;" onclick="deleteImage('${img.id}'); closeDetailModal();">${deleteIconSVG} ${t.menu_del}</button>` : '';
-      const replaceCoverBtnHTML = canEdit ? `<button class="btn-ghost" style="display:flex; align-items:center; margin-right:auto; margin-left: 10px;" onclick="triggerSingleCoverReplace('${img.id}')">${t.btn_replace_cover}</button>` : '';
+      const safeId = escapeAttr(String(img.id));
+      const safeMainNameEncoded = encodeURIComponent(String(img.fileName || 'asset'));
+      const deleteBtnHTML = canEdit ? `<button class="btn-ghost" style="border-color:var(--danger); color:var(--danger); display:flex; align-items:center; gap:6px;" onclick="deleteImageFromModal('${safeId}')">${deleteIconSVG} ${escapeHtml(t.menu_del)}</button>` : '';
+      const replaceCoverBtnHTML = canEdit ? `<button class="btn-ghost" style="display:flex; align-items:center; margin-right:auto; margin-left: 10px;" onclick="triggerSingleCoverReplace('${safeId}')">${escapeHtml(t.btn_replace_cover)}</button>` : '';
 
       footerContainer.innerHTML = `
         <div style="display: flex; gap: 16px; flex: 1;">
-            <div class="modal-logo-section" ${canEdit ? `onclick="triggerLogoUpload('${img.id}')"` : ''} title="${canEdit ? '点击上传/更换 Logo' : ''}">
+            <div class="modal-logo-section" ${canEdit ? `onclick="triggerLogoUpload('${safeId}')"` : ''} title="${escapeAttr(canEdit ? '点击上传/更换 Logo' : '')}">
               <div class="logo-preview-area">${logoContent}</div>
-              <button class="btn-download-small" onclick="event.stopPropagation(); triggerDownload('${img.id}', 'logo', 'logo.png')" ${!img.logoUrl ? 'disabled' : ''}>${t.btn_dl_logo}</button>
+              <button class="btn-download-small" onclick="event.stopPropagation(); triggerDownload('${safeId}', 'logo', 'logo.png')" ${!img.logoUrl ? 'disabled' : ''}>${escapeHtml(t.btn_dl_logo)}</button>
             </div>
             ${replaceCoverBtnHTML}
         </div>
         <div class="modal-right-actions">
           ${deleteBtnHTML}
-          <div style="font-size: 12px; color: #8a919f; text-align: right;">${t.uploader_prefix} <span style="color:#fff; font-weight:bold;">${img.uploader_name || 'System'}</span><br><span style="font-size: 11px;">${img.fileName}</span></div>
-          <button class="btn-download-large" onclick="triggerDownload('${img.id}', 'main', '${img.fileName}')">${dlIconSVG} ${t.btn_dl_main}</button>
+          <div style="font-size: 12px; color: #8a919f; text-align: right;">${escapeHtml(t.uploader_prefix)} <span style="color:#fff; font-weight:bold;">${escapeHtml(img.uploader_name || 'System')}</span><br><span style="font-size: 11px;">${escapeHtml(img.fileName || '')}</span></div>
+          <button class="btn-download-large" onclick="triggerDownload('${safeId}', 'main', decodeURIComponent('${safeMainNameEncoded}'))">${dlIconSVG} ${escapeHtml(t.btn_dl_main)}</button>
         </div>
       `;
     } catch (error) {
+      console.error('renderModal error:', error);
       document.getElementById('modal-media-container').innerHTML = `<div class="file-placeholder"><span style="font-size:16px;">详情渲染失败，请关闭后重试。</span></div>`;
       document.getElementById('modal-footer-controls').innerHTML = '';
       showCloudStatus(`云端状态：详情渲染失败（${readCloudError(error, '未知错误')}）`, 'err');
@@ -1027,25 +1043,36 @@
 
   window.deleteImage = async (id) => {
     const index = imageLibrary.findIndex(i => sameId(i.id, id));
-    if(index > -1) {
-      const img = imageLibrary[index];
-      imageLibrary.splice(index, 1);
-      renderGallery();
-      try {
-        await ensureSupabaseClient();
-        const removePaths = [
-          extractStoragePathFromUrl(img.url, 'visual-assets'),
-          extractStoragePathFromUrl(img.coverUrl, 'visual-assets'),
-          extractStoragePathFromUrl(img.logoUrl, 'visual-assets')
-        ].filter(Boolean);
-        if(removePaths.length > 0) await vfSupabaseClient.storage.from('visual-assets').remove(removePaths);
-        const { error } = await vfSupabaseClient.from('assets_library').delete().eq('id', id);
-        if(error) throw error;
-        showCloudStatus('云端状态：素材删除成功', 'ok');
-      } catch (error) {
-        showCloudStatus(`云端状态：删除失败（${readCloudError(error, '未知错误')}）`, 'err');
+    if(index < 0) return false;
+    const img = imageLibrary[index];
+    imageLibrary.splice(index, 1);
+    renderGallery();
+    try {
+      await ensureSupabaseClient();
+      const removePaths = [
+        extractStoragePathFromUrl(img.url, 'visual-assets'),
+        extractStoragePathFromUrl(img.coverUrl, 'visual-assets'),
+        extractStoragePathFromUrl(img.logoUrl, 'visual-assets')
+      ].filter(Boolean);
+      if(removePaths.length > 0) {
+        const { error: removeErr } = await vfSupabaseClient.storage.from('visual-assets').remove(removePaths);
+        if(removeErr) throw removeErr;
       }
+      const { error } = await vfSupabaseClient.from('assets_library').delete().eq('id', id);
+      if(error) throw error;
+      showCloudStatus('云端状态：素材删除成功', 'ok');
+      return true;
+    } catch (error) {
+      imageLibrary.splice(index, 0, img);
+      renderGallery();
+      showCloudStatus(`云端状态：删除失败（${readCloudError(error, '未知错误')}）`, 'err');
+      return false;
     }
+  };
+
+  window.deleteImageFromModal = async (id) => {
+    const ok = await window.deleteImage(id);
+    if (ok) closeDetailModal();
   };
 
   window.triggerDownload = async (id, type, originalName) => {
