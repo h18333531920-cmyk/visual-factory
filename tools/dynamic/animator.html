@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>营销视觉超级工厂 - 巅峰生产版 (带时光机与序列帧)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://unpkg.com/gif.js/dist/gif.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+    
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --panel: #ffffff; --border: #e2e8f0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 20px; margin: 0; color: #1e293b; user-select: none; }
+        .container { display: flex; gap: 24px; max-width: 1400px; width: 100%; height: 95vh; }
+        
+        .preview-section { flex: 1; background: var(--panel); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 20px; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.04); overflow: visible; z-index: 10; }
+        
+        .view-toggle-bar { display: flex; gap: 10px; background: #f1f5f9; padding: 4px; border-radius: 10px; margin-bottom: 20px; z-index: 100; }
+        .view-toggle-bar button { border: none; background: transparent; padding: 8px 16px; border-radius: 6px; font-weight: 600; color: #64748b; cursor: pointer; transition: 0.2s; font-size: 13px; }
+        .view-toggle-bar button.active { background: white; color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+
+        .viewport-wrapper { position: relative; transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), height 0.4s cubic-bezier(0.4, 0, 0.2, 1); display: flex; justify-content: center;}
+        .viewport-wrapper.mode-edit { width: 327px; height: 470.5px; }
+        .viewport-wrapper.mode-mockup { width: 315px; height: 682px; }
+
+        .master-container { position: absolute; top: 0; left: 0; transform-origin: top left; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; }
+        .master-container.mode-edit { width: 654px; height: 941px; transform: scale(0.5); border: 4px dashed #cbd5e1; border-radius: 16px; background: white; cursor: crosshair; }
+        .master-container.mode-mockup { width: 750px; height: 1624px; transform: scale(0.42); border-radius: 60px; box-shadow: 0 0 0 16px #0f172a, 0 30px 60px rgba(0,0,0,0.2); background: #1e293b; border: none; }
+
+        .mockup-bg { width: 100%; height: 100%; position: absolute; top: 0; left: 0; object-fit: cover; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
+        .mockup-mask { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 2; pointer-events: none; opacity: 0; transition: opacity 0.3s; background: rgba(0,0,0,0.6); }
+        .canvas-wrapper { width: 654px; height: 941px; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3; }
+        
+        .grid-lines { position: absolute; width: 100%; height: 100%; z-index: 99; pointer-events: none; background-image: linear-gradient(to right, rgba(37,99,235,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(37,99,235,0.15) 1px, transparent 1px); background-size: 163.5px 156.83px; display: block; opacity: 0; transition: 0.3s; }
+        .bg-checker { background-image: linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; background-color: white; }
+
+        .edit-tools { position: absolute; left: 20px; top: 80px; display: flex; flex-direction: column; gap: 8px; z-index: 100; transition: 0.3s; }
+        .edit-tools button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid #cbd5e1; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); transition: 0.2s;}
+        .edit-tools button:hover { transform: scale(1.1); }
+        .edit-tools button.active { box-shadow: 0 0 0 2px var(--primary); }
+
+        .mockup-tools { position: absolute; right: -50px; top: 40px; z-index: 999; transition: 0.3s; opacity: 0; pointer-events: none;}
+        .mockup-tools .tool-btn { background: white; border: 1px solid #cbd5e1; border-radius: 50%; width: 38px; height: 38px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display:flex; justify-content:center; align-items:center; font-size:16px; transition: 0.2s;}
+        .mockup-tools .tool-btn:hover { transform: scale(1.1); color: var(--primary); }
+        .mockup-popover { position: absolute; left: 50px; top: 0; width: 220px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border: 1px solid var(--border); border-radius: 12px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); display: none; text-align: left;}
+
+        .drop-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%; z-index: 10; font-weight: 500;}
+        
+        .layer-el { position: absolute; transform-origin: center center; cursor: move; pointer-events: auto;}
+        .layer-el.active { outline: 4px dashed var(--primary); outline-offset: 4px; z-index: 50; }
+        .anim-wrapper { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center;}
+        .anim-wrapper img { display: block; pointer-events: none; }
+
+        /* 时间轴与控制区 */
+        .timeline-container { width: 327px; margin-top: 16px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 12px; box-sizing: border-box; box-shadow: 0 2px 10px rgba(0,0,0,0.02);}
+        .timeline-info { display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-bottom: 8px; font-weight: 600;}
+        input[type="range"].scrubber { width: 100%; margin: 0; cursor: pointer; height: 6px; background: #e2e8f0; border-radius: 3px; -webkit-appearance: none; }
+        input[type="range"].scrubber::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: var(--primary); border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+
+        .action-bar { width: 327px; display: flex; gap: 12px; position: relative; z-index: 10; margin-top: 12px;}
+        .btn { padding: 10px 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; font-size: 13px; flex: 1; display: flex; justify-content: center; align-items: center; gap: 6px;}
+        .btn-upload { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+        .btn-upload:hover { background: #e2e8f0; }
+        .btn-play { background: #10b981; color: white; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+        .btn-play.playing { background: #f59e0b; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
+        .btn-play:hover { filter: brightness(0.9); }
+
+        /* === 右侧控制台 === */
+        .control-section { flex: 1.2; background: var(--panel); border-radius: 16px; padding: 24px; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.04); position: relative; z-index: 5;}
+        .card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid var(--border); transition: 0.3s;}
+        h3 { margin-top: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+        h3::before { content: ''; display: block; width: 4px; height: 14px; background: var(--primary); border-radius: 2px; }
+        
+        .layer-list { list-style: none; padding: 0; margin: 0; max-height: 400px; overflow-y: auto; }
+        .layer-item { display: flex; align-items: center; padding: 8px; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; cursor: grab; transition: transform 0.2s;}
+        .layer-item:active { cursor: grabbing; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: scale(1.02); z-index: 100;}
+        .layer-item.active { border-color: var(--primary); background: #eff6ff; }
+        .drag-handle { padding: 0 10px; color: #94a3b8; font-size: 18px; cursor: grab; }
+        .layer-thumb { width: 36px; height: 36px; object-fit: contain; background: #fff; border-radius: 4px; border: 1px solid #e2e8f0; margin-right: 12px; }
+        
+        .semantic-select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-bottom: 16px; outline: none; background: #fff;}
+        .param-group { background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .param-row { display: flex; flex-direction: column; margin-bottom: 12px; }
+        .param-row:last-child { margin-bottom: 0; }
+        .param-header { display: flex; justify-content: space-between; font-size: 12px; color: #64748b; margin-bottom: 8px; font-weight: 500; }
+        
+        .toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #475569; font-weight: 500;}
+        .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(18px); }
+
+        .export-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;}
+        .btn-gif { background: #8b5cf6; color: white; }
+        .btn-gif:hover { background: #7c3aed; }
+        .btn-png { background: #334155; color: white; }
+        .btn-png:hover { background: #0f172a; }
+
+        .bg-choice-group { display: flex; gap: 10px; margin-bottom: 16px; }
+        .bg-choice { flex: 1; text-align: center; padding: 8px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 12px; transition: 0.2s; background: #fff; font-weight: 500;}
+        .bg-choice.active { border-color: var(--primary); background: #eff6ff; color: var(--primary); font-weight: 600; box-shadow: inset 0 0 0 1px var(--primary); }
+
+        #export-overlay { display: none; position: fixed; top:0; left:0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; }
+        .progress-bar { width: 300px; height: 8px; background: #e2e8f0; border-radius: 4px; margin-top: 20px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.1s; }
+        
+        .history-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 10px 24px; border-radius: 30px; font-size: 13px; font-weight: bold; opacity: 0; pointer-events: none; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+<div class="history-toast" id="history-toast">已撤销</div>
+
+<div id="export-overlay">
+    <h2 style="color: var(--primary); margin: 0;">引擎重采样渲染中...</h2>
+    <p style="color: #64748b; font-size: 14px;" id="export-text">正在通过底层矩阵同步时间轴并抓取序列</p>
+    <div class="progress-bar"><div class="progress-fill" id="export-progress"></div></div>
+</div>
+
+<div class="container">
+    <div class="preview-section">
+        
+        <div class="view-toggle-bar">
+            <button id="btn-mode-edit" class="active" onclick="switchMode('edit')">✏️ 专注编辑</button>
+            <button id="btn-mode-mockup" onclick="switchMode('mockup')">📱 样机展示</button>
+        </div>
+
+        <input type="file" id="hidden-upload" multiple accept="image/png, image/jpeg, application/zip" style="display: none;" onchange="handleFiles(event)">
+        <input type="file" id="hidden-mockup-upload" accept="image/png, image/jpeg" style="display: none;" onchange="handleMockupFile(event)">
+        
+        <div id="edit-tools" class="edit-tools">
+            <button id="bg-btn-white" class="active" onclick="setEditBg('white')" title="白底辅助">⚪</button>
+            <button id="bg-btn-black" onclick="setEditBg('black')" title="黑底辅助">⚫</button>
+            <button id="bg-btn-trans" onclick="setEditBg('transparent')" title="透明观察">🏁</button>
+        </div>
+
+        <div id="viewport-wrapper" class="viewport-wrapper mode-edit">
+            <div id="master-container" class="master-container mode-edit" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" onclick="triggerUpload(event)">
+                
+                <img id="mockup-bg" class="mockup-bg" src="" />
+                <div id="mockup-mask" class="mockup-mask"></div>
+                
+                <div class="canvas-wrapper" id="main-canvas">
+                    <div id="grid-lines" class="grid-lines"></div>
+                    <div class="drop-hint" id="drop-hint">📥<br>拖拽素材或 .ZIP序列包</div>
+                </div>
+            </div>
+
+            <div id="mockup-tools" class="mockup-tools">
+                <button class="tool-btn" onclick="toggleMockupPopover()" title="样机设置">⚙️</button>
+                <div id="mockup-popover" class="mockup-popover">
+                    <h4 style="margin:0 0 12px 0; font-size:14px; color:#1e293b; display:flex; justify-content:space-between; align-items:center;">
+                        环境配置 <span style="cursor:pointer; color:#94a3b8; font-size:18px;" onclick="toggleMockupPopover()">×</span>
+                    </h4>
+                    <button class="btn" style="background:#f1f5f9; color:#334155; width:100%; font-size:12px; padding:8px; margin-bottom:16px; border: 1px solid #cbd5e1;" onclick="document.getElementById('hidden-mockup-upload').click()">🖼️ 更换手机壁纸</button>
+                    <div style="font-size:12px; color:#64748b; margin-bottom:8px; display:flex; justify-content:space-between;"><span>遮罩浓度</span><span id="val-mask-opacity">60%</span></div>
+                    <input type="range" id="param-mask-opacity" min="0" max="100" value="60" oninput="updateMaskOpacity(false)" onchange="updateMaskOpacity(true)" style="width:100%;">
+                </div>
+            </div>
+        </div>
+        
+        <div class="timeline-container">
+            <div class="timeline-info">
+                <span>0.0s</span>
+                <span id="time-display" style="color: var(--primary); font-weight: bold;">0.00s</span>
+                <span>2.0s</span>
+            </div>
+            <input type="range" id="timeline-scrubber" class="scrubber" min="0" max="2000" value="0" oninput="scrubTimeline()">
+        </div>
+
+        <div class="action-bar">
+            <button class="btn btn-upload" onclick="document.getElementById('hidden-upload').click()">➕ 导入图层/ZIP序列</button>
+            <button id="btn-play-toggle" class="btn btn-play" onclick="togglePlay()">▶ 播放 / 暂停</button>
+        </div>
+        <div style="font-size:11px; color:#94a3b8; margin-top:8px;">💡 快捷键：Cmd+Z 撤销 / Shift+Cmd+Z 重做</div>
+    </div>
+
+    <div class="control-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 24px;">
+            <h2 style="margin:0; font-size: 20px;">自动化控制台</h2>
+            <span style="font-size: 12px; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 4px;">✔ 实时存入浏览器</span>
+        </div>
+
+        <div class="card">
+            <h3>1. 资产管理栈 (拖拽排序 / 点选)</h3>
+            <ul class="layer-list" id="layer-list-ui"></ul>
+        </div>
+
+        <div class="card" id="anim-config" style="opacity: 0.5; pointer-events: none;">
+            <h3>2. 选中自动化配置</h3>
+            <label style="font-size: 12px; color: #64748b; display: block; margin-bottom: 6px;">语义化动效模板</label>
+            <select id="semantic-type" class="semantic-select" onchange="updateSemanticUI(); pushHistory();">
+                <option value="none">静止常驻 (无动画)</option>
+                <option value="breath">Q弹呼吸 (推荐按钮/焦点)</option>
+                <option value="slide">沉稳滑入 (带果冻回弹)</option>
+                <option value="heartbeat">急促心跳 (强视觉提醒)</option>
+            </select>
+
+            <div class="param-group" id="param-group" style="display: none;">
+                <div class="param-row" id="direction-row" style="display: none; padding-bottom: 12px; border-bottom: 1px dashed #cbd5e1; margin-bottom: 12px;">
+                    <div class="param-header"><span>滑入起始方向</span></div>
+                    <select id="param-direction" class="semantic-select" style="margin-bottom: 0; padding: 6px;" onchange="updateLayerData(); pushHistory();">
+                        <option value="bottom">从下方</option>
+                        <option value="top">从上方</option>
+                        <option value="left">从左侧</option>
+                        <option value="right">从右侧</option>
+                    </select>
+                </div>
+                <div class="param-row">
+                    <div class="param-header"><span>动画频率 (2秒内次数少 <-> 多)</span></div>
+                    <input type="range" id="param-speed" min="0" max="100" value="50" oninput="updateLayerData()" onchange="pushHistory()">
+                </div>
+                <div class="param-row">
+                    <div class="param-header"><span>动作幅度 (微 <-> 强)</span></div>
+                    <input type="range" id="param-mag" min="0" max="100" value="50" oninput="updateLayerData()" onchange="pushHistory()">
+                </div>
+                <div class="toggle-row" style="margin-top: 12px;">
+                    <span>开启循环播放</span>
+                    <label class="switch">
+                        <input type="checkbox" id="param-loop" checked onchange="updateLayerData(); pushHistory();">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="param-row" style="margin-top: 20px;">
+                <div class="param-header"><span>图层基础缩放</span> <span id="val-scale">1.0x</span></div>
+                <input type="range" id="base-scale" min="0.1" max="2.5" step="0.05" value="1" oninput="updateLayerData()" onchange="pushHistory()">
+            </div>
+            
+            <button class="btn" style="background: #fee2e2; color: #ef4444; margin-top: 24px; border: 1px solid #fca5a5;" onclick="removeActiveLayer()">🗑️ 删除选中资产</button>
+        </div>
+
+        <div class="card" style="background: #f1f5f9; border-color: #cbd5e1;">
+            <h3 style="margin-bottom: 8px;">3. 所见即所得引擎导出</h3>
+            <p style="font-size: 12px; color: #64748b; margin-top: 0; margin-bottom: 16px; font-weight: bold;" id="export-mode-desc">
+                [当前为专注编辑态]：剥离多余元素，导出 654x941 纯净组件。
+            </p>
+            
+            <div id="export-bg-controls">
+                <label style="font-size: 11px; color: #64748b; margin-bottom: 8px; display: block;">设置GIF辅助底色（PNG序列永远保留真透明）：</label>
+                <div class="bg-choice-group">
+                    <div class="bg-choice active" data-bg="matte_black" onclick="selectExportBg(this)">✨ 纯透明 (防白边)</div>
+                    <div class="bg-choice" data-bg="#FFFFFF" onclick="selectExportBg(this)">⚪ 纯白底</div>
+                    <div class="bg-choice" data-bg="#000000" onclick="selectExportBg(this)">⚫ 纯黑底</div>
+                </div>
+            </div>
+            
+            <div class="export-grid">
+                <button class="btn btn-gif" onclick="exportSmart('gif')">🎞️ 导出防闪烁 GIF</button>
+                <button class="btn btn-png" onclick="exportSmart('zip')">📦 导出 PNG 序列</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.addEventListener("dragover", e => e.preventDefault(), false);
+    window.addEventListener("drop", e => e.preventDefault(), false);
+
+    const viewportWrapper = document.getElementById('viewport-wrapper');
+    const masterContainer = document.getElementById('master-container');
+    const canvasDOM = document.getElementById('main-canvas');
+    const layerListUI = document.getElementById('layer-list-ui');
+    const configPanel = document.getElementById('anim-config');
+    const mockupBgDOM = document.getElementById('mockup-bg');
+    const mockupMaskDOM = document.getElementById('mockup-mask');
+    const gridLinesDOM = document.getElementById('grid-lines');
+    const editToolsDOM = document.getElementById('edit-tools');
+    const mockupToolsDOM = document.getElementById('mockup-tools');
+
+    const paramGroup = document.getElementById('param-group');
+    const directionRow = document.getElementById('direction-row');
+
+    let layers = [];
+    let activeLayerId = null;
+    let exportBg = 'matte_black'; 
+    let mockupBgSrc = ''; 
+    let maskOpacity = 0.6; 
+    let viewMode = 'edit'; 
+    let currentScale = 0.5;
+    let activeAnimations = [];
+
+    // 拖拽参数
+    let isCanvasDragging = false, dragEl = null, startX = 0, startY = 0, initX = 0, initY = 0;
+    let draggedItemIdx = null;
+
+    /* ================= 霸权时间轴引擎 (完全取代 anime.js 原生自播) ================= */
+    const TOTAL_DURATION = 2000; // 全局锁死 2 秒
+    let globalTime = 0;
+    let isPlaying = false;
+    let rafId = null;
+    let lastTimestamp = 0;
+
+    function togglePlay() {
+        const btn = document.getElementById('btn-play-toggle');
+        if (isPlaying) {
+            isPlaying = false;
+            cancelAnimationFrame(rafId);
+            btn.innerHTML = '▶ 播放 / 暂停';
+            btn.classList.remove('playing');
+        } else {
+            // 在播放前强制重建动画队列，以获取最新参数
+            rebuildAnimations();
+            isPlaying = true;
+            lastTimestamp = performance.now();
+            btn.innerHTML = '⏸ 播放中...';
+            btn.classList.add('playing');
+            rafId = requestAnimationFrame(playLoop);
+        }
+    }
+
+    function playLoop(timestamp) {
+        if(!isPlaying) return;
+        const dt = timestamp - lastTimestamp;
+        lastTimestamp = timestamp;
+        
+        globalTime += dt;
+        if(globalTime >= TOTAL_DURATION) globalTime = 0; // 自动循环
+
+        updateTimelineUI();
+        syncTimeToRenderers();
+        
+        rafId = requestAnimationFrame(playLoop);
+    }
+
+    function scrubTimeline() {
+        if (isPlaying) togglePlay(); // 拖拽时自动暂停
+        rebuildAnimations(); // 确保拖拽时应用了最新参数
+        globalTime = parseInt(document.getElementById('timeline-scrubber').value);
+        updateTimelineUI();
+        syncTimeToRenderers();
+    }
+
+    function updateTimelineUI() {
+        document.getElementById('timeline-scrubber').value = globalTime;
+        document.getElementById('time-display').innerText = (globalTime / 1000).toFixed(2) + 's';
+    }
+
+    // 将全局时间同步给所有动画和图层序列
+    function syncTimeToRenderers() {
+        // 1. 推进 Anime.js 劫持矩阵
+        activeAnimations.forEach(a => a.seek(globalTime));
+        
+        // 2. 推进 ZIP 序列帧图层
+        layers.forEach(l => {
+            if (l.isSequence && l.frames && l.frames.length > 0) {
+                // 根据时间算出当前该播哪一帧
+                let frameIdx = Math.floor((globalTime / TOTAL_DURATION) * l.frames.length) % l.frames.length;
+                l.currentImgData = l.frames[frameIdx];
+                
+                // 实时更新 DOM 里的 src
+                const imgEl = document.querySelector(`#${l.id} img`);
+                if (imgEl && imgEl.src !== l.currentImgData.src) {
+                    imgEl.src = l.currentImgData.src;
+                }
+            } else {
+                l.currentImgData = l.imgData;
+            }
+            syncDOM(l); // 应用矩阵变化
+        });
+    }
+
+    function buildBreathKeyframes(layer) {
+        const speed = Number(layer.speed) || 0;
+        const mag = Number(layer.mag) || 0;
+        const beats = 2 + Math.round(speed / 25); // 2 秒内 2~6 次起伏
+        const peakScale = 1 + (mag * 0.002);
+        const reboundScale = Math.max(0.95, 1 - (mag * 0.00035));
+        const segment = TOTAL_DURATION / beats;
+        const keyframes = [];
+
+        for (let i = 0; i < beats; i++) {
+            keyframes.push(
+                { scale: peakScale, duration: segment * 0.36, easing: 'easeOutSine' },
+                { scale: reboundScale, duration: segment * 0.28, easing: 'easeInOutSine' },
+                { scale: 1, duration: segment * 0.36, easing: 'easeOutSine' }
+            );
+        }
+
+        return keyframes;
+    }
+
+    function buildHeartbeatKeyframes(layer) {
+        const speed = Number(layer.speed) || 0;
+        const mag = Number(layer.mag) || 0;
+        const bursts = 2 + Math.round(speed / 33); // 2 秒内 2~5 组双跳
+        const firstBeat = 1 + (mag * 0.0032);
+        const secondBeat = 1 + (mag * 0.0024);
+        const recoilScale = Math.max(0.92, 1 - (mag * 0.0009));
+        const segment = TOTAL_DURATION / bursts;
+        const keyframes = [];
+
+        for (let i = 0; i < bursts; i++) {
+            keyframes.push(
+                { scale: firstBeat, duration: segment * 0.16, easing: 'easeOutCubic' },
+                { scale: recoilScale, duration: segment * 0.10, easing: 'easeInQuad' },
+                { scale: secondBeat, duration: segment * 0.14, easing: 'easeOutBack' },
+                { scale: 1, duration: segment * 0.16, easing: 'easeInOutSine' },
+                { scale: 1, duration: segment * 0.44, easing: 'linear' }
+            );
+        }
+
+        return keyframes;
+    }
+
+    // 重建被 Anime.js 托管的虚拟态参数
+    function rebuildAnimations() {
+        activeAnimations.forEach(a => a.pause());
+        activeAnimations = [];
+
+        layers.forEach(layer => {
+            layer.animState = { scale: 1, tx: 0, ty: 0, opacity: 1 }; 
+            syncDOM(layer);
+            if(layer.semantic === 'none') return;
+
+            const duration = 2500 - (layer.speed * 20); 
+            // 注意：全部设为 autoplay: false，由时间轴统一驱动 seek
+            let config = { targets: layer.animState, loop: layer.loop, autoplay: false, update: () => {} };
+
+            if(layer.semantic === 'breath') {
+                config = { ...config, duration: TOTAL_DURATION, easing: 'linear', keyframes: buildBreathKeyframes(layer) };
+            } else if(layer.semantic === 'slide') {
+                let tp = {}; const dist = 150 + (layer.mag * 5);
+                if(layer.direction === 'bottom') tp = { ty: [dist, 0] }; if(layer.direction === 'top') tp = { ty: [-dist, 0] };
+                if(layer.direction === 'left') tp = { tx: [-dist, 0] }; if(layer.direction === 'right') tp = { tx: [dist, 0] };
+                config = { ...config, ...tp, opacity: [0, 1], duration, easing: 'easeOutElastic(1, .6)', loop: layer.loop };
+            } else if(layer.semantic === 'heartbeat') {
+                config = { ...config, duration: TOTAL_DURATION, easing: 'linear', keyframes: buildHeartbeatKeyframes(layer) };
+            }
+            activeAnimations.push(anime(config));
+        });
+    }
+
+    /* ================= 撤销 / 重做 时光机引擎 ================= */
+    let historyStack = [];
+    let historyIndex = -1;
+    let isRestoring = false;
+
+    function pushHistory() {
+        if (isRestoring) return;
+        // 注意：不深拷贝 Blob 和 frames 数组，只拷贝引用以防内存爆炸
+        const state = {
+            layers: layers.map(l => ({ ...l, animState: { ...l.animState } })),
+            activeLayerId, mockupBgSrc, maskOpacity, viewMode
+        };
+        if (historyIndex < historyStack.length - 1) historyStack = historyStack.slice(0, historyIndex + 1);
+        historyStack.push(state);
+        if (historyStack.length > 11) historyStack.shift(); else historyIndex++;
+    }
+
+    function undo() { if (historyIndex > 0) { historyIndex--; restoreHistory(historyStack[historyIndex]); showToast("⏪ 已撤销"); } }
+    function redo() { if (historyIndex < historyStack.length - 1) { historyIndex++; restoreHistory(historyStack[historyIndex]); showToast("⏩ 已重做"); } }
+
+    function showToast(msg) {
+        const t = document.getElementById('history-toast'); t.innerText = msg;
+        anime.remove(t); anime({ targets: t, opacity: [0, 1], translateY: [-10, 0], duration: 300, easing: 'easeOutExpo' });
+        setTimeout(() => { anime({ targets: t, opacity: 0, duration: 300 }); }, 1500);
+    }
+
+    window.addEventListener('keydown', (e) => {
+        if (e.metaKey || e.ctrlKey) {
+            if (e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+        }
+    });
+
+    function restoreHistory(state) {
+        isRestoring = true;
+        document.querySelectorAll('.layer-el').forEach(el => el.remove());
+        layers = state.layers.map(l => ({ ...l, animState: { ...l.animState } }));
+        
+        layers.forEach(l => {
+            const el = document.createElement('div'); el.className = 'layer-el'; el.id = l.id;
+            el.onmousedown = (e) => {
+                e.stopPropagation(); e.preventDefault(); 
+                selectLayer(l.id);
+                isCanvasDragging = true; dragEl = el; startX = e.clientX; startY = e.clientY; initX = l.x; initY = l.y;
+            };
+            el.innerHTML = `<div class="anim-wrapper"><img src="${l.src}" style="width:${l.rw}px; height:${l.rh}px;" draggable="false"/></div>`;
+            canvasDOM.appendChild(el); syncDOM(l);
+        });
+        
+        mockupBgSrc = state.mockupBgSrc || ''; mockupBgDOM.src = mockupBgSrc;
+        if(mockupBgSrc) mockupBgDOM.style.display = 'block'; else mockupBgDOM.style.display = 'none';
+        
+        maskOpacity = state.maskOpacity !== undefined ? state.maskOpacity : 0.6;
+        document.getElementById('param-mask-opacity').value = maskOpacity * 100;
+        mockupMaskDOM.style.background = `rgba(0,0,0,${maskOpacity})`;
+        document.getElementById('val-mask-opacity').innerText = Math.round(maskOpacity * 100) + '%';
+        
+        viewMode = state.viewMode || 'edit'; switchMode(viewMode, true); 
+        
+        activeLayerId = state.activeLayerId; updateZIndex();
+        
+        if (activeLayerId && layers.find(l => l.id === activeLayerId)) selectLayer(activeLayerId);
+        else { configPanel.style.opacity = '0.5'; configPanel.style.pointerEvents = 'none'; document.querySelectorAll('.layer-el').forEach(el => el.classList.remove('active')); }
+        
+        document.getElementById('drop-hint').style.display = layers.length === 0 ? 'block' : 'none';
+        
+        // 恢复时间轴位置
+        rebuildAnimations();
+        syncTimeToRenderers();
+        autoSave();
+        isRestoring = false;
+    }
+
+    /* ================= 悬浮气泡控制 ================= */
+    function toggleMockupPopover() {
+        const pop = document.getElementById('mockup-popover');
+        if(pop.style.display === 'none' || pop.style.display === '') {
+            pop.style.display = 'block';
+            anime({ targets: pop, opacity: [0,1], translateX: [-10, 0], duration: 300, easing: 'easeOutExpo' });
+        } else {
+            anime({ targets: pop, opacity: 0, translateX: -10, duration: 200, easing: 'easeInExpo', complete: () => pop.style.display = 'none' });
+        }
+    }
+
+    /* ================= 状态路由 (编辑/样机) ================= */
+    function switchMode(mode, skipHistory = false) {
+        viewMode = mode;
+        document.getElementById('btn-mode-edit').classList.toggle('active', mode === 'edit');
+        document.getElementById('btn-mode-mockup').classList.toggle('active', mode === 'mockup');
+        
+        const exportDesc = document.getElementById('export-mode-desc');
+        const exportBgControls = document.getElementById('export-bg-controls');
+
+        if(mode === 'edit') {
+            viewportWrapper.className = 'viewport-wrapper mode-edit'; masterContainer.className = 'master-container mode-edit';
+            currentScale = 0.5; 
+            mockupBgDOM.style.opacity = '0'; mockupMaskDOM.style.opacity = '0'; gridLinesDOM.style.opacity = '1'; editToolsDOM.style.opacity = '1'; editToolsDOM.style.pointerEvents = 'auto';
+            document.getElementById('mockup-tools').style.opacity = '0'; document.getElementById('mockup-tools').style.pointerEvents = 'none'; document.getElementById('mockup-popover').style.display = 'none';
+            exportDesc.innerHTML = `<span style="color:var(--primary);">[当前为专注编辑态]</span> 剥离背景环境，仅导出 <b>654x941</b> 核心组件。`;
+            exportBgControls.style.display = 'block';
+            const activeTool = document.querySelector('.edit-tools button.active');
+            if(activeTool) setEditBg(activeTool.id.replace('bg-btn-', '').replace('trans', 'transparent'));
+        } else {
+            viewportWrapper.className = 'viewport-wrapper mode-mockup'; masterContainer.className = 'master-container mode-mockup';
+            currentScale = 0.42; 
+            mockupBgDOM.style.opacity = '1'; mockupMaskDOM.style.opacity = '1'; gridLinesDOM.style.opacity = '0'; editToolsDOM.style.opacity = '0'; editToolsDOM.style.pointerEvents = 'none';
+            document.getElementById('mockup-tools').style.opacity = '1'; document.getElementById('mockup-tools').style.pointerEvents = 'auto';
+            exportDesc.innerHTML = `<span style="color:#8b5cf6;">[当前为样机展示态]</span> 连带手机环境，导出 <b>750x1624</b> 沉浸全景。`;
+            exportBgControls.style.display = 'none'; 
+            masterContainer.style.background = '#1e293b'; masterContainer.classList.remove('bg-checker');
+        }
+        autoSave(); if(!skipHistory) pushHistory();
+    }
+
+    function setEditBg(type) {
+        document.querySelectorAll('.edit-tools button').forEach(b => b.classList.remove('active'));
+        let btnId = type === 'transparent' ? 'bg-btn-trans' : `bg-btn-${type}`;
+        if(document.getElementById(btnId)) document.getElementById(btnId).classList.add('active');
+        masterContainer.classList.remove('bg-checker');
+        if(type === 'white') masterContainer.style.background = 'white'; else if(type === 'black') masterContainer.style.background = '#0f172a'; else if(type === 'transparent') { masterContainer.style.background = 'white'; masterContainer.classList.add('bg-checker'); }
+    }
+
+    function updateMaskOpacity(final = false) {
+        const val = document.getElementById('param-mask-opacity').value;
+        maskOpacity = val / 100;
+        document.getElementById('val-mask-opacity').innerText = val + '%';
+        mockupMaskDOM.style.background = `rgba(0,0,0,${maskOpacity})`;
+        if(final) { autoSave(); pushHistory(); }
+    }
+
+    function selectExportBg(el) {
+        document.querySelectorAll('.bg-choice').forEach(item => item.classList.remove('active'));
+        el.classList.add('active'); exportBg = el.dataset.bg;
+    }
+
+    function handleMockupFile(e) {
+        const file = e.target.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => { mockupBgSrc = ev.target.result; mockupBgDOM.src = mockupBgSrc; mockupBgDOM.style.display = 'block'; autoSave(); pushHistory(); };
+        reader.readAsDataURL(file); e.target.value = '';
+    }
+
+    /* ================= 数据库级状态保持 ================= */
+    async function initFactory() {
+        try {
+            const savedLayers = await localforage.getItem('super_factory_layers');
+            const savedActiveId = await localforage.getItem('super_factory_active_id');
+            const savedMockup = await localforage.getItem('super_factory_mockup');
+            const savedMask = await localforage.getItem('super_factory_mask');
+            const savedMode = await localforage.getItem('super_factory_mode');
+            
+            if (savedMockup) { mockupBgSrc = savedMockup; mockupBgDOM.src = mockupBgSrc; mockupBgDOM.style.display = 'block'; }
+            if (savedMask !== null) { maskOpacity = savedMask; document.getElementById('param-mask-opacity').value = maskOpacity * 100; mockupMaskDOM.style.background = `rgba(0,0,0,${maskOpacity})`; }
+            if (savedMode) { switchMode(savedMode, true); } else { switchMode('edit', true); }
+
+            if (savedLayers && savedLayers.length > 0) {
+                document.getElementById('drop-hint').style.display = 'none';
+                for (let data of savedLayers) {
+                    
+                    // 如果存的是 ZIP 序列帧
+                    if (data.isSequence && data.blobs) {
+                        data.frames = await Promise.all(data.blobs.map(async b => {
+                            const img = new Image(); img.src = URL.createObjectURL(b);
+                            await new Promise(r => img.onload = r); return img;
+                        }));
+                        data.imgData = data.frames[0]; data.currentImgData = data.frames[0]; data.src = data.frames[0].src;
+                    } else {
+                        // 静态图
+                        const img = new Image(); img.src = data.src;
+                        await new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; });
+                        data.imgData = img; data.currentImgData = img;
+                    }
+                    data.animState = { scale: 1, tx: 0, ty: 0, opacity: 1 };
+                    layers.push(data); createLayerDOM(data);
+                }
+                updateZIndex();
+                if(savedActiveId && layers.find(l => l.id === savedActiveId)) selectLayer(savedActiveId);
+            }
+            rebuildAnimations();
+            pushHistory(); // 存入原点状态
+        } catch (e) { console.error("存档读取失败", e); }
+    }
+    initFactory();
+
+    function autoSave() {
+        if(isRestoring) return;
+        const cleanData = layers.map(l => ({
+            id: l.id, name: l.name, 
+            src: l.isSequence ? null : l.src, // 序列帧为节省空间不存冗余 base64
+            isSequence: l.isSequence, blobs: l.blobs, // Blob 会被 localForage 自动高效序列化
+            x: l.x, y: l.y, rw: l.rw, rh: l.rh,
+            scale: l.scale, semantic: l.semantic, direction: l.direction, speed: l.speed, mag: l.mag, loop: l.loop
+        }));
+        localforage.setItem('super_factory_layers', cleanData);
+        localforage.setItem('super_factory_active_id', activeLayerId);
+        localforage.setItem('super_factory_mockup', mockupBgSrc);
+        localforage.setItem('super_factory_mask', maskOpacity);
+        localforage.setItem('super_factory_mode', viewMode);
+    }
+
+    /* ================= 图层列表交互 ================= */
+    function renderList() {
+        if(layers.length === 0) {
+            layerListUI.innerHTML = '<li style="text-align:center; color:#94a3b8; font-size:12px; padding:20px;">暂无资产，请上传图层</li>';
+            configPanel.style.opacity = '0.5'; configPanel.style.pointerEvents = 'none';
+            document.getElementById('drop-hint').style.display = 'block';
+            return;
+        }
+        layerListUI.innerHTML = '';
+        [...layers].reverse().forEach((l, index) => {
+            const actualIndex = layers.length - 1 - index;
+            const li = document.createElement('li');
+            li.className = `layer-item ${l.id === activeLayerId ? 'active' : ''}`;
+            li.draggable = true;
+            li.ondragstart = (e) => { draggedItemIdx = actualIndex; e.dataTransfer.effectAllowed = 'move'; };
+            li.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+            li.ondrop = (e) => {
+                e.preventDefault(); const targetIdx = actualIndex;
+                if(draggedItemIdx !== targetIdx && draggedItemIdx !== null) {
+                    const item = layers.splice(draggedItemIdx, 1)[0];
+                    layers.splice(targetIdx, 0, item); updateZIndex(); autoSave(); pushHistory();
+                }
+            };
+            li.onclick = () => selectLayer(l.id);
+            li.innerHTML = `
+                <div class="drag-handle">≡</div><img class="layer-thumb" src="${l.isSequence ? l.frames[0].src : l.src}" />
+                <div style="flex:1; font-size:13px; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                    ${l.isSequence ? '<span style="color:#eab308; margin-right:4px;">[序列帧]</span>' : ''}${l.name}
+                </div>
+                <div style="font-size:12px; color:#64748b; margin-right:10px;">${l.semantic === 'none' ? '静止' : '动态'}</div>
+            `;
+            layerListUI.appendChild(li);
+        });
+    }
+
+    function updateZIndex() {
+        layers.forEach((l, idx) => { const el = document.getElementById(l.id); if(el) el.style.zIndex = idx + 1; });
+        renderList();
+    }
+
+    /* ================= 核心防错位鼠标绑定 ================= */
+    document.onmousemove = e => {
+        if(!isCanvasDragging || !activeLayerId || !dragEl) return;
+        const dx = (e.clientX - startX) / currentScale;
+        const dy = (e.clientY - startY) / currentScale;
+        const layer = layers.find(x => x.id === activeLayerId);
+        if(layer) { layer.x = initX + dx; layer.y = initY + dy; syncDOM(layer); }
+    };
+    
+    document.onmouseup = () => {
+        if(isCanvasDragging) {
+            isCanvasDragging = false; dragEl = null; autoSave(); pushHistory(); // 拖拽完毕存档
+        }
+    };
+
+    /* ================= 资产导入引擎 (新增 ZIP 解析) ================= */
+    function triggerUpload(e) {
+        if (e.target === masterContainer || e.target.closest('#drop-hint') || e.target.classList.contains('mockup-mask') || e.target.id === 'main-canvas') {
+            document.getElementById('hidden-upload').click();
+        }
+    }
+
+    async function handleFiles(e) { 
+        if(!e.target.files.length) return;
+        for (let file of Array.from(e.target.files)) {
+            
+            // 引擎 1：ZIP 序列包无损解析
+            if (file.name.toLowerCase().endsWith('.zip')) {
+                try {
+                    const zip = await JSZip.loadAsync(file);
+                    // 过滤并按字母顺序提取图片
+                    const frameFiles = Object.keys(zip.files).filter(k => !zip.files[k].dir && k.match(/\.(png|jpe?g)$/i)).sort();
+                    if (frameFiles.length === 0) { alert("ZIP包内未发现格式支持的序列图片！"); continue; }
+                    
+                    const blobs = [];
+                    for (let k of frameFiles) { blobs.push(await zip.files[k].async("blob")); }
+                    
+                    // 将 Blob 实例化为可用图层
+                    const frames = await Promise.all(blobs.map(async b => {
+                        const img = new Image(); img.src = URL.createObjectURL(b);
+                        await new Promise(r => img.onload = r); return img;
+                    }));
+
+                    const w = frames[0].naturalWidth, h = frames[0].naturalHeight;
+                    const data = {
+                        id: 'L_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                        name: file.name.replace('.zip', ''),
+                        src: frames[0].src, 
+                        imgData: frames[0], currentImgData: frames[0], // timeline 渲染锚点
+                        isSequence: true, blobs: blobs, frames: frames, // 核心序列特征
+                        x: 327, y: 470.5, rw: w, rh: h, scale: 1, semantic: 'none', direction: 'bottom',
+                        speed: 50, mag: 50, loop: true, animState: { scale: 1, tx: 0, ty: 0, opacity: 1 }
+                    };
+                    
+                    document.getElementById('drop-hint').style.display = 'none';
+                    layers.push(data); createLayerDOM(data); updateZIndex(); selectLayer(data.id); 
+                } catch (error) {
+                    console.error(error); alert("ZIP 序列包解析失败，请检查文件完整性。");
+                }
+            } 
+            // 引擎 2：单张静态 PNG/JPG/GIF 处理
+            else {
+                const reader = new FileReader();
+                reader.onload = async ev => {
+                    const rawImg = new Image(); rawImg.src = ev.target.result;
+                    await new Promise(r => rawImg.onload = r);
+                    
+                    let w = rawImg.naturalWidth, h = rawImg.naturalHeight;
+                    if(w > 654 || h > 941) { const r = Math.min(654/w, 941/h); w *= r; h *= r; }
+
+                    // 强制重采样防锯齿狗牙
+                    const offCv = document.createElement('canvas'); offCv.width = w; offCv.height = h;
+                    const offCtx = offCv.getContext('2d');
+                    offCtx.imageSmoothingEnabled = true; offCtx.imageSmoothingQuality = 'high';
+                    offCtx.drawImage(rawImg, 0, 0, w, h);
+                    
+                    const finalImg = new Image(); finalImg.src = offCv.toDataURL('image/png');
+                    await new Promise(r => finalImg.onload = r);
+
+                    const data = {
+                        id: 'L_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                        name: file.name, src: finalImg.src, imgData: finalImg, currentImgData: finalImg,
+                        isSequence: false, 
+                        x: 327, y: 470.5, rw: w, rh: h, scale: 1, semantic: 'none', direction: 'bottom',
+                        speed: 50, mag: 50, loop: true, animState: { scale: 1, tx: 0, ty: 0, opacity: 1 }
+                    };
+                    
+                    document.getElementById('drop-hint').style.display = 'none';
+                    layers.push(data); createLayerDOM(data); updateZIndex(); selectLayer(data.id); 
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        // 全部处理完毕后归档
+        setTimeout(() => { autoSave(); pushHistory(); rebuildAnimations(); syncTimeToRenderers(); }, 500);
+        e.target.value = '';
+    }
+    
+    function handleDragOver(e) { e.preventDefault(); masterContainer.classList.add('dragover'); }
+    function handleDragLeave(e) { e.preventDefault(); masterContainer.classList.remove('dragover'); }
+    function handleDrop(e) { e.preventDefault(); masterContainer.classList.remove('dragover'); handleFiles({target: {files: e.dataTransfer.files}}); }
+    
+    /* ================= 视图 DOM 绑定引擎 ================= */
+    function createLayerDOM(layer) {
+        const el = document.createElement('div');
+        el.className = 'layer-el';
+        el.id = layer.id;
+        
+        el.onmousedown = (e) => {
+            e.stopPropagation(); 
+            e.preventDefault(); 
+            selectLayer(layer.id);
+            isCanvasDragging = true; dragEl = el; startX = e.clientX; startY = e.clientY; initX = layer.x; initY = layer.y;
+        };
+
+        el.innerHTML = `<div class="anim-wrapper"><img src="${layer.src}" style="width:${layer.rw}px; height:${layer.rh}px;" draggable="false"/></div>`;
+        canvasDOM.appendChild(el);
+        syncDOM(layer);
+    }
+
+    function syncDOM(layer) {
+        const el = document.getElementById(layer.id);
+        if(!el) return;
+        el.style.left = layer.x + 'px'; el.style.top = layer.y + 'px';
+        el.style.opacity = layer.animState.opacity;
+        el.style.transform = `translate(-50%, -50%) scale(${layer.scale})`;
+        
+        const wrapper = el.querySelector('.anim-wrapper');
+        wrapper.style.transform = `translateX(${layer.animState.tx}px) translateY(${layer.animState.ty}px) scale(${layer.animState.scale})`;
+    }
+
+    /* ================= 控制台参数联动系统 ================= */
+    function selectLayer(id) {
+        try {
+            activeLayerId = id;
+            const data = layers.find(l => l.id === id);
+            if(!data) return;
+            
+            configPanel.style.opacity = '1';
+            configPanel.style.pointerEvents = 'auto';
+            
+            document.getElementById('semantic-type').value = data.semantic || 'none';
+            document.getElementById('base-scale').value = data.scale || 1;
+            document.getElementById('param-speed').value = data.speed || 50;
+            document.getElementById('param-mag').value = data.mag || 50;
+            document.getElementById('param-direction').value = data.direction || 'bottom';
+            document.getElementById('param-loop').checked = data.loop;
+            
+            updateSemanticUI(); 
+            
+            document.getElementById('val-scale').innerText = parseFloat(data.scale || 1).toFixed(2) + 'x';
+            
+            document.querySelectorAll('.layer-el').forEach(el => el.classList.remove('active'));
+            const targetEl = document.getElementById(id);
+            if(targetEl) targetEl.classList.add('active');
+            
+            renderList();
+            autoSave();
+        } catch(err) {
+            console.error('选择器拦截错误:', err);
+        }
+    }
+
+    function updateSemanticUI() {
+        const type = document.getElementById('semantic-type').value;
+        paramGroup.style.display = type === 'none' ? 'none' : 'block';
+        directionRow.style.display = type === 'slide' ? 'flex' : 'none';
+        updateLayerData();
+    }
+
+    function updateLayerData() {
+        if(!activeLayerId) return;
+        const data = layers.find(l => l.id === activeLayerId);
+        if (!data) return;
+        
+        data.semantic = document.getElementById('semantic-type').value;
+        data.scale = document.getElementById('base-scale').value;
+        data.speed = document.getElementById('param-speed').value;
+        data.mag = document.getElementById('param-mag').value;
+        data.direction = document.getElementById('param-direction').value;
+        data.loop = document.getElementById('param-loop').checked;
+
+        document.getElementById('val-scale').innerText = parseFloat(data.scale).toFixed(2) + 'x';
+        syncDOM(data);
+        rebuildAnimations(); // 参数改变时必须重建动画矩阵
+        autoSave();
+    }
+
+    function removeActiveLayer() {
+        if(!activeLayerId) return;
+        layers = layers.filter(l => l.id !== activeLayerId);
+        const domEl = document.getElementById(activeLayerId);
+        if(domEl) domEl.remove();
+        
+        activeLayerId = null; updateZIndex(); autoSave(); pushHistory(); rebuildAnimations();
+        
+        if(layers.length === 0) {
+            document.getElementById('drop-hint').style.display = 'block';
+            configPanel.style.opacity = '0.5'; configPanel.style.pointerEvents = 'none';
+        }
+    }
+
+    /* ================= 最终智能压制中心：导出全序列 ================= */
+    async function exportSmart(format) {
+        if(layers.length === 0) return alert("工厂内暂无资产！");
+        
+        // 强行暂停，交接控制权
+        if(isPlaying) togglePlay(); 
+        
+        const isMockup = (viewMode === 'mockup');
+        const EXPORT_W = isMockup ? 750 : 654;
+        const EXPORT_H = isMockup ? 1624 : 941;
+        
+        document.querySelectorAll('.layer-el').forEach(el => el.classList.remove('active'));
+        const overlay = document.getElementById('export-overlay');
+        const pFill = document.getElementById('export-progress');
+        overlay.style.display = 'flex'; pFill.style.width = '0%';
+        
+        try {
+            const fps = 24; const totalFrames = (TOTAL_DURATION / 1000) * fps;
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = EXPORT_W; offCanvas.height = EXPORT_H;
+            const ctx = offCanvas.getContext('2d', { alpha: true });
+            
+            let zip = null, gif = null, workerBlobUrl = null;
+
+            let renderBgColor = ''; let gifTransparentKey = null;
+
+            if (!isMockup) {
+                if (exportBg === 'matte_black') { renderBgColor = '#010101'; gifTransparentKey = 0x010101; }
+                else { renderBgColor = exportBg; gifTransparentKey = null; }
+            } else {
+                gifTransparentKey = null; 
+            }
+
+            if (format === 'zip') {
+                zip = new JSZip();
+            } else {
+                const workerRes = await fetch('https://unpkg.com/gif.js/dist/gif.worker.js');
+                workerBlobUrl = URL.createObjectURL(new Blob([await workerRes.text()], {type: 'application/javascript'}));
+                gif = new GIF({
+                    workers: 4, quality: 1, width: EXPORT_W, height: EXPORT_H,
+                    transparent: gifTransparentKey, dither: false, workerScript: workerBlobUrl
+                });
+            }
+            
+            rebuildAnimations(); // 确保矩阵干净
+
+            for(let frame = 0; frame <= totalFrames; frame++) {
+                // 劫持全局时间轴，驱动全部渲染器
+                globalTime = (frame / totalFrames) * TOTAL_DURATION;
+                syncTimeToRenderers();
+                
+                ctx.clearRect(0, 0, EXPORT_W, EXPORT_H);
+                
+                if (isMockup) {
+                    ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, EXPORT_W, EXPORT_H);
+                    if(mockupBgDOM.src && mockupBgDOM.src.length > 100) { ctx.drawImage(mockupBgDOM, 0, 0, EXPORT_W, EXPORT_H); }
+                    ctx.fillStyle = `rgba(0,0,0,${maskOpacity})`; ctx.fillRect(0, 0, EXPORT_W, EXPORT_H);
+                } else {
+                    if (format === 'zip') {
+                        if (exportBg === '#FFFFFF' || exportBg === '#000000') { ctx.fillStyle = exportBg; ctx.fillRect(0, 0, EXPORT_W, EXPORT_H); }
+                    } else { ctx.fillStyle = renderBgColor; ctx.fillRect(0, 0, EXPORT_W, EXPORT_H); }
+                }
+                
+                const offsetX = isMockup ? (750 - 654) / 2 : 0;
+                const offsetY = isMockup ? (1624 - 941) / 2 : 0;
+
+                layers.forEach(l => {
+                    ctx.save();
+                    ctx.globalAlpha = l.animState.opacity;
+                    ctx.translate(l.x + offsetX, l.y + offsetY);
+                    ctx.scale(l.scale, l.scale);
+                    ctx.translate(l.animState.tx, l.animState.ty);
+                    ctx.scale(l.animState.scale, l.animState.scale);
+                    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; 
+                    // 核心提取：直接绘制经过时间轴同步好的 currentImgData，实现序列帧穿透渲染
+                    ctx.drawImage(l.currentImgData, -l.rw/2, -l.rh/2, l.rw, l.rh);
+                    ctx.restore();
+                });
+                
+                if (format === 'zip') {
+                    const dataUrl = offCanvas.toDataURL('image/png', 1.0);
+                    zip.file(String(frame).padStart(3, '0') + '.png', dataUrl.split(',')[1], {base64: true});
+                } else {
+                    gif.addFrame(ctx, {copy: true, delay: 1000 / fps, dispose: 2}); 
+                }
+                
+                pFill.style.width = `${(frame / totalFrames) * 100}%`;
+                await new Promise(r => setTimeout(r, 5)); 
+            }
+
+            const prefix = isMockup ? "Mockup_Demo_750x1624" : "Core_Asset_654x941";
+            if (format === 'zip') {
+                saveAs(await zip.generateAsync({type:"blob"}), prefix + ".zip");
+                overlay.style.display = 'none';
+            } else {
+                await new Promise((resolve) => { gif.on('finished', function(blob) { saveAs(blob, prefix + ".gif"); resolve(); }); gif.render(); });
+                URL.revokeObjectURL(workerBlobUrl);
+                overlay.style.display = 'none';
+            }
+        } catch (error) {
+            console.error(error); alert("导出异常，请检查控制台"); overlay.style.display = 'none';
+        }
+    }
+</script>
+<script src="/tool-bridge.js"></script>
+</body>
+</html>

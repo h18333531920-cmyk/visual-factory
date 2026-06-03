@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperFactory - Professional Poster Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        :root { --primary: #00D06C; --primary-hover: #00E676; --bg-canvas: #F3F5F7; --panel-bg: #FFFFFF; --card-bg: #F8FAFC; --border: #E5E7EB; --text-main: #111827; --text-sub: #6B7280; --danger: #EF4444; }
+        * { box-sizing: border-box; outline: none; }
+        body { font-family: -apple-system, 'PingFang SC', sans-serif; background: #FFFFFF; display: flex; justify-content: center; padding: 24px; margin: 0; color: var(--text-main); user-select: none; -webkit-font-smoothing: antialiased; overflow: hidden; }
+        
+        .editor-layout { display: flex; gap: 24px; max-width: 1600px; width: 100%; height: calc(100vh - 48px); }
+        .left-pane { flex: 1.5; background: var(--bg-canvas); border-radius: 24px; position: relative; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); overflow: hidden; background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 24px 24px; }
+        .ratio-nav { position: absolute; top: 24px; z-index: 10; display: flex; gap: 4px; background: #FFFFFF; padding: 6px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); border: 1px solid var(--border); }
+        .ratio-nav button { background: transparent; border: none; padding: 8px 16px; border-radius: 10px; cursor: pointer; color: var(--text-sub); font-weight: 600; font-size: 13px; transition: 0.2s; }
+        .ratio-nav button:hover { color: var(--text-main); }
+        .ratio-nav button.active { background: var(--text-main); color: #FFFFFF; }
+
+        .canvas-wrapper { position: absolute; left: 50%; top: 50%; background: #FFFFFF; box-shadow: 0 20px 60px rgba(0,0,0,0.08); overflow: hidden; transform-origin: center center; }
+        .layer-base { position: absolute; pointer-events: none; }
+        
+        .layer-image-wrapper { position: absolute; cursor: grab; transform-origin: center center; pointer-events: auto; box-shadow: 0 0 0 1px rgba(0,0,0,0.05); }
+        .layer-image-wrapper:active { cursor: grabbing; }
+        .layer-image-div { width: 100%; height: 100%; background-size: cover; background-position: center; pointer-events: none; }
+        .layer-image-img { width: 100%; height: 100%; display: block; pointer-events: none; }
+
+        .empty-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; color: #9CA3AF; background: #F8FAFC; z-index: 0; pointer-events: none;}
+
+        .layer-arc-wrapper { transform-origin: center center; position: absolute; pointer-events: none; }
+        .layer-arc-wrapper circle { pointer-events: stroke; cursor: grab; } .layer-arc-wrapper circle:active { cursor: grabbing; }
+        
+        .layer-tag-wrapper { position: absolute; cursor: grab; display: inline-block; transform-origin: center center; pointer-events: auto;}
+        .layer-tag-wrapper:active { cursor: grabbing; }
+        
+        .is-active-layer { outline: 3px dashed var(--primary); outline-offset: 4px; }
+        
+        .tag-pill { display: inline-block; height: 60px; line-height: 60px; padding: 0 36px; border-radius: 30px; font-size: 36px; font-weight: inherit; white-space: pre; letter-spacing: inherit; font-kerning: normal; font-feature-settings: "kern" 1; pointer-events: auto; text-align: center; }
+
+        .right-pane { width: 400px; background: var(--panel-bg); border-radius: 24px; display: flex; flex-direction: column; border: 1px solid var(--border); box-shadow: 0 10px 40px rgba(0,0,0,0.02); overflow: hidden; }
+        .pane-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .pane-header h2 { margin: 0; font-size: 18px; font-weight: 800; color: var(--text-main); }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .btn-icon { background: #FFFFFF; border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: bold; transition: 0.2s; color: var(--text-main); }
+        .btn-icon:hover { border-color: var(--text-main); }
+        .btn-icon:disabled { opacity: 0.35; cursor: not-allowed; border-color: var(--border); }
+        
+        .pane-content { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 24px; background: var(--panel-bg); }
+        
+        .module-card { background: var(--card-bg); border-radius: 16px; padding: 20px; border: 1px solid var(--border); }
+        .card-title { font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+        .card-title::before { content: ''; display: block; width: 4px; height: 14px; background: var(--primary); border-radius: 4px; margin-right: 8px; }
+        .card-title-wrap { display: flex; align-items: center; }
+
+        .label { display: block; font-size: 12px; color: var(--text-sub); margin-bottom: 8px; font-weight: 600; }
+        .input-text, .input-select, .textarea { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; font-weight: 600; color: var(--text-main); background: #FFFFFF; margin-bottom: 14px; transition: 0.2s; }
+        .input-text:focus, .input-select:focus, .textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0, 208, 108, 0.1); }
+        .textarea { resize: none; font-weight: normal; }
+        
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 13px; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 6px; }
+        .btn-outline { background: #FFFFFF; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-outline:hover { border-color: var(--text-main); }
+        .btn-dark { background: var(--text-main); color: #FFFFFF; }
+        .btn-dark:hover { background: var(--primary); color: #000000; box-shadow: 0 8px 20px rgba(0,208,108,0.2); }
+        .btn:disabled { opacity: 0.7; cursor: progress; }
+        
+        .slider-row { display: flex; align-items: center; margin-bottom: 12px; }
+        .slider-row span.s-label { width: 60px; font-size: 12px; color: var(--text-sub); font-weight: 600;}
+        input[type="range"] { flex: 1; margin: 0 12px; cursor: pointer; accent-color: var(--text-main); }
+        .slider-val { width: 45px; font-size: 12px; color: var(--text-main); text-align: right; font-weight: 800; font-variant-numeric: tabular-nums;}
+        
+        .layer-list { display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; padding-right: 4px;}
+        .layer-item { display: flex; justify-content: space-between; align-items: center; background: #FFFFFF; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); font-size: 13px; color: var(--text-main); font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .layer-item:hover { border-color: #D1D5DB; }
+        .layer-item.active { border-color: var(--text-main); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .layer-item.locked { opacity: 0.6; }
+        .layer-item.dragging { opacity: 0.45; border-style: dashed; }
+        
+        .layer-actions { display: flex; gap: 8px; align-items: center;}
+        .l-btn { background: transparent; border: none; cursor: pointer; font-size: 14px; opacity: 0.6; transition: 0.2s; padding: 0;}
+        .l-btn:hover { opacity: 1; transform: scale(1.1); }
+        .drag-handle { cursor: grab; opacity: 0.4; font-size: 16px; margin-right: 8px; }
+
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 999; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+        .modal-content { background: #FFFFFF; padding: 24px; border-radius: 20px; width: 620px; box-shadow: 0 24px 60px rgba(0,0,0,0.1); max-height: 90vh; overflow-y: auto;}
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h3 { margin: 0; font-size: 16px; font-weight: 800; }
+        .close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-sub); }
+        
+        .preset-tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        .p-tab { background: transparent; border: none; font-size: 13px; font-weight: bold; color: var(--text-sub); cursor: pointer; padding: 6px 12px; border-radius: 8px; }
+        .p-tab.active { background: var(--text-main); color: #FFF; }
+        
+        .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-height: 300px; overflow-y: auto;}
+        .preset-card { border: 1px solid var(--border); border-radius: 12px; padding: 16px; cursor: pointer; transition: 0.2s; background: #F8FAFC; text-align: center; font-weight: bold; font-size: 13px;}
+        .preset-card:hover { border-color: var(--primary); background: #F0FDF4; color: var(--primary);}
+
+        .asset-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+        .asset-tab { border: 1px solid var(--border); background: #FFFFFF; border-radius: 9px; padding: 8px 6px; font-size: 12px; font-weight: 800; cursor: pointer; color: var(--text-sub); }
+        .asset-tab.active { background: var(--text-main); border-color: var(--text-main); color: #FFFFFF; }
+        .asset-list { display: flex; flex-direction: column; gap: 8px; max-height: 190px; overflow-y: auto; padding-right: 4px; }
+        .asset-item { display: grid; grid-template-columns: 42px 1fr auto; align-items: center; gap: 10px; padding: 9px; border: 1px solid var(--border); border-radius: 10px; background: #FFFFFF; cursor: pointer; }
+        .asset-item:hover { border-color: var(--primary); }
+        .asset-thumb { width: 42px; height: 30px; border-radius: 6px; background: #F3F5F7; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 10px; font-weight: 800; color: var(--text-sub); }
+        .asset-thumb img { width: 100%; height: 100%; object-fit: contain; }
+        .asset-name { font-size: 12px; font-weight: 800; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .asset-meta { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
+        .asset-actions { display: flex; gap: 6px; align-items: center; }
+        .asset-action { border: none; background: transparent; cursor: pointer; font-size: 13px; color: var(--text-sub); padding: 3px; }
+        .asset-action:hover { color: var(--danger); }
+        .asset-empty { color: var(--text-sub); font-size: 12px; text-align: center; padding: 14px 8px; border: 1px dashed var(--border); border-radius: 10px; background: #FFFFFF; }
+        .prompt-tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+        .prompt-tag-chip { border: 1px solid var(--border); background: #FFFFFF; color: var(--text-sub); border-radius: 999px; padding: 7px 11px; cursor: pointer; font-size: 12px; font-weight: 800; transition: 0.2s; }
+        .prompt-tag-chip:hover { border-color: var(--primary); color: var(--text-main); }
+        .prompt-tag-chip.active { background: var(--text-main); border-color: var(--text-main); color: #FFFFFF; }
+        .keyword-setting-row { display: grid; grid-template-columns: 92px 1fr auto; gap: 8px; align-items: center; background: var(--card-bg); padding: 10px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 10px; }
+        .keyword-setting-row textarea { margin: 0; min-height: 54px; }
+        .add-menu-wrap { position: relative; }
+        .add-menu { display: none; position: absolute; right: 0; top: 32px; width: 150px; background: #FFFFFF; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,0.08); padding: 6px; z-index: 30; }
+        .add-menu.open { display: block; }
+        .add-menu button { width: 100%; border: none; background: transparent; text-align: left; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 800; cursor: pointer; color: var(--text-main); }
+        .add-menu button:hover { background: #F3F5F7; }
+        .ai-loading { display: none; position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); width: min(440px, calc(100% - 48px)); background: rgba(17,24,39,0.92); color: #FFFFFF; border-radius: 14px; padding: 14px 16px; z-index: 80; box-shadow: 0 16px 40px rgba(0,0,0,0.16); }
+        .ai-loading.show { display: block; }
+        .ai-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .ai-spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.9s linear infinite; flex-shrink: 0; }
+        .ai-title { font-size: 13px; font-weight: 800; }
+        .ai-progress { height: 6px; background: rgba(255,255,255,0.16); border-radius: 99px; overflow: hidden; }
+        .ai-progress-bar { width: 0%; height: 100%; background: var(--primary); border-radius: 99px; transition: width 0.35s ease; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .setting-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; background: var(--card-bg); padding: 12px; border-radius: 10px; border: 1px solid var(--border);}
+        .color-box { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border); flex-shrink: 0;}
+        .setting-input { width: 80px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-family: monospace; font-weight: bold; text-align: center; color: var(--text-main);}
+
+        .toast { position: fixed; top: 30px; left: 50%; transform: translate(-50%, -20px); background: var(--text-main); color: #FFF; padding: 10px 20px; border-radius: 12px; font-size: 13px; font-weight: bold; opacity: 0; pointer-events: none; transition: 0.3s; z-index: 9999; box-shadow: 0 8px 24px rgba(0,0,0,0.1);}
+    </style>
+</head>
+<body>
+
+<div class="toast" id="toast">提示信息</div>
+<input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2" style="display:none">
+<input type="file" id="bg-upload" accept="image/png, image/jpeg" style="display:none">
+<input type="file" id="logo-upload" accept="image/png, image/jpeg, image/svg+xml" multiple style="display:none">
+<input type="file" id="backup-import" accept="application/json,.json" style="display:none">
+
+<div class="modal-overlay" id="export-overlay" style="z-index: 10000; flex-direction: column;">
+    <div class="modal-content" style="width: auto; text-align: center;">
+        <h2 style="margin: 0 0 10px 0; color: var(--text-main);">📦 正在压制超清海报</h2>
+        <p style="margin: 0; color: var(--text-sub); font-size: 14px;">渲染引擎正在剥离涂层并切片，请勿关闭...</p>
+    </div>
+</div>
+
+<div class="modal-overlay" id="settings-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>⚙️ 品牌资产与全局设置</h3>
+            <button class="close-btn" onclick="document.getElementById('settings-modal').style.display='none'">×</button>
+        </div>
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
+            <div class="card-title"><div class="card-title-wrap">字体库管理</div></div>
+            <button class="btn btn-outline" onclick="document.getElementById('font-upload').click()">Aa 导入本地字体文件</button>
+            <div id="custom-font-list" style="margin-top: 12px; font-size: 12px; color: var(--text-sub); display:flex; gap:12px; flex-wrap:wrap;"></div>
+        </div>
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
+            <div class="card-title"><div class="card-title-wrap">资产备份与迁移</div></div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-outline" onclick="exportAssetBackup()">导出资产备份</button>
+                <button class="btn btn-dark" onclick="document.getElementById('backup-import').click()">导入资产备份</button>
+            </div>
+            <div style="font-size:12px; color:var(--text-sub); line-height:1.6; margin-top:10px;">从 file:// 旧页面导出，再到 localhost 页面导入，可恢复原来的版式、色彩、字体与 Logo。</div>
+        </div>
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
+            <div class="card-title"><div class="card-title-wrap">生图关键词标签</div></div>
+            <div id="settings-keyword-tag-list"></div>
+            <button class="btn btn-outline" style="margin-top: 12px;" onclick="addKeywordTag()">+ 添加关键词标签</button>
+        </div>
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
+            <div class="card-title"><div class="card-title-wrap">标签色彩预设管理</div></div>
+            <div id="settings-preset-list"></div>
+            <button class="btn btn-outline" style="margin-top: 12px;" onclick="addTagPreset()">+ 添加新色彩预设</button>
+        </div>
+        <div>
+            <div class="card-title"><div class="card-title-wrap">圆弧色彩预设管理</div></div>
+            <div id="settings-arc-preset-list"></div>
+            <button class="btn btn-outline" style="margin-top: 12px;" onclick="addArcPreset()">+ 添加新圆弧预设</button>
+        </div>
+    </div>
+</div>
+
+<div class="editor-layout">
+    <div class="left-pane" id="left-pane">
+        <div class="ratio-nav" id="ratio-nav">
+            <button class="active" onclick="setRatio('1:1')">1:1</button>
+            <button onclick="setRatio('3:4')">3:4</button>
+            <button onclick="setRatio('4:3')">4:3</button>
+            <button onclick="setRatio('16:9')">16:9</button>
+            <button onclick="setRatio('9:16')">9:16</button>
+        </div>
+
+        <div class="canvas-wrapper" id="canvas-wrapper">
+            <div class="empty-hint" id="empty-hint">暂无背景，请生成或导入图片</div>
+            <div id="dynamic-layers"></div>
+        </div>
+        <div class="ai-loading" id="ai-loading">
+            <div class="ai-row">
+                <div class="ai-spinner"></div>
+                <div class="ai-title" id="ai-loading-text">AI 正在处理...</div>
+            </div>
+            <div class="ai-progress"><div class="ai-progress-bar" id="ai-progress-bar"></div></div>
+        </div>
+    </div>
+
+    <div class="right-pane">
+        <div class="pane-header">
+            <h2>SuperFactory</h2>
+            <div class="header-actions">
+                <button class="btn-icon" id="undo-btn" onclick="undoAction()" title="撤回 Cmd/Ctrl+Z">↶</button>
+                <button class="btn-icon" id="redo-btn" onclick="redoAction()" title="取消撤回 Cmd/Ctrl+Shift+Z">↷</button>
+                <button class="btn-icon" onclick="openSettingsModal()">⚙️ 设置</button>
+            </div>
+        </div>
+
+        <div class="pane-content">
+            <div class="module-card">
+                <div class="card-title">
+                    <div class="card-title-wrap">资产库</div>
+                    <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="saveActiveAsset()">保存当前</button>
+                </div>
+                <div class="asset-tabs">
+                    <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')">版式</button>
+                    <button class="asset-tab" data-asset-tab="tag" onclick="switchAssetTab('tag')">标签组</button>
+                    <button class="asset-tab" data-asset-tab="logo" onclick="switchAssetTab('logo')">Logo</button>
+                </div>
+                <div class="asset-list" id="asset-list-ui"></div>
+            </div>
+
+            <div class="module-card">
+                <div class="card-title">
+                    <div class="card-title-wrap">图层管理 (支持Shift多选)</div>
+                    <div class="add-menu-wrap">
+                        <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="toggleAddMenu(event)">+ 添加</button>
+                        <div class="add-menu" id="add-menu">
+                            <button onclick="document.getElementById('bg-upload').click(); closeAddMenu();">图片图层</button>
+                            <button onclick="document.getElementById('logo-upload').click(); closeAddMenu();">上传Logo</button>
+                            <button onclick="addLayer('arc'); closeAddMenu();">圆弧</button>
+                            <button onclick="addLayer('tag'); closeAddMenu();">标签</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="layer-list" id="layer-list-ui"></div>
+            </div>
+
+            <div class="module-card" style="border-color: #D1D5DB; background: #FFFFFF;">
+                <div class="card-title"><div class="card-title-wrap">属性编辑</div></div>
+                <div id="prop-edit-area">
+                    <div style="text-align: center; color: var(--text-sub); font-size: 13px; padding: 20px 0;">请在上方或画板中选择图层</div>
+                </div>
+            </div>
+
+            <div class="module-card">
+                <div class="card-title"><div class="card-title-wrap">图像与 AI 引擎</div></div>
+                <button class="btn btn-outline" style="margin-bottom: 16px;" onclick="document.getElementById('bg-upload').click()">🖼️ 导入本地图片图层</button>
+                <div style="border-top: 1px dashed var(--border); padding-top: 16px;">
+                    <label class="label">AI 画面描述词</label>
+                    <div class="prompt-tag-list" id="prompt-tag-list"></div>
+                    <textarea class="textarea" id="ai-prompt-input" rows="3" placeholder="提示：扩图时务必输入主体！如：一个汉堡，延伸四周背景..."></textarea>
+                    
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <button class="btn btn-dark" style="flex:1;" onclick="generateAIBG()">🚀 生成新图</button>
+                        <button class="btn btn-outline" style="flex:1; border-color: var(--primary); color: var(--primary);" onclick="outpaintAIBG()">🪄 智能扩图</button>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn btn-dark" style="padding: 16px; font-size: 15px;" onclick="exportPNG()">📦 压制并导出超清 PNG</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    /* ================= 全局状态与常量 ================= */
+    const SIZES = { '1:1': { w: 1080, h: 1080 }, '3:4': { w: 1080, h: 1440 }, '4:3': { w: 1440, h: 1080 }, '16:9': { w: 1920, h: 1080 }, '9:16': { w: 1080, h: 1920 } };
+    let currentRatio = '1:1'; let currentScale = 1; 
+    let activeLayerIds = []; 
+    let customFonts = []; 
+    let layers = []; // 万物皆图层
+
+    let tagColorPresets = [{ id: 'c1', name: '品牌绿', bg: '#00D06C', text: '#FFFFFF', shadow: '#111827', shadowOpacity: 1 }, { id: 'c2', name: '警示红', bg: '#EF4444', text: '#FFFFFF', shadow: '#450a0a', shadowOpacity: 1 }];
+    let arcColorPresets = [{ id: 'a1', name: '经典黄绿', cIn: '#FFCC00', cOut: '#00D06C' }, { id: 'a2', name: '极简黑白', cIn: '#111827', cOut: '#E5E7EB' }];
+    let keywordTags = [
+        { id: 'kw_food', name: '美食商业', prompt: '商业美食摄影，食物主体清晰，诱人质感，高级广告光影' },
+        { id: 'kw_clean', name: '干净背景', prompt: '干净背景，画面简洁，留出版式和文字空间' },
+        { id: 'kw_vivid', name: '鲜艳色彩', prompt: '高饱和色彩，明亮活泼，社交媒体广告风格' }
+    ];
+    let selectedKeywordTagIds = [];
+    let presetLibrary = [];
+    let tagPresetLibrary = [];
+    let logoAssets = [];
+    let currentAssetTab = 'layout';
+    let draggingLayerId = null;
+    let aiProgressTimer = null;
+    let historyStack = []; let historyIdx = -1; let isRestoring = false;
+
+    /* ================= 数据持久化 ================= */
+    const DB_NAME = 'SuperFactoryDB';
+    const GLOBAL_STATE_KEY = 'global';
+    function getGlobalSnapshot() { return { tagColorPresets, arcColorPresets, keywordTags, presetLibrary, tagPresetLibrary }; }
+    function applyGlobalData(data = {}) {
+        if(data.tagColorPresets) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
+        if(data.arcColorPresets) arcColorPresets = data.arcColorPresets;
+        if(data.keywordTags) keywordTags = data.keywordTags;
+        if(data.presetLibrary) presetLibrary = data.presetLibrary;
+        if(data.tagPresetLibrary) tagPresetLibrary = data.tagPresetLibrary;
+    }
+    async function saveGlobalData() {
+        const snapshot = getGlobalSnapshot();
+        const dbOk = await saveStateToDB(snapshot);
+        try {
+            localStorage.setItem('sf_global_data', JSON.stringify({
+                tagColorPresets,
+                arcColorPresets,
+                keywordTags,
+                tagPresetLibrary,
+                presetMeta: presetLibrary.map(p => ({ id: p.id, name: p.name, size: p.size, count: p.elements?.length || 0 }))
+            }));
+        } catch(e) {}
+        return dbOk;
+    }
+    async function loadGlobalData() {
+        let localData = null;
+        try {
+            const raw = localStorage.getItem('sf_global_data');
+            if(raw) localData = JSON.parse(raw);
+        } catch(e) {}
+        if(localData) applyGlobalData(localData);
+
+        const dbData = await loadStateFromDB();
+        if(dbData) {
+            applyGlobalData(dbData);
+        } else if(localData && localData.presetLibrary) {
+            await saveGlobalData();
+        }
+    }
+
+    function initDB() { return new Promise((resolve, reject) => { const req = indexedDB.open(DB_NAME, 3); req.onupgradeneeded = e => { const db = e.target.result; if(!db.objectStoreNames.contains('fonts')) { db.createObjectStore('fonts', { keyPath: 'name' }); } if(!db.objectStoreNames.contains('logos')) { db.createObjectStore('logos', { keyPath: 'id' }); } if(!db.objectStoreNames.contains('state')) { db.createObjectStore('state', { keyPath: 'key' }); }}; req.onsuccess = e => resolve(e.target.result); req.onerror = e => reject(e.target.error); }); }
+    async function saveStateToDB(value) { try { const db = await initDB(); const tx = db.transaction('state', 'readwrite'); tx.objectStore('state').put({ key: GLOBAL_STATE_KEY, value, updatedAt: new Date().toISOString() }); return await new Promise(resolve => { tx.oncomplete = () => resolve(true); tx.onerror = () => resolve(false); tx.onabort = () => resolve(false); }); } catch(e) { return false; } }
+    async function loadStateFromDB() { try { const db = await initDB(); const tx = db.transaction('state', 'readonly'); const req = tx.objectStore('state').get(GLOBAL_STATE_KEY); return await new Promise(resolve => { req.onsuccess = e => resolve(e.target.result?.value || null); req.onerror = () => resolve(null); }); } catch(e) { return null; } }
+    async function saveFontToDB(fontObj) { try { const db = await initDB(); const tx = db.transaction('fonts', 'readwrite'); tx.objectStore('fonts').put(fontObj); } catch(e) {} }
+    async function saveLogoToDB(logoObj) { try { const db = await initDB(); const tx = db.transaction('logos', 'readwrite'); tx.objectStore('logos').put(logoObj); } catch(e) {} }
+    async function deleteLogoFromDB(id) { try { const db = await initDB(); const tx = db.transaction('logos', 'readwrite'); tx.objectStore('logos').delete(id); } catch(e) {} }
+    async function getAllFromDB(storeName) {
+        try {
+            const db = await initDB();
+            const tx = db.transaction(storeName, 'readonly');
+            const req = tx.objectStore(storeName).getAll();
+            return await new Promise(resolve => {
+                req.onsuccess = e => resolve(e.target.result || []);
+                req.onerror = () => resolve([]);
+            });
+        } catch(e) { return []; }
+    }
+    async function replaceStoreInDB(storeName, items = []) {
+        try {
+            const db = await initDB();
+            const tx = db.transaction(storeName, 'readwrite');
+            const store = tx.objectStore(storeName);
+            store.clear();
+            items.forEach(item => store.put(item));
+            return await new Promise(resolve => {
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+                tx.onabort = () => resolve(false);
+            });
+        } catch(e) { return false; }
+    }
+    async function registerFontAsset(f) {
+        if(!f || !f.id || !f.data) return false;
+        try {
+            const loaded = await new FontFace(f.id, `url(${f.data})`).load();
+            document.fonts.add(loaded);
+            await document.fonts.ready;
+            if(!customFonts.some(item => item.name === f.name)) {
+                customFonts.push({ name: f.name, value: f.value || cssFontFamily(f.id), data: f.data, id: f.id, fileName: f.fileName });
+            }
+            return true;
+        } catch(e) { return false; }
+    }
+    async function loadFontsFromDB() {
+        try { 
+            const db = await initDB(); const tx = db.transaction('fonts', 'readonly'); const req = tx.objectStore('fonts').getAll();
+            req.onsuccess = e => { 
+                const fonts = e.target.result;
+                if (fonts && fonts.length > 0) { 
+                    let loadedCount = 0; 
+                    fonts.forEach(f => {
+                        registerFontAsset(f).then(() => {
+                            loadedCount++; 
+                            if(loadedCount === fonts.length) { renderSettings(); renderProperties(); showToast(`成功恢复 ${fonts.length} 个持久化字体`); } 
+                        });
+                    }); 
+                }
+            };
+        } catch(e) {}
+    }
+    async function loadLogosFromDB() {
+        try {
+            const db = await initDB(); const tx = db.transaction('logos', 'readonly'); const req = tx.objectStore('logos').getAll();
+            req.onsuccess = e => { logoAssets = e.target.result || []; renderAssetLibrary(); };
+        } catch(e) {}
+    }
+
+    function saveHistory() {
+        if(isRestoring) return;
+        const state = { ratio: currentRatio, layers: JSON.parse(JSON.stringify(layers)) };
+        const stateText = JSON.stringify(state);
+        if(historyIdx >= 0 && JSON.stringify(historyStack[historyIdx]) === stateText) { updateHistoryButtons(); return; }
+        historyStack = historyStack.slice(0, historyIdx + 1);
+        historyStack.push(state);
+        if(historyStack.length > 80) historyStack.shift();
+        historyIdx = historyStack.length - 1;
+        updateHistoryButtons();
+    }
+    function applyHistory(state) {
+        if(!state) return;
+        isRestoring = true;
+        layers = JSON.parse(JSON.stringify(state.layers));
+        activeLayerIds = activeLayerIds.filter(id => layers.some(l => l.id === id));
+        if(currentRatio !== state.ratio) currentRatio = state.ratio;
+        syncRatioNav();
+        resizeCanvas();
+        renderCanvas();
+        renderPromptTags();
+        renderLayersList();
+        renderProperties();
+        renderAssetLibrary();
+        isRestoring = false;
+        updateHistoryButtons();
+    }
+    function updateHistoryButtons() {
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        if(undoBtn) undoBtn.disabled = historyIdx <= 0;
+        if(redoBtn) redoBtn.disabled = historyIdx < 0 || historyIdx >= historyStack.length - 1;
+    }
+    function undoAction() {
+        if(historyIdx <= 0) return;
+        historyIdx--;
+        applyHistory(historyStack[historyIdx]);
+        showToast('已撤回');
+    }
+    function redoAction() {
+        if(historyIdx < 0 || historyIdx >= historyStack.length - 1) return;
+        historyIdx++;
+        applyHistory(historyStack[historyIdx]);
+        showToast('已取消撤回');
+    }
+    document.addEventListener('keydown', e => {
+        const tag = e.target?.tagName;
+        if(['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if(!mod) return;
+        const key = e.key.toLowerCase();
+        if(key === 'z') {
+            e.preventDefault();
+            if(e.shiftKey) redoAction(); else undoAction();
+        } else if(key === 'y') {
+            e.preventDefault();
+            redoAction();
+        }
+    });
+    document.addEventListener('keydown', e => {
+        const tag = e.target?.tagName;
+        if(['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
+        if(document.getElementById('mini-dialog')?.style.display === 'flex') return;
+        if((e.key === 'Delete' || e.key === 'Backspace') && activeLayerIds.length > 0) {
+            e.preventDefault();
+            deleteSelectedLayers();
+        }
+    });
+    function showToast(msg, isError = false) { const toast = document.getElementById('toast'); toast.innerText = msg; toast.style.background = isError ? 'var(--danger)' : 'var(--text-main)'; toast.style.opacity = 1; toast.style.transform = 'translate(-50%, 0)'; setTimeout(() => { toast.style.opacity = 0; toast.style.transform = 'translate(-50%, -20px)'; }, 2500); }
+    function formatPresetTime() {
+        const d = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    function ensureMiniDialog() {
+        let overlay = document.getElementById('mini-dialog');
+        if(overlay) return overlay;
+        overlay = document.createElement('div');
+        overlay.id = 'mini-dialog';
+        overlay.style.cssText = 'display:none; position:fixed; inset:0; z-index:10002; align-items:center; justify-content:center; background:rgba(17,24,39,0.28); backdrop-filter:blur(4px);';
+        overlay.innerHTML = `<div style="width:360px; background:#fff; border:1px solid var(--border); border-radius:18px; padding:22px; box-shadow:0 24px 70px rgba(0,0,0,0.16);"><div id="mini-dialog-title" style="font-size:16px; font-weight:900; margin-bottom:14px;"></div><input id="mini-dialog-input" class="input-text" style="margin-bottom:16px;"><div id="mini-dialog-message" style="display:none; color:var(--text-sub); font-size:13px; line-height:1.6; margin-bottom:16px;"></div><div style="display:flex; gap:10px;"><button id="mini-dialog-cancel" class="btn btn-outline" style="flex:1;">取消</button><button id="mini-dialog-ok" class="btn btn-dark" style="flex:1;">确定</button></div></div>`;
+        document.body.appendChild(overlay);
+        return overlay;
+    }
+    function askText(title, defaultValue = '') {
+        return new Promise(resolve => {
+            const overlay = ensureMiniDialog();
+            const titleEl = document.getElementById('mini-dialog-title');
+            const input = document.getElementById('mini-dialog-input');
+            const message = document.getElementById('mini-dialog-message');
+            const ok = document.getElementById('mini-dialog-ok');
+            const cancel = document.getElementById('mini-dialog-cancel');
+            titleEl.innerText = title; message.style.display = 'none'; input.style.display = 'block'; input.value = defaultValue;
+            overlay.style.display = 'flex';
+            setTimeout(() => { input.focus(); input.select(); }, 30);
+            const cleanup = value => { overlay.style.display = 'none'; ok.onclick = null; cancel.onclick = null; input.onkeydown = null; resolve(value); };
+            ok.onclick = () => cleanup(input.value.trim() || defaultValue);
+            cancel.onclick = () => cleanup(null);
+            input.onkeydown = e => { if(e.key === 'Enter') cleanup(input.value.trim() || defaultValue); if(e.key === 'Escape') cleanup(null); };
+        });
+    }
+    function askConfirm(messageText) {
+        return new Promise(resolve => {
+            const overlay = ensureMiniDialog();
+            const titleEl = document.getElementById('mini-dialog-title');
+            const input = document.getElementById('mini-dialog-input');
+            const message = document.getElementById('mini-dialog-message');
+            const ok = document.getElementById('mini-dialog-ok');
+            const cancel = document.getElementById('mini-dialog-cancel');
+            titleEl.innerText = '确认操作'; message.innerText = messageText; message.style.display = 'block'; input.style.display = 'none';
+            overlay.style.display = 'flex';
+            const cleanup = value => { overlay.style.display = 'none'; ok.onclick = null; cancel.onclick = null; resolve(value); };
+            ok.onclick = () => cleanup(true);
+            cancel.onclick = () => cleanup(false);
+        });
+    }
+    function genId(prefix) { return prefix + '_' + Date.now() + '_' + Math.floor(Math.random()*1000); }
+    function escapeHtml(v) { return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
+    function normalizeFontDataUrl(dataUrl, fileName = '') {
+        const ext = fileName.split('.').pop().toLowerCase();
+        const mime = ext === 'otf' ? 'font/otf' : (ext === 'woff' ? 'font/woff' : (ext === 'woff2' ? 'font/woff2' : 'font/ttf'));
+        return dataUrl.replace(/^data:[^;]+;base64,/, `data:${mime};base64,`);
+    }
+    function cssFontFamily(fontId) { return `"${String(fontId).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}", sans-serif`; }
+    function isCustomFont(fontValue = '') { return String(fontValue).includes('CF_'); }
+    function getTagFontWeight(l) { return l.fontWeight !== undefined ? l.fontWeight : (isCustomFont(l.font) ? 400 : 900); }
+    function normalizeAlpha(value) {
+        const n = Number(value);
+        if(!Number.isFinite(n)) return 1;
+        return Math.min(1, Math.max(0, n));
+    }
+    function normalizeTagPreset(p = {}) {
+        return { ...p, shadowOpacity: normalizeAlpha(p.shadowOpacity ?? 1) };
+    }
+    function colorWithAlpha(color, alpha = 1) {
+        const a = normalizeAlpha(alpha);
+        const raw = String(color || '#111827').trim();
+        if(raw.startsWith('rgba(')) return raw.replace(/rgba\(([^,]+),([^,]+),([^,]+),[^)]+\)/, `rgba($1,$2,$3,${a})`);
+        if(raw.startsWith('rgb(')) return raw.replace('rgb(', 'rgba(').replace(')', `, ${a})`);
+        let hex = raw.replace('#', '');
+        if(hex.length === 3) hex = hex.split('').map(ch => ch + ch).join('');
+        if(hex.length === 8) hex = hex.slice(0, 6);
+        if(hex.length !== 6 || /[^0-9a-f]/i.test(hex)) return raw;
+        const r = parseInt(hex.slice(0,2), 16);
+        const g = parseInt(hex.slice(2,4), 16);
+        const b = parseInt(hex.slice(4,6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${a})`;
+    }
+    function formatPropValue(p, v) {
+        if(p === 'scale') return v + 'x';
+        if(p.includes('rotation')) return v + '°';
+        if(p.includes('Thickness') || p === 'letterSpacing') return v + 'px';
+        if(p === 'shadowOpacity') return Math.round(normalizeAlpha(v) * 100) + '%';
+        return v;
+    }
+    function stripDataUrl(dataUrl = '') { return String(dataUrl).includes(',') ? String(dataUrl).split(',')[1] : String(dataUrl); }
+    function getPromptText() {
+        const manual = document.getElementById('ai-prompt-input')?.value.trim() || '';
+        const tagPrompts = selectedKeywordTagIds
+            .map(id => keywordTags.find(t => t.id === id)?.prompt?.trim())
+            .filter(Boolean);
+        return [manual, ...tagPrompts].filter(Boolean).join('，');
+    }
+    function getOutpaintExpand(imgW, imgH, targetW, targetH) {
+        const imgRatio = imgW / imgH;
+        const targetRatio = targetW / targetH;
+        const expand = { top: 0, bottom: 0, left: 0, right: 0 };
+        if(Math.abs(imgRatio - targetRatio) < 0.03) {
+            expand.top = expand.bottom = expand.left = expand.right = 0.18;
+        } else if(targetRatio > imgRatio) {
+            const targetImageW = imgH * targetRatio;
+            expand.left = expand.right = Math.max(0, (targetImageW - imgW) / imgW / 2);
+        } else {
+            const targetImageH = imgW / targetRatio;
+            expand.top = expand.bottom = Math.max(0, (targetImageH - imgH) / imgH / 2);
+        }
+        return expand;
+    }
+    function preservePaneScroll(fn) {
+        const pane = document.querySelector('.pane-content');
+        const y = pane ? pane.scrollTop : 0;
+        fn();
+        if(pane) requestAnimationFrame(() => { pane.scrollTop = y; });
+    }
+    function getLayerIcon(l) {
+        if(l.type === 'arc') return '⭕ 圆弧';
+        if(l.type === 'logo') return '🔖 Logo';
+        if(l.type === 'image') return '🖼️ 图像';
+        return '🏷️ 标签';
+    }
+    function getSelectedTagLayers() {
+        return activeLayerIds.map(id => layers.find(l => l.id === id)).filter(l => l && l.type === 'tag');
+    }
+    function cloneLayersForInsert(elements, centerOnCanvas = false) {
+        const {w, h} = SIZES[currentRatio];
+        const maxZ = layers.length > 0 ? Math.max(...layers.map(l => l.zIndex)) : 1;
+        const source = JSON.parse(JSON.stringify(elements || []));
+        if(source.length === 0) return [];
+        let cx = 0, cy = 0;
+        source.forEach(l => { cx += Number(l.x) || 0; cy += Number(l.y) || 0; });
+        cx /= source.length; cy /= source.length;
+        return source.map((el, i) => {
+            const cloned = { ...el, id: genId(el.type), zIndex: maxZ + i + 1, locked: false };
+            if(centerOnCanvas) { cloned.x = w / 2 + ((Number(el.x) || 0) - cx); cloned.y = h / 2 + ((Number(el.y) || 0) - cy); }
+            if(cloned.type === 'tag' && cloned.shadowThickness === undefined) cloned.shadowThickness = 12;
+            if(cloned.type === 'tag' && cloned.letterSpacing === undefined) cloned.letterSpacing = 0;
+            if(cloned.type === 'tag' && cloned.shadowOpacity === undefined) cloned.shadowOpacity = 1;
+            if((cloned.type === 'image' || cloned.type === 'logo') && cloned.flipX === undefined) cloned.flipX = false;
+            return cloned;
+        });
+    }
+    function readImageSize(src) {
+        return new Promise(resolve => {
+            const img = new Image();
+            img.onload = () => resolve({ w: img.naturalWidth || img.width || 400, h: img.naturalHeight || img.height || 240 });
+            img.onerror = () => resolve({ w: 400, h: 240 });
+            img.src = src;
+        });
+    }
+    function waitForImagesIn(root) {
+        const imgs = [...root.querySelectorAll('img')];
+        return Promise.all(imgs.map(img => {
+            if(img.complete && img.naturalWidth > 0) return Promise.resolve();
+            return new Promise(resolve => {
+                img.onload = resolve;
+                img.onerror = resolve;
+            });
+        }));
+    }
+    function startAIProgress(text) {
+        const box = document.getElementById('ai-loading');
+        const label = document.getElementById('ai-loading-text');
+        const bar = document.getElementById('ai-progress-bar');
+        if(label) label.innerText = text;
+        if(bar) bar.style.width = '8%';
+        box?.classList.add('show');
+        clearInterval(aiProgressTimer);
+        let val = 8;
+        aiProgressTimer = setInterval(() => {
+            val = Math.min(88, val + Math.random() * 7);
+            if(bar) bar.style.width = val + '%';
+        }, 700);
+    }
+    function updateAIProgress(text, pct) {
+        const label = document.getElementById('ai-loading-text');
+        const bar = document.getElementById('ai-progress-bar');
+        if(label) label.innerText = text;
+        if(bar && pct !== undefined) bar.style.width = pct + '%';
+    }
+    function stopAIProgress() {
+        const box = document.getElementById('ai-loading');
+        const bar = document.getElementById('ai-progress-bar');
+        clearInterval(aiProgressTimer);
+        if(bar) bar.style.width = '100%';
+        setTimeout(() => box?.classList.remove('show'), 350);
+    }
+
+    function syncRatioNav() {
+        document.querySelectorAll('.ratio-nav button').forEach(b => { b.classList.toggle('active', b.innerText === currentRatio); });
+    }
+    function renderPromptTags() {
+        const list = document.getElementById('prompt-tag-list'); if(!list) return;
+        selectedKeywordTagIds = selectedKeywordTagIds.filter(id => keywordTags.some(t => t.id === id));
+        if(keywordTags.length === 0) { list.innerHTML = `<div class="asset-empty" style="width:100%; padding:10px;">可在设置里添加常用关键词标签。</div>`; return; }
+        list.innerHTML = '';
+        keywordTags.forEach(tag => {
+            const btn = document.createElement('button');
+            btn.className = `prompt-tag-chip ${selectedKeywordTagIds.includes(tag.id) ? 'active' : ''}`;
+            btn.type = 'button';
+            btn.innerText = tag.name;
+            btn.title = tag.prompt;
+            btn.onclick = () => toggleKeywordTag(tag.id);
+            list.appendChild(btn);
+        });
+    }
+    function toggleKeywordTag(id) {
+        if(selectedKeywordTagIds.includes(id)) selectedKeywordTagIds = selectedKeywordTagIds.filter(x => x !== id);
+        else selectedKeywordTagIds.push(id);
+        renderPromptTags();
+    }
+    function setRatio(ratio) {
+        if(currentRatio === ratio) return; currentRatio = ratio;
+        syncRatioNav();
+        resizeCanvas(); renderCanvas(); renderLayersList(); renderProperties(); renderAssetLibrary(); saveHistory(); 
+    }
+
+    function resizeCanvas() {
+        const wrap = document.getElementById('canvas-wrapper'); const pane = document.getElementById('left-pane'); const {w, h} = SIZES[currentRatio];
+        wrap.style.width = w + 'px'; wrap.style.height = h + 'px';
+        const scale = Math.min((pane.clientWidth - 160) / w, (pane.clientHeight - 160) / h);
+        currentScale = scale; wrap.style.transform = `translate(-50%, -50%) scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function openSettingsModal() { renderSettings(); document.getElementById('settings-modal').style.display = 'flex'; }
+    function renderSettings() {
+        const keywordList = document.getElementById('settings-keyword-tag-list');
+        if(keywordList) {
+            keywordList.innerHTML = '';
+            keywordTags.forEach((tag, index) => {
+                keywordList.innerHTML += `<div class="keyword-setting-row"><input type="text" class="setting-input" style="width:100%; margin:0;" value="${escapeHtml(tag.name)}" onchange="updateKeywordTag(${index}, 'name', this.value)"><textarea class="textarea" rows="2" placeholder="输入这个标签代表的完整关键词" onchange="updateKeywordTag(${index}, 'prompt', this.value)">${escapeHtml(tag.prompt)}</textarea><button class="l-btn" style="color:var(--danger);" onclick="deleteKeywordTag(${index})">✖</button></div>`;
+            });
+        }
+        const list = document.getElementById('settings-preset-list'); list.innerHTML = '';
+        tagColorPresets = tagColorPresets.map(normalizeTagPreset);
+        tagColorPresets.forEach((p, index) => { const alpha = normalizeAlpha(p.shadowOpacity); list.innerHTML += `<div class="setting-row" style="flex-wrap:wrap;"><input type="text" class="setting-input" value="${p.name}" onchange="updateTagPreset(${index}, 'name', this.value)"><div class="color-box" style="background:${p.bg}" title="标签底色"></div><input type="text" class="setting-input" value="${p.bg}" onchange="updateTagPreset(${index}, 'bg', this.value)"><div class="color-box" style="background:${p.text}" title="文字颜色"></div><input type="text" class="setting-input" value="${p.text}" onchange="updateTagPreset(${index}, 'text', this.value)"><div class="color-box" style="background:${colorWithAlpha(p.shadow, alpha)}" title="投影颜色"></div><input type="text" class="setting-input" value="${p.shadow}" onchange="updateTagPreset(${index}, 'shadow', this.value)"><span style="font-size:11px;color:var(--text-sub);font-weight:800;">投影透明度</span><input type="range" min="0" max="1" step="0.05" value="${alpha}" style="width:96px; flex:0 0 96px; margin:0;" oninput="updateTagPreset(${index}, 'shadowOpacity', parseFloat(this.value)); this.nextElementSibling.innerText = Math.round(parseFloat(this.value)*100)+'%'"><span style="width:38px;font-size:11px;font-weight:800;color:var(--text-main);">${Math.round(alpha*100)}%</span><button class="l-btn" style="color:var(--danger);" onclick="deleteTagPreset(${index})">✖</button></div>`; });
+        const arcList = document.getElementById('settings-arc-preset-list'); arcList.innerHTML = '';
+        arcColorPresets.forEach((p, index) => { arcList.innerHTML += `<div class="setting-row"><input type="text" class="setting-input" value="${p.name}" onchange="updateArcPreset(${index}, 'name', this.value)"><div class="color-box" style="background:${p.cIn}"></div><input type="text" class="setting-input" value="${p.cIn}" onchange="updateArcPreset(${index}, 'cIn', this.value)"><div class="color-box" style="background:${p.cOut}"></div><input type="text" class="setting-input" value="${p.cOut}" onchange="updateArcPreset(${index}, 'cOut', this.value)"><div style="width: 80px;"></div><button class="l-btn" style="color:var(--danger);" onclick="deleteArcPreset(${index})">✖</button></div>`; });
+        const fontList = document.getElementById('custom-font-list'); fontList.innerHTML = customFonts.map(f => `<div style="background:#F3F5F7; padding:4px 8px; border-radius:4px; font-weight:bold;">✅ ${f.name}</div>`).join('') || '暂无导入字体';
+    }
+
+    function updateTagPreset(i, k, v) { tagColorPresets[i][k] = k === 'shadowOpacity' ? normalizeAlpha(v) : v; saveGlobalData(); if(k !== 'shadowOpacity') renderSettings(); renderProperties(); renderCanvas(); }
+    function addTagPreset() { tagColorPresets.push({ id: genId('c'), name: '新预设', bg: '#00D06C', text: '#FFFFFF', shadow: '#111827', shadowOpacity: 1 }); saveGlobalData(); renderSettings(); }
+    function deleteTagPreset(i) { tagColorPresets.splice(i, 1); saveGlobalData(); renderSettings(); }
+    function updateKeywordTag(i, k, v) { keywordTags[i][k] = v; saveGlobalData(); renderPromptTags(); }
+    function addKeywordTag() { keywordTags.push({ id: genId('kw'), name: '新标签', prompt: '输入关键词' }); saveGlobalData(); renderSettings(); renderPromptTags(); }
+    function deleteKeywordTag(i) { const id = keywordTags[i]?.id; keywordTags.splice(i, 1); selectedKeywordTagIds = selectedKeywordTagIds.filter(x => x !== id); saveGlobalData(); renderSettings(); renderPromptTags(); }
+    function updateArcPreset(i, k, v) { arcColorPresets[i][k] = v; saveGlobalData(); renderSettings(); renderProperties(); renderCanvas(); }
+    function addArcPreset() { arcColorPresets.push({ id: genId('ac'), name: '新圆弧', cIn: '#FFCC00', cOut: '#00D06C' }); saveGlobalData(); renderSettings(); }
+    function deleteArcPreset(i) { arcColorPresets.splice(i, 1); saveGlobalData(); renderSettings(); }
+
+    /* ================= 统一图层添加 ================= */
+    function addLayer(type, extraData = {}) {
+        const {w, h} = SIZES[currentRatio]; 
+        const maxZ = layers.length > 0 ? Math.max(...layers.map(l => l.zIndex)) : 1;
+        const minZ = layers.length > 0 ? Math.min(...layers.map(l => l.zIndex)) : 1;
+        let newL = { id: genId(type), type, x: w/2, y: h/2, scale: 1, locked: false };
+        
+        if (type === 'image') {
+            newL.zIndex = minZ - 1; newL.rotation = 0; newL.baseW = w; newL.baseH = h; newL.flipX = false;
+            Object.assign(newL, extraData);
+        } else if (type === 'logo') {
+            newL.zIndex = maxZ + 1; newL.rotation = 0; newL.baseW = 260; newL.baseH = 160; newL.flipX = false;
+            Object.assign(newL, extraData);
+        } else {
+            newL.zIndex = maxZ + 1; 
+            if(type === 'arc') Object.assign(newL, { rIn: 400, wIn: 40, wOut: 120, cIn: '#00D06C', cOut: '#111827' });
+            else if(type === 'tag') Object.assign(newL, { rotation: -3, shadowThickness: 12, shadowOpacity: 1, letterSpacing: 0, text: 'NEW TAG', font: '-apple-system, sans-serif', bgCol: '#00D06C', textCol: '#FFFFFF', shadowCol: '#111827' });
+        }
+        layers.push(newL); activeLayerIds = [newL.id]; saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+    }
+
+    /* ================= 核心渲染 ================= */
+    function renderCanvas() {
+        const container = document.getElementById('dynamic-layers'); container.innerHTML = '';
+        const hintEl = document.getElementById('empty-hint');
+        hintEl.style.display = layers.some(l => l.type === 'image' || l.type === 'logo') ? 'none' : 'flex';
+        
+        layers.sort((a,b) => a.zIndex - b.zIndex).forEach(l => {
+            const wrapper = document.createElement('div'); wrapper.dataset.id = l.id; wrapper.id = l.id; wrapper.style.left = l.x + 'px'; wrapper.style.top = l.y + 'px'; wrapper.style.zIndex = l.zIndex;
+            if(activeLayerIds.includes(l.id)) wrapper.classList.add('is-active-layer');
+            if(l.locked) wrapper.style.pointerEvents = 'none';
+            
+            if(l.type === 'image' || l.type === 'logo') {
+                wrapper.className = 'layer-image-wrapper layer-base';
+                wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation}deg) scale(${l.scale}) scaleX(${l.flipX ? -1 : 1})`;
+                wrapper.style.width = l.baseW + 'px'; wrapper.style.height = l.baseH + 'px';
+                wrapper.innerHTML = `<img class="layer-image-img" src="${l.src}" style="object-fit:${l.type === 'logo' ? 'contain' : 'cover'};">`;
+            }
+            else if(l.type === 'arc') {
+                wrapper.className = 'layer-arc-wrapper layer-base';
+                wrapper.style.transform = `translate(-50%, -50%) scale(${l.scale})`;
+                const rIn = parseInt(l.rIn); const wIn = parseInt(l.wIn); const wOut = parseInt(l.wOut); const total = rIn + (wIn/2) + wOut; const size = total*2+4;
+                wrapper.innerHTML = `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}"><circle cx="${total+2}" cy="${total+2}" r="${rIn}" fill="none" stroke="${l.cIn}" stroke-width="${wIn}" style="pointer-events:stroke; cursor:grab;"></circle><circle cx="${total+2}" cy="${total+2}" r="${rIn+wIn/2+wOut/2}" fill="none" stroke="${l.cOut}" stroke-width="${wOut}" style="pointer-events:stroke; cursor:grab;"></circle></svg>`;
+            } 
+            else if(l.type === 'tag') {
+                wrapper.className = 'layer-tag-wrapper layer-base';
+                wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation}deg) scale(${l.scale})`;
+                wrapper.style.fontFamily = l.font || '-apple-system, sans-serif';
+                wrapper.style.fontWeight = getTagFontWeight(l);
+                wrapper.style.letterSpacing = (l.letterSpacing ?? 0) + 'px';
+                const thick = l.shadowThickness !== undefined ? l.shadowThickness : 12; 
+                const shadowAlpha = normalizeAlpha(l.shadowOpacity ?? 1);
+                const shadowColor = colorWithAlpha(l.shadowCol, shadowAlpha);
+                const safeText = escapeHtml(l.text);
+                const autoAngle = Math.atan2(thick, 72 + String(l.text || '').length * 22) * (180/Math.PI);
+                // 紧凑 HTML 避免幽灵空格
+                wrapper.innerHTML = `<div style="position:relative; display:inline-block;"><div class="tag-pill" style="position:absolute; left:0; top:0; width:100%; height:100%; background:${shadowColor}; color:transparent; z-index:0; transform-origin: 30px 30px; transform: rotate(${autoAngle}deg); clip-path: inset(-100px -100px -100px 30px);">${safeText}</div><div class="tag-pill" style="position:relative; background:${l.bgCol}; color:${l.textCol}; z-index:1;">${safeText}</div></div>`;
+            }
+            if(activeLayerIds.includes(l.id)) wrapper.classList.add('is-active-layer');
+            container.appendChild(wrapper);
+        });
+    }
+
+    function renderLayersList() {
+        const listUI = document.getElementById('layer-list-ui'); listUI.innerHTML = '';
+        [...layers].sort((a,b) => b.zIndex - a.zIndex).forEach(l => {
+            const li = document.createElement('div'); li.className = `layer-item ${activeLayerIds.includes(l.id) ? 'active' : ''}`;
+            li.draggable = true; li.dataset.id = l.id;
+            li.ondragstart = e => { draggingLayerId = l.id; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; };
+            li.ondragend = () => { draggingLayerId = null; li.classList.remove('dragging'); };
+            li.ondragover = e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+            li.ondrop = e => { e.preventDefault(); reorderLayerByDrop(draggingLayerId, l.id); };
+            li.onclick = (e) => { 
+                if(!e.target.closest('button')) { 
+                    preservePaneScroll(() => {
+                        if(e.shiftKey) { if(activeLayerIds.includes(l.id)) activeLayerIds = activeLayerIds.filter(x => x !== l.id); else activeLayerIds.push(l.id); } else { activeLayerIds = [l.id]; }
+                        renderCanvas(); renderLayersList(); renderProperties(); 
+                    });
+                } 
+            };
+            const icon = getLayerIcon(l);
+            li.innerHTML = `<div style="display:flex; align-items:center; min-width:0;"><span class="drag-handle">⋮⋮</span><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${icon}</span></div><div class="layer-actions"><button class="l-btn" onclick="toggleLock('${l.id}')">${l.locked ? '🔒' : '🔓'}</button><button class="l-btn" style="color:var(--danger);" onclick="deleteLayer('${l.id}')">✖</button></div>`;
+            listUI.appendChild(li);
+        });
+    }
+
+    function reorderLayerByDrop(fromId, toId) {
+        if(!fromId || !toId || fromId === toId) return;
+        preservePaneScroll(() => {
+            const ordered = [...layers].sort((a,b) => b.zIndex - a.zIndex);
+            const fromIdx = ordered.findIndex(l => l.id === fromId);
+            const toIdx = ordered.findIndex(l => l.id === toId);
+            if(fromIdx < 0 || toIdx < 0) return;
+            const [moved] = ordered.splice(fromIdx, 1);
+            ordered.splice(toIdx, 0, moved);
+            ordered.forEach((l, idx) => { l.zIndex = ordered.length - idx; });
+            renderCanvas(); renderLayersList(); renderProperties(); saveHistory();
+        });
+    }
+
+    function deleteLayer(id) { preservePaneScroll(() => { layers = layers.filter(l => l.id !== id); activeLayerIds = activeLayerIds.filter(x => x !== id); renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); }); }
+    function deleteSelectedLayers() { preservePaneScroll(() => { const ids = new Set(activeLayerIds); layers = layers.filter(l => !ids.has(l.id)); activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); showToast('已删除选中图层'); }); }
+    function toggleLock(id) { preservePaneScroll(() => { const l = layers.find(x => x.id === id); if(l) l.locked = !l.locked; renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); }); }
+
+    window.updateProp = function(p, v) { activeLayerIds.forEach(id => { const l = layers.find(x => x.id === id); if(l) l[p] = v; }); renderCanvas(); if(activeLayerIds.length === 1) { const el = document.getElementById('val-'+p); if(el) el.innerText = formatPropValue(p, v); } };
+    window.applyTagColor = function(b, t, s, o = 1) { activeLayerIds.forEach(id => { const l = layers.find(x => x.id === id); if(l && l.type === 'tag') { l.bgCol = b; l.textCol = t; l.shadowCol = s; l.shadowOpacity = normalizeAlpha(o); }}); renderCanvas(); renderProperties(); saveHistory(); };
+    window.applyArcColor = function(cIn, cOut) { activeLayerIds.forEach(id => { const l = layers.find(x => x.id === id); if(l && l.type === 'arc') { l.cIn = cIn; l.cOut = cOut; }}); renderCanvas(); renderProperties(); saveHistory(); };
+
+    function renderProperties() {
+        const area = document.getElementById('prop-edit-area'); 
+        if(activeLayerIds.length === 0) { area.innerHTML = `<div style="text-align: center; color: var(--text-sub); font-size: 13px; padding: 20px 0;">请在上方或画板中选择图层</div>`; return; }
+        if(activeLayerIds.length > 1) {
+            const types = activeLayerIds.map(id => layers.find(l => l.id === id)?.type); const allTags = types.every(t => t === 'tag'); const allArcs = types.every(t => t === 'arc');
+            let batchUI = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0;">已选择 ${activeLayerIds.length} 个图层</div>`;
+            if(allTags) { let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); presetHtml += `<div onclick="applyTagColor('${p.bg}', '${p.text}', '${p.shadow}', ${alpha})" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid #FFF; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;" title="${p.name}"></div>`; }); batchUI += `<label class="label">批量修改标签品牌色</label>${presetHtml}</div>`; } 
+            else if (allArcs) { let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; arcColorPresets.forEach(p => { presetHtml += `<div onclick="applyArcColor('${p.cIn}', '${p.cOut}')" style="width:36px; height:36px; border-radius:50%; background:${p.cIn}; border: 4px solid ${p.cOut}; cursor:pointer;" title="${p.name}"></div>`; }); batchUI += `<label class="label">批量修改圆弧品牌色</label>${presetHtml}</div>`; }
+            area.innerHTML = batchUI; return;
+        }
+
+        const l = layers.find(x => x.id === activeLayerIds[0]); if(!l) return;
+        let fontOptions = `<option value="-apple-system, sans-serif">系统默认字体</option><option value="Arial Black, sans-serif">Arial Black (超粗体)</option>`; 
+        customFonts.forEach(f => { fontOptions += `<option value='${f.value}'>${f.name}</option>`; });
+
+        if(l.type === 'image' || l.type === 'logo') {
+            const title = l.type === 'logo' ? 'Logo属性调整' : '图片属性调整';
+            area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">${title}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.2" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div style="display:flex; gap:8px; margin-top:16px;"><button class="btn btn-outline" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="centerLayer()">🔄 居中</button><button class="btn btn-outline" style="flex:1;" onclick="toggleFlipX()" title="镜像反转">⇋ 镜像</button></div>`;
+        }
+        else if(l.type === 'tag') {
+            let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="applyTagColor('${p.bg}', '${p.text}', '${p.shadow}', ${alpha})" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;"></div>`; });
+            area.innerHTML = `<label class="label">文案内容</label><input type="text" class="input-text" value="${escapeHtml(l.text)}" oninput="updateProp('text', this.value)" onchange="saveHistory()"><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.3" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-8" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="30" step="1" value="${l.shadowThickness||12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness||12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 1)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 1)*100)}%</span></div>`;
+        } 
+        else if(l.type === 'arc') {
+            let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; arcColorPresets.forEach(p => { const isActive = l.cIn === p.cIn && l.cOut === p.cOut; presetHtml += `<div onclick="applyArcColor('${p.cIn}', '${p.cOut}')" style="width:36px; height:36px; border-radius:50%; background:${p.cIn}; border: 4px solid ${p.cOut}; box-shadow: 0 0 0 ${isActive ? '2px' : '0'} var(--text-main); cursor:pointer;"></div>`; });
+            area.innerHTML = `<label class="label">一键圆弧品牌色</label>${presetHtml}</div><div class="slider-row"><span class="s-label">整体缩放</span><input type="range" min="0.2" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">中心半径</span><input type="range" min="100" max="1000" step="1" value="${l.rIn}" oninput="updateProp('rIn', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rIn">${l.rIn}</span></div><div class="slider-row"><span class="s-label">内环粗细</span><input type="range" min="10" max="400" step="1" value="${l.wIn}" oninput="updateProp('wIn', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-wIn">${l.wIn}</span></div><div class="slider-row"><span class="s-label">外环粗细</span><input type="range" min="0" max="400" step="1" value="${l.wOut}" oninput="updateProp('wOut', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-wOut">${l.wOut}</span></div>`;
+        }
+    }
+    
+    window.centerLayer = function() {
+        if(activeLayerIds.length === 1) {
+            const l = layers.find(x => x.id === activeLayerIds[0]);
+            const {w, h} = SIZES[currentRatio];
+            if(l) { l.x = w/2; l.y = h/2; renderCanvas(); saveHistory(); }
+        }
+    }
+    window.toggleFlipX = function() {
+        activeLayerIds.forEach(id => {
+            const l = layers.find(x => x.id === id);
+            if(l && (l.type === 'image' || l.type === 'logo')) l.flipX = !l.flipX;
+        });
+        renderCanvas(); renderProperties(); saveHistory();
+    }
+
+    /* ================= 图层统一拖拽引擎 ================= */
+    let isDragging = false, dragStartX = 0, dragStartY = 0, dragData = [], hasDragged = false;
+    document.getElementById('canvas-wrapper').addEventListener('mousedown', e => {
+        hasDragged = false; const wrap = e.target.closest('.layer-base');
+        if(wrap) { 
+            const id = wrap.dataset.id; const l = layers.find(x => x.id === id); if(!l || l.locked) return; 
+            if(e.shiftKey) { if(!activeLayerIds.includes(id)) activeLayerIds.push(id); } 
+            else { if(!activeLayerIds.includes(id)) activeLayerIds = [id]; }
+            isDragging = true; dragStartX = e.clientX; dragStartY = e.clientY; 
+            dragData = activeLayerIds.map(selId => ({ id: selId, ix: layers.find(x => x.id === selId).x, iy: layers.find(x => x.id === selId).y }));
+            renderCanvas(); renderLayersList(); renderProperties(); 
+        } else { activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); }
+    });
+    window.addEventListener('mousemove', e => { 
+        if(isDragging && activeLayerIds.length > 0) { 
+            hasDragged = true; let dx = (e.clientX - dragStartX) / currentScale; let dy = (e.clientY - dragStartY) / currentScale;
+            if(e.shiftKey) {
+                if(Math.abs(dx) >= Math.abs(dy)) dy = 0;
+                else dx = 0;
+            }
+            dragData.forEach(data => { const l = layers.find(x => x.id === data.id); if(l) { l.x = data.ix + dx; l.y = data.iy + dy; document.getElementById(data.id).style.left = l.x + 'px'; document.getElementById(data.id).style.top = l.y + 'px'; }});
+        } 
+    });
+    window.addEventListener('mouseup', e => { 
+        if(isDragging) { 
+            isDragging = false; saveHistory(); 
+            const wrap = e.target.closest('.layer-base');
+            if(!hasDragged && !e.shiftKey && wrap && activeLayerIds.length > 1) { activeLayerIds = [wrap.dataset.id]; renderCanvas(); renderLayersList(); renderProperties(); }
+        }
+    });
+
+    /* ================= 内嵌资产库系统 ================= */
+    function switchAssetTab(tab) {
+        currentAssetTab = tab;
+        document.querySelectorAll('.asset-tab').forEach(b => b.classList.toggle('active', b.dataset.assetTab === tab));
+        renderAssetLibrary();
+    }
+    function toggleAddMenu(e) { e.stopPropagation(); document.getElementById('add-menu')?.classList.toggle('open'); }
+    function closeAddMenu() { document.getElementById('add-menu')?.classList.remove('open'); }
+    document.addEventListener('click', e => { if(!e.target.closest('.add-menu-wrap')) closeAddMenu(); });
+    async function saveActiveAsset() {
+        if(currentAssetTab === 'layout') return await saveToPreset();
+        if(currentAssetTab === 'tag') return await saveTagComboPreset();
+        document.getElementById('logo-upload').click();
+    }
+    function renderAssetLibrary() {
+        const list = document.getElementById('asset-list-ui'); if(!list) return;
+        list.innerHTML = '';
+        if(currentAssetTab === 'layout') {
+            const items = presetLibrary.filter(p => p.size === currentRatio);
+            if(items.length === 0) { list.innerHTML = `<div class="asset-empty">当前比例暂无版式，点击“保存当前”存一个。</div>`; return; }
+            items.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.size} · ${p.elements?.length || 0} 图层`, thumb: '版式', onApply: () => applyLayoutPreset(p.id), onDelete: () => deleteLayoutPreset(p.id) })));
+        } else if(currentAssetTab === 'tag') {
+            if(tagPresetLibrary.length === 0) { list.innerHTML = `<div class="asset-empty">多选标签后点击“保存当前”，可保存标签组合。</div>`; return; }
+            tagPresetLibrary.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, thumb: '标签', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
+        } else {
+            if(logoAssets.length === 0) { list.innerHTML = `<div class="asset-empty">点击“保存当前”上传常用 Logo，之后可固定调用。</div>`; return; }
+            logoAssets.forEach(l => list.appendChild(createAssetItem({ title: l.name, meta: '点击添加到画布', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
+        }
+    }
+    function createAssetItem({ title, meta, thumb, img, onApply, onDelete }) {
+        const item = document.createElement('div'); item.className = 'asset-item'; item.onclick = onApply;
+        item.innerHTML = `<div class="asset-thumb">${img ? `<img src="${img}">` : escapeHtml(thumb || '')}</div><div style="min-width:0;"><div class="asset-name">${escapeHtml(title)}</div><div class="asset-meta">${escapeHtml(meta || '')}</div></div><div class="asset-actions"><button class="asset-action" title="删除">✖</button></div>`;
+        item.querySelector('.asset-action').onclick = e => { e.stopPropagation(); onDelete(); };
+        return item;
+    }
+    function applyLayoutPreset(id) {
+        const p = presetLibrary.find(x => x.id === id); if(!p) return;
+        if(currentRatio !== p.size) return showToast('预设和画板尺寸不匹配！', true);
+        const currentImages = layers.filter(l => l.type === 'image').map(l => JSON.parse(JSON.stringify(l)));
+        const newLayers = cloneLayersForInsert(p.elements, false);
+        if(currentImages.length > 0) {
+            const presetImages = newLayers.filter(l => l.type === 'image');
+            if(presetImages.length > 0) {
+                presetImages.forEach((imgLayer, index) => {
+                    const currentImage = currentImages[index] || currentImages[currentImages.length - 1];
+                    const placeholderZ = imgLayer.zIndex;
+                    Object.keys(imgLayer).forEach(key => delete imgLayer[key]);
+                    Object.assign(imgLayer, { ...currentImage, id: genId('image'), zIndex: placeholderZ, locked: false, flipX: currentImage.flipX ?? false });
+                });
+                if(currentImages.length > presetImages.length) {
+                    const minZ = newLayers.length > 0 ? Math.min(...newLayers.map(l => l.zIndex)) : 1;
+                    currentImages.slice(presetImages.length).forEach((img, index) => {
+                        newLayers.push({ ...img, id: genId('image'), zIndex: minZ - currentImages.length + index, locked: false, flipX: img.flipX ?? false });
+                    });
+                }
+            } else {
+                const minZ = newLayers.length > 0 ? Math.min(...newLayers.map(l => l.zIndex)) : 1;
+                currentImages.forEach((img, index) => {
+                    newLayers.push({ ...img, id: genId('image'), zIndex: minZ - currentImages.length + index, locked: false, flipX: img.flipX ?? false });
+                });
+            }
+        }
+        layers = newLayers;
+        activeLayerIds = newLayers.filter(l => l.type !== 'image').map(l => l.id);
+        if(activeLayerIds.length === 0) activeLayerIds = newLayers.map(l => l.id);
+        saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast(currentImages.length > 0 ? '已套用版式，并保留当前图片' : '已切换到该版式');
+    }
+    async function deleteLayoutPreset(id) {
+        if(!await askConfirm('删除这个版式预设？')) return;
+        presetLibrary = presetLibrary.filter(p => p.id !== id);
+        await saveGlobalData(); renderAssetLibrary(); showToast('已删除版式预设');
+    }
+    async function saveToPreset() {
+        if(layers.length === 0) return showToast('画板为空', true);
+        const name = await askText('命名版式', `版式 ${formatPresetTime()}`); if(!name) return;
+        presetLibrary.push({ id: genId('p'), name, size: currentRatio, elements: JSON.parse(JSON.stringify(layers)) });
+        const ok = await saveGlobalData();
+        renderAssetLibrary();
+        showToast(ok ? '已保存到版式库' : '已保存到当前页面，但本地持久化失败', !ok);
+    }
+    async function saveTagComboPreset() {
+        const tags = getSelectedTagLayers();
+        if(tags.length === 0) return showToast('请先选择一个或多个标签图层', true);
+        const name = await askText('命名标签组合', `标签组合 ${formatPresetTime()}`); if(!name) return;
+        tagPresetLibrary.push({ id: genId('tp'), name, elements: JSON.parse(JSON.stringify(tags)) });
+        const ok = await saveGlobalData();
+        renderAssetLibrary();
+        showToast(ok ? '已保存到标签组合库' : '已保存到当前页面，但本地持久化失败', !ok);
+    }
+    function applyTagComboPreset(id) {
+        const p = tagPresetLibrary.find(x => x.id === id); if(!p) return;
+        const newLayers = cloneLayersForInsert(p.elements, true);
+        layers.push(...newLayers); activeLayerIds = newLayers.map(l => l.id);
+        saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast('标签组合已应用');
+    }
+    async function deleteTagComboPreset(id) {
+        if(!await askConfirm('删除这个标签组合？')) return;
+        tagPresetLibrary = tagPresetLibrary.filter(p => p.id !== id);
+        await saveGlobalData(); renderAssetLibrary(); showToast('已删除标签组合');
+    }
+    async function addLogoFromAsset(id) {
+        const logo = logoAssets.find(l => l.id === id); if(!logo) return;
+        const size = await readImageSize(logo.src);
+        const targetW = 260; const targetH = Math.max(60, targetW * size.h / size.w);
+        addLayer('logo', { src: logo.src, baseW: targetW, baseH: targetH });
+    }
+    function deleteLogoAsset(id) {
+        askConfirm('删除这个 Logo 素材？').then(ok => {
+            if(!ok) return;
+            logoAssets = logoAssets.filter(l => l.id !== id);
+            deleteLogoFromDB(id); renderAssetLibrary(); showToast('已删除 Logo 素材');
+        });
+    }
+
+    async function exportAssetBackup() {
+        const fonts = await getAllFromDB('fonts');
+        const logos = await getAllFromDB('logos');
+        const backup = {
+            app: 'SuperFactory',
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            data: { tagColorPresets, arcColorPresets, keywordTags, presetLibrary, tagPresetLibrary },
+            fonts,
+            logos
+        };
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `SuperFactory_backup_${Date.now()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(link.href);
+        showToast('资产备份已导出');
+    }
+
+    async function importAssetBackupFile(file) {
+        try {
+            const backup = JSON.parse(await file.text());
+            const data = backup.data || backup;
+            if(data.tagColorPresets) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
+            if(data.arcColorPresets) arcColorPresets = data.arcColorPresets;
+            if(data.keywordTags) keywordTags = data.keywordTags;
+            if(data.presetLibrary) presetLibrary = data.presetLibrary;
+            if(data.tagPresetLibrary) tagPresetLibrary = data.tagPresetLibrary;
+
+            const fonts = Array.isArray(backup.fonts) ? backup.fonts : [];
+            const logos = Array.isArray(backup.logos) ? backup.logos : [];
+            await replaceStoreInDB('fonts', fonts);
+            await replaceStoreInDB('logos', logos);
+
+            customFonts = [];
+            logoAssets = logos;
+            await Promise.all(fonts.map(registerFontAsset));
+            await saveGlobalData();
+            renderSettings();
+            renderPromptTags();
+            renderAssetLibrary();
+            renderCanvas();
+            renderLayersList();
+            renderProperties();
+            showToast(`资产已恢复：${presetLibrary.length} 个版式，${tagPresetLibrary.length} 个标签组合，${fonts.length} 个字体，${logos.length} 个 Logo`);
+        } catch(e) {
+            console.error('导入资产备份失败:', e);
+            showToast('导入失败，请确认这是 SuperFactory 备份 JSON', true);
+        }
+    }
+
+    /* ================= 导入本地图层 / 字体并解决 MIME 拦截 ================= */
+    document.getElementById('bg-upload').addEventListener('change', e => { 
+        const file = e.target.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => { addLayer('image', { src: ev.target.result }); };
+        reader.readAsDataURL(file); e.target.value = '';
+    });
+
+    document.getElementById('logo-upload').addEventListener('change', e => {
+        const files = [...e.target.files]; if(files.length === 0) return;
+        let loaded = 0;
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = ev => {
+                const logo = { id: genId('logo_asset'), name: file.name.replace(/\.[^/.]+$/, ''), src: ev.target.result };
+                logoAssets.push(logo); saveLogoToDB(logo); loaded++;
+                if(loaded === files.length) { currentAssetTab = 'logo'; switchAssetTab('logo'); showToast(`已保存 ${files.length} 个 Logo 素材`); }
+            };
+            reader.readAsDataURL(file);
+        });
+        e.target.value = '';
+    });
+
+    document.getElementById('backup-import').addEventListener('change', e => {
+        const file = e.target.files[0]; if(!file) return;
+        importAssetBackupFile(file);
+        e.target.value = '';
+    });
+    
+    document.getElementById('font-upload').addEventListener('change', e => { 
+        const file = e.target.files[0]; if(!file) return; const name = file.name.replace(/\.[^/.]+$/, ""); 
+        if(customFonts.some(f => f.name === name)) { showToast(`字体 [${name}] 已存在，请勿重复上传`, true); e.target.value = ''; return; } 
+        const fontName = 'CF_' + Date.now(); const reader = new FileReader(); 
+        
+        reader.onload = ev => { 
+            const fontDataUrl = normalizeFontDataUrl(ev.target.result, file.name);
+            const font = new FontFace(fontName, `url(${fontDataUrl})`); 
+            
+            font.load().then(async loaded => { 
+                document.fonts.add(loaded); 
+                await document.fonts.ready;
+                const fontValue = cssFontFamily(fontName);
+                const fontData = { name: name, value: fontValue, data: fontDataUrl, id: fontName, fileName: file.name }; 
+                customFonts.push(fontData); saveFontToDB(fontData); 
+                if(activeLayerIds.length === 1) { const l = layers.find(x => x.id === activeLayerIds[0]); if(l && l.type === 'tag') { l.font = fontValue; renderCanvas(); } } 
+                renderProperties(); renderSettings(); showToast(`字体 [${name}] 安装且持久化成功`); saveHistory(); 
+            }).catch(() => showToast('字体解析失败，请确保格式正确', true)); 
+        }; 
+        reader.readAsDataURL(file); e.target.value = ''; 
+    });
+
+    /* ================= AI 图形引擎集成 ================= */
+    async function generateAIBG() {
+        const p = getPromptText(); if(!p) return showToast('请输入描述词或选择关键词标签', true);
+        const btn = event.target; btn.innerText = '⏳ 渲染中...'; btn.disabled = true;
+        startAIProgress('AI 正在生成新图片...');
+        try {
+            updateAIProgress('正在提交生成请求...', 22);
+            const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: p, ratio: currentRatio }) });
+            updateAIProgress('模型正在生成画面...', 70);
+            const data = await res.json(); 
+            if(data.success) { addLayer('image', { src: `data:image/png;base64,${data.imageBase64}` }); showToast('✅ 成功生成新图片'); } else { showToast('❌ 失败', true); }
+        } catch(e) { showToast('❌ 无法连接服务器', true); } finally { updateAIProgress('正在应用到画布...', 96); stopAIProgress(); btn.innerText = '🚀 生成新图'; btn.disabled = false; }
+    }
+    
+    // 真扩图：把原图和需要扩展的方向比例交给后端 outpainting 接口。
+    async function outpaintAIBG() {
+        let targetLayer = null;
+        if(activeLayerIds.length === 1) { const l = layers.find(x => x.id === activeLayerIds[0]); if(l && l.type === 'image') targetLayer = l; }
+        if(!targetLayer) { targetLayer = layers.find(l => l.type === 'image'); }
+        if(!targetLayer) return showToast('请先生成或选中一张图片图层', true);
+        
+        const p = getPromptText(); 
+        if(!p) return showToast('请输入扩图引导或选择关键词标签', true);
+        
+        const btn = event.target; const ogText = btn.innerText; btn.innerText = '🪄 读取原图...'; btn.disabled = true;
+        startAIProgress('正在读取原图并计算扩展区域...');
+        
+        try {
+            const {w, h} = SIZES[currentRatio];
+            const img = new Image(); img.crossOrigin = "anonymous"; img.src = targetLayer.src;
+            await new Promise(r => { img.onload = r; });
+            const expand = getOutpaintExpand(img.width, img.height, w, h);
+            const base64Image = stripDataUrl(targetLayer.src);
+            btn.innerText = '🪄 调用真扩图...';
+            updateAIProgress('正在上传原图并调用智能扩图...', 32);
+            
+            const res = await fetch('/api/outpaint-image', { 
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ prompt: p, ratio: currentRatio, baseImage: base64Image, expand }) 
+            });
+            updateAIProgress('AI 正在延展背景...', 74);
+            const data = await res.json(); 
+            
+            if(data.success) { 
+                targetLayer.src = `data:image/jpeg;base64,${data.imageBase64}`; targetLayer.scale = 1; targetLayer.rotation = 0; targetLayer.x = w/2; targetLayer.y = h/2; targetLayer.baseW = w; targetLayer.baseH = h;
+                renderCanvas(); saveHistory(); showToast('✅ 扩图成功，主体已完美保留！'); 
+            } else { showToast('❌ 扩图失败: ' + data.message, true); }
+        } catch(e) { showToast('❌ 扩图失败，请看后端终端日志', true); } finally { updateAIProgress('正在应用扩图结果...', 96); stopAIProgress(); btn.innerText = ogText; btn.disabled = false; }
+    }
+
+    async function exportPNG() {
+        if(layers.length === 0) return showToast('画板为空，无法导出', true);
+        await document.fonts.ready; const oldActive = activeLayerIds; activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); 
+        const wrap = document.getElementById('canvas-wrapper'); const overlay = document.getElementById('export-overlay');
+        overlay.style.display = 'flex'; 
+        
+        const origCss = wrap.style.cssText;
+        const {w, h} = SIZES[currentRatio];
+        wrap.style.cssText = `position: fixed; left: 0px; top: 0px; width: ${w}px; height: ${h}px; transform: none; z-index: 10001; background: #FFFFFF; overflow: hidden;`;
+        
+        void wrap.offsetWidth; await waitForImagesIn(wrap); await new Promise(r => setTimeout(r, 500));
+        try {
+            const canvas = await html2canvas(wrap, { scale: 3, useCORS: true, allowTaint: true, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 0 });
+            canvas.toBlob(blob => {
+                if(!blob) { showToast('❌ 导出异常', true); return; }
+                const link = document.createElement('a');
+                link.download = `SuperFactory_${Date.now()}.png`;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                URL.revokeObjectURL(link.href);
+                showToast('✅ 3倍超清 PNG 导出成功');
+            }, 'image/png');
+        } catch (e) { showToast('❌ 导出异常', true); } finally {
+            wrap.style.cssText = origCss; overlay.style.display = 'none'; activeLayerIds = oldActive; renderCanvas(); renderLayersList(); renderProperties();
+        }
+    }
+
+    async function bootApp() {
+        await loadGlobalData();
+        loadFontsFromDB();
+        loadLogosFromDB();
+        syncRatioNav();
+        resizeCanvas();
+        renderCanvas();
+        renderLayersList();
+        renderProperties();
+        renderAssetLibrary();
+        renderPromptTags();
+        saveHistory();
+    }
+    bootApp();
+
+</script>
+<script src="/tool-bridge.js"></script>
+</body>
+</html>
