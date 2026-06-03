@@ -75,6 +75,10 @@
     });
   }
 
+  window.addEventListener('load', () => {
+    setTimeout(importPendingLibraryAsset, 300);
+  });
+
   function shouldAttachAuth(url) {
     if (!url) return false;
     try {
@@ -91,6 +95,116 @@
     if (path.includes('/tools/dynamic/')) return 'dynamic';
     if (path.includes('/tools/library/')) return 'library';
     return 'unknown';
+  }
+
+  async function importPendingLibraryAsset() {
+    const toolType = detectToolType();
+    if (!['static', 'dynamic'].includes(toolType)) return;
+    const raw = localStorage.getItem('vf_pending_library_asset');
+    if (!raw) return;
+    let asset = null;
+    try {
+      asset = JSON.parse(raw);
+    } catch (_error) {
+      localStorage.removeItem('vf_pending_library_asset');
+      return;
+    }
+    if (!asset || asset.targetTool !== toolType || !asset.url) return;
+    try {
+      const dataUrl = await fetchAsDataUrl(asset.url);
+      if (toolType === 'static') await importIntoStaticEditor(asset, dataUrl);
+      if (toolType === 'dynamic') await importIntoDynamicEditor(asset, dataUrl);
+      localStorage.removeItem('vf_pending_library_asset');
+    } catch (error) {
+      console.warn('Visual Factory asset import failed:', error);
+    }
+  }
+
+  function fetchAsDataUrl(url) {
+    return fetch(url)
+      .then(response => {
+        if (!response.ok) throw new Error(`Asset fetch failed: ${response.status}`);
+        return response.blob();
+      })
+      .then(blob => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error('FileReader failed'));
+        reader.readAsDataURL(blob);
+      }));
+  }
+
+  async function importIntoStaticEditor(asset, dataUrl) {
+    await waitFor(() => typeof addLayer === 'function', 6000);
+    addLayer('image', { src: dataUrl });
+    if (typeof showToast === 'function') showToast(`已导入素材：${asset.title || asset.filename || 'Asset'}`);
+  }
+
+  async function importIntoDynamicEditor(asset, dataUrl) {
+    await waitFor(() => typeof layers !== 'undefined' && typeof createLayerDOM === 'function' && typeof selectLayer === 'function', 6000);
+    const img = await loadImage(dataUrl);
+    let w = img.naturalWidth || img.width || 240;
+    let h = img.naturalHeight || img.height || 240;
+    if (w > 654 || h > 941) {
+      const ratio = Math.min(654 / w, 941 / h);
+      w *= ratio;
+      h *= ratio;
+    }
+    const layer = {
+      id: `L_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      name: asset.filename || asset.title || 'Library asset',
+      src: dataUrl,
+      imgData: img,
+      currentImgData: img,
+      isSequence: false,
+      x: 327,
+      y: 470.5,
+      rw: w,
+      rh: h,
+      scale: 1,
+      semantic: 'none',
+      direction: 'bottom',
+      speed: 50,
+      mag: 50,
+      loop: true,
+      animState: { scale: 1, tx: 0, ty: 0, opacity: 1 }
+    };
+    layers.push(layer);
+    document.getElementById('drop-hint').style.display = 'none';
+    createLayerDOM(layer);
+    if (typeof updateZIndex === 'function') updateZIndex();
+    selectLayer(layer.id);
+    if (typeof autoSave === 'function') autoSave();
+    if (typeof pushHistory === 'function') pushHistory();
+    if (typeof rebuildAnimations === 'function') rebuildAnimations();
+    if (typeof syncTimeToRenderers === 'function') syncTimeToRenderers();
+  }
+
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Image load failed'));
+      img.src = src;
+    });
+  }
+
+  function waitFor(check, timeoutMs) {
+    const start = Date.now();
+    return new Promise((resolve, reject) => {
+      const tick = () => {
+        if (check()) {
+          resolve();
+          return;
+        }
+        if (Date.now() - start > timeoutMs) {
+          reject(new Error('Timed out waiting for editor'));
+          return;
+        }
+        setTimeout(tick, 80);
+      };
+      tick();
+    });
   }
 
   function safeClone(value) {

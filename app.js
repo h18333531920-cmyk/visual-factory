@@ -94,6 +94,9 @@
   ];
 
   const config = window.VF_CONFIG || {};
+  const LIBRARY_BUCKET = 'vf-library';
+  const SOURCE_EXTENSIONS = ['psd', 'ai', 'pdf'];
+  const PREVIEW_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   const state = {
     lang: localStorage.getItem('vf_lang') || 'zh',
     supabase: null,
@@ -101,7 +104,20 @@
     profile: null,
     localPreview: false,
     route: 'overview',
-    activeFrame: null
+    activeFrame: null,
+    libraryOptions: [],
+    librarySources: [],
+    libraryPreviews: [],
+    libraryItems: [],
+    libraryPreviewUrls: {},
+    libraryFavorites: new Set(),
+    libraryFilters: {
+      query: '',
+      country: 'all',
+      activity: 'all',
+      category: 'all',
+      favorites: false
+    }
   };
 
   const els = {};
@@ -294,7 +310,7 @@
     els.routeTitle.textContent = t(route.title);
     els.saveProjectBtn.hidden = !['static', 'dynamic'].includes(state.route);
     if (state.route === 'overview') renderOverview();
-    if (state.route === 'library') renderTool('library');
+    if (state.route === 'library') renderLibrary();
     if (state.route === 'static') renderTool('static');
     if (state.route === 'dynamic') renderTool('dynamic');
     if (state.route === 'projects') renderProjects();
@@ -329,6 +345,620 @@
         </section>
       </div>
     `;
+  }
+
+  async function renderLibrary() {
+    state.activeFrame = null;
+    const canUpload = canUploadAssets();
+    els.content.innerHTML = `
+      <div class="library-page">
+        <section class="library-head">
+          <div>
+            <div class="kicker">${state.lang === 'zh' ? 'ASSET LIBRARY V2' : 'ASSET LIBRARY V2'}</div>
+            <h3>${state.lang === 'zh' ? '素材与源文件库' : 'Assets & Source Files'}</h3>
+            <p>${state.lang === 'zh' ? '源文件由设计师管理，预览图可下载并用于 DIY。旧版素材库仍保留为过渡入口。' : 'Designers manage source files; previews can be downloaded and sent to DIY tools.'}</p>
+          </div>
+          <div class="library-actions">
+            <button class="ghost-btn" type="button" id="legacy-library-btn">${state.lang === 'zh' ? '旧版素材库' : 'Legacy Library'}</button>
+            ${canUpload ? `<button class="primary-btn" type="button" id="open-upload-modal">${state.lang === 'zh' ? '上传素材' : 'Upload Asset'}</button>` : ''}
+          </div>
+        </section>
+
+        <section class="library-filterbar panel">
+            <label><span>${state.lang === 'zh' ? '搜索' : 'Search'}</span><input id="library-search" placeholder="${state.lang === 'zh' ? '名称、文件名、标签' : 'Title, filename, tags'}" value="${escapeAttr(state.libraryFilters.query)}"></label>
+          <label><span>${state.lang === 'zh' ? '国家' : 'Country'}</span><select id="library-country-filter"></select></label>
+          <label><span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span><select id="library-activity-filter"></select></label>
+          <label><span>${state.lang === 'zh' ? '品类' : 'Category'}</span><select id="library-category-filter"></select></label>
+          <button class="ghost-btn" type="button" id="library-favorite-filter">${state.libraryFilters.favorites ? (state.lang === 'zh' ? '仅收藏中' : 'Favorites only') : (state.lang === 'zh' ? '全部素材' : 'All assets')}</button>
+        </section>
+
+        <section id="library-status" class="library-status panel">${state.lang === 'zh' ? '正在读取素材库...' : 'Loading library...'}</section>
+        <section id="library-grid" class="library-grid"></section>
+
+        ${canUpload ? renderUploadModal() : ''}
+        ${renderEditModal()}
+      </div>
+    `;
+    wireLibraryShell();
+    await loadLibraryData();
+  }
+
+  function renderUploadModal() {
+    return `
+      <div id="library-upload-modal" class="modal-backdrop" hidden>
+        <section class="modal library-modal">
+          <div class="modal-head">
+            <h3>${state.lang === 'zh' ? '上传源文件与预览图' : 'Upload Source and Previews'}</h3>
+            <button class="icon-btn" id="close-library-upload" type="button" aria-label="Close">x</button>
+          </div>
+          <form id="library-upload-form" class="library-form">
+            <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" id="library-upload-title" maxlength="120" required></label>
+            <div class="library-form-grid">
+              <label><span>${state.lang === 'zh' ? '国家' : 'Country'}</span><select name="country_id" id="library-upload-country" required></select></label>
+              <label><span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span><select name="activity_id" id="library-upload-activity" required></select></label>
+              <label><span>${state.lang === 'zh' ? '品类' : 'Category'}</span><select name="category_id" id="library-upload-category" required></select></label>
+            </div>
+            <div class="library-form-grid two">
+              <label><span>${t('visibility')}</span><select name="visibility"><option value="all">${t('allVisible')}</option><option value="designers">${t('designersOnly')}</option><option value="operators">${t('operatorsOnly')}</option></select></label>
+              <label><span>${state.lang === 'zh' ? '标签' : 'Tags'}</span><input name="tags" placeholder="${state.lang === 'zh' ? '用逗号分隔，可选' : 'Comma separated, optional'}"></label>
+            </div>
+            <label><span>${state.lang === 'zh' ? '源文件 PSD / AI / PDF' : 'Source file PSD / AI / PDF'}</span><input name="source_file" id="library-source-input" type="file" accept=".psd,.ai,.pdf,application/pdf" required></label>
+            <label><span>${state.lang === 'zh' ? '预览图 JPG / PNG / WEBP，可多选' : 'Preview images JPG / PNG / WEBP, multiple allowed'}</span><input name="preview_files" id="library-preview-input" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>
+            <div id="library-upload-message" class="message"></div>
+            <div class="modal-actions">
+              <button class="ghost-btn" id="cancel-library-upload" type="button">${t('cancel')}</button>
+              <button class="primary-btn" type="submit">${state.lang === 'zh' ? '上传入库' : 'Upload'}</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    `;
+  }
+
+  function renderEditModal() {
+    return `
+      <div id="library-edit-modal" class="modal-backdrop" hidden>
+        <section class="modal library-modal">
+          <div class="modal-head">
+            <h3>${state.lang === 'zh' ? '编辑素材信息' : 'Edit Asset'}</h3>
+            <button class="icon-btn" id="close-library-edit" type="button" aria-label="Close">x</button>
+          </div>
+          <form id="library-edit-form" class="library-form">
+            <input type="hidden" name="id">
+            <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" maxlength="120" required></label>
+            <div class="library-form-grid">
+              <label><span>${state.lang === 'zh' ? '国家' : 'Country'}</span><select name="country_id" id="library-edit-country" required></select></label>
+              <label><span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span><select name="activity_id" id="library-edit-activity" required></select></label>
+              <label><span>${state.lang === 'zh' ? '品类' : 'Category'}</span><select name="category_id" id="library-edit-category" required></select></label>
+            </div>
+            <div class="library-form-grid two">
+              <label><span>${t('visibility')}</span><select name="visibility"><option value="all">${t('allVisible')}</option><option value="designers">${t('designersOnly')}</option><option value="operators">${t('operatorsOnly')}</option></select></label>
+              <label><span>${state.lang === 'zh' ? '标签' : 'Tags'}</span><input name="tags" placeholder="${state.lang === 'zh' ? '用逗号分隔' : 'Comma separated'}"></label>
+            </div>
+            <div id="library-edit-message" class="message"></div>
+            <div class="modal-actions">
+              <button class="ghost-btn" id="cancel-library-edit" type="button">${t('cancel')}</button>
+              <button class="primary-btn" type="submit">${t('save')}</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    `;
+  }
+
+  function wireLibraryShell() {
+    document.getElementById('legacy-library-btn')?.addEventListener('click', () => renderTool('library'));
+    document.getElementById('open-upload-modal')?.addEventListener('click', openLibraryUploadModal);
+    document.getElementById('close-library-upload')?.addEventListener('click', closeLibraryUploadModal);
+    document.getElementById('cancel-library-upload')?.addEventListener('click', closeLibraryUploadModal);
+    document.getElementById('library-upload-form')?.addEventListener('submit', uploadLibraryAsset);
+    document.getElementById('close-library-edit')?.addEventListener('click', closeLibraryEditModal);
+    document.getElementById('cancel-library-edit')?.addEventListener('click', closeLibraryEditModal);
+    document.getElementById('library-edit-form')?.addEventListener('submit', saveLibraryEdit);
+    document.getElementById('library-search')?.addEventListener('input', event => {
+      state.libraryFilters.query = event.target.value.trim();
+      renderLibraryGrid();
+    });
+    document.getElementById('library-favorite-filter')?.addEventListener('click', () => {
+      state.libraryFilters.favorites = !state.libraryFilters.favorites;
+      renderLibrary();
+    });
+    ['country', 'activity', 'category'].forEach(type => {
+      document.getElementById(`library-${type}-filter`)?.addEventListener('change', event => {
+        state.libraryFilters[type] = event.target.value;
+        loadLibraryData();
+      });
+    });
+  }
+
+  async function loadLibraryData() {
+    const status = document.getElementById('library-status');
+    try {
+      if (state.localPreview || !state.supabase) {
+        status.textContent = state.lang === 'zh' ? '新素材库需要真实登录后使用；本地预览仅用于检查外观。' : 'The new library needs a real cloud login.';
+        document.getElementById('library-grid').innerHTML = '';
+        return;
+      }
+      status.textContent = state.lang === 'zh' ? '正在读取分类和素材...' : 'Loading options and assets...';
+      await loadLibraryOptions();
+      renderLibrarySelects();
+      await loadLibraryFavorites();
+      await loadLibrarySources();
+      await loadLibraryPreviews();
+      await signLibraryPreviewUrls();
+      renderLibraryGrid();
+    } catch (error) {
+      status.innerHTML = `
+        <strong>${state.lang === 'zh' ? '素材库还未就绪' : 'Library is not ready'}</strong>
+        <p>${escapeHtml(error.message)}</p>
+        <p class="muted">${state.lang === 'zh' ? '如果这是第一次打开 V2，需要先运行 sql/002_library_v2.sql。' : 'If this is the first V2 run, execute sql/002_library_v2.sql first.'}</p>
+      `;
+      document.getElementById('library-grid').innerHTML = '';
+    }
+  }
+
+  async function loadLibraryOptions() {
+    const { data, error } = await state.supabase
+      .from('vf_library_options')
+      .select('id,option_type,name_en,name_zh,sort_order')
+      .eq('active', true)
+      .order('sort_order', { ascending: true });
+    if (error) throw error;
+    state.libraryOptions = data || [];
+  }
+
+  async function loadLibraryFavorites() {
+    const { data, error } = await state.supabase
+      .from('vf_asset_favorites')
+      .select('preview_id');
+    if (error) throw error;
+    state.libraryFavorites = new Set((data || []).map(item => item.preview_id));
+  }
+
+  async function loadLibrarySources() {
+    let query = state.supabase
+      .from('vf_source_files')
+      .select('id,title,country_id,activity_id,category_id,tags,visibility,source_path,source_filename,source_mime_type,source_size_bytes,source_ext,uploaded_by,created_at,updated_at')
+      .order('updated_at', { ascending: false })
+      .limit(200);
+    ['country', 'activity', 'category'].forEach(type => {
+      const value = state.libraryFilters[type];
+      if (value && value !== 'all') query = query.eq(`${type}_id`, value);
+    });
+    const { data, error } = await query;
+    if (error) throw error;
+    state.librarySources = data || [];
+  }
+
+  async function loadLibraryPreviews() {
+    if (state.librarySources.length === 0) {
+      state.libraryPreviews = [];
+      state.libraryItems = [];
+      return;
+    }
+    const ids = state.librarySources.map(item => item.id);
+    const { data, error } = await state.supabase
+      .from('vf_asset_previews')
+      .select('id,source_file_id,preview_path,preview_filename,preview_mime_type,preview_size_bytes,width,height,sort_order,created_at')
+      .in('source_file_id', ids)
+      .order('sort_order', { ascending: true });
+    if (error) throw error;
+    state.libraryPreviews = data || [];
+  }
+
+  async function signLibraryPreviewUrls() {
+    state.libraryPreviewUrls = {};
+    const paths = state.libraryPreviews.map(item => item.preview_path).filter(Boolean);
+    if (paths.length === 0) return;
+    const { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).createSignedUrls(paths, 60 * 60);
+    if (error) throw error;
+    (data || []).forEach(item => {
+      if (item.path && item.signedUrl) state.libraryPreviewUrls[item.path] = item.signedUrl;
+    });
+  }
+
+  function renderLibrarySelects() {
+    const filterMap = {
+      country: document.getElementById('library-country-filter'),
+      activity: document.getElementById('library-activity-filter'),
+      category: document.getElementById('library-category-filter')
+    };
+    Object.entries(filterMap).forEach(([type, select]) => {
+      if (!select) return;
+      select.innerHTML = `<option value="all">${state.lang === 'zh' ? '全部' : 'All'}</option>${libraryOptions(type).map(option => `<option value="${option.id}">${escapeHtml(optionName(option))}</option>`).join('')}`;
+      select.value = state.libraryFilters[type] || 'all';
+    });
+    ['upload', 'edit'].forEach(prefix => {
+      ['country', 'activity', 'category'].forEach(type => {
+        const select = document.getElementById(`library-${prefix}-${type}`);
+        if (!select) return;
+        select.innerHTML = libraryOptions(type).map(option => `<option value="${option.id}">${escapeHtml(optionName(option))}</option>`).join('');
+      });
+    });
+  }
+
+  function renderLibraryGrid() {
+    const status = document.getElementById('library-status');
+    const grid = document.getElementById('library-grid');
+    if (!grid || !status) return;
+    const sourcesById = new Map(state.librarySources.map(source => [source.id, source]));
+    const query = state.libraryFilters.query.toLowerCase();
+    state.libraryItems = state.libraryPreviews
+      .map(preview => ({ preview, source: sourcesById.get(preview.source_file_id), url: state.libraryPreviewUrls[preview.preview_path] || '' }))
+      .filter(item => item.source)
+      .filter(item => !state.libraryFilters.favorites || state.libraryFavorites.has(item.preview.id))
+      .filter(item => {
+        if (!query) return true;
+        const text = [
+          item.source.title,
+          item.source.source_filename,
+          item.preview.preview_filename,
+          ...(item.source.tags || [])
+        ].join(' ').toLowerCase();
+        return text.includes(query);
+      });
+    status.innerHTML = `
+      <strong>${state.libraryItems.length}</strong> ${state.lang === 'zh' ? '张预览图' : 'previews'}
+      <span class="muted">· ${state.librarySources.length} ${state.lang === 'zh' ? '个源文件' : 'source files'}</span>
+    `;
+    if (state.libraryItems.length === 0) {
+      grid.innerHTML = `<div class="empty-card">${state.lang === 'zh' ? '还没有符合条件的素材。设计师可以先上传一组源文件和预览图。' : 'No matching assets yet.'}</div>`;
+      return;
+    }
+    grid.innerHTML = state.libraryItems.map(renderLibraryCard).join('');
+    wireLibraryCards();
+  }
+
+  function renderLibraryCard(item) {
+    const source = item.source;
+    const preview = item.preview;
+    const favorite = state.libraryFavorites.has(preview.id);
+    const canManage = canManageSource(source);
+    const canSource = canDownloadSource();
+    const tags = (source.tags || []).slice(0, 4);
+    return `
+      <article class="library-card" data-preview-id="${preview.id}">
+        <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
+        <div class="library-thumb">${item.url ? `<img src="${escapeAttr(item.url)}" alt="${escapeAttr(source.title)}">` : `<span>${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`}</div>
+        <div class="library-card-body">
+          <h4>${escapeHtml(source.title)}</h4>
+          <div class="library-meta">
+            <span>${escapeHtml(optionNameById(source.country_id))}</span>
+            <span>${escapeHtml(optionNameById(source.activity_id))}</span>
+            <span>${escapeHtml(optionNameById(source.category_id))}</span>
+          </div>
+          <div class="library-tags">
+            <span class="badge">${visibilityLabel(source.visibility)}</span>
+            ${tags.map(tag => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}
+          </div>
+          <div class="library-fileline">${escapeHtml(source.source_filename)} · ${formatFileSize(source.source_size_bytes)}</div>
+          <div class="library-card-actions">
+            <button class="secondary-btn" type="button" data-action="download-preview">${state.lang === 'zh' ? '下载预览' : 'Download Preview'}</button>
+            ${canSource ? `<button class="ghost-btn" type="button" data-action="download-source">${state.lang === 'zh' ? '下载源文件' : 'Download Source'}</button>` : ''}
+            <button class="ghost-btn" type="button" data-action="use-static">${state.lang === 'zh' ? '用于静态' : 'Static DIY'}</button>
+            <button class="ghost-btn" type="button" data-action="use-dynamic">${state.lang === 'zh' ? '用于动态' : 'Dynamic DIY'}</button>
+            ${canManage ? `<button class="ghost-btn" type="button" data-action="edit">${state.lang === 'zh' ? '编辑' : 'Edit'}</button><button class="ghost-btn danger" type="button" data-action="delete">${state.lang === 'zh' ? '删除' : 'Delete'}</button>` : ''}
+          </div>
+        </div>
+      </article>
+    `;
+  }
+
+  function wireLibraryCards() {
+    document.querySelectorAll('.library-card').forEach(card => {
+      card.addEventListener('click', event => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const item = libraryItemByPreviewId(card.dataset.previewId);
+        if (!item) return;
+        handleLibraryCardAction(button.dataset.action, item);
+      });
+    });
+  }
+
+  async function handleLibraryCardAction(action, item) {
+    if (action === 'favorite') return toggleLibraryFavorite(item);
+    if (action === 'download-preview') return downloadLibraryFile(item, 'preview');
+    if (action === 'download-source') return downloadLibraryFile(item, 'source');
+    if (action === 'use-static') return useLibraryAsset(item, 'static');
+    if (action === 'use-dynamic') return useLibraryAsset(item, 'dynamic');
+    if (action === 'edit') return openLibraryEditModal(item.source.id);
+    if (action === 'delete') return deleteLibrarySource(item.source.id);
+  }
+
+  function openLibraryUploadModal() {
+    renderLibrarySelects();
+    const form = document.getElementById('library-upload-form');
+    form.reset();
+    document.getElementById('library-upload-title').value = '';
+    document.getElementById('library-upload-message').textContent = '';
+    document.getElementById('library-upload-modal').hidden = false;
+  }
+
+  function closeLibraryUploadModal() {
+    const modal = document.getElementById('library-upload-modal');
+    if (modal) modal.hidden = true;
+  }
+
+  async function uploadLibraryAsset(event) {
+    event.preventDefault();
+    const message = document.getElementById('library-upload-message');
+    setMessage(message, state.lang === 'zh' ? '正在上传，请不要关闭页面...' : 'Uploading, please keep this page open...');
+    try {
+      const form = event.currentTarget;
+      const formData = new FormData(form);
+      const sourceFile = formData.get('source_file');
+      const previewFiles = Array.from(formData.getAll('preview_files')).filter(file => file && file.size > 0);
+      validateLibraryUpload(sourceFile, previewFiles);
+      const sourceId = crypto.randomUUID();
+      const userId = state.session.user.id;
+      const sourcePath = `${userId}/sources/${sourceId}/${safeStorageName(sourceFile.name)}`;
+      const sourceUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, sourceFile, { upsert: false, contentType: sourceFile.type || 'application/octet-stream' });
+      if (sourceUpload.error) throw sourceUpload.error;
+      const title = formData.get('title').trim() || stripExtension(sourceFile.name);
+      const sourceRow = {
+        id: sourceId,
+        title,
+        country_id: formData.get('country_id'),
+        activity_id: formData.get('activity_id'),
+        category_id: formData.get('category_id'),
+        tags: parseTags(formData.get('tags')),
+        visibility: formData.get('visibility') || 'all',
+        source_path: sourcePath,
+        source_filename: sourceFile.name,
+        source_mime_type: sourceFile.type || '',
+        source_size_bytes: sourceFile.size,
+        source_ext: fileExt(sourceFile.name),
+        uploaded_by: userId
+      };
+      const sourceInsert = await state.supabase.from('vf_source_files').insert([sourceRow]);
+      if (sourceInsert.error) throw sourceInsert.error;
+      const previewRows = [];
+      for (let index = 0; index < previewFiles.length; index += 1) {
+        const file = previewFiles[index];
+        const previewId = crypto.randomUUID();
+        const previewPath = `${userId}/previews/${sourceId}/${previewId}-${safeStorageName(file.name)}`;
+        const upload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(previewPath, file, { upsert: false, contentType: file.type });
+        if (upload.error) throw upload.error;
+        const dimensions = await readImageDimensions(file);
+        previewRows.push({
+          id: previewId,
+          source_file_id: sourceId,
+          preview_path: previewPath,
+          preview_filename: file.name,
+          preview_mime_type: file.type,
+          preview_size_bytes: file.size,
+          width: dimensions.width,
+          height: dimensions.height,
+          sort_order: (index + 1) * 10
+        });
+      }
+      const previewInsert = await state.supabase.from('vf_asset_previews').insert(previewRows);
+      if (previewInsert.error) throw previewInsert.error;
+      setMessage(message, state.lang === 'zh' ? '上传成功，已入库。' : 'Uploaded.', false, true);
+      setTimeout(closeLibraryUploadModal, 600);
+      await loadLibraryData();
+    } catch (error) {
+      setMessage(message, error.message, true);
+    }
+  }
+
+  function validateLibraryUpload(sourceFile, previewFiles) {
+    if (!sourceFile || !sourceFile.size) throw new Error(state.lang === 'zh' ? '请选择源文件。' : 'Choose a source file.');
+    if (!SOURCE_EXTENSIONS.includes(fileExt(sourceFile.name))) throw new Error(state.lang === 'zh' ? '源文件仅支持 PSD / AI / PDF。' : 'Source must be PSD / AI / PDF.');
+    if (previewFiles.length === 0) throw new Error(state.lang === 'zh' ? '至少上传一张预览图。' : 'Upload at least one preview image.');
+    previewFiles.forEach(file => {
+      if (!PREVIEW_MIME_TYPES.includes(file.type)) throw new Error(state.lang === 'zh' ? '预览图仅支持 JPG / PNG / WEBP。' : 'Preview must be JPG / PNG / WEBP.');
+    });
+  }
+
+  function openLibraryEditModal(sourceId) {
+    const source = state.librarySources.find(item => item.id === sourceId);
+    if (!source) return;
+    renderLibrarySelects();
+    const form = document.getElementById('library-edit-form');
+    form.elements.id.value = source.id;
+    form.elements.title.value = source.title || '';
+    form.elements.country_id.value = source.country_id || '';
+    form.elements.activity_id.value = source.activity_id || '';
+    form.elements.category_id.value = source.category_id || '';
+    form.elements.visibility.value = source.visibility || 'all';
+    form.elements.tags.value = (source.tags || []).join(', ');
+    document.getElementById('library-edit-message').textContent = '';
+    document.getElementById('library-edit-modal').hidden = false;
+  }
+
+  function closeLibraryEditModal() {
+    const modal = document.getElementById('library-edit-modal');
+    if (modal) modal.hidden = true;
+  }
+
+  async function saveLibraryEdit(event) {
+    event.preventDefault();
+    const message = document.getElementById('library-edit-message');
+    setMessage(message, state.lang === 'zh' ? '正在保存...' : 'Saving...');
+    try {
+      const form = new FormData(event.currentTarget);
+      const id = form.get('id');
+      const update = {
+        title: form.get('title').trim(),
+        country_id: form.get('country_id'),
+        activity_id: form.get('activity_id'),
+        category_id: form.get('category_id'),
+        visibility: form.get('visibility') || 'all',
+        tags: parseTags(form.get('tags'))
+      };
+      const { error } = await state.supabase.from('vf_source_files').update(update).eq('id', id);
+      if (error) throw error;
+      setMessage(message, state.lang === 'zh' ? '已保存。' : 'Saved.', false, true);
+      setTimeout(closeLibraryEditModal, 500);
+      await loadLibraryData();
+    } catch (error) {
+      setMessage(message, error.message, true);
+    }
+  }
+
+  async function deleteLibrarySource(sourceId) {
+    const source = state.librarySources.find(item => item.id === sourceId);
+    if (!source) return;
+    const relatedPreviews = state.libraryPreviews.filter(item => item.source_file_id === sourceId);
+    const ok = window.confirm(state.lang === 'zh'
+      ? `确定删除「${source.title}」吗？源文件和 ${relatedPreviews.length} 张预览图会一起删除。`
+      : `Delete "${source.title}" and ${relatedPreviews.length} previews?`);
+    if (!ok) return;
+    const { error } = await state.supabase.from('vf_source_files').delete().eq('id', sourceId);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    const paths = [source.source_path, ...relatedPreviews.map(item => item.preview_path)].filter(Boolean);
+    if (paths.length) await state.supabase.storage.from(LIBRARY_BUCKET).remove(paths);
+    await loadLibraryData();
+  }
+
+  async function toggleLibraryFavorite(item) {
+    const payload = { user_id: state.session.user.id, preview_id: item.preview.id };
+    if (state.libraryFavorites.has(item.preview.id)) {
+      const { error } = await state.supabase.from('vf_asset_favorites').delete().eq('preview_id', item.preview.id);
+      if (error) alert(error.message);
+    } else {
+      const { error } = await state.supabase.from('vf_asset_favorites').insert([payload]);
+      if (error) alert(error.message);
+    }
+    await loadLibraryFavorites();
+    renderLibraryGrid();
+  }
+
+  async function downloadLibraryFile(item, kind) {
+    if (kind === 'source' && !canDownloadSource()) return;
+    const path = kind === 'source' ? item.source.source_path : item.preview.preview_path;
+    const filename = kind === 'source' ? item.source.source_filename : item.preview.preview_filename;
+    const { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).download(path);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    triggerBlobDownload(data, filename);
+    await logAssetEvent(kind === 'source' ? 'download_source' : 'download_preview', item);
+  }
+
+  async function useLibraryAsset(item, tool) {
+    const target = tool === 'dynamic' ? 'dynamic' : 'static';
+    localStorage.setItem('vf_pending_library_asset', JSON.stringify({
+      targetTool: target,
+      previewId: item.preview.id,
+      sourceFileId: item.source.id,
+      title: item.source.title,
+      filename: item.preview.preview_filename,
+      url: item.url,
+      storedAt: new Date().toISOString()
+    }));
+    await logAssetEvent(target === 'dynamic' ? 'use_dynamic' : 'use_static', item);
+    location.hash = target;
+    navigate(target);
+  }
+
+  async function logAssetEvent(eventType, item) {
+    if (state.localPreview || !state.supabase) return;
+    try {
+      await state.supabase.from('vf_asset_events').insert([{
+        actor_id: state.session.user.id,
+        actor_role: currentRole(),
+        event_type: eventType,
+        source_file_id: item.source.id,
+        preview_id: item.preview.id,
+        meta: {
+          title: item.source.title,
+          filename: eventType === 'download_source' ? item.source.source_filename : item.preview.preview_filename
+        }
+      }]);
+    } catch (error) {
+      console.warn('Asset event log failed:', error);
+    }
+  }
+
+  function libraryOptions(type) {
+    return state.libraryOptions.filter(item => item.option_type === type);
+  }
+
+  function optionName(option) {
+    if (!option) return '-';
+    return state.lang === 'zh' ? (option.name_zh || option.name_en) : option.name_en;
+  }
+
+  function optionNameById(id) {
+    return optionName(state.libraryOptions.find(item => item.id === id));
+  }
+
+  function libraryItemByPreviewId(id) {
+    return state.libraryItems.find(item => item.preview.id === id);
+  }
+
+  function canUploadAssets() {
+    return !state.localPreview && ['admin', 'designer'].includes(currentRole());
+  }
+
+  function canDownloadSource() {
+    return ['admin', 'designer'].includes(currentRole());
+  }
+
+  function canManageSource(source) {
+    return currentRole() === 'admin' || source.uploaded_by === state.session?.user?.id;
+  }
+
+  function parseTags(value) {
+    return String(value || '')
+      .split(/[,，\n]/)
+      .map(item => item.trim())
+      .filter(Boolean)
+      .slice(0, 12);
+  }
+
+  function fileExt(name) {
+    const clean = String(name || '').split('?')[0];
+    return clean.includes('.') ? clean.split('.').pop().toLowerCase() : '';
+  }
+
+  function stripExtension(name) {
+    return String(name || '').replace(/\.[^/.]+$/, '');
+  }
+
+  function safeStorageName(name) {
+    const ext = fileExt(name);
+    const base = stripExtension(name)
+      .normalize('NFKD')
+      .replace(/[^\w.-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 80) || 'file';
+    return `${base}-${Date.now()}${ext ? `.${ext}` : ''}`;
+  }
+
+  function readImageDimensions(file) {
+    return new Promise(resolve => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve({ width: img.naturalWidth || null, height: img.naturalHeight || null });
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve({ width: null, height: null });
+      };
+      img.src = url;
+    });
+  }
+
+  function triggerBlobDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename || 'download';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function renderTool(type) {
@@ -433,6 +1063,10 @@
       checks.push(await checkTable('vf_profiles', state.lang === 'zh' ? '账号资料表' : 'Profiles table'));
       checks.push(await checkTable('vf_categories', state.lang === 'zh' ? '分类权限表' : 'Categories table'));
       checks.push(await checkTable('vf_projects', state.lang === 'zh' ? '项目保存表' : 'Projects table'));
+      checks.push(await checkTable('vf_library_options', state.lang === 'zh' ? 'V2 素材分类选项' : 'V2 library options'));
+      checks.push(await checkTable('vf_source_files', state.lang === 'zh' ? 'V2 源文件表' : 'V2 source files'));
+      checks.push(await checkTable('vf_asset_previews', state.lang === 'zh' ? 'V2 预览图表' : 'V2 previews'));
+      checks.push(await checkTable('vf_asset_events', state.lang === 'zh' ? 'V2 下载/使用日志' : 'V2 events'));
     }
 
     checks.push(await checkApiHealth());
@@ -786,6 +1420,14 @@
     return new Date(value).toLocaleString(state.lang === 'zh' ? 'zh-CN' : 'en-US');
   }
 
+  function formatFileSize(value) {
+    const size = Number(value || 0);
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+    if (size < 1024 * 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+    return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  }
+
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({
       '&': '&amp;',
@@ -794,5 +1436,9 @@
       '"': '&quot;',
       "'": '&#39;'
     }[char]));
+  }
+
+  function escapeAttr(value) {
+    return escapeHtml(value).replace(/`/g, '&#96;');
   }
 })();

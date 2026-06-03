@@ -110,6 +110,7 @@ label {
 
 input,
 select {
+  width: 100%;
   min-height: 42px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
@@ -336,7 +337,8 @@ select:focus {
 
 .content {
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .dashboard {
@@ -407,6 +409,199 @@ select:focus {
   padding: 22px;
   display: grid;
   gap: 16px;
+}
+
+.library-page {
+  padding: 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.library-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.library-head h3 {
+  margin: 2px 0 6px;
+  font-size: 20px;
+}
+
+.library-head p {
+  margin: 0;
+  max-width: 680px;
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.library-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.library-filterbar {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) repeat(3, minmax(120px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.library-filterbar label,
+.library-form-grid label {
+  min-width: 0;
+}
+
+.library-status {
+  padding: 12px 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.library-status strong {
+  color: var(--text);
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.library-card {
+  position: relative;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.library-thumb {
+  aspect-ratio: 4 / 3;
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.library-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.favorite-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.favorite-btn.active {
+  color: #b7791f;
+  background: #fff8db;
+  border-color: #f6d06f;
+}
+
+.library-card-body {
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.library-card h4 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.library-meta,
+.library-tags,
+.library-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.library-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.library-fileline {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.library-card-actions {
+  padding-top: 2px;
+}
+
+.library-card-actions .secondary-btn,
+.library-card-actions .ghost-btn {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.empty-card {
+  grid-column: 1 / -1;
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  color: var(--muted);
+  border: 1px dashed var(--border-strong);
+  background: var(--surface);
+  border-radius: var(--radius);
+}
+
+.library-modal {
+  width: min(760px, 100%);
+}
+
+.library-form {
+  display: grid;
+  gap: 14px;
+}
+
+.library-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.library-form-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .toolbar {
@@ -545,6 +740,20 @@ select:focus {
   }
 
   .cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .library-head {
+    flex-direction: column;
+  }
+
+  .library-actions {
+    justify-content: flex-start;
+  }
+
+  .library-filterbar,
+  .library-form-grid,
+  .library-form-grid.two {
     grid-template-columns: 1fr;
   }
 }
