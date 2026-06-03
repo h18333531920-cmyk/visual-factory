@@ -244,7 +244,13 @@ using (
   and (
     public.vf_is_admin()
     or public.vf_current_role() = 'designer'::public.vf_role
-    or (storage.foldername(name))[2] = 'previews'
+    or exists (
+      select 1
+      from public.vf_asset_previews p
+      join public.vf_source_files s on s.id = p.source_file_id
+      where p.preview_path = storage.objects.name
+        and public.vf_can_see_visibility(s.visibility)
+    )
   )
 );
 
