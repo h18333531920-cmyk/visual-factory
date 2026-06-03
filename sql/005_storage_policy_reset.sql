@@ -14,6 +14,13 @@ create table if not exists public.vf_storage_policy_backup (
   with_check text
 );
 
+alter table public.vf_storage_policy_backup enable row level security;
+
+drop policy if exists vf_storage_policy_backup_admin_select on public.vf_storage_policy_backup;
+create policy vf_storage_policy_backup_admin_select on public.vf_storage_policy_backup
+for select to authenticated
+using (public.vf_is_admin());
+
 insert into public.vf_storage_policy_backup (policyname, cmd, roles, qual, with_check)
 select policyname, cmd, roles, qual, with_check
 from pg_policies
