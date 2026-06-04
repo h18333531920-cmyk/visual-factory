@@ -6,21 +6,18 @@
 
   const I18N = {
     zh: {
-      loginTitle: 'Visual Factory',
-      loginSubtitle: '登录后进入素材库、静态 DIY 和动态 DIY 工作台。',
+      loginTitle: 'GCC Design',
+      loginSubtitle: '一个给设计师和运营使用的素材库、静态 DIY、动态 DIY 工作台。',
       email: '邮箱',
       password: '密码',
       signIn: '登录',
       signOut: '退出',
-      workspace: '内部工具站',
+      workspace: 'Creative workspace',
       localPreviewHint: '本地预览模式仅用于检查界面，不会写入云端。',
-      overview: '总览',
       library: '素材库',
       staticDiy: 'DIY 静态',
       dynamicDiy: 'DIY 动态',
-      projects: '我的项目',
-      systemCheck: '系统自检',
-      admin: '管理员',
+      admin: '团队管理',
       checkItem: '检查项',
       checkResult: '结果',
       checkDetail: '说明',
@@ -39,26 +36,28 @@
       operatorsOnly: '仅运营可见',
       createCategory: '创建分类',
       createAccount: '创建账号',
+      assetCount: '素材',
+      sourceCount: '源文件',
+      uploadAsset: '上传素材',
+      allAssets: '全部素材',
+      favoritesOnly: '仅收藏',
       displayName: '姓名',
       role: '角色',
       initialPassword: '初始密码'
     },
     en: {
-      loginTitle: 'Visual Factory',
-      loginSubtitle: 'Sign in to use Library, Static DIY, and Dynamic DIY.',
+      loginTitle: 'GCC Design',
+      loginSubtitle: 'A focused workspace for assets, static DIY, and motion DIY.',
       email: 'Email',
       password: 'Password',
       signIn: 'Sign in',
       signOut: 'Sign out',
       workspace: 'Workspace',
       localPreviewHint: 'Local preview only checks the UI and does not write to cloud.',
-      overview: 'Overview',
       library: 'Library',
       staticDiy: 'Static DIY',
       dynamicDiy: 'Dynamic DIY',
-      projects: 'My Projects',
-      systemCheck: 'System Check',
-      admin: 'Admin',
+      admin: 'Team',
       checkItem: 'Check',
       checkResult: 'Result',
       checkDetail: 'Detail',
@@ -77,6 +76,11 @@
       operatorsOnly: 'Operators only',
       createCategory: 'Create category',
       createAccount: 'Create account',
+      assetCount: 'Assets',
+      sourceCount: 'Sources',
+      uploadAsset: 'Upload asset',
+      allAssets: 'All assets',
+      favoritesOnly: 'Favorites',
       displayName: 'Name',
       role: 'Role',
       initialPassword: 'Initial password'
@@ -84,13 +88,10 @@
   };
 
   const ROUTES = [
-    { id: 'overview', icon: '01', title: 'overview' },
-    { id: 'library', icon: '02', title: 'library' },
-    { id: 'static', icon: '03', title: 'staticDiy' },
-    { id: 'dynamic', icon: '04', title: 'dynamicDiy' },
-    { id: 'projects', icon: '05', title: 'projects' },
-    { id: 'status', icon: '06', title: 'systemCheck', adminOnly: true },
-    { id: 'admin', icon: '07', title: 'admin', adminOnly: true }
+    { id: 'library', icon: 'library', title: 'library' },
+    { id: 'static', icon: 'static', title: 'staticDiy' },
+    { id: 'dynamic', icon: 'dynamic', title: 'dynamicDiy' },
+    { id: 'admin', icon: 'admin', title: 'admin', adminOnly: true }
   ];
 
   const config = window.VF_CONFIG || {};
@@ -103,7 +104,7 @@
     session: null,
     profile: null,
     localPreview: false,
-    route: 'overview',
+    route: 'library',
     activeFrame: null,
     libraryOptions: [],
     librarySources: [],
@@ -166,7 +167,7 @@
       if (btn) startLocalPreview(btn.dataset.role);
     });
     window.addEventListener('hashchange', () => {
-      navigate((location.hash || '#overview').slice(1));
+      navigate((location.hash || '#library').slice(1));
     });
   }
 
@@ -275,7 +276,7 @@
     els.appShell.hidden = false;
     renderNav();
     renderUserChip();
-    navigate((location.hash || '#overview').slice(1));
+    navigate((location.hash || '#library').slice(1));
   }
 
   function renderNav() {
@@ -287,7 +288,7 @@
         button.type = 'button';
         button.className = `nav-item ${state.route === route.id ? 'active' : ''}`;
         button.dataset.route = route.id;
-        button.innerHTML = `<span class="nav-icon">${route.icon}</span><span>${t(route.title)}</span>`;
+        button.innerHTML = `<span class="nav-icon" aria-hidden="true">${navIcon(route.icon)}</span><span>${t(route.title)}</span>`;
         button.addEventListener('click', () => {
           location.hash = route.id;
           navigate(route.id);
@@ -298,24 +299,36 @@
 
   function renderUserChip() {
     const profile = state.profile || {};
-    els.userChip.textContent = `${profile.display_name || profile.email || 'User'} · ${roleLabel(profile.role)}`;
+    const name = profile.display_name || profile.email || 'User';
+    els.userChip.innerHTML = `
+      <span class="user-avatar">${escapeHtml((name || 'U').slice(0, 1).toUpperCase())}</span>
+      <span>${escapeHtml(name)}</span>
+      <span class="user-role">${escapeHtml(roleLabel(profile.role))}</span>
+    `;
   }
 
   function navigate(routeId) {
     const allowed = ROUTES.some(route => route.id === routeId && (!route.adminOnly || currentRole() === 'admin'));
-    state.route = allowed ? routeId : 'overview';
+    state.route = allowed ? routeId : 'library';
     renderNav();
     const route = ROUTES.find(item => item.id === state.route);
-    els.routeKicker.textContent = state.localPreview ? 'Local Preview' : 'Visual Factory';
+    els.routeKicker.textContent = state.localPreview ? 'Local Preview' : 'gccdesign.app';
     els.routeTitle.textContent = t(route.title);
     els.saveProjectBtn.hidden = !['static', 'dynamic'].includes(state.route);
-    if (state.route === 'overview') renderOverview();
     if (state.route === 'library') renderLibrary();
     if (state.route === 'static') renderTool('static');
     if (state.route === 'dynamic') renderTool('dynamic');
-    if (state.route === 'projects') renderProjects();
-    if (state.route === 'status') renderStatus();
     if (state.route === 'admin') renderAdmin();
+  }
+
+  function navIcon(icon) {
+    const icons = {
+      library: '<svg viewBox="0 0 24 24"><path d="M4 6.5h16M4 12h16M4 17.5h16"/><path d="M7 4.5v15M17 4.5v15"/></svg>',
+      static: '<svg viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="14" rx="2"/><path d="M8 15l2.4-2.7 2.3 2.3 1.7-1.8L18 16"/><circle cx="9" cy="9" r="1.2"/></svg>',
+      dynamic: '<svg viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="14" rx="2"/><path d="M10 9.2v5.6l5-2.8-5-2.8z"/></svg>',
+      admin: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.2"/><path d="M5.5 19c.8-3.2 3-5 6.5-5s5.7 1.8 6.5 5"/></svg>'
+    };
+    return icons[icon] || '';
   }
 
   function renderOverview() {
@@ -354,22 +367,21 @@
       <div class="library-page">
         <section class="library-head">
           <div>
-            <div class="kicker">${state.lang === 'zh' ? 'ASSET LIBRARY V2' : 'ASSET LIBRARY V2'}</div>
-            <h3>${state.lang === 'zh' ? '素材与源文件库' : 'Assets & Source Files'}</h3>
-            <p>${state.lang === 'zh' ? '源文件由设计师管理，预览图可下载并用于 DIY。旧版素材库仍保留为过渡入口。' : 'Designers manage source files; previews can be downloaded and sent to DIY tools.'}</p>
+            <div class="kicker">${state.lang === 'zh' ? 'GCC DESIGN LIBRARY' : 'GCC DESIGN LIBRARY'}</div>
+            <h3>${t('library')}</h3>
+            <p>${state.lang === 'zh' ? '设计师上传源文件与预览图，运营直接下载预览或带入 DIY。' : 'Designers upload sources and previews; operators use previews in DIY.'}</p>
           </div>
           <div class="library-actions">
-            <button class="ghost-btn" type="button" id="legacy-library-btn">${state.lang === 'zh' ? '旧版素材库' : 'Legacy Library'}</button>
-            ${canUpload ? `<button class="primary-btn" type="button" id="open-upload-modal">${state.lang === 'zh' ? '上传素材' : 'Upload Asset'}</button>` : ''}
+            ${canUpload ? `<button class="primary-btn" type="button" id="open-upload-modal">${t('uploadAsset')}</button>` : ''}
           </div>
         </section>
 
         <section class="library-filterbar panel">
-            <label><span>${state.lang === 'zh' ? '搜索' : 'Search'}</span><input id="library-search" placeholder="${state.lang === 'zh' ? '名称、文件名、标签' : 'Title, filename, tags'}" value="${escapeAttr(state.libraryFilters.query)}"></label>
+          <label><span>${state.lang === 'zh' ? '搜索' : 'Search'}</span><input id="library-search" placeholder="${state.lang === 'zh' ? '搜索名称、文件名、标签' : 'Search title, filename, tags'}" value="${escapeAttr(state.libraryFilters.query)}"></label>
           <label><span>${state.lang === 'zh' ? '国家' : 'Country'}</span><select id="library-country-filter"></select></label>
           <label><span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span><select id="library-activity-filter"></select></label>
           <label><span>${state.lang === 'zh' ? '品类' : 'Category'}</span><select id="library-category-filter"></select></label>
-          <button class="ghost-btn" type="button" id="library-favorite-filter">${state.libraryFilters.favorites ? (state.lang === 'zh' ? '仅收藏中' : 'Favorites only') : (state.lang === 'zh' ? '全部素材' : 'All assets')}</button>
+          <button class="ghost-btn" type="button" id="library-favorite-filter">${state.libraryFilters.favorites ? t('favoritesOnly') : t('allAssets')}</button>
         </section>
 
         <section id="library-status" class="library-status panel">${state.lang === 'zh' ? '正在读取素材库...' : 'Loading library...'}</section>
@@ -447,7 +459,6 @@
   }
 
   function wireLibraryShell() {
-    document.getElementById('legacy-library-btn')?.addEventListener('click', () => renderTool('library'));
     document.getElementById('open-upload-modal')?.addEventListener('click', openLibraryUploadModal);
     document.getElementById('close-library-upload')?.addEventListener('click', closeLibraryUploadModal);
     document.getElementById('cancel-library-upload')?.addEventListener('click', closeLibraryUploadModal);
@@ -598,8 +609,8 @@
         return text.includes(query);
       });
     status.innerHTML = `
-      <strong>${state.libraryItems.length}</strong> ${state.lang === 'zh' ? '张预览图' : 'previews'}
-      <span class="muted">· ${state.librarySources.length} ${state.lang === 'zh' ? '个源文件' : 'source files'}</span>
+      <span><strong>${state.libraryItems.length}</strong>${state.lang === 'zh' ? ' 张预览图' : ' previews'}</span>
+      <span><strong>${state.librarySources.length}</strong>${state.lang === 'zh' ? ' 个源文件' : ' source files'}</span>
     `;
     if (state.libraryItems.length === 0) {
       grid.innerHTML = `<div class="empty-card">${state.lang === 'zh' ? '还没有符合条件的素材。设计师可以先上传一组源文件和预览图。' : 'No matching assets yet.'}</div>`;
@@ -633,10 +644,10 @@
           </div>
           <div class="library-fileline">${escapeHtml(source.source_filename)} · ${formatFileSize(source.source_size_bytes)}</div>
           <div class="library-card-actions">
-            <button class="secondary-btn" type="button" data-action="download-preview">${state.lang === 'zh' ? '下载预览' : 'Download Preview'}</button>
-            ${canSource ? `<button class="ghost-btn" type="button" data-action="download-source">${state.lang === 'zh' ? '下载源文件' : 'Download Source'}</button>` : ''}
-            <button class="ghost-btn" type="button" data-action="use-static">${state.lang === 'zh' ? '用于静态' : 'Static DIY'}</button>
-            <button class="ghost-btn" type="button" data-action="use-dynamic">${state.lang === 'zh' ? '用于动态' : 'Dynamic DIY'}</button>
+            <button class="secondary-btn" type="button" data-action="download-preview">${state.lang === 'zh' ? '下载预览' : 'Preview'}</button>
+            ${canSource ? `<button class="ghost-btn" type="button" data-action="download-source">${state.lang === 'zh' ? '源文件' : 'Source'}</button>` : ''}
+            <button class="ghost-btn" type="button" data-action="use-static">${state.lang === 'zh' ? '静态 DIY' : 'Static DIY'}</button>
+            <button class="ghost-btn" type="button" data-action="use-dynamic">${state.lang === 'zh' ? '动态 DIY' : 'Motion DIY'}</button>
             ${canManage ? `<button class="ghost-btn" type="button" data-action="edit">${state.lang === 'zh' ? '编辑' : 'Edit'}</button><button class="ghost-btn danger" type="button" data-action="delete">${state.lang === 'zh' ? '删除' : 'Delete'}</button>` : ''}
           </div>
         </div>
@@ -965,25 +976,18 @@
     const legacyRole = currentRole() === 'operator' ? 'viewer' : currentRole();
     const map = {
       library: {
-        src: `./tools/library/index.html?embedded=1&role=${encodeURIComponent(legacyRole)}`,
-        noticeZh: '素材库当前使用旧工具副本嵌入；后续会把分类权限和中英切换迁入新外壳。',
-        noticeEn: 'The library is embedded as a legacy copy; category permissions and i18n will be migrated into the shell.'
+        src: `./tools/library/index.html?embedded=1&role=${encodeURIComponent(legacyRole)}`
       },
       static: {
-        src: './tools/static/frontend.html?embedded=1',
-        noticeZh: '静态 DIY 核心功能保持原样。保存项目会先记录云端快照，完整恢复将在下一步细接。',
-        noticeEn: 'Static DIY keeps its core behavior. Project save records a cloud snapshot first; full restore comes next.'
+        src: './tools/static/frontend.html?embedded=1'
       },
       dynamic: {
-        src: './tools/dynamic/animator.html?embedded=1',
-        noticeZh: '动态 DIY 核心功能保持原样。序列帧项目较大，V1 会先保存结构快照。',
-        noticeEn: 'Dynamic DIY keeps its core behavior. V1 saves structural snapshots for large sequence projects.'
+        src: './tools/dynamic/animator.html?embedded=1'
       }
     };
     const item = map[type];
     els.content.innerHTML = `
       <div class="tool-layout">
-        <div class="tool-notice">${state.lang === 'zh' ? item.noticeZh : item.noticeEn}</div>
         <iframe id="tool-frame" class="tool-frame" src="${item.src}" title="${type}"></iframe>
       </div>
     `;
@@ -1182,8 +1186,11 @@
     state.activeFrame = null;
     els.content.innerHTML = `
       <div class="panel-page">
-        <section class="panel card">
-          <h3>${t('createAccount')}</h3>
+        <section class="admin-section">
+          <div>
+            <div class="kicker">${state.lang === 'zh' ? 'TEAM ACCESS' : 'TEAM ACCESS'}</div>
+            <h3>${t('createAccount')}</h3>
+          </div>
           <form id="create-user-form" class="toolbar">
             <label><span>${t('displayName')}</span><input name="display_name" required></label>
             <label><span>${t('email')}</span><input name="email" type="email" required></label>
@@ -1193,8 +1200,11 @@
           </form>
           <div id="create-user-message" class="message"></div>
         </section>
-        <section class="panel card">
-          <h3>${t('createCategory')}</h3>
+        <section class="admin-section">
+          <div>
+            <div class="kicker">${state.lang === 'zh' ? 'CLASSIFICATION' : 'CLASSIFICATION'}</div>
+            <h3>${t('createCategory')}</h3>
+          </div>
           <form id="category-form" class="toolbar">
             <label><span>${t('categoryNameZh')}</span><input name="name_zh" required></label>
             <label><span>${t('categoryNameEn')}</span><input name="name_en"></label>
