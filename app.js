@@ -113,6 +113,7 @@
     libraryItems: [],
     libraryPreviewUrls: {},
     libraryFavorites: new Set(),
+    librarySelectedPreviewId: '',
     libraryFilters: {
       query: '',
       country: 'all',
@@ -368,25 +369,29 @@
       <div class="library-page">
         <section class="library-head">
           <div>
-            <div class="kicker">${state.lang === 'zh' ? 'GCC DESIGN LIBRARY' : 'GCC DESIGN LIBRARY'}</div>
+            <div class="kicker">GCC DESIGN LIBRARY</div>
             <h3>${t('library')}</h3>
             <p>${state.lang === 'zh' ? '设计师上传源文件与预览图，运营直接下载预览或带入 DIY。' : 'Designers upload sources and previews; operators use previews in DIY.'}</p>
           </div>
           <div class="library-actions">
+            <span class="role-pill">${escapeHtml(roleLabel(currentRole()))}</span>
             ${canUpload ? `<button class="primary-btn" type="button" id="open-upload-modal">${t('uploadAsset')}</button>` : ''}
           </div>
         </section>
 
         <section class="library-filterbar panel">
-          <label><span>${state.lang === 'zh' ? '搜索' : 'Search'}</span><input id="library-search" placeholder="${state.lang === 'zh' ? '搜索名称、文件名、标签' : 'Search title, filename, tags'}" value="${escapeAttr(state.libraryFilters.query)}"></label>
+          <label class="library-search-field"><span>${state.lang === 'zh' ? '搜索' : 'Search'}</span><input id="library-search" placeholder="${state.lang === 'zh' ? '搜索名称、文件名、标签' : 'Search title, filename, tags'}" value="${escapeAttr(state.libraryFilters.query)}"></label>
           <label><span>${state.lang === 'zh' ? '国家' : 'Country'}</span><select id="library-country-filter"></select></label>
           <label><span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span><select id="library-activity-filter"></select></label>
           <label><span>${state.lang === 'zh' ? '品类' : 'Category'}</span><select id="library-category-filter"></select></label>
           <button class="ghost-btn" type="button" id="library-favorite-filter">${state.libraryFilters.favorites ? t('favoritesOnly') : t('allAssets')}</button>
         </section>
 
-        <section id="library-status" class="library-status panel">${state.lang === 'zh' ? '正在读取素材库...' : 'Loading library...'}</section>
-        <section id="library-grid" class="library-grid"></section>
+        <section id="library-status" class="library-status">${state.lang === 'zh' ? '正在读取素材库...' : 'Loading library...'}</section>
+        <section class="library-board">
+          <section id="library-grid" class="library-grid"></section>
+          <aside id="library-inspector" class="library-inspector"></aside>
+        </section>
 
         ${canUpload ? renderUploadModal() : ''}
         ${renderEditModal()}
@@ -487,8 +492,7 @@
     const status = document.getElementById('library-status');
     try {
       if (state.localPreview || !state.supabase) {
-        status.textContent = state.lang === 'zh' ? '新素材库需要真实登录后使用；本地预览仅用于检查外观。' : 'The new library needs a real cloud login.';
-        document.getElementById('library-grid').innerHTML = '';
+        loadLocalLibraryDemo();
         return;
       }
       status.textContent = state.lang === 'zh' ? '正在读取分类和素材...' : 'Loading options and assets...';
@@ -598,6 +602,12 @@
     state.libraryItems = state.libraryPreviews
       .map(preview => ({ preview, source: sourcesById.get(preview.source_file_id), url: state.libraryPreviewUrls[preview.preview_path] || '' }))
       .filter(item => item.source)
+      .filter(item => {
+        return ['country', 'activity', 'category'].every(type => {
+          const value = state.libraryFilters[type];
+          return !value || value === 'all' || item.source[`${type}_id`] === value;
+        });
+      })
       .filter(item => !state.libraryFilters.favorites || state.libraryFavorites.has(item.preview.id))
       .filter(item => {
         if (!query) return true;
@@ -610,15 +620,120 @@
         return text.includes(query);
       });
     status.innerHTML = `
-      <span><strong>${state.libraryItems.length}</strong>${state.lang === 'zh' ? ' 张预览图' : ' previews'}</span>
-      <span><strong>${state.librarySources.length}</strong>${state.lang === 'zh' ? ' 个源文件' : ' source files'}</span>
+      <span class="library-stat"><small>${state.lang === 'zh' ? '预览图' : 'Previews'}</small><strong>${state.libraryItems.length}</strong></span>
+      <span class="library-stat"><small>${state.lang === 'zh' ? '源文件' : 'Sources'}</small><strong>${state.librarySources.length}</strong></span>
+      <span class="library-stat"><small>${state.lang === 'zh' ? '收藏' : 'Favorites'}</small><strong>${state.libraryFavorites.size}</strong></span>
     `;
     if (state.libraryItems.length === 0) {
-      grid.innerHTML = `<div class="empty-card">${state.lang === 'zh' ? '还没有符合条件的素材。设计师可以先上传一组源文件和预览图。' : 'No matching assets yet.'}</div>`;
+      state.librarySelectedPreviewId = '';
+      grid.innerHTML = `<div class="empty-card">
+        <strong>${state.lang === 'zh' ? '还没有符合条件的素材' : 'No matching assets'}</strong>
+        <span>${state.lang === 'zh' ? '设计师可以先上传一组源文件和预览图。' : 'Designers can upload a source file and previews first.'}</span>
+      </div>`;
+      renderLibraryInspector();
       return;
+    }
+    if (!state.libraryItems.some(item => item.preview.id === state.librarySelectedPreviewId)) {
+      state.librarySelectedPreviewId = state.libraryItems[0].preview.id;
     }
     grid.innerHTML = state.libraryItems.map(renderLibraryCard).join('');
     wireLibraryCards();
+    renderLibraryInspector();
+  }
+
+  function loadLocalLibraryDemo() {
+    const now = new Date().toISOString();
+    state.libraryOptions = [
+      { id: 'local-uae', option_type: 'country', name_zh: '阿联酋', name_en: 'UAE', sort_order: 10 },
+      { id: 'local-ksa', option_type: 'country', name_zh: '沙特', name_en: 'Saudi Arabia', sort_order: 20 },
+      { id: 'local-qatar', option_type: 'country', name_zh: '卡塔尔', name_en: 'Qatar', sort_order: 30 },
+      { id: 'local-ramadan', option_type: 'activity', name_zh: '斋月', name_en: 'Ramadan', sort_order: 10 },
+      { id: 'local-weekly', option_type: 'activity', name_zh: '周报', name_en: 'Weekly', sort_order: 20 },
+      { id: 'local-launch', option_type: 'activity', name_zh: '新品', name_en: 'Launch', sort_order: 30 },
+      { id: 'local-food', option_type: 'category', name_zh: '餐饮', name_en: 'F&B', sort_order: 10 },
+      { id: 'local-retail', option_type: 'category', name_zh: '零售', name_en: 'Retail', sort_order: 20 },
+      { id: 'local-app', option_type: 'category', name_zh: 'App 运营', name_en: 'App Ops', sort_order: 30 }
+    ];
+    state.librarySources = [
+      {
+        id: 'local-source-1',
+        title: 'Ramadan App Banner Set',
+        country_id: 'local-uae',
+        activity_id: 'local-ramadan',
+        category_id: 'local-app',
+        tags: ['App', 'Banner', 'Campaign'],
+        visibility: 'all',
+        source_filename: 'ramadan-banner-master.psd',
+        source_size_bytes: 128 * 1024 * 1024,
+        source_ext: 'psd',
+        uploaded_by: state.session?.user?.id || 'local_admin',
+        created_at: now,
+        updated_at: now
+      },
+      {
+        id: 'local-source-2',
+        title: 'KSA Weekly Offer Poster',
+        country_id: 'local-ksa',
+        activity_id: 'local-weekly',
+        category_id: 'local-food',
+        tags: ['Offer', 'Poster'],
+        visibility: 'all',
+        source_filename: 'ksa-weekly-offer.ai',
+        source_size_bytes: 74 * 1024 * 1024,
+        source_ext: 'ai',
+        uploaded_by: 'local_designer',
+        created_at: now,
+        updated_at: now
+      },
+      {
+        id: 'local-source-3',
+        title: 'Qatar New Store Launch',
+        country_id: 'local-qatar',
+        activity_id: 'local-launch',
+        category_id: 'local-retail',
+        tags: ['Launch', 'Storefront', 'Social'],
+        visibility: 'all',
+        source_filename: 'qatar-store-launch.pdf',
+        source_size_bytes: 52 * 1024 * 1024,
+        source_ext: 'pdf',
+        uploaded_by: 'local_designer',
+        created_at: now,
+        updated_at: now
+      }
+    ];
+    state.libraryPreviews = [
+      { id: 'local-preview-1', source_file_id: 'local-source-1', preview_path: 'local-preview-1', preview_filename: 'ramadan-banner-01.jpg', width: 1600, height: 900, sort_order: 10, created_at: now },
+      { id: 'local-preview-2', source_file_id: 'local-source-1', preview_path: 'local-preview-2', preview_filename: 'ramadan-banner-02.jpg', width: 1080, height: 1350, sort_order: 20, created_at: now },
+      { id: 'local-preview-3', source_file_id: 'local-source-2', preview_path: 'local-preview-3', preview_filename: 'weekly-offer.jpg', width: 1200, height: 1500, sort_order: 10, created_at: now },
+      { id: 'local-preview-4', source_file_id: 'local-source-3', preview_path: 'local-preview-4', preview_filename: 'launch-social.jpg', width: 1080, height: 1080, sort_order: 10, created_at: now }
+    ];
+    state.libraryPreviewUrls = {
+      'local-preview-1': localPreviewArtwork('Ramadan', '#155eef', '#f59e0b', '#111827'),
+      'local-preview-2': localPreviewArtwork('App Banner', '#0f766e', '#60a5fa', '#111827'),
+      'local-preview-3': localPreviewArtwork('Weekly Offer', '#be123c', '#f97316', '#111827'),
+      'local-preview-4': localPreviewArtwork('Store Launch', '#7c3aed', '#14b8a6', '#111827')
+    };
+    state.libraryFavorites = new Set(['local-preview-1']);
+    renderLibrarySelects();
+    renderLibraryGrid();
+  }
+
+  function localPreviewArtwork(title, colorA, colorB, ink) {
+    const safeTitle = escapeHtml(title);
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900">
+        <rect width="1200" height="900" fill="#f8fafc"/>
+        <rect x="80" y="80" width="1040" height="740" rx="36" fill="#ffffff" stroke="#d0d5dd" stroke-width="3"/>
+        <rect x="130" y="130" width="420" height="56" rx="28" fill="${colorA}"/>
+        <rect x="130" y="222" width="660" height="170" rx="26" fill="${ink}"/>
+        <circle cx="930" cy="248" r="116" fill="${colorB}" opacity="0.92"/>
+        <circle cx="1008" cy="332" r="74" fill="${colorA}" opacity="0.88"/>
+        <rect x="130" y="462" width="890" height="44" rx="22" fill="#e4e7ec"/>
+        <rect x="130" y="536" width="620" height="44" rx="22" fill="#e4e7ec"/>
+        <rect x="130" y="656" width="260" height="72" rx="18" fill="${colorA}"/>
+        <text x="164" y="328" fill="#ffffff" font-family="Inter, Arial" font-size="72" font-weight="800">${safeTitle}</text>
+      </svg>`;
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
   }
 
   function renderLibraryCard(item) {
@@ -628,12 +743,21 @@
     const canManage = canManageSource(source);
     const canSource = canDownloadSource();
     const tags = (source.tags || []).slice(0, 4);
+    const selected = state.librarySelectedPreviewId === preview.id;
+    const dimensions = formatDimensions(preview);
+    const ext = sourceFileLabel(source);
     return `
-      <article class="library-card" data-preview-id="${preview.id}">
-        <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
-        <div class="library-thumb">${item.url ? `<img src="${escapeAttr(item.url)}" alt="${escapeAttr(source.title)}">` : `<span>${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`}</div>
+      <article class="library-card ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
+        <div class="library-thumb-wrap">
+          <span class="file-pill">${escapeHtml(ext)}</span>
+          <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
+          <div class="library-thumb">${item.url ? `<img src="${escapeAttr(item.url)}" alt="${escapeAttr(source.title)}">` : `<span>${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`}</div>
+        </div>
         <div class="library-card-body">
-          <h4>${escapeHtml(source.title)}</h4>
+          <div>
+            <h4>${escapeHtml(source.title)}</h4>
+            <div class="library-subline">${escapeHtml(preview.preview_filename)}${dimensions ? ` · ${escapeHtml(dimensions)}` : ''}</div>
+          </div>
           <div class="library-meta">
             <span>${escapeHtml(optionNameById(source.country_id))}</span>
             <span>${escapeHtml(optionNameById(source.activity_id))}</span>
@@ -645,10 +769,10 @@
           </div>
           <div class="library-fileline">${escapeHtml(source.source_filename)} · ${formatFileSize(source.source_size_bytes)}</div>
           <div class="library-card-actions">
-            <button class="secondary-btn" type="button" data-action="download-preview">${state.lang === 'zh' ? '下载预览' : 'Preview'}</button>
+            <button class="secondary-btn" type="button" data-action="use-static">${state.lang === 'zh' ? '静态' : 'Static'}</button>
+            <button class="secondary-btn" type="button" data-action="use-dynamic">${state.lang === 'zh' ? '动态' : 'Motion'}</button>
+            <button class="ghost-btn" type="button" data-action="download-preview">${state.lang === 'zh' ? '预览图' : 'Preview'}</button>
             ${canSource ? `<button class="ghost-btn" type="button" data-action="download-source">${state.lang === 'zh' ? '源文件' : 'Source'}</button>` : ''}
-            <button class="ghost-btn" type="button" data-action="use-static">${state.lang === 'zh' ? '静态 DIY' : 'Static DIY'}</button>
-            <button class="ghost-btn" type="button" data-action="use-dynamic">${state.lang === 'zh' ? '动态 DIY' : 'Motion DIY'}</button>
             ${canManage ? `<button class="ghost-btn" type="button" data-action="edit">${state.lang === 'zh' ? '编辑' : 'Edit'}</button><button class="ghost-btn danger" type="button" data-action="delete">${state.lang === 'zh' ? '删除' : 'Delete'}</button>` : ''}
           </div>
         </div>
@@ -660,8 +784,84 @@
     document.querySelectorAll('.library-card').forEach(card => {
       card.addEventListener('click', event => {
         const button = event.target.closest('button[data-action]');
-        if (!button) return;
+        if (!button) {
+          selectLibraryItem(card.dataset.previewId);
+          return;
+        }
         const item = libraryItemByPreviewId(card.dataset.previewId);
+        if (!item) return;
+        handleLibraryCardAction(button.dataset.action, item);
+      });
+      card.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        selectLibraryItem(card.dataset.previewId);
+      });
+    });
+  }
+
+  function selectLibraryItem(previewId) {
+    state.librarySelectedPreviewId = previewId || '';
+    document.querySelectorAll('.library-card').forEach(card => {
+      card.classList.toggle('selected', card.dataset.previewId === state.librarySelectedPreviewId);
+    });
+    renderLibraryInspector();
+  }
+
+  function renderLibraryInspector() {
+    const inspector = document.getElementById('library-inspector');
+    if (!inspector) return;
+    const item = libraryItemByPreviewId(state.librarySelectedPreviewId);
+    if (!item) {
+      inspector.innerHTML = `
+        <div class="inspector-empty">
+          <strong>${state.lang === 'zh' ? '选择一个素材' : 'Select an asset'}</strong>
+          <span>${state.lang === 'zh' ? '右侧会显示预览、源文件信息和可执行操作。' : 'Preview, source details, and actions appear here.'}</span>
+        </div>
+      `;
+      return;
+    }
+    const { source, preview } = item;
+    const canManage = canManageSource(source);
+    const canSource = canDownloadSource();
+    const tags = source.tags || [];
+    inspector.innerHTML = `
+      <div class="inspector-sticky">
+        <div class="inspector-preview">${item.url ? `<img src="${escapeAttr(item.url)}" alt="${escapeAttr(source.title)}">` : `<span>${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`}</div>
+        <div class="inspector-content">
+          <div>
+            <div class="kicker">${escapeHtml(sourceFileLabel(source))} SOURCE</div>
+            <h3>${escapeHtml(source.title)}</h3>
+            <p>${escapeHtml(source.source_filename)} · ${formatFileSize(source.source_size_bytes)}</p>
+          </div>
+          <div class="inspector-actions">
+            <button class="primary-btn" type="button" data-preview-id="${preview.id}" data-action="use-static">${state.lang === 'zh' ? '带入静态 DIY' : 'Use in Static'}</button>
+            <button class="secondary-btn" type="button" data-preview-id="${preview.id}" data-action="use-dynamic">${state.lang === 'zh' ? '带入动态 DIY' : 'Use in Motion'}</button>
+          </div>
+          <dl class="inspector-list">
+            <div><dt>${state.lang === 'zh' ? '国家' : 'Country'}</dt><dd>${escapeHtml(optionNameById(source.country_id))}</dd></div>
+            <div><dt>${state.lang === 'zh' ? '活动' : 'Activity'}</dt><dd>${escapeHtml(optionNameById(source.activity_id))}</dd></div>
+            <div><dt>${state.lang === 'zh' ? '品类' : 'Category'}</dt><dd>${escapeHtml(optionNameById(source.category_id))}</dd></div>
+            <div><dt>${state.lang === 'zh' ? '可见范围' : 'Visibility'}</dt><dd>${visibilityLabel(source.visibility)}</dd></div>
+            <div><dt>${state.lang === 'zh' ? '预览尺寸' : 'Preview size'}</dt><dd>${escapeHtml(formatDimensions(preview) || '-')}</dd></div>
+            <div><dt>${state.lang === 'zh' ? '更新时间' : 'Updated'}</dt><dd>${formatDate(source.updated_at || source.created_at)}</dd></div>
+          </dl>
+          ${tags.length ? `<div class="inspector-tags">${tags.map(tag => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+          <div class="inspector-secondary-actions">
+            <button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="download-preview">${state.lang === 'zh' ? '下载预览图' : 'Download preview'}</button>
+            ${canSource ? `<button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="download-source">${state.lang === 'zh' ? '下载源文件' : 'Download source'}</button>` : ''}
+            ${canManage ? `<button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="edit">${state.lang === 'zh' ? '编辑信息' : 'Edit details'}</button><button class="ghost-btn danger" type="button" data-preview-id="${preview.id}" data-action="delete">${state.lang === 'zh' ? '删除整组' : 'Delete source'}</button>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+    wireLibraryInspectorActions();
+  }
+
+  function wireLibraryInspectorActions() {
+    document.querySelectorAll('#library-inspector button[data-action]').forEach(button => {
+      button.addEventListener('click', () => {
+        const item = libraryItemByPreviewId(button.dataset.previewId);
         if (!item) return;
         handleLibraryCardAction(button.dataset.action, item);
       });
@@ -843,6 +1043,16 @@
 
   async function downloadLibraryFile(item, kind) {
     if (kind === 'source' && !canDownloadSource()) return;
+    if (state.localPreview) {
+      if (kind === 'preview' && item.url) {
+        const response = await fetch(item.url);
+        const blob = await response.blob();
+        triggerBlobDownload(blob, item.preview.preview_filename || 'preview.svg');
+        return;
+      }
+      alert(state.lang === 'zh' ? '本地预览不下载真实源文件。' : 'Local preview does not download real source files.');
+      return;
+    }
     const path = kind === 'source' ? item.source.source_path : item.preview.preview_path;
     const filename = kind === 'source' ? item.source.source_filename : item.preview.preview_filename;
     const { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).download(path);
@@ -1415,6 +1625,15 @@
     if (value === 'designers') return t('designersOnly');
     if (value === 'operators') return t('operatorsOnly');
     return t('allVisible');
+  }
+
+  function sourceFileLabel(source) {
+    return (source?.source_ext || fileExt(source?.source_filename) || 'file').toUpperCase();
+  }
+
+  function formatDimensions(preview) {
+    if (!preview?.width || !preview?.height) return '';
+    return `${preview.width} x ${preview.height}`;
   }
 
   function showLoginMessage(message, isError) {
