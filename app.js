@@ -7,7 +7,7 @@
   const I18N = {
     zh: {
       loginTitle: 'GCC Design',
-      loginSubtitle: '一个给设计师和运营使用的素材库、静态 DIY、动态 DIY 工作台。',
+      loginSubtitle: '把素材、海报和动效集中在一个安静的创意工作台。',
       email: '邮箱',
       password: '密码',
       signIn: '登录',
@@ -47,7 +47,7 @@
     },
     en: {
       loginTitle: 'GCC Design',
-      loginSubtitle: 'A focused workspace for assets, static DIY, and motion DIY.',
+      loginSubtitle: 'A calm creative workspace for assets, posters, and motion.',
       email: 'Email',
       password: 'Password',
       signIn: 'Sign in',
@@ -96,6 +96,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
+  const TOOL_UI_VERSION = '20260604-ui2';
   const SOURCE_EXTENSIONS = ['psd', 'ai', 'pdf'];
   const PREVIEW_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   const state = {
@@ -976,13 +977,13 @@
     const legacyRole = currentRole() === 'operator' ? 'viewer' : currentRole();
     const map = {
       library: {
-        src: `./tools/library/index.html?embedded=1&role=${encodeURIComponent(legacyRole)}`
+        src: `./tools/library/index.html?embedded=1&role=${encodeURIComponent(legacyRole)}&v=${TOOL_UI_VERSION}`
       },
       static: {
-        src: './tools/static/frontend.html?embedded=1'
+        src: `./tools/static/frontend.html?embedded=1&v=${TOOL_UI_VERSION}`
       },
       dynamic: {
-        src: './tools/dynamic/animator.html?embedded=1'
+        src: `./tools/dynamic/animator.html?embedded=1&v=${TOOL_UI_VERSION}`
       }
     };
     const item = map[type];

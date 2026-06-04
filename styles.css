@@ -53,12 +53,22 @@ button {
 }
 
 .login-panel {
+  position: relative;
+  overflow: hidden;
   width: min(430px, 100%);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 24px 60px rgba(16, 24, 40, 0.10);
   padding: 34px;
+}
+
+.login-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: #111827;
 }
 
 .brand-mark {

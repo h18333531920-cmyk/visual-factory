@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>营销视觉超级工厂 - 巅峰生产版 (带时光机与序列帧)</title>
+    <title>GCC Design - Motion DIY</title>
     <script src="/config.js"></script>
     <script src="/tool-auth-guard.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
@@ -12,22 +12,22 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     
     <style>
-        :root { --primary: #2563eb; --bg: #f8fafc; --panel: #ffffff; --border: #e2e8f0; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 20px; margin: 0; color: #1e293b; user-select: none; }
-        .container { display: flex; gap: 24px; max-width: 1400px; width: 100%; height: 95vh; }
+        :root { --primary: #2563eb; --primary-strong: #1d4ed8; --bg: #f7f8fb; --panel: #ffffff; --border: #e4e7ec; --border-strong: #d0d5dd; --text: #101828; --muted: #667085; --success: #0f9f6e; --danger: #d92d20; }
+        body { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 18px; margin: 0; color: var(--text); user-select: none; letter-spacing: 0; }
+        .container { display: flex; gap: 18px; max-width: 1440px; width: 100%; height: calc(100vh - 36px); }
         
-        .preview-section { flex: 1; background: var(--panel); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 20px; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.04); overflow: visible; z-index: 10; }
+        .preview-section { flex: 1; background: var(--panel); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 18px; position: relative; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(16,24,40,0.05); overflow: visible; z-index: 10; }
         
-        .view-toggle-bar { display: flex; gap: 10px; background: #f1f5f9; padding: 4px; border-radius: 10px; margin-bottom: 20px; z-index: 100; }
-        .view-toggle-bar button { border: none; background: transparent; padding: 8px 16px; border-radius: 6px; font-weight: 600; color: #64748b; cursor: pointer; transition: 0.2s; font-size: 13px; }
-        .view-toggle-bar button.active { background: white; color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .view-toggle-bar { display: flex; gap: 4px; background: #f2f4f7; padding: 5px; border-radius: 10px; margin-bottom: 18px; z-index: 100; border: 1px solid var(--border); }
+        .view-toggle-bar button { border: none; background: transparent; padding: 7px 14px; border-radius: 8px; font-weight: 700; color: var(--muted); cursor: pointer; transition: 0.2s; font-size: 12px; }
+        .view-toggle-bar button.active { background: white; color: var(--text); box-shadow: 0 1px 2px rgba(16,24,40,0.08); }
 
         .viewport-wrapper { position: relative; transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), height 0.4s cubic-bezier(0.4, 0, 0.2, 1); display: flex; justify-content: center;}
         .viewport-wrapper.mode-edit { width: 327px; height: 470.5px; }
         .viewport-wrapper.mode-mockup { width: 315px; height: 682px; }
 
         .master-container { position: absolute; top: 0; left: 0; transform-origin: top left; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; }
-        .master-container.mode-edit { width: 654px; height: 941px; transform: scale(0.5); border: 4px dashed #cbd5e1; border-radius: 16px; background: white; cursor: crosshair; }
+        .master-container.mode-edit { width: 654px; height: 941px; transform: scale(0.5); border: 2px dashed var(--border-strong); border-radius: 12px; background: white; cursor: crosshair; }
         .master-container.mode-mockup { width: 750px; height: 1624px; transform: scale(0.42); border-radius: 60px; box-shadow: 0 0 0 16px #0f172a, 0 30px 60px rgba(0,0,0,0.2); background: #1e293b; border: none; }
 
         .mockup-bg { width: 100%; height: 100%; position: absolute; top: 0; left: 0; object-fit: cover; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
@@ -55,24 +55,24 @@
         .anim-wrapper img { display: block; pointer-events: none; }
 
         /* 时间轴与控制区 */
-        .timeline-container { width: 327px; margin-top: 16px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 12px; box-sizing: border-box; box-shadow: 0 2px 10px rgba(0,0,0,0.02);}
-        .timeline-info { display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-bottom: 8px; font-weight: 600;}
+        .timeline-container { width: 327px; margin-top: 16px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 12px; box-sizing: border-box; box-shadow: 0 1px 2px rgba(16,24,40,0.04);}
+        .timeline-info { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 8px; font-weight: 650;}
         input[type="range"].scrubber { width: 100%; margin: 0; cursor: pointer; height: 6px; background: #e2e8f0; border-radius: 3px; -webkit-appearance: none; }
         input[type="range"].scrubber::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: var(--primary); border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 
         .action-bar { width: 327px; display: flex; gap: 12px; position: relative; z-index: 10; margin-top: 12px;}
-        .btn { padding: 10px 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; font-size: 13px; flex: 1; display: flex; justify-content: center; align-items: center; gap: 6px;}
-        .btn-upload { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+        .btn { padding: 10px 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: 750; transition: 0.2s; font-size: 13px; flex: 1; display: flex; justify-content: center; align-items: center; gap: 6px;}
+        .btn-upload { background: #f8fafc; color: #344054; border: 1px solid var(--border-strong); }
         .btn-upload:hover { background: #e2e8f0; }
-        .btn-play { background: #10b981; color: white; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+        .btn-play { background: var(--primary); color: white; box-shadow: 0 8px 18px rgba(37,99,235,0.18); }
         .btn-play.playing { background: #f59e0b; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
         .btn-play:hover { filter: brightness(0.9); }
 
         /* === 右侧控制台 === */
-        .control-section { flex: 1.2; background: var(--panel); border-radius: 16px; padding: 24px; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.04); position: relative; z-index: 5;}
-        .card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid var(--border); transition: 0.3s;}
-        h3 { margin-top: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-        h3::before { content: ''; display: block; width: 4px; height: 14px; background: var(--primary); border-radius: 2px; }
+        .control-section { flex: 1.2; background: var(--panel); border-radius: 12px; padding: 18px; overflow-y: auto; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(16,24,40,0.05); position: relative; z-index: 5;}
+        .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 14px; border: 1px solid var(--border); transition: 0.3s;}
+        h3 { margin-top: 0; font-size: 14px; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; letter-spacing: 0; }
+        h3::before { content: ''; display: block; width: 3px; height: 13px; background: var(--primary); border-radius: 2px; }
         
         .layer-list { list-style: none; padding: 0; margin: 0; max-height: 400px; overflow-y: auto; }
         .layer-item { display: flex; align-items: center; padding: 8px; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; cursor: grab; transition: transform 0.2s;}
@@ -117,7 +117,7 @@
 <div class="history-toast" id="history-toast">已撤销</div>
 
 <div id="export-overlay">
-    <h2 style="color: var(--primary); margin: 0;">引擎重采样渲染中...</h2>
+    <h2 style="color: var(--primary); margin: 0;">正在导出动效素材...</h2>
     <p style="color: #64748b; font-size: 14px;" id="export-text">正在通过底层矩阵同步时间轴并抓取序列</p>
     <div class="progress-bar"><div class="progress-fill" id="export-progress"></div></div>
 </div>
@@ -126,8 +126,8 @@
     <div class="preview-section">
         
         <div class="view-toggle-bar">
-            <button id="btn-mode-edit" class="active" onclick="switchMode('edit')">✏️ 专注编辑</button>
-            <button id="btn-mode-mockup" onclick="switchMode('mockup')">📱 样机展示</button>
+            <button id="btn-mode-edit" class="active" onclick="switchMode('edit')">编辑</button>
+            <button id="btn-mode-mockup" onclick="switchMode('mockup')">样机</button>
         </div>
 
         <input type="file" id="hidden-upload" multiple accept="image/png, image/jpeg, application/zip" style="display: none;" onchange="handleFiles(event)">
@@ -147,7 +147,7 @@
                 
                 <div class="canvas-wrapper" id="main-canvas">
                     <div id="grid-lines" class="grid-lines"></div>
-                    <div class="drop-hint" id="drop-hint">📥<br>拖拽素材或 .ZIP序列包</div>
+                    <div class="drop-hint" id="drop-hint">拖拽素材或 .ZIP 序列包</div>
                 </div>
             </div>
 
@@ -157,7 +157,7 @@
                     <h4 style="margin:0 0 12px 0; font-size:14px; color:#1e293b; display:flex; justify-content:space-between; align-items:center;">
                         环境配置 <span style="cursor:pointer; color:#94a3b8; font-size:18px;" onclick="toggleMockupPopover()">×</span>
                     </h4>
-                    <button class="btn" style="background:#f1f5f9; color:#334155; width:100%; font-size:12px; padding:8px; margin-bottom:16px; border: 1px solid #cbd5e1;" onclick="document.getElementById('hidden-mockup-upload').click()">🖼️ 更换手机壁纸</button>
+                    <button class="btn" style="background:#f8fafc; color:#334155; width:100%; font-size:12px; padding:8px; margin-bottom:16px; border: 1px solid #cbd5e1;" onclick="document.getElementById('hidden-mockup-upload').click()">更换手机壁纸</button>
                     <div style="font-size:12px; color:#64748b; margin-bottom:8px; display:flex; justify-content:space-between;"><span>遮罩浓度</span><span id="val-mask-opacity">60%</span></div>
                     <input type="range" id="param-mask-opacity" min="0" max="100" value="60" oninput="updateMaskOpacity(false)" onchange="updateMaskOpacity(true)" style="width:100%;">
                 </div>
@@ -174,25 +174,25 @@
         </div>
 
         <div class="action-bar">
-            <button class="btn btn-upload" onclick="document.getElementById('hidden-upload').click()">➕ 导入图层/ZIP序列</button>
-            <button id="btn-play-toggle" class="btn btn-play" onclick="togglePlay()">▶ 播放 / 暂停</button>
+            <button class="btn btn-upload" onclick="document.getElementById('hidden-upload').click()">导入图层 / ZIP 序列</button>
+            <button id="btn-play-toggle" class="btn btn-play" onclick="togglePlay()">播放 / 暂停</button>
         </div>
-        <div style="font-size:11px; color:#94a3b8; margin-top:8px;">💡 快捷键：Cmd+Z 撤销 / Shift+Cmd+Z 重做</div>
+        <div style="font-size:11px; color:#98a2b3; margin-top:8px;">Cmd+Z 撤销 / Shift+Cmd+Z 重做</div>
     </div>
 
     <div class="control-section">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 24px;">
-            <h2 style="margin:0; font-size: 20px;">自动化控制台</h2>
-            <span style="font-size: 12px; color: #10b981; background: #d1fae5; padding: 4px 8px; border-radius: 4px;">✔ 实时存入浏览器</span>
+            <h2 style="margin:0; font-size: 20px;">GCC Motion</h2>
+            <span style="font-size: 12px; color: #067647; background: #ecfdf3; padding: 4px 8px; border-radius: 999px;">本地自动保存</span>
         </div>
 
         <div class="card">
-            <h3>1. 资产管理栈 (拖拽排序 / 点选)</h3>
+            <h3>资产管理</h3>
             <ul class="layer-list" id="layer-list-ui"></ul>
         </div>
 
         <div class="card" id="anim-config" style="opacity: 0.5; pointer-events: none;">
-            <h3>2. 选中自动化配置</h3>
+            <h3>动效配置</h3>
             <label style="font-size: 12px; color: #64748b; display: block; margin-bottom: 6px;">语义化动效模板</label>
             <select id="semantic-type" class="semantic-select" onchange="updateSemanticUI(); pushHistory();">
                 <option value="none">静止常驻 (无动画)</option>
@@ -233,11 +233,11 @@
                 <input type="range" id="base-scale" min="0.1" max="2.5" step="0.05" value="1" oninput="updateLayerData()" onchange="pushHistory()">
             </div>
             
-            <button class="btn" style="background: #fee2e2; color: #ef4444; margin-top: 24px; border: 1px solid #fca5a5;" onclick="removeActiveLayer()">🗑️ 删除选中资产</button>
+            <button class="btn" style="background: #fff1f0; color: #b42318; margin-top: 24px; border: 1px solid #fecdca;" onclick="removeActiveLayer()">删除选中资产</button>
         </div>
 
         <div class="card" style="background: #f1f5f9; border-color: #cbd5e1;">
-            <h3 style="margin-bottom: 8px;">3. 所见即所得引擎导出</h3>
+            <h3 style="margin-bottom: 8px;">导出</h3>
             <p style="font-size: 12px; color: #64748b; margin-top: 0; margin-bottom: 16px; font-weight: bold;" id="export-mode-desc">
                 [当前为专注编辑态]：剥离多余元素，导出 654x941 纯净组件。
             </p>
@@ -245,9 +245,9 @@
             <div id="export-bg-controls">
                 <label style="font-size: 11px; color: #64748b; margin-bottom: 8px; display: block;">设置GIF辅助底色（PNG序列永远保留真透明）：</label>
                 <div class="bg-choice-group">
-                    <div class="bg-choice active" data-bg="matte_black" onclick="selectExportBg(this)">✨ 纯透明 (防白边)</div>
-                    <div class="bg-choice" data-bg="#FFFFFF" onclick="selectExportBg(this)">⚪ 纯白底</div>
-                    <div class="bg-choice" data-bg="#000000" onclick="selectExportBg(this)">⚫ 纯黑底</div>
+                    <div class="bg-choice active" data-bg="matte_black" onclick="selectExportBg(this)">透明防白边</div>
+                    <div class="bg-choice" data-bg="#FFFFFF" onclick="selectExportBg(this)">白底</div>
+                    <div class="bg-choice" data-bg="#000000" onclick="selectExportBg(this)">黑底</div>
                 </div>
             </div>
             
@@ -302,7 +302,7 @@
         if (isPlaying) {
             isPlaying = false;
             cancelAnimationFrame(rafId);
-            btn.innerHTML = '▶ 播放 / 暂停';
+            btn.innerHTML = '播放 / 暂停';
             btn.classList.remove('playing');
         } else {
             // 在播放前强制重建动画队列，以获取最新参数
