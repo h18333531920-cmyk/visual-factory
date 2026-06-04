@@ -352,36 +352,36 @@
           </a>
           <div class="home-title-row">
             <span>Hey</span>
-            <span class="home-mascot" aria-hidden="true">G</span>
+            <span class="home-aurora-mark" aria-hidden="true"></span>
             <h3>${state.lang === 'zh' ? '你的创意工作台已就绪' : 'Your creative workspace is ready'}</h3>
           </div>
           <form id="home-search-form" class="home-search">
             <textarea id="home-search-input" rows="3" placeholder="${state.lang === 'zh' ? '可以问我找素材、做海报、做动效，也可以输入国家、活动、品类' : 'Ask for assets, posters, motion, countries, campaigns, or categories'}"></textarea>
             <div class="home-search-tools">
               <div class="home-tool-switches">
-                <button type="button" data-route="library">${navIcon('library')}<span>${t('library')}</span></button>
-                <button type="button" data-route="static">${navIcon('static')}<span>${t('staticDiy')}</span></button>
-                <button type="button" data-route="dynamic">${navIcon('dynamic')}<span>${t('dynamicDiy')}</span></button>
-                <button type="button" data-query="Ramadan">+</button>
+                <button type="button" data-route="library">${navIcon('library')}<span>${state.lang === 'zh' ? '超级库' : 'Super Library'}</span></button>
+                <button type="button" data-route="static">${navIcon('static')}<span>${state.lang === 'zh' ? '静态设计师' : 'Static Designer'}</span></button>
+                <button type="button" data-route="dynamic">${navIcon('dynamic')}<span>${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'}</span></button>
+                <button type="button" data-placeholder="request">${state.lang === 'zh' ? '提需流程' : 'Request Flow'}</button>
               </div>
               <button class="home-submit-btn" type="submit" aria-label="${state.lang === 'zh' ? '开始' : 'Start'}">↑</button>
             </div>
           </form>
           <section class="home-tool-row">
             <article class="home-tool-card library-card-visual" data-route="library">
-              <span>${state.lang === 'zh' ? '品牌设计' : 'Brand design'}</span>
+              <span>${state.lang === 'zh' ? '超级库' : 'Super Library'}</span>
               <strong>›</strong>
             </article>
             <article class="home-tool-card static-card-visual" data-route="static">
-              <span>${state.lang === 'zh' ? '电商营销' : 'Commerce'}</span>
-              <strong>›</strong>
-            </article>
-            <article class="home-tool-card poster-card-visual" data-route="static">
-              <span>${state.lang === 'zh' ? '海报设计' : 'Poster design'}</span>
+              <span>${state.lang === 'zh' ? '静态设计师' : 'Static Designer'}</span>
               <strong>›</strong>
             </article>
             <article class="home-tool-card dynamic-card-visual" data-route="dynamic">
-              <span>${state.lang === 'zh' ? '动效制作' : 'Motion'}</span>
+              <span>${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'}</span>
+              <strong>›</strong>
+            </article>
+            <article class="home-tool-card request-card-visual" data-placeholder="request">
+              <span>${state.lang === 'zh' ? '提需流程' : 'Request Flow'}</span>
               <strong>›</strong>
             </article>
           </section>
@@ -415,14 +415,20 @@
             <button type="button">${state.lang === 'zh' ? '筛选' : 'Filter'}⌄</button>
           </div>
           <div class="home-gallery">
-            ${renderHomeInspirationCard('5分钟创建你的专属 Skill 技能', '#031716', '#08b978', 'feature', '查看模板')}
-            ${renderHomeInspirationCard('你的 AI 设计部来了', '#111111', '#9ef01a', 'wide', '查看更多')}
-            ${renderHomeInspirationCard('用 AI 承包整个夏天的清凉海报', '#7dd3fc', '#facc15', 'wide', '立即创作')}
-            ${renderHomeInspirationCard('打造专属 IP 赋能品牌表达', '#d9f99d', '#84cc16', 'wide', '查看灵感')}
-            ${renderHomeInspirationCard('Travel Vlog 视觉封面', '#164e63', '#fb923c', '', '')}
-            ${renderHomeInspirationCard('芒种节气活动主视觉', '#fef3c7', '#22c55e', '', '')}
-            ${renderHomeInspirationCard('毕业季人物海报', '#166534', '#f9a8d4', '', '')}
-            ${renderHomeInspirationCard('门店开业宣传图', '#78350f', '#fcd34d', '', '')}
+            ${renderHomeInspirationCard('斋月餐饮活动海报', '#031716', '#08b978', 'tall', '查看素材')}
+            ${renderHomeInspirationCard('你的 AI 设计部来了', '#111111', '#9ef01a', 'short', '查看更多')}
+            ${renderHomeInspirationCard('夏日清凉饮品海报', '#7dd3fc', '#facc15', 'tall', '立即创作')}
+            ${renderHomeInspirationCard('青蛙 IP 系列视觉', '#d9f99d', '#84cc16', 'portrait', '查看灵感')}
+            ${renderHomeInspirationCard('Travel Vlog 视觉封面', '#164e63', '#fb923c', 'short', '')}
+            ${renderHomeInspirationCard('芒种节气活动主视觉', '#fef3c7', '#22c55e', 'portrait', '')}
+            ${renderHomeInspirationCard('毕业季人物海报', '#166534', '#f9a8d4', 'tall', '')}
+            ${renderHomeInspirationCard('门店开业宣传图', '#78350f', '#fcd34d', 'short', '')}
+            ${renderHomeInspirationCard('App 弹窗动效分镜', '#1d4ed8', '#67e8f9', 'portrait', '')}
+            ${renderHomeInspirationCard('周末促销社媒图', '#be123c', '#fb7185', 'tall', '')}
+            ${renderHomeInspirationCard('ICON&LOGO 灵感板', '#0f172a', '#a78bfa', 'short', '')}
+            ${renderHomeInspirationCard('中东新品上市图', '#0f766e', '#f97316', 'portrait', '')}
+            ${renderHomeInspirationCard('品牌视觉手册封面', '#312e81', '#facc15', 'tall', '')}
+            ${renderHomeInspirationCard('视频特效封面模板', '#020617', '#22d3ee', 'short', '')}
           </div>
         </section>
       </div>
@@ -467,6 +473,11 @@
       button.addEventListener('click', () => {
         location.hash = button.dataset.route;
         navigate(button.dataset.route);
+      });
+    });
+    document.querySelectorAll('[data-placeholder="request"]').forEach(node => {
+      node.addEventListener('click', () => {
+        alert(state.lang === 'zh' ? '提需流程模块已预留，后续会接入需求提交和审批。' : 'Request Flow is reserved for requirement submission and approval.');
       });
     });
     document.getElementById('home-search-form')?.addEventListener('submit', event => {
