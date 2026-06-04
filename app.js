@@ -317,6 +317,7 @@
   function navigate(routeId) {
     const allowed = ROUTES.some(route => route.id === routeId && (!route.adminOnly || currentRole() === 'admin'));
     state.route = allowed ? routeId : 'home';
+    els.appShell.dataset.route = state.route;
     renderNav();
     const route = ROUTES.find(item => item.id === state.route);
     els.routeKicker.textContent = state.localPreview ? 'Local Preview' : 'gccdesign.app';
@@ -344,65 +345,84 @@
     state.activeFrame = null;
     els.content.innerHTML = `
       <div class="home-page">
-        <section class="home-hero">
-          <div class="home-hero-copy">
-            <div class="soft-pill">${state.lang === 'zh' ? 'GCC Creative Studio' : 'GCC Creative Studio'}</div>
-            <h3>${state.lang === 'zh' ? 'Hey，今天想做点什么？' : 'Hey, what are we making today?'}</h3>
-            <p>${state.lang === 'zh' ? '找素材、做海报、做动效，从这里开始。' : 'Find assets, make posters, and build motion from one place.'}</p>
+        <section class="home-composer">
+          <a class="home-announcement" href="#library">
+            <span>${state.lang === 'zh' ? 'GCC Creative Beta 已开放团队体验' : 'GCC Creative Beta is open for teams'}</span>
+            <strong>↗</strong>
+          </a>
+          <div class="home-title-row">
+            <span>Hey</span>
+            <span class="home-mascot" aria-hidden="true">G</span>
+            <h3>${state.lang === 'zh' ? '你的创意工作台已就绪' : 'Your creative workspace is ready'}</h3>
           </div>
           <form id="home-search-form" class="home-search">
-            <input id="home-search-input" placeholder="${state.lang === 'zh' ? '搜索素材、国家、活动，或输入你想制作的内容' : 'Search assets, countries, campaigns, or describe what you need'}">
-            <button class="primary-btn" type="submit">${state.lang === 'zh' ? '搜索' : 'Search'}</button>
+            <textarea id="home-search-input" rows="3" placeholder="${state.lang === 'zh' ? '可以问我找素材、做海报、做动效，也可以输入国家、活动、品类' : 'Ask for assets, posters, motion, countries, campaigns, or categories'}"></textarea>
+            <div class="home-search-tools">
+              <div class="home-tool-switches">
+                <button type="button" data-route="library">${navIcon('library')}<span>${t('library')}</span></button>
+                <button type="button" data-route="static">${navIcon('static')}<span>${t('staticDiy')}</span></button>
+                <button type="button" data-route="dynamic">${navIcon('dynamic')}<span>${t('dynamicDiy')}</span></button>
+                <button type="button" data-query="Ramadan">+</button>
+              </div>
+              <button class="home-submit-btn" type="submit" aria-label="${state.lang === 'zh' ? '开始' : 'Start'}">↑</button>
+            </div>
           </form>
-          <div class="home-chips">
-            <button type="button" data-query="Ramadan">Ramadan</button>
-            <button type="button" data-query="${state.lang === 'zh' ? '海报' : 'Poster'}">${state.lang === 'zh' ? '海报设计' : 'Poster Design'}</button>
-            <button type="button" data-query="${state.lang === 'zh' ? '餐饮' : 'Food'}">${state.lang === 'zh' ? '餐饮营销' : 'Food Campaign'}</button>
-            <button type="button" data-query="${state.lang === 'zh' ? '动效' : 'Motion'}">${state.lang === 'zh' ? '动效弹窗' : 'Motion Popup'}</button>
-          </div>
+          <section class="home-tool-row">
+            <article class="home-tool-card library-card-visual" data-route="library">
+              <span>${state.lang === 'zh' ? '品牌设计' : 'Brand design'}</span>
+              <strong>›</strong>
+            </article>
+            <article class="home-tool-card static-card-visual" data-route="static">
+              <span>${state.lang === 'zh' ? '电商营销' : 'Commerce'}</span>
+              <strong>›</strong>
+            </article>
+            <article class="home-tool-card poster-card-visual" data-route="static">
+              <span>${state.lang === 'zh' ? '海报设计' : 'Poster design'}</span>
+              <strong>›</strong>
+            </article>
+            <article class="home-tool-card dynamic-card-visual" data-route="dynamic">
+              <span>${state.lang === 'zh' ? '动效制作' : 'Motion'}</span>
+              <strong>›</strong>
+            </article>
+          </section>
         </section>
 
-        <section class="home-tool-row">
-          <article class="home-tool-card library-card-visual" data-route="library">
-            <div class="tool-visual visual-library"></div>
-            <div>
-              <span>${state.lang === 'zh' ? 'Asset Library' : 'Asset Library'}</span>
-              <h4>${t('library')}</h4>
-              <p>${state.lang === 'zh' ? '上传源文件与预览图，快速筛选并带进编辑器。' : 'Upload sources and previews, then send them into editors.'}</p>
-            </div>
-          </article>
-          <article class="home-tool-card static-card-visual" data-route="static">
-            <div class="tool-visual visual-static"></div>
-            <div>
-              <span>${state.lang === 'zh' ? 'Poster Studio' : 'Poster Studio'}</span>
-              <h4>${t('staticDiy')}</h4>
-              <p>${state.lang === 'zh' ? '做社媒海报、运营图、活动主视觉。' : 'Create social posters, offer visuals, and campaign layouts.'}</p>
-            </div>
-          </article>
-          <article class="home-tool-card dynamic-card-visual" data-route="dynamic">
-            <div class="tool-visual visual-dynamic"></div>
-            <div>
-              <span>${state.lang === 'zh' ? 'Motion Lab' : 'Motion Lab'}</span>
-              <h4>${t('dynamicDiy')}</h4>
-              <p>${state.lang === 'zh' ? '制作弹窗动效、序列帧和轻量动画素材。' : 'Build popup motion, sequences, and lightweight animations.'}</p>
-            </div>
-          </article>
-        </section>
-
-        <section class="home-showcase">
-          <div class="section-row">
-            <div>
-              <h3>${state.lang === 'zh' ? '热门创作方向' : 'Popular directions'}</h3>
-              <p>${state.lang === 'zh' ? '给设计师和运营一个更直接的开始点。' : 'A faster starting point for designers and operators.'}</p>
-            </div>
-            <button class="ghost-btn" type="button" data-route="library">${state.lang === 'zh' ? '查看素材库' : 'Open library'}</button>
+        <section class="home-discovery">
+          <div class="home-tabs">
+            <button class="active" type="button">${state.lang === 'zh' ? '精选' : 'Featured'}</button>
+            <button type="button">${state.lang === 'zh' ? '营销专辑' : 'Marketing'}</button>
+            <button type="button">${state.lang === 'zh' ? '商业海报' : 'Posters'}</button>
+            <button type="button">${state.lang === 'zh' ? '视频特效' : 'Video FX'}</button>
+            <button type="button">${state.lang === 'zh' ? '大赛活动' : 'Events'}</button>
+            <label class="home-mini-search">
+              <input placeholder="${state.lang === 'zh' ? '搜索内容' : 'Search'}">
+              <span>${navIcon('library')}</span>
+            </label>
           </div>
-          <div class="inspiration-wall">
-            ${renderHomeInspirationCard('Ramadan Campaign', '#155eef', '#f59e0b', 'tall')}
-            ${renderHomeInspirationCard('Weekly Offer', '#be123c', '#fb7185', '')}
-            ${renderHomeInspirationCard('App Popup', '#0f766e', '#60a5fa', 'wide')}
-            ${renderHomeInspirationCard('Store Launch', '#7c3aed', '#14b8a6', '')}
-            ${renderHomeInspirationCard('Food Banner', '#111827', '#f97316', 'tall')}
+          <div class="home-channel-row">
+            <button type="button" data-query="">${state.lang === 'zh' ? '全部' : 'All'}</button>
+            <button type="button" data-query="${state.lang === 'zh' ? '电商' : 'Commerce'}">${state.lang === 'zh' ? '电商营销' : 'Commerce'}</button>
+            <button type="button" data-query="${state.lang === 'zh' ? '创意' : 'Creative'}">${state.lang === 'zh' ? '创意建筑' : 'Creative'}</button>
+            <button type="button" data-query="${state.lang === 'zh' ? '节日' : 'Festival'}">${state.lang === 'zh' ? '热点节日' : 'Festival'}</button>
+            <button type="button" data-query="${state.lang === 'zh' ? '视频' : 'Video'}">${state.lang === 'zh' ? '视频生成' : 'Video'}</button>
+            <button type="button" data-query="ICON">ICON&LOGO</button>
+            <button type="button" data-query="${state.lang === 'zh' ? '字体' : 'Type'}">${state.lang === 'zh' ? '字体设计' : 'Typography'}</button>
+            <button type="button" data-query="${state.lang === 'zh' ? 'IP' : 'IP'}">IP${state.lang === 'zh' ? '设计' : ' Design'}</button>
+            <button type="button" data-query="${state.lang === 'zh' ? '餐饮' : 'Food'}">${state.lang === 'zh' ? '餐饮营销' : 'Food'}</button>
+          </div>
+          <div class="home-filter-actions">
+            <button type="button">${state.lang === 'zh' ? '推荐' : 'Recommended'}⌄</button>
+            <button type="button">${state.lang === 'zh' ? '筛选' : 'Filter'}⌄</button>
+          </div>
+          <div class="home-gallery">
+            ${renderHomeInspirationCard('5分钟创建你的专属 Skill 技能', '#031716', '#08b978', 'feature', '查看模板')}
+            ${renderHomeInspirationCard('你的 AI 设计部来了', '#111111', '#9ef01a', 'wide', '查看更多')}
+            ${renderHomeInspirationCard('用 AI 承包整个夏天的清凉海报', '#7dd3fc', '#facc15', 'wide', '立即创作')}
+            ${renderHomeInspirationCard('打造专属 IP 赋能品牌表达', '#d9f99d', '#84cc16', 'wide', '查看灵感')}
+            ${renderHomeInspirationCard('Travel Vlog 视觉封面', '#164e63', '#fb923c', '', '')}
+            ${renderHomeInspirationCard('芒种节气活动主视觉', '#fef3c7', '#22c55e', '', '')}
+            ${renderHomeInspirationCard('毕业季人物海报', '#166534', '#f9a8d4', '', '')}
+            ${renderHomeInspirationCard('门店开业宣传图', '#78350f', '#fcd34d', '', '')}
           </div>
         </section>
       </div>
@@ -410,11 +430,14 @@
     wireCreativeHome();
   }
 
-  function renderHomeInspirationCard(title, colorA, colorB, size) {
+  function renderHomeInspirationCard(title, colorA, colorB, size, action) {
     return `
       <article class="inspiration-card ${size || ''}">
         <img src="${escapeAttr(localPreviewArtwork(title, colorA, colorB, '#111827'))}" alt="${escapeAttr(title)}">
-        <span>${escapeHtml(title)}</span>
+        <div class="inspiration-overlay">
+          <span>${escapeHtml(title)}</span>
+          ${action ? `<button type="button">${escapeHtml(action)}</button>` : ''}
+        </div>
       </article>
     `;
   }
@@ -431,6 +454,19 @@
         state.libraryFilters.query = button.dataset.query || '';
         location.hash = 'library';
         navigate('library');
+      });
+    });
+    document.querySelectorAll('.home-channel-row button[data-query], .home-tool-switches button[data-query]').forEach(button => {
+      button.addEventListener('click', () => {
+        state.libraryFilters.query = button.dataset.query || '';
+        location.hash = 'library';
+        navigate('library');
+      });
+    });
+    document.querySelectorAll('.home-tool-switches button[data-route]').forEach(button => {
+      button.addEventListener('click', () => {
+        location.hash = button.dataset.route;
+        navigate(button.dataset.route);
       });
     });
     document.getElementById('home-search-form')?.addEventListener('submit', event => {
