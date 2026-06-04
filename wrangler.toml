@@ -1,0 +1,8 @@
+name = "visual-factory"
+compatibility_date = "2026-06-04"
+pages_build_output_dir = "./dist"
+send_metrics = false
+
+[vars]
+SUPABASE_URL = "https://juuqvjmhzdgfggzrivbb.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_PIa3V0LGlOn1K6G1nBUeqw_kiFB6fjt"

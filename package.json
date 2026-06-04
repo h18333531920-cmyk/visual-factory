@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "python3 -m http.server 8791 --bind 127.0.0.1"
+    "dev": "python3 -m http.server 8791 --bind 127.0.0.1",
+    "build:pages": "rm -rf dist && mkdir -p dist && cp index.html styles.css app.js config.js tool-auth-guard.js tool-bridge.js animator.html dist/ && cp -R tools dist/tools"
   }
 }
