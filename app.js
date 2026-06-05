@@ -107,6 +107,10 @@
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
   const TOOL_UI_VERSION = '20260605-integration1';
+  const LIBRARY_SOURCE_PAGE_SIZE = 500;
+  const LIBRARY_SOURCE_MAX_ROWS = 5000;
+  const SUPABASE_IN_BATCH_SIZE = 200;
+  const SIGNED_URL_BATCH_SIZE = 100;
   const SOURCE_EXTENSIONS = ['psd', 'ai', 'pdf'];
   const PREVIEW_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   const state = {
@@ -807,18 +811,24 @@
   }
 
   async function loadLibrarySources() {
-    let query = state.supabase
-      .from('vf_source_files')
-      .select('id,title,country_id,activity_id,category_id,tags,visibility,source_path,source_filename,source_mime_type,source_size_bytes,source_ext,uploaded_by,created_at,updated_at')
-      .order('updated_at', { ascending: false })
-      .limit(200);
-    ['country', 'activity', 'category'].forEach(type => {
-      const value = state.libraryFilters[type];
-      if (value && value !== 'all') query = query.eq(`${type}_id`, value);
-    });
-    const { data, error } = await query;
-    if (error) throw error;
-    state.librarySources = data || [];
+    const sources = [];
+    for (let from = 0; from < LIBRARY_SOURCE_MAX_ROWS; from += LIBRARY_SOURCE_PAGE_SIZE) {
+      let query = state.supabase
+        .from('vf_source_files')
+        .select('id,title,country_id,activity_id,category_id,tags,visibility,source_path,source_filename,source_mime_type,source_size_bytes,source_ext,uploaded_by,created_at,updated_at')
+        .order('updated_at', { ascending: false })
+        .range(from, from + LIBRARY_SOURCE_PAGE_SIZE - 1);
+      ['country', 'activity', 'category'].forEach(type => {
+        const value = state.libraryFilters[type];
+        if (value && value !== 'all') query = query.eq(`${type}_id`, value);
+      });
+      const { data, error } = await query;
+      if (error) throw error;
+      const batch = data || [];
+      sources.push(...batch);
+      if (batch.length < LIBRARY_SOURCE_PAGE_SIZE) break;
+    }
+    state.librarySources = sources;
   }
 
   async function loadLibraryPreviews() {
@@ -828,24 +838,37 @@
       return;
     }
     const ids = state.librarySources.map(item => item.id);
-    const { data, error } = await state.supabase
-      .from('vf_asset_previews')
-      .select('id,source_file_id,preview_path,preview_filename,preview_mime_type,preview_size_bytes,width,height,sort_order,created_at')
-      .in('source_file_id', ids)
-      .order('sort_order', { ascending: true });
-    if (error) throw error;
-    state.libraryPreviews = data || [];
+    const previews = [];
+    for (const idBatch of chunkArray(ids, SUPABASE_IN_BATCH_SIZE)) {
+      const { data, error } = await state.supabase
+        .from('vf_asset_previews')
+        .select('id,source_file_id,preview_path,preview_filename,preview_mime_type,preview_size_bytes,width,height,sort_order,created_at')
+        .in('source_file_id', idBatch)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      previews.push(...(data || []));
+    }
+    const sourceOrder = new Map(state.librarySources.map((source, index) => [source.id, index]));
+    state.libraryPreviews = previews.sort((a, b) => {
+      const sourceDiff = (sourceOrder.get(a.source_file_id) ?? 999999) - (sourceOrder.get(b.source_file_id) ?? 999999);
+      if (sourceDiff) return sourceDiff;
+      const sortDiff = (a.sort_order || 0) - (b.sort_order || 0);
+      if (sortDiff) return sortDiff;
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    });
   }
 
   async function signLibraryPreviewUrls() {
     state.libraryPreviewUrls = {};
     const paths = state.libraryPreviews.map(item => item.preview_path).filter(Boolean);
     if (paths.length === 0) return;
-    const { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).createSignedUrls(paths, 60 * 60);
-    if (error) throw error;
-    (data || []).forEach(item => {
-      if (item.path && item.signedUrl) state.libraryPreviewUrls[item.path] = item.signedUrl;
-    });
+    for (const pathBatch of chunkArray(paths, SIGNED_URL_BATCH_SIZE)) {
+      const { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).createSignedUrls(pathBatch, 60 * 60);
+      if (error) throw error;
+      (data || []).forEach(item => {
+        if (item.path && item.signedUrl) state.libraryPreviewUrls[item.path] = item.signedUrl;
+      });
+    }
   }
 
   function renderLibrarySelects() {
@@ -1170,19 +1193,29 @@
 
   async function uploadLibraryAsset(event) {
     event.preventDefault();
+    const form = event.currentTarget;
+    const submitButton = event.submitter || form.querySelector('button[type="submit"]');
+    const originalSubmitText = submitButton?.textContent || '';
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = state.lang === 'zh' ? '上传中...' : 'Uploading...';
+    }
     const message = document.getElementById('library-upload-message');
     setMessage(message, state.lang === 'zh' ? '正在上传，请不要关闭页面...' : 'Uploading, please keep this page open...');
+    const uploadedPaths = [];
+    let sourceInserted = false;
+    let sourceId = '';
     try {
-      const form = event.currentTarget;
       const formData = new FormData(form);
       const sourceFile = formData.get('source_file');
       const previewFiles = Array.from(formData.getAll('preview_files')).filter(file => file && file.size > 0);
       validateLibraryUpload(sourceFile, previewFiles);
-      const sourceId = crypto.randomUUID();
+      sourceId = crypto.randomUUID();
       const userId = state.session.user.id;
       const sourcePath = `${userId}/sources/${sourceId}/${safeStorageName(sourceFile.name)}`;
       const sourceUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, sourceFile, { upsert: false, contentType: sourceFile.type || 'application/octet-stream' });
       if (sourceUpload.error) throw sourceUpload.error;
+      uploadedPaths.push(sourcePath);
       const title = formData.get('title').trim() || stripExtension(sourceFile.name);
       const sourceRow = {
         id: sourceId,
@@ -1201,6 +1234,7 @@
       };
       const sourceInsert = await state.supabase.from('vf_source_files').insert([sourceRow]);
       if (sourceInsert.error) throw sourceInsert.error;
+      sourceInserted = true;
       const previewRows = [];
       for (let index = 0; index < previewFiles.length; index += 1) {
         const file = previewFiles[index];
@@ -1208,6 +1242,7 @@
         const previewPath = `${userId}/previews/${sourceId}/${previewId}-${safeStorageName(file.name)}`;
         const upload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(previewPath, file, { upsert: false, contentType: file.type });
         if (upload.error) throw upload.error;
+        uploadedPaths.push(previewPath);
         const dimensions = await readImageDimensions(file);
         previewRows.push({
           id: previewId,
@@ -1227,7 +1262,27 @@
       setTimeout(closeLibraryUploadModal, 600);
       await loadLibraryData();
     } catch (error) {
+      await cleanupFailedLibraryUpload(sourceId, sourceInserted, uploadedPaths);
       setMessage(message, error.message, true);
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = originalSubmitText;
+      }
+    }
+  }
+
+  async function cleanupFailedLibraryUpload(sourceId, sourceInserted, uploadedPaths) {
+    if (state.localPreview || !state.supabase) return;
+    try {
+      if (sourceInserted && sourceId) {
+        await state.supabase.from('vf_source_files').delete().eq('id', sourceId);
+      }
+      if (uploadedPaths.length) {
+        await state.supabase.storage.from(LIBRARY_BUCKET).remove(uploadedPaths);
+      }
+    } catch (error) {
+      console.warn('Library upload cleanup failed:', error);
     }
   }
 
@@ -1294,13 +1349,19 @@
       ? `确定删除「${source.title}」吗？源文件和 ${relatedPreviews.length} 张预览图会一起删除。`
       : `Delete "${source.title}" and ${relatedPreviews.length} previews?`);
     if (!ok) return;
+    const paths = [source.source_path, ...relatedPreviews.map(item => item.preview_path)].filter(Boolean);
+    if (paths.length) {
+      const remove = await state.supabase.storage.from(LIBRARY_BUCKET).remove(paths);
+      if (remove.error) {
+        alert(remove.error.message);
+        return;
+      }
+    }
     const { error } = await state.supabase.from('vf_source_files').delete().eq('id', sourceId);
     if (error) {
       alert(error.message);
       return;
     }
-    const paths = [source.source_path, ...relatedPreviews.map(item => item.preview_path)].filter(Boolean);
-    if (paths.length) await state.supabase.storage.from(LIBRARY_BUCKET).remove(paths);
     await loadLibraryData();
   }
 
@@ -1341,6 +1402,10 @@
   }
 
   async function useLibraryAsset(item, tool) {
+    if (!item.url) {
+      alert(state.lang === 'zh' ? '预览图链接还没准备好，请刷新素材库后再试。' : 'The preview link is not ready. Refresh the library and try again.');
+      return;
+    }
     const target = tool === 'dynamic' ? 'dynamic' : 'static';
     localStorage.setItem('vf_pending_library_asset', JSON.stringify({
       targetTool: target,
@@ -1939,6 +2004,14 @@
   function setMessage(element, message, isError, isSuccess) {
     element.textContent = message || '';
     element.className = `message${isError ? ' error' : ''}${isSuccess ? ' success' : ''}`;
+  }
+
+  function chunkArray(items, size) {
+    const chunks = [];
+    for (let index = 0; index < items.length; index += size) {
+      chunks.push(items.slice(index, index + size));
+    }
+    return chunks;
   }
 
   function formatDate(value) {
