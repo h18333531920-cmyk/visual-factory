@@ -106,7 +106,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260605-integration1';
+  const TOOL_UI_VERSION = '20260605-stability2';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const SUPABASE_IN_BATCH_SIZE = 200;
@@ -1870,11 +1870,20 @@
 
   async function saveProject(event) {
     event.preventDefault();
+    const submitButton = event.submitter || els.projectForm.querySelector('button[type="submit"]');
+    const originalSubmitText = submitButton?.textContent || '';
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = state.lang === 'zh' ? '保存中...' : 'Saving...';
+    }
     const title = els.projectTitleInput.value.trim();
     const projectType = state.route === 'dynamic' ? 'dynamic' : 'static';
     setMessage(els.projectModalMessage, state.lang === 'zh' ? '正在保存...' : 'Saving...');
+    let dataPath = '';
+    let uploadedProjectFile = false;
     try {
       const snapshot = await captureProjectSnapshot(projectType);
+      validateProjectSnapshot(snapshot, projectType);
       if (state.localPreview || !state.supabase) {
         saveLocalProject(title, projectType, snapshot);
         setMessage(els.projectModalMessage, state.lang === 'zh' ? '已保存到本地预览记录。' : 'Saved to local preview.', false, true);
@@ -1882,13 +1891,14 @@
         return;
       }
       const id = crypto.randomUUID();
-      const dataPath = `${state.session.user.id}/${id}.json`;
+      dataPath = `${state.session.user.id}/${id}.json`;
       const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
       const upload = await state.supabase.storage.from('vf-projects').upload(dataPath, blob, {
         contentType: 'application/json',
         upsert: true
       });
       if (upload.error) throw upload.error;
+      uploadedProjectFile = true;
       const meta = {
         schema: snapshot.schema,
         toolType: snapshot.toolType,
@@ -1907,7 +1917,19 @@
       setMessage(els.projectModalMessage, state.lang === 'zh' ? '项目已保存到云端。' : 'Project saved to cloud.', false, true);
       setTimeout(closeProjectModal, 700);
     } catch (error) {
+      if (uploadedProjectFile && dataPath && state.supabase) {
+        try {
+          await state.supabase.storage.from('vf-projects').remove([dataPath]);
+        } catch (cleanupError) {
+          console.warn('Project upload cleanup failed:', cleanupError);
+        }
+      }
       setMessage(els.projectModalMessage, error.message, true);
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = originalSubmitText;
+      }
     }
   }
 
@@ -1923,6 +1945,7 @@
       return { ...base, exportError: 'Tool frame is not available.' };
     }
     try {
+      await waitForToolExporter();
       if (typeof frame.contentWindow.VF_EXPORT_PROJECT === 'function') {
         return await frame.contentWindow.VF_EXPORT_PROJECT();
       }
@@ -1930,6 +1953,41 @@
       return { ...base, exportError: error.message };
     }
     return { ...base, exportError: 'Tool bridge is not ready yet.' };
+  }
+
+  function waitForToolExporter(timeoutMs = 10000) {
+    const start = Date.now();
+    return new Promise((resolve, reject) => {
+      const tick = () => {
+        try {
+          if (state.activeFrame?.contentWindow && typeof state.activeFrame.contentWindow.VF_EXPORT_PROJECT === 'function') {
+            resolve();
+            return;
+          }
+        } catch (_error) {}
+        if (Date.now() - start > timeoutMs) {
+          reject(new Error(state.lang === 'zh' ? '编辑器保存桥接还没有准备好，请稍后再试。' : 'The editor save bridge is not ready yet. Please try again.'));
+          return;
+        }
+        setTimeout(tick, 120);
+      };
+      tick();
+    });
+  }
+
+  function validateProjectSnapshot(snapshot, projectType) {
+    if (!snapshot || snapshot.schema !== 'vf-project-snapshot/v1') {
+      throw new Error(state.lang === 'zh' ? '没有拿到可保存的项目快照。' : 'No valid project snapshot was captured.');
+    }
+    if (snapshot.toolType && snapshot.toolType !== projectType) {
+      throw new Error(state.lang === 'zh' ? '当前编辑器类型和项目类型不一致，请刷新后再保存。' : 'The editor type does not match this project type. Refresh and save again.');
+    }
+    if (snapshot.exportError) {
+      throw new Error(`${state.lang === 'zh' ? '项目快照未保存成功' : 'Project snapshot was not saved'}: ${snapshot.exportError}`);
+    }
+    if (!snapshot.editorState) {
+      throw new Error(state.lang === 'zh' ? '项目缺少编辑器状态，已阻止保存。' : 'The project is missing editor state, so save was blocked.');
+    }
   }
 
   function saveLocalProject(title, projectType, snapshot) {

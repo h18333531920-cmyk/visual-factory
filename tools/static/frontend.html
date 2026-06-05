@@ -1139,15 +1139,17 @@
     /* ================= AI 图形引擎集成 ================= */
     async function generateAIBG() {
         const p = getPromptText(); if(!p) return showToast('请输入描述词或选择关键词标签', true);
-        const btn = event.target; btn.innerText = '⏳ 渲染中...'; btn.disabled = true;
+        const btn = window.event?.target || document.activeElement;
+        const ogText = btn?.innerText || '生成新图';
+        if(btn) { btn.innerText = '⏳ 渲染中...'; btn.disabled = true; }
         startAIProgress('AI 正在生成新图片...');
         try {
             updateAIProgress('正在提交生成请求...', 22);
             const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: p, ratio: currentRatio }) });
             updateAIProgress('模型正在生成画面...', 70);
             const data = await res.json(); 
-            if(data.success) { addLayer('image', { src: `data:image/png;base64,${data.imageBase64}` }); showToast('✅ 成功生成新图片'); } else { showToast('❌ 失败', true); }
-        } catch(e) { showToast('❌ 无法连接服务器', true); } finally { updateAIProgress('正在应用到画布...', 96); stopAIProgress(); btn.innerText = '🚀 生成新图'; btn.disabled = false; }
+            if(data.success) { addLayer('image', { src: `data:image/png;base64,${data.imageBase64}` }); showToast('✅ 成功生成新图片'); } else { showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true); }
+        } catch(e) { showToast('❌ ' + (e.message || '无法连接服务器'), true); } finally { updateAIProgress('正在应用到画布...', 96); stopAIProgress(); if(btn) { btn.innerText = ogText; btn.disabled = false; } }
     }
     
     // 真扩图：把原图和需要扩展的方向比例交给后端 outpainting 接口。
@@ -1160,16 +1162,16 @@
         const p = getPromptText(); 
         if(!p) return showToast('请输入扩图引导或选择关键词标签', true);
         
-        const btn = event.target; const ogText = btn.innerText; btn.innerText = '🪄 读取原图...'; btn.disabled = true;
+        const btn = window.event?.target || document.activeElement; const ogText = btn?.innerText || '智能扩图'; if(btn) { btn.innerText = '🪄 读取原图...'; btn.disabled = true; }
         startAIProgress('正在读取原图并计算扩展区域...');
         
         try {
             const {w, h} = SIZES[currentRatio];
             const img = new Image(); img.crossOrigin = "anonymous"; img.src = targetLayer.src;
-            await new Promise(r => { img.onload = r; });
+            await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = () => reject(new Error('原图读取失败')); });
             const expand = getOutpaintExpand(img.width, img.height, w, h);
             const base64Image = stripDataUrl(targetLayer.src);
-            btn.innerText = '🪄 调用真扩图...';
+            if(btn) btn.innerText = '🪄 调用真扩图...';
             updateAIProgress('正在上传原图并调用智能扩图...', 32);
             
             const res = await fetch('/api/outpaint-image', { 
@@ -1182,8 +1184,8 @@
             if(data.success) { 
                 targetLayer.src = `data:image/jpeg;base64,${data.imageBase64}`; targetLayer.scale = 1; targetLayer.rotation = 0; targetLayer.x = w/2; targetLayer.y = h/2; targetLayer.baseW = w; targetLayer.baseH = h;
                 renderCanvas(); saveHistory(); showToast('✅ 扩图成功，主体已完美保留！'); 
-            } else { showToast('❌ 扩图失败: ' + data.message, true); }
-        } catch(e) { showToast('❌ 扩图失败，请看后端终端日志', true); } finally { updateAIProgress('正在应用扩图结果...', 96); stopAIProgress(); btn.innerText = ogText; btn.disabled = false; }
+            } else { showToast('❌ 扩图失败: ' + (data.message || `HTTP ${res.status}`), true); }
+        } catch(e) { showToast('❌ 扩图失败: ' + (e.message || '请看后端终端日志'), true); } finally { updateAIProgress('正在应用扩图结果...', 96); stopAIProgress(); if(btn) { btn.innerText = ogText; btn.disabled = false; } }
     }
 
     async function exportPNG() {
