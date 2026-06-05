@@ -54,6 +54,25 @@
     }
   };
 
+  window.VF_IMPORT_PROJECT = async function VF_IMPORT_PROJECT(snapshot) {
+    const toolType = detectToolType();
+    if (!snapshot || snapshot.schema !== 'vf-project-snapshot/v1') {
+      return { success: false, message: 'Invalid project snapshot.' };
+    }
+    if (snapshot.toolType && snapshot.toolType !== toolType) {
+      return { success: false, message: `Snapshot is for ${snapshot.toolType}, not ${toolType}.` };
+    }
+
+    try {
+      if (toolType === 'static') return await importStaticProject(snapshot);
+      if (toolType === 'dynamic') return await importDynamicProject(snapshot);
+      return { success: false, message: 'This tool cannot import project snapshots yet.' };
+    } catch (error) {
+      console.warn('Visual Factory project import failed:', error);
+      return { success: false, message: error.message || 'Project import failed.' };
+    }
+  };
+
   window.addEventListener('message', async event => {
     if (!event.data || event.data.type !== 'vf:export-project') return;
     const payload = await window.VF_EXPORT_PROJECT();
@@ -178,6 +197,75 @@
     if (typeof pushHistory === 'function') pushHistory();
     if (typeof rebuildAnimations === 'function') rebuildAnimations();
     if (typeof syncTimeToRenderers === 'function') syncTimeToRenderers();
+  }
+
+  async function importStaticProject(snapshot) {
+    await waitFor(() => typeof renderCanvas === 'function' && typeof resizeCanvas === 'function' && typeof renderLayersList === 'function', 6000);
+    const editorState = snapshot.editorState || {};
+    if (editorState.currentRatio) currentRatio = editorState.currentRatio;
+    layers = safeClone(editorState.layers || []);
+    activeLayerIds = Array.isArray(editorState.activeLayerIds) ? safeClone(editorState.activeLayerIds) : [];
+    if (typeof syncRatioNav === 'function') syncRatioNav();
+    resizeCanvas();
+    renderCanvas();
+    if (typeof renderPromptTags === 'function') renderPromptTags();
+    renderLayersList();
+    if (typeof renderProperties === 'function') renderProperties();
+    if (typeof renderAssetLibrary === 'function') renderAssetLibrary();
+    if (typeof saveHistory === 'function') saveHistory();
+    if (typeof showToast === 'function') showToast(`已打开项目：${snapshot.title || 'Project'}`);
+    return { success: true };
+  }
+
+  async function importDynamicProject(snapshot) {
+    await waitFor(() => typeof layers !== 'undefined' && typeof createLayerDOM === 'function' && typeof selectLayer === 'function', 6000);
+    const editorState = snapshot.editorState || {};
+    const importedLayers = [];
+    for (const rawLayer of editorState.layers || []) {
+      if (!rawLayer || rawLayer.isSequence || !rawLayer.src) continue;
+      const layer = {
+        ...safeClone(rawLayer),
+        animState: {
+          scale: 1,
+          tx: 0,
+          ty: 0,
+          opacity: 1,
+          ...(rawLayer.animState || {})
+        }
+      };
+      try {
+        const img = await loadImage(layer.src);
+        layer.imgData = img;
+        layer.currentImgData = img;
+      } catch (_error) {}
+      importedLayers.push(layer);
+    }
+
+    const activeId = editorState.activeLayerId && importedLayers.some(layer => layer.id === editorState.activeLayerId)
+      ? editorState.activeLayerId
+      : importedLayers[0]?.id || null;
+    const restoreState = {
+      layers: importedLayers,
+      activeLayerId: activeId,
+      mockupBgSrc: editorState.mockupBgSrc || '',
+      maskOpacity: editorState.maskOpacity ?? 0.6,
+      viewMode: editorState.viewMode || 'edit'
+    };
+
+    if (typeof restoreHistory === 'function') {
+      restoreHistory(restoreState);
+    } else {
+      document.querySelectorAll('.layer-el').forEach(el => el.remove());
+      layers = importedLayers;
+      layers.forEach(layer => createLayerDOM(layer));
+      if (typeof updateZIndex === 'function') updateZIndex();
+      if (activeId) selectLayer(activeId);
+    }
+    if (typeof pushHistory === 'function') pushHistory();
+    if (typeof rebuildAnimations === 'function') rebuildAnimations();
+    if (typeof syncTimeToRenderers === 'function') syncTimeToRenderers();
+    if (typeof showToast === 'function') showToast(`已打开项目：${snapshot.title || 'Project'}`);
+    return { success: true };
   }
 
   function loadImage(src) {

@@ -18,6 +18,7 @@
       library: '素材库',
       staticDiy: 'DIY 静态',
       dynamicDiy: 'DIY 动态',
+      requestFlow: '提需流程',
       admin: '团队管理',
       checkItem: '检查项',
       checkResult: '结果',
@@ -26,6 +27,8 @@
       notReady: '未就绪',
       localOnly: '本地预览',
       saveProject: '保存项目',
+      recentProjects: '近期项目',
+      openProject: '打开项目',
       projectName: '项目名称',
       cancel: '取消',
       save: '保存',
@@ -59,6 +62,7 @@
       library: 'Library',
       staticDiy: 'Static DIY',
       dynamicDiy: 'Dynamic DIY',
+      requestFlow: 'Request Flow',
       admin: 'Team',
       checkItem: 'Check',
       checkResult: 'Result',
@@ -67,6 +71,8 @@
       notReady: 'Not ready',
       localOnly: 'Local only',
       saveProject: 'Save Project',
+      recentProjects: 'Recent Projects',
+      openProject: 'Open Project',
       projectName: 'Project Name',
       cancel: 'Cancel',
       save: 'Save',
@@ -94,12 +100,13 @@
     { id: 'library', icon: 'library', title: 'library' },
     { id: 'static', icon: 'static', title: 'staticDiy' },
     { id: 'dynamic', icon: 'dynamic', title: 'dynamicDiy' },
+    { id: 'request', icon: 'request', title: 'requestFlow', hidden: true },
     { id: 'admin', icon: 'admin', title: 'admin', adminOnly: true }
   ];
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260604-ui2';
+  const TOOL_UI_VERSION = '20260605-integration1';
   const SOURCE_EXTENSIONS = ['psd', 'ai', 'pdf'];
   const PREVIEW_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   const state = {
@@ -117,6 +124,7 @@
     libraryPreviewUrls: {},
     libraryFavorites: new Set(),
     librarySelectedPreviewId: '',
+    recentProjects: [],
     libraryFilters: {
       query: '',
       country: 'all',
@@ -287,7 +295,7 @@
   function renderNav() {
     els.navList.innerHTML = '';
     ROUTES
-      .filter(route => !route.adminOnly || currentRole() === 'admin')
+      .filter(route => !route.hidden && (!route.adminOnly || currentRole() === 'admin'))
       .forEach(route => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -327,6 +335,7 @@
     if (state.route === 'library') renderLibrary();
     if (state.route === 'static') renderTool('static');
     if (state.route === 'dynamic') renderTool('dynamic');
+    if (state.route === 'request') renderRequestFlow();
     if (state.route === 'admin') renderAdmin();
   }
 
@@ -336,6 +345,7 @@
       library: '<svg viewBox="0 0 24 24"><path d="M5 6.3h14v11.4H5z"/><path d="M8 3.8h8M8 20.2h8"/><path d="m8.2 15.3 2.4-2.8 2.2 2.2 1.6-1.8 2.7 3.2"/></svg>',
       static: '<svg viewBox="0 0 24 24"><rect x="4" y="4.8" width="16" height="14.4" rx="3"/><path d="M8 8.2h5.5M8 11h8"/><path d="M8 15.5h3.6l1.8-2 1.8 2H18"/></svg>',
       dynamic: '<svg viewBox="0 0 24 24"><rect x="4.4" y="5" width="15.2" height="14" rx="3"/><path d="M10 9v6l5.2-3L10 9z"/><path d="M7.5 3.8h9"/></svg>',
+      request: '<svg viewBox="0 0 24 24"><path d="M5 5.5h14v10H8.5L5 19V5.5Z"/><path d="M8.5 9h7M8.5 12h4.5"/></svg>',
       admin: '<svg viewBox="0 0 24 24"><path d="M12 13.4a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M5.5 20c.9-3.2 3.1-4.8 6.5-4.8s5.6 1.6 6.5 4.8"/></svg>'
     };
     return icons[icon] || '';
@@ -362,7 +372,7 @@
                 <button type="button" data-route="library">${navIcon('library')}<span>${state.lang === 'zh' ? '超级库' : 'Super Library'}</span></button>
                 <button type="button" data-route="static">${navIcon('static')}<span>${state.lang === 'zh' ? '静态设计师' : 'Static Designer'}</span></button>
                 <button type="button" data-route="dynamic">${navIcon('dynamic')}<span>${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'}</span></button>
-                <button type="button" data-placeholder="request">${state.lang === 'zh' ? '提需流程' : 'Request Flow'}</button>
+                <button type="button" data-route="request">${state.lang === 'zh' ? '提需流程' : 'Request Flow'}</button>
               </div>
               <button class="home-submit-btn" type="submit" aria-label="${state.lang === 'zh' ? '开始' : 'Start'}">↑</button>
             </div>
@@ -385,6 +395,7 @@
               <strong>›</strong>
             </article>
           </section>
+          <section id="home-recent-projects" class="home-recent-projects" hidden></section>
         </section>
 
         <section class="home-discovery">
@@ -434,6 +445,7 @@
       </div>
     `;
     wireCreativeHome();
+    void loadHomeRecentProjects();
   }
 
   function renderHomeInspirationCard(title, colorA, colorB, size, action) {
@@ -477,7 +489,8 @@
     });
     document.querySelectorAll('[data-placeholder="request"]').forEach(node => {
       node.addEventListener('click', () => {
-        alert(state.lang === 'zh' ? '提需流程模块已预留，后续会接入需求提交和审批。' : 'Request Flow is reserved for requirement submission and approval.');
+        location.hash = 'request';
+        navigate('request');
       });
     });
     document.getElementById('home-search-form')?.addEventListener('submit', event => {
@@ -486,6 +499,142 @@
       location.hash = 'library';
       navigate('library');
     });
+  }
+
+  async function loadHomeRecentProjects() {
+    const mount = document.getElementById('home-recent-projects');
+    if (!mount) return;
+    try {
+      state.recentProjects = await fetchRecentProjects(6);
+      renderHomeRecentProjects();
+    } catch (error) {
+      console.warn('Recent projects failed:', error);
+      mount.hidden = true;
+    }
+  }
+
+  async function fetchRecentProjects(limit = 6) {
+    if (state.localPreview || !state.supabase) {
+      return JSON.parse(localStorage.getItem('vf_local_projects') || '[]').slice(0, limit);
+    }
+    const { data, error } = await state.supabase
+      .from('vf_projects')
+      .select('id,title,project_type,updated_at,snapshot_meta,data_path')
+      .order('updated_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return data || [];
+  }
+
+  function renderHomeRecentProjects() {
+    const mount = document.getElementById('home-recent-projects');
+    if (!mount) return;
+    if (!state.recentProjects.length) {
+      mount.hidden = true;
+      mount.innerHTML = '';
+      return;
+    }
+    mount.hidden = false;
+    mount.innerHTML = `
+      <div class="home-recent-head">
+        <span>${t('recentProjects')}</span>
+        <small>${state.recentProjects.length}</small>
+      </div>
+      <div class="home-recent-list">
+        ${state.recentProjects.map(project => `
+          <button class="home-project-chip" type="button" data-open-project="${project.id}">
+            <span>${escapeHtml(project.title)}</span>
+            <small>${projectTypeLabel(project.project_type)} · ${formatDate(project.updated_at)}</small>
+          </button>
+        `).join('')}
+      </div>
+    `;
+    mount.querySelectorAll('[data-open-project]').forEach(button => {
+      button.addEventListener('click', async () => {
+        const original = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = `<span>${state.lang === 'zh' ? '正在打开...' : 'Opening...'}</span>`;
+        try {
+          await openSavedProject(button.dataset.openProject);
+        } catch (error) {
+          alert(error.message || (state.lang === 'zh' ? '打开项目失败' : 'Open project failed'));
+          button.disabled = false;
+          button.innerHTML = original;
+        }
+      });
+    });
+  }
+
+  function projectTypeLabel(type) {
+    if (type === 'dynamic') return state.lang === 'zh' ? '动态' : 'Motion';
+    return state.lang === 'zh' ? '静态' : 'Static';
+  }
+
+  async function openSavedProject(projectId) {
+    const project = state.recentProjects.find(item => item.id === projectId);
+    if (!project) throw new Error(state.lang === 'zh' ? '没有找到项目记录。' : 'Project record was not found.');
+    const snapshot = await loadProjectSnapshot(project);
+    if (!snapshot || snapshot.schema !== 'vf-project-snapshot/v1') {
+      throw new Error(state.lang === 'zh' ? '这个项目缺少可恢复的编辑器快照。' : 'This project does not include a restorable editor snapshot.');
+    }
+    snapshot.title = project.title;
+    const target = project.project_type === 'dynamic' ? 'dynamic' : 'static';
+    location.hash = target;
+    navigate(target);
+    await waitForToolImporter();
+    const result = await state.activeFrame.contentWindow.VF_IMPORT_PROJECT(snapshot);
+    if (result && result.success === false) throw new Error(result.message || 'Import failed');
+  }
+
+  async function loadProjectSnapshot(project) {
+    if (state.localPreview || !state.supabase) {
+      return project.snapshot || project.snapshot_meta;
+    }
+    if (!project.data_path) throw new Error(state.lang === 'zh' ? '项目缺少快照路径。' : 'Project is missing its snapshot path.');
+    const { data, error } = await state.supabase.storage.from('vf-projects').download(project.data_path);
+    if (error) throw error;
+    return JSON.parse(await data.text());
+  }
+
+  function waitForToolImporter(timeoutMs = 10000) {
+    const start = Date.now();
+    return new Promise((resolve, reject) => {
+      const tick = () => {
+        try {
+          if (state.activeFrame?.contentWindow && typeof state.activeFrame.contentWindow.VF_IMPORT_PROJECT === 'function') {
+            resolve();
+            return;
+          }
+        } catch (_error) {}
+        if (Date.now() - start > timeoutMs) {
+          reject(new Error(state.lang === 'zh' ? '编辑器还没有准备好，请稍后再试。' : 'The editor is not ready yet. Please try again.'));
+          return;
+        }
+        setTimeout(tick, 120);
+      };
+      tick();
+    });
+  }
+
+  function renderRequestFlow() {
+    state.activeFrame = null;
+    els.content.innerHTML = `
+      <div class="request-page">
+        <section class="request-hero">
+          <div class="request-visual" aria-hidden="true"></div>
+          <div>
+            <div class="kicker">REQUEST FLOW</div>
+            <h3>${state.lang === 'zh' ? '提需流程' : 'Request Flow'}</h3>
+            <p>${state.lang === 'zh' ? '需求提交、排期、交付归档会放在这里。' : 'Requests, scheduling, and delivery archive will live here.'}</p>
+          </div>
+        </section>
+        <section class="request-steps">
+          <article><span>01</span><strong>${state.lang === 'zh' ? '提交需求' : 'Submit'}</strong></article>
+          <article><span>02</span><strong>${state.lang === 'zh' ? '确认排期' : 'Schedule'}</strong></article>
+          <article><span>03</span><strong>${state.lang === 'zh' ? '交付归档' : 'Archive'}</strong></article>
+        </section>
+      </div>
+    `;
   }
 
   async function renderLibrary() {
@@ -1664,6 +1813,7 @@
       if (state.localPreview || !state.supabase) {
         saveLocalProject(title, projectType, snapshot);
         setMessage(els.projectModalMessage, state.lang === 'zh' ? '已保存到本地预览记录。' : 'Saved to local preview.', false, true);
+        setTimeout(closeProjectModal, 700);
         return;
       }
       const id = crypto.randomUUID();
@@ -1720,7 +1870,20 @@
   function saveLocalProject(title, projectType, snapshot) {
     const key = 'vf_local_projects';
     const items = JSON.parse(localStorage.getItem(key) || '[]');
-    items.unshift({ id: crypto.randomUUID(), title, project_type: projectType, updated_at: new Date().toISOString(), snapshot_meta: snapshot });
+    items.unshift({
+      id: crypto.randomUUID(),
+      title,
+      project_type: projectType,
+      updated_at: new Date().toISOString(),
+      snapshot,
+      snapshot_meta: {
+        schema: snapshot.schema,
+        toolType: snapshot.toolType,
+        exportedAt: snapshot.exportedAt,
+        exportError: snapshot.exportError || null,
+        layerCount: snapshot.layerCount || snapshot.editorState?.layers?.length || 0
+      }
+    });
     localStorage.setItem(key, JSON.stringify(items.slice(0, 20)));
   }
 
