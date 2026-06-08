@@ -5,29 +5,32 @@
     <title>GCC Design - Motion DIY</title>
     <script src="/config.js"></script>
     <script src="/tool-auth-guard.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <script src="https://unpkg.com/gif.js/dist/gif.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+    <script src="/tools/vendor/anime.min.js"></script>
+    <script src="/tools/vendor/jszip.min.js"></script>
+    <script src="/tools/vendor/FileSaver.min.js"></script>
+    <script src="/tools/vendor/gif.js"></script>
+    <script src="/tools/vendor/localforage.min.js"></script>
     
     <style>
         :root { --primary: #2563eb; --primary-strong: #1d4ed8; --bg: #f7f8fb; --panel: #ffffff; --border: #e4e7ec; --border-strong: #d0d5dd; --text: #101828; --muted: #667085; --success: #0f9f6e; --danger: #d92d20; }
-        body { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 18px; margin: 0; color: var(--text); user-select: none; letter-spacing: 0; }
-        .container { display: flex; gap: 18px; max-width: 1440px; width: 100%; height: calc(100vh - 36px); }
+        body { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 18px; padding: 34px 44px; margin: 0; color: var(--text); user-select: none; letter-spacing: 0; overflow: hidden; }
+        .workspace-tabs { width: min(1560px, 100%); height: 24px; display: flex; align-items: center; gap: 26px; color: #111827; font-size: 14px; font-weight: 520; }
+        .workspace-tabs strong { font-weight: 860; }
+        .workspace-tabs button { border: 0; background: transparent; padding: 0; color: #111827; font-size: 14px; font-weight: 520; }
+        .container { display: flex; gap: 30px; max-width: 1560px; width: 100%; height: calc(100vh - 110px); }
         
-        .preview-section { flex: 1; background: var(--panel); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 18px; position: relative; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(16,24,40,0.05); overflow: visible; z-index: 10; }
+        .preview-section { flex: 1; background: #EAEAEA; border-radius: 9px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 18px; position: relative; border: 0; box-shadow: none; overflow: visible; z-index: 10; }
         
-        .view-toggle-bar { display: flex; gap: 4px; background: #f2f4f7; padding: 5px; border-radius: 10px; margin-bottom: 18px; z-index: 100; border: 1px solid var(--border); }
-        .view-toggle-bar button { border: none; background: transparent; padding: 7px 14px; border-radius: 8px; font-weight: 700; color: var(--muted); cursor: pointer; transition: 0.2s; font-size: 12px; }
-        .view-toggle-bar button.active { background: white; color: var(--text); box-shadow: 0 1px 2px rgba(16,24,40,0.08); }
+        .view-toggle-bar { position: absolute; top: 26px; right: 28px; display: flex; gap: 8px; background: transparent; padding: 0; border-radius: 0; margin-bottom: 0; z-index: 100; border: 0; }
+        .view-toggle-bar button { border: 1px solid #111827; background: #FFFFFF; padding: 5px 18px; border-radius: 999px; font-weight: 800; color: #111827; cursor: pointer; transition: 0.2s; font-size: 12px; }
+        .view-toggle-bar button.active { background: #717171; border-color: #717171; color: #FFFFFF; box-shadow: none; }
 
         .viewport-wrapper { position: relative; transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), height 0.4s cubic-bezier(0.4, 0, 0.2, 1); display: flex; justify-content: center;}
         .viewport-wrapper.mode-edit { width: 327px; height: 470.5px; }
         .viewport-wrapper.mode-mockup { width: 315px; height: 682px; }
 
         .master-container { position: absolute; top: 0; left: 0; transform-origin: top left; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; }
-        .master-container.mode-edit { width: 654px; height: 941px; transform: scale(0.5); border: 2px dashed var(--border-strong); border-radius: 12px; background: white; cursor: crosshair; }
+        .master-container.mode-edit { width: 654px; height: 941px; transform: scale(0.5); border: 0; border-radius: 0; background: #D6D6D6; cursor: crosshair; }
         .master-container.mode-mockup { width: 750px; height: 1624px; transform: scale(0.42); border-radius: 60px; box-shadow: 0 0 0 16px #0f172a, 0 30px 60px rgba(0,0,0,0.2); background: #1e293b; border: none; }
 
         .mockup-bg { width: 100%; height: 100%; position: absolute; top: 0; left: 0; object-fit: cover; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
@@ -47,7 +50,7 @@
         .mockup-tools .tool-btn:hover { transform: scale(1.1); color: var(--primary); }
         .mockup-popover { position: absolute; left: 50px; top: 0; width: 220px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border: 1px solid var(--border); border-radius: 12px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); display: none; text-align: left;}
 
-        .drop-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%; z-index: 10; font-weight: 500;}
+        .drop-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #8C8C8C; pointer-events: none; width: 100%; z-index: 10; font-size: 13px; font-weight: 700;}
         
         .layer-el { position: absolute; transform-origin: center center; cursor: move; pointer-events: auto;}
         .layer-el.active { outline: 4px dashed var(--primary); outline-offset: 4px; z-index: 50; }
@@ -55,7 +58,7 @@
         .anim-wrapper img { display: block; pointer-events: none; }
 
         /* 时间轴与控制区 */
-        .timeline-container { width: 327px; margin-top: 16px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 12px; box-sizing: border-box; box-shadow: 0 1px 2px rgba(16,24,40,0.04);}
+        .timeline-container { width: 327px; margin-top: 16px; background: rgba(255,255,255,0.78); border: 0; border-radius: 9px; padding: 12px; box-sizing: border-box; box-shadow: none;}
         .timeline-info { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 8px; font-weight: 650;}
         input[type="range"].scrubber { width: 100%; margin: 0; cursor: pointer; height: 6px; background: #e2e8f0; border-radius: 3px; -webkit-appearance: none; }
         input[type="range"].scrubber::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: var(--primary); border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
@@ -69,20 +72,20 @@
         .btn-play:hover { filter: brightness(0.9); }
 
         /* === 右侧控制台 === */
-        .control-section { flex: 1.2; background: var(--panel); border-radius: 12px; padding: 18px; overflow-y: auto; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(16,24,40,0.05); position: relative; z-index: 5;}
-        .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 14px; border: 1px solid var(--border); transition: 0.3s;}
+        .control-section { width: 390px; flex: 0 0 390px; background: transparent; border-radius: 0; padding: 0; overflow-y: auto; border: 0; box-shadow: none; position: relative; z-index: 5;}
+        .card { background: #EAEAEA; border-radius: 9px; padding: 18px; margin-bottom: 18px; border: 0; transition: 0.3s;}
         h3 { margin-top: 0; font-size: 14px; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; letter-spacing: 0; }
-        h3::before { content: ''; display: block; width: 3px; height: 13px; background: var(--primary); border-radius: 2px; }
+        h3::before { content: ''; display: block; width: 5px; height: 18px; background: #D6D6D6; border-radius: 4px; }
         
         .layer-list { list-style: none; padding: 0; margin: 0; max-height: 400px; overflow-y: auto; }
-        .layer-item { display: flex; align-items: center; padding: 8px; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; cursor: grab; transition: transform 0.2s;}
+        .layer-item { display: flex; align-items: center; padding: 8px; background: #D6D6D6; border: 0; border-radius: 7px; margin-bottom: 8px; cursor: grab; transition: transform 0.2s;}
         .layer-item:active { cursor: grabbing; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: scale(1.02); z-index: 100;}
         .layer-item.active { border-color: var(--primary); background: #eff6ff; }
         .drag-handle { padding: 0 10px; color: #94a3b8; font-size: 18px; cursor: grab; }
         .layer-thumb { width: 36px; height: 36px; object-fit: contain; background: #fff; border-radius: 4px; border: 1px solid #e2e8f0; margin-right: 12px; }
         
         .semantic-select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-bottom: 16px; outline: none; background: #fff;}
-        .param-group { background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .param-group { background: #F5F5F5; padding: 16px; border-radius: 8px; border: 0; }
         .param-row { display: flex; flex-direction: column; margin-bottom: 12px; }
         .param-row:last-child { margin-bottom: 0; }
         .param-header { display: flex; justify-content: space-between; font-size: 12px; color: #64748b; margin-bottom: 8px; font-weight: 500; }
@@ -110,6 +113,7 @@
         .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.1s; }
         
         .history-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 10px 24px; border-radius: 30px; font-size: 13px; font-weight: bold; opacity: 0; pointer-events: none; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .control-section > div:first-child { display: none !important; }
     </style>
 </head>
 <body>
@@ -120,6 +124,12 @@
     <h2 style="color: var(--primary); margin: 0;">正在导出动效素材...</h2>
     <p style="color: #64748b; font-size: 14px;" id="export-text">正在通过底层矩阵同步时间轴并抓取序列</p>
     <div class="progress-bar"><div class="progress-fill" id="export-progress"></div></div>
+</div>
+
+<div class="workspace-tabs">
+    <strong>我要做</strong>
+    <button type="button">弹窗动画</button>
+    <button type="button">KV动画</button>
 </div>
 
 <div class="container">
@@ -236,7 +246,7 @@
             <button class="btn" style="background: #fff1f0; color: #b42318; margin-top: 24px; border: 1px solid #fecdca;" onclick="removeActiveLayer()">删除选中资产</button>
         </div>
 
-        <div class="card" style="background: #f1f5f9; border-color: #cbd5e1;">
+        <div class="card">
             <h3 style="margin-bottom: 8px;">导出</h3>
             <p style="font-size: 12px; color: #64748b; margin-top: 0; margin-bottom: 16px; font-weight: bold;" id="export-mode-desc">
                 [当前为专注编辑态]：剥离多余元素，导出 654x941 纯净组件。
@@ -901,7 +911,7 @@
             offCanvas.width = EXPORT_W; offCanvas.height = EXPORT_H;
             const ctx = offCanvas.getContext('2d', { alpha: true });
             
-            let zip = null, gif = null, workerBlobUrl = null;
+            let zip = null, gif = null;
 
             let renderBgColor = ''; let gifTransparentKey = null;
 
@@ -915,11 +925,9 @@
             if (format === 'zip') {
                 zip = new JSZip();
             } else {
-                const workerRes = await fetch('https://unpkg.com/gif.js/dist/gif.worker.js');
-                workerBlobUrl = URL.createObjectURL(new Blob([await workerRes.text()], {type: 'application/javascript'}));
                 gif = new GIF({
                     workers: 4, quality: 1, width: EXPORT_W, height: EXPORT_H,
-                    transparent: gifTransparentKey, dither: false, workerScript: workerBlobUrl
+                    transparent: gifTransparentKey, dither: false, workerScript: '/tools/vendor/gif.worker.js'
                 });
             }
             
@@ -975,7 +983,6 @@
                 overlay.style.display = 'none';
             } else {
                 await new Promise((resolve) => { gif.on('finished', function(blob) { saveAs(blob, prefix + ".gif"); resolve(); }); gif.render(); });
-                URL.revokeObjectURL(workerBlobUrl);
                 overlay.style.display = 'none';
             }
         } catch (error) {

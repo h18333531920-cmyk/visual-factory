@@ -2650,3 +2650,241 @@ select:focus {
     gap: 10px;
   }
 }
+
+/* V1 polish: fast, image-first library wall */
+.tool-frame-mount {
+  min-height: 0;
+  height: 100%;
+}
+
+.library-page,
+.library-page-home {
+  padding: 24px clamp(18px, 3vw, 44px) 52px;
+  gap: 18px;
+}
+
+.library-page .library-hero {
+  display: none;
+}
+
+.library-control-strip {
+  width: min(1800px, 100%);
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 14px 18px;
+  padding-top: 0;
+}
+
+.library-kind-tabs {
+  gap: clamp(18px, 2vw, 32px);
+}
+
+.library-kind-tabs button,
+.library-tag-row button {
+  font-size: 15px;
+}
+
+.library-tag-rows {
+  gap: 12px;
+}
+
+.library-search-pill {
+  grid-column: 1 / span 1;
+  width: min(300px, 100%);
+}
+
+.library-status {
+  width: min(1800px, 100%);
+}
+
+.library-board {
+  width: min(1800px, 100%);
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+.library-inspector {
+  display: none;
+}
+
+.library-grid {
+  columns: 5 260px;
+  column-gap: 8px;
+}
+
+.library-card {
+  margin: 0 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: #e9edf4;
+  box-shadow: none;
+}
+
+.library-card:hover,
+.library-card.selected {
+  transform: none;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
+}
+
+.library-card.selected {
+  outline: 2px solid rgba(17, 24, 39, 0.8);
+  outline-offset: -2px;
+}
+
+.library-thumb-wrap {
+  overflow: hidden;
+}
+
+.library-thumb {
+  min-height: 220px;
+  max-height: none;
+  border-bottom: 0;
+  background: #edf1f7;
+}
+
+.library-thumb img {
+  object-fit: cover;
+}
+
+.library-card-overlay {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 3;
+  min-height: 92px;
+  display: grid;
+  align-content: end;
+  gap: 9px;
+  padding: 18px 14px 13px;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.72) 100%);
+  color: #ffffff;
+}
+
+.library-card-overlay h4 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 16px;
+  line-height: 1.28;
+  font-weight: 860;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.36);
+}
+
+.library-card-overlay p {
+  margin: 3px 0 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.library-card-actions {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.library-card:hover .library-card-actions,
+.library-card.selected .library-card-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.library-card-actions button {
+  min-height: 29px;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 760;
+  backdrop-filter: blur(8px);
+}
+
+.library-card-actions button:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.library-card-actions button.danger {
+  border-color: rgba(255, 205, 210, 0.68);
+  color: #ffd8dc;
+}
+
+.file-pill,
+.favorite-btn {
+  z-index: 4;
+}
+
+.file-pill {
+  min-height: 24px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.88);
+  color: #111827;
+}
+
+.favorite-btn {
+  border: 0;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.library-load-more {
+  width: 100%;
+  min-height: 56px;
+  margin: 0 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  break-inside: avoid;
+  border: 1px solid #d7dfeb;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.84);
+  color: #344054;
+  font-size: 14px;
+  font-weight: 820;
+}
+
+.library-drop-zone {
+  position: relative;
+  min-height: 116px;
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  padding: 18px;
+  border: 1px dashed #b7c2d4;
+  border-radius: 10px;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.library-drop-zone.dragging {
+  border-color: #111827;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+}
+
+.library-drop-zone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.library-drop-zone span {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 860;
+}
+
+.library-drop-zone strong {
+  color: #344054;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.library-drop-zone small {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.35;
+  word-break: break-all;
+}

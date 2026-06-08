@@ -106,9 +106,10 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260608-v1base1';
+  const TOOL_UI_VERSION = '20260608-v1perf1';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
+  const LIBRARY_RENDER_STEP = 80;
   const SUPABASE_IN_BATCH_SIZE = 200;
   const SIGNED_URL_BATCH_SIZE = 100;
   const SOURCE_EXTENSIONS = ['psd', 'ai', 'pdf'];
@@ -161,6 +162,7 @@
     localPreview: false,
     route: 'home',
     activeFrame: null,
+    toolFrames: {},
     libraryOptions: [],
     librarySources: [],
     libraryPreviews: [],
@@ -168,6 +170,9 @@
     libraryPreviewUrls: {},
     libraryFavorites: new Set(),
     librarySelectedPreviewId: '',
+    libraryDataLoaded: false,
+    libraryDataPromise: null,
+    libraryVisibleLimit: LIBRARY_RENDER_STEP,
     recentProjects: [],
     libraryFilters: {
       query: '',
@@ -232,6 +237,25 @@
     window.addEventListener('hashchange', () => {
       navigate((location.hash || '#home').slice(1));
     });
+  }
+
+  function toolFrameCache() {
+    let cache = document.getElementById('tool-frame-cache');
+    if (!cache) {
+      cache = document.createElement('div');
+      cache.id = 'tool-frame-cache';
+      cache.hidden = true;
+      document.body.appendChild(cache);
+    }
+    return cache;
+  }
+
+  function parkActiveToolFrame() {
+    if (!state.activeFrame) return;
+    if (state.activeFrame.parentElement) {
+      toolFrameCache().appendChild(state.activeFrame);
+    }
+    state.activeFrame = null;
   }
 
   function initSupabase() {
@@ -373,6 +397,7 @@
   }
 
   function navigate(routeId) {
+    parkActiveToolFrame();
     const allowed = ROUTES.some(route => route.id === routeId && (!route.adminOnly || currentRole() === 'admin'));
     state.route = allowed ? routeId : 'home';
     els.appShell.dataset.route = state.route;
@@ -404,7 +429,7 @@
   }
 
   function renderCreativeHome() {
-    state.activeFrame = null;
+    return renderLibrary({ homeMode: true });
     els.content.innerHTML = `
       <div class="home-page">
         <section class="home-composer">
@@ -669,7 +694,7 @@
   }
 
   function renderRequestFlow() {
-    state.activeFrame = null;
+    parkActiveToolFrame();
     els.content.innerHTML = `
       <div class="request-page">
         <section class="request-hero">
@@ -689,12 +714,12 @@
     `;
   }
 
-  async function renderLibrary() {
-    state.activeFrame = null;
+  async function renderLibrary({ homeMode = false } = {}) {
+    parkActiveToolFrame();
     const canUpload = canUploadAssets();
     const activeKind = state.libraryFilters.kind || 'all';
     els.content.innerHTML = `
-      <div class="library-page">
+      <div class="library-page ${homeMode ? 'library-page-home' : ''}">
         <section class="library-hero">
           <div class="library-hero-panel"></div>
           <div class="library-module-row">
@@ -754,9 +779,24 @@
               <label><span>${t('visibility')}</span><select name="visibility"><option value="all">${t('allVisible')}</option></select></label>
               <label><span>${state.lang === 'zh' ? '标签' : 'Tags'}</span><input name="tags" placeholder="${state.lang === 'zh' ? '用逗号分隔，可选' : 'Comma separated, optional'}"></label>
             </div>
-            <label data-upload-mode="gallery"><span>${state.lang === 'zh' ? '图库图片 JPG / PNG / WEBP，可多选' : 'Gallery images JPG / PNG / WEBP, multiple allowed'}</span><input name="gallery_files" id="library-gallery-input" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
-            <label data-upload-mode="source"><span>${state.lang === 'zh' ? '源文件 PSD / AI / PDF' : 'Source file PSD / AI / PDF'}</span><input name="source_file" id="library-source-input" type="file" accept=".psd,.ai,.pdf,application/pdf"></label>
-            <label data-upload-mode="source"><span>${state.lang === 'zh' ? '预览图 JPG / PNG / WEBP，1-5 张' : 'Preview images JPG / PNG / WEBP, 1-5 files'}</span><input name="preview_files" id="library-preview-input" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
+            <label class="library-drop-zone" data-upload-mode="gallery" data-drop-input="library-gallery-input">
+              <input name="gallery_files" id="library-gallery-input" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+              <span>${state.lang === 'zh' ? '图库图片' : 'Gallery images'}</span>
+              <strong>${state.lang === 'zh' ? '拖拽 JPG / PNG / WEBP 到这里，可多选' : 'Drop JPG / PNG / WEBP here, multiple allowed'}</strong>
+              <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No files selected'}</small>
+            </label>
+            <label class="library-drop-zone" data-upload-mode="source" data-drop-input="library-source-input">
+              <input name="source_file" id="library-source-input" type="file" accept=".psd,.ai,.pdf,application/pdf">
+              <span>${state.lang === 'zh' ? '源文件' : 'Source file'}</span>
+              <strong>${state.lang === 'zh' ? '拖拽 1 个 PSD / AI / PDF 到这里' : 'Drop one PSD / AI / PDF here'}</strong>
+              <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No file selected'}</small>
+            </label>
+            <label class="library-drop-zone" data-upload-mode="source" data-drop-input="library-preview-input">
+              <input name="preview_files" id="library-preview-input" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+              <span>${state.lang === 'zh' ? '预览图' : 'Preview images'}</span>
+              <strong>${state.lang === 'zh' ? '拖拽 1-5 张 JPG / PNG / WEBP 到这里' : 'Drop 1-5 JPG / PNG / WEBP files here'}</strong>
+              <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No files selected'}</small>
+            </label>
             <div id="library-upload-message" class="message"></div>
             <div class="modal-actions">
               <button class="ghost-btn" id="cancel-library-upload" type="button">${t('cancel')}</button>
@@ -822,7 +862,11 @@
         state.libraryFilters.tag2 = 'all';
         state.libraryFilters.tag3 = 'all';
         state.libraryFilters.tag4 = 'all';
-        renderLibrary();
+        state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
+        document.querySelectorAll('[data-library-kind]').forEach(item => item.classList.toggle('active', item.dataset.libraryKind === state.libraryFilters.kind));
+        document.getElementById('library-tag-rows').innerHTML = renderLibraryTagRows(state.libraryFilters.kind || 'all');
+        wireLibraryTagButtons();
+        renderLibraryGrid();
       });
     });
     wireLibraryTagButtons();
@@ -830,6 +874,7 @@
     document.getElementById('close-library-upload')?.addEventListener('click', closeLibraryUploadModal);
     document.getElementById('cancel-library-upload')?.addEventListener('click', closeLibraryUploadModal);
     document.getElementById('library-upload-form')?.addEventListener('submit', uploadLibraryAsset);
+    wireLibraryUploadDrops();
     document.getElementById('library-upload-kind')?.addEventListener('change', event => {
       const kind = event.target.value === 'gallery' ? 'gallery' : 'source';
       document.getElementById('library-upload-tag-controls').innerHTML = renderUploadTagControls(kind);
@@ -840,11 +885,15 @@
     document.getElementById('library-edit-form')?.addEventListener('submit', saveLibraryEdit);
     document.getElementById('library-search')?.addEventListener('input', event => {
       state.libraryFilters.query = event.target.value.trim();
+      state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
       renderLibraryGrid();
     });
     document.getElementById('library-favorite-filter')?.addEventListener('click', () => {
       state.libraryFilters.favorites = !state.libraryFilters.favorites;
-      renderLibrary();
+      state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
+      const button = document.getElementById('library-favorite-filter');
+      if (button) button.textContent = state.libraryFilters.favorites ? t('favoritesOnly') : t('allAssets');
+      renderLibraryGrid();
     });
   }
 
@@ -863,6 +912,7 @@
           state.libraryFilters.tag4 = 'all';
         }
         if (key === 'tag3') state.libraryFilters.tag4 = 'all';
+        state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
         renderLibraryGrid();
         document.getElementById('library-tag-rows').innerHTML = renderLibraryTagRows(state.libraryFilters.kind || 'all');
         wireLibraryTagButtons();
@@ -906,18 +956,32 @@
 
   async function loadLibraryData() {
     const status = document.getElementById('library-status');
+    if (!state.localPreview && state.libraryDataLoaded) {
+      renderLibrarySelects();
+      renderLibraryGrid();
+      return;
+    }
+    if (!state.localPreview && state.libraryDataPromise) {
+      await state.libraryDataPromise;
+      renderLibrarySelects();
+      renderLibraryGrid();
+      return;
+    }
     try {
       if (state.localPreview || !state.supabase) {
         loadLocalLibraryDemo();
         return;
       }
       status.textContent = state.lang === 'zh' ? '正在读取分类和素材...' : 'Loading options and assets...';
-      await loadLibraryOptions();
+      state.libraryDataPromise = (async () => {
+        await loadLibraryOptions();
+        await loadLibraryFavorites();
+        await loadLibrarySources();
+        await loadLibraryPreviews();
+        state.libraryDataLoaded = true;
+      })();
+      await state.libraryDataPromise;
       renderLibrarySelects();
-      await loadLibraryFavorites();
-      await loadLibrarySources();
-      await loadLibraryPreviews();
-      await signLibraryPreviewUrls();
       renderLibraryGrid();
     } catch (error) {
       status.innerHTML = `
@@ -926,7 +990,17 @@
         <p class="muted">${state.lang === 'zh' ? '如果这是第一次打开 V2，需要先运行 sql/002_library_v2.sql。' : 'If this is the first V2 run, execute sql/002_library_v2.sql first.'}</p>
       `;
       document.getElementById('library-grid').innerHTML = '';
+    } finally {
+      state.libraryDataPromise = null;
     }
+  }
+
+  async function reloadLibraryData() {
+    state.libraryDataLoaded = false;
+    state.libraryDataPromise = null;
+    state.libraryPreviewUrls = {};
+    state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
+    await loadLibraryData();
   }
 
   async function loadLibraryOptions() {
@@ -995,16 +1069,28 @@
     });
   }
 
-  async function signLibraryPreviewUrls() {
-    state.libraryPreviewUrls = {};
-    const paths = state.libraryPreviews.map(item => item.preview_path).filter(Boolean);
-    if (paths.length === 0) return;
-    for (const pathBatch of chunkArray(paths, SIGNED_URL_BATCH_SIZE)) {
+  async function signLibraryPreviewUrls(paths) {
+    const targetPaths = Array.from(new Set((paths || state.libraryPreviews.map(item => item.preview_path)).filter(Boolean)))
+      .filter(path => !state.libraryPreviewUrls[path]);
+    if (targetPaths.length === 0) return;
+    for (const pathBatch of chunkArray(targetPaths, SIGNED_URL_BATCH_SIZE)) {
       const { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).createSignedUrls(pathBatch, 60 * 60);
       if (error) throw error;
       (data || []).forEach(item => {
         if (item.path && item.signedUrl) state.libraryPreviewUrls[item.path] = item.signedUrl;
       });
+    }
+  }
+
+  async function signVisibleLibraryUrls(items) {
+    if (state.localPreview || !state.supabase) return;
+    const paths = items.map(item => item.preview.preview_path).filter(path => path && !state.libraryPreviewUrls[path]);
+    if (!paths.length) return;
+    try {
+      await signLibraryPreviewUrls(paths);
+      if (document.getElementById('library-grid')) renderLibraryGrid();
+    } catch (error) {
+      console.warn('Preview signing failed:', error);
     }
   }
 
@@ -1034,7 +1120,7 @@
     if (!grid || !status) return;
     const sourcesById = new Map(state.librarySources.map(source => [source.id, source]));
     const query = state.libraryFilters.query.toLowerCase();
-    state.libraryItems = state.libraryPreviews
+    const filteredItems = state.libraryPreviews
       .map(preview => ({ preview, source: sourcesById.get(preview.source_file_id), url: state.libraryPreviewUrls[preview.preview_path] || '' }))
       .filter(item => item.source)
       .filter(item => {
@@ -1059,14 +1145,17 @@
         ].join(' ').toLowerCase();
         return text.includes(query);
       });
+    state.libraryItems = filteredItems;
+    const visibleItems = state.libraryItems.slice(0, state.libraryVisibleLimit);
+    const hasMore = visibleItems.length < state.libraryItems.length;
     const counts = countLibraryKinds();
     status.innerHTML = `
-      <span class="library-stat"><small>${state.lang === 'zh' ? '当前结果' : 'Results'}</small><strong>${state.libraryItems.length}</strong></span>
+      <span class="library-stat"><small>${state.lang === 'zh' ? '当前展示' : 'Showing'}</small><strong>${visibleItems.length}/${state.libraryItems.length}</strong></span>
       <span class="library-stat"><small>${state.lang === 'zh' ? '图库' : 'Gallery'}</small><strong>${counts.gallery}</strong></span>
       <span class="library-stat"><small>${state.lang === 'zh' ? '源文件库' : 'Sources'}</small><strong>${counts.source}</strong></span>
       <span class="library-stat"><small>${state.lang === 'zh' ? '模板库' : 'Templates'}</small><strong>${counts.template}</strong></span>
     `;
-    if (state.libraryItems.length === 0) {
+    if (visibleItems.length === 0) {
       state.librarySelectedPreviewId = '';
       grid.innerHTML = `<div class="empty-card">
         <strong>${state.lang === 'zh' ? '还没有符合条件的素材' : 'No matching assets'}</strong>
@@ -1075,12 +1164,20 @@
       renderLibraryInspector();
       return;
     }
-    if (!state.libraryItems.some(item => item.preview.id === state.librarySelectedPreviewId)) {
-      state.librarySelectedPreviewId = state.libraryItems[0].preview.id;
+    if (!visibleItems.some(item => item.preview.id === state.librarySelectedPreviewId)) {
+      state.librarySelectedPreviewId = visibleItems[0].preview.id;
     }
-    grid.innerHTML = state.libraryItems.map(renderLibraryCard).join('');
+    grid.innerHTML = `
+      ${visibleItems.map(renderLibraryCard).join('')}
+      ${hasMore ? `<button class="library-load-more" id="library-load-more" type="button">${state.lang === 'zh' ? `加载更多 ${Math.min(LIBRARY_RENDER_STEP, state.libraryItems.length - visibleItems.length)} 个` : `Load ${Math.min(LIBRARY_RENDER_STEP, state.libraryItems.length - visibleItems.length)} more`}</button>` : ''}
+    `;
     wireLibraryCards();
+    document.getElementById('library-load-more')?.addEventListener('click', () => {
+      state.libraryVisibleLimit += LIBRARY_RENDER_STEP;
+      renderLibraryGrid();
+    });
     renderLibraryInspector();
+    void signVisibleLibraryUrls(visibleItems);
   }
 
   function loadLocalLibraryDemo() {
@@ -1156,6 +1253,7 @@
       'local-preview-4': localPreviewArtwork('Store Launch', '#7c3aed', '#14b8a6', '#111827')
     };
     state.libraryFavorites = new Set(['local-preview-1']);
+    state.libraryDataLoaded = true;
     renderLibrarySelects();
     renderLibraryGrid();
   }
@@ -1187,42 +1285,36 @@
     const canSource = canDownloadSource();
     const tags = visibleLibraryTags(source).slice(0, 4);
     const selected = state.librarySelectedPreviewId === preview.id;
-    const dimensions = formatDimensions(preview);
     const ext = kind === 'template' ? 'TEMPLATE' : sourceFileLabel(source);
     const thumbStyle = previewAspectStyle(preview);
-    const meta = [libraryKindLabel(kind), ...tags.slice(0, 3)];
     const previewLabel = kind === 'gallery'
       ? (state.lang === 'zh' ? '原图' : 'Image')
       : (state.lang === 'zh' ? '预览图' : 'Preview');
     const sourceLabel = kind === 'template'
       ? (state.lang === 'zh' ? '模板文件' : 'Template')
       : (state.lang === 'zh' ? '源文件' : 'Source');
+    const quickUse = kind === 'gallery'
+      ? `<button type="button" data-action="use-static">${state.lang === 'zh' ? '静态' : 'Static'}</button><button type="button" data-action="use-dynamic">${state.lang === 'zh' ? '动态' : 'Motion'}</button>`
+      : kind === 'template'
+        ? `<button type="button" data-action="use-static">${state.lang === 'zh' ? '打开' : 'Open'}</button>`
+        : '';
     return `
       <article class="library-card ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
         <div class="library-thumb-wrap">
           <span class="file-pill">${escapeHtml(ext)}</span>
           <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
           <div class="library-thumb" style="${thumbStyle}">${item.url ? `<img src="${escapeAttr(item.url)}" alt="${escapeAttr(source.title)}">` : `<span>${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`}</div>
-        </div>
-        <div class="library-card-body">
-          <div>
-            <h4>${escapeHtml(source.title)}</h4>
-            <div class="library-subline">${escapeHtml(preview.preview_filename)}${dimensions ? ` · ${escapeHtml(dimensions)}` : ''}</div>
-          </div>
-          <div class="library-meta">
-            ${meta.map(label => `<span>${escapeHtml(label)}</span>`).join('')}
-          </div>
-          <div class="library-tags">
-            <span class="badge">${visibilityLabel(source.visibility)}</span>
-            ${tags.map(tag => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}
-          </div>
-          <div class="library-fileline">${escapeHtml(source.source_filename)} · ${formatFileSize(source.source_size_bytes)}</div>
-          <div class="library-card-actions">
-            ${kind === 'gallery' ? `<button class="secondary-btn" type="button" data-action="use-static">${state.lang === 'zh' ? '静态' : 'Static'}</button><button class="secondary-btn" type="button" data-action="use-dynamic">${state.lang === 'zh' ? '动态' : 'Motion'}</button>` : ''}
-            ${kind === 'template' ? `<button class="secondary-btn" type="button" data-action="use-static">${state.lang === 'zh' ? '打开模板' : 'Open Template'}</button>` : ''}
-            <button class="ghost-btn" type="button" data-action="download-preview">${previewLabel}</button>
-            ${canSource && kind !== 'gallery' ? `<button class="ghost-btn" type="button" data-action="download-source">${sourceLabel}</button>` : ''}
-            ${canManage ? `<button class="ghost-btn" type="button" data-action="edit">${state.lang === 'zh' ? '编辑' : 'Edit'}</button><button class="ghost-btn danger" type="button" data-action="delete">${state.lang === 'zh' ? '删除' : 'Delete'}</button>` : ''}
+          <div class="library-card-overlay">
+            <div>
+              <h4>${escapeHtml(source.title)}</h4>
+              <p>${escapeHtml([libraryKindLabel(kind), ...tags.slice(0, 2)].filter(Boolean).join(' / '))}</p>
+            </div>
+            <div class="library-card-actions">
+              ${quickUse}
+              <button type="button" data-action="download-preview">${previewLabel}</button>
+              ${canSource && kind !== 'gallery' ? `<button type="button" data-action="download-source">${sourceLabel}</button>` : ''}
+              ${canManage ? `<button type="button" data-action="edit">${state.lang === 'zh' ? '编辑' : 'Edit'}</button><button class="danger" type="button" data-action="delete">${state.lang === 'zh' ? '删除' : 'Delete'}</button>` : ''}
+            </div>
           </div>
         </div>
       </article>
@@ -1357,6 +1449,52 @@
     });
   }
 
+  function wireLibraryUploadDrops() {
+    document.querySelectorAll('.library-drop-zone').forEach(zone => {
+      const input = document.getElementById(zone.dataset.dropInput);
+      if (!input) return;
+      input.addEventListener('change', () => updateDropZoneSummary(zone, input.files));
+      zone.addEventListener('dragenter', event => {
+        event.preventDefault();
+        zone.classList.add('dragging');
+      });
+      zone.addEventListener('dragover', event => {
+        event.preventDefault();
+        zone.classList.add('dragging');
+      });
+      zone.addEventListener('dragleave', event => {
+        if (!zone.contains(event.relatedTarget)) zone.classList.remove('dragging');
+      });
+      zone.addEventListener('drop', event => {
+        event.preventDefault();
+        zone.classList.remove('dragging');
+        const files = Array.from(event.dataTransfer?.files || []);
+        if (!files.length) return;
+        const dt = new DataTransfer();
+        const maxFiles = input.multiple ? files.length : 1;
+        files.slice(0, maxFiles).forEach(file => dt.items.add(file));
+        input.files = dt.files;
+        updateDropZoneSummary(zone, input.files);
+        const titleInput = document.getElementById('library-upload-title');
+        if (titleInput && !titleInput.value.trim() && input.id !== 'library-preview-input') {
+          titleInput.value = stripExtension(files[0].name);
+        }
+      });
+    });
+  }
+
+  function updateDropZoneSummary(zone, fileList) {
+    const files = Array.from(fileList || []);
+    const summary = zone.querySelector('[data-file-summary]');
+    if (!summary) return;
+    if (!files.length) {
+      summary.textContent = state.lang === 'zh' ? '未选择文件' : 'No files selected';
+      return;
+    }
+    const names = files.slice(0, 3).map(file => file.name).join(' / ');
+    summary.textContent = files.length > 3 ? `${names} +${files.length - 3}` : names;
+  }
+
   async function uploadLibraryAsset(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1379,7 +1517,7 @@
         setMessage(message, state.lang === 'zh' ? '图库素材已上传。' : 'Gallery assets uploaded.', false, true);
         setTimeout(closeLibraryUploadModal, 600);
         state.libraryFilters.kind = 'gallery';
-        await loadLibraryData();
+        await reloadLibraryData();
         return;
       }
       const sourceFile = formData.get('source_file');
@@ -1435,7 +1573,7 @@
       if (previewInsert.error) throw previewInsert.error;
       setMessage(message, state.lang === 'zh' ? '上传成功，已入库。' : 'Uploaded.', false, true);
       setTimeout(closeLibraryUploadModal, 600);
-      await loadLibraryData();
+      await reloadLibraryData();
     } catch (error) {
       await cleanupFailedLibraryUpload(sourceId, sourceInserted, uploadedPaths);
       setMessage(message, error.message, true);
@@ -1584,7 +1722,7 @@
       if (error) throw error;
       setMessage(message, state.lang === 'zh' ? '已保存。' : 'Saved.', false, true);
       setTimeout(closeLibraryEditModal, 500);
-      await loadLibraryData();
+      await reloadLibraryData();
     } catch (error) {
       setMessage(message, error.message, true);
     }
@@ -1611,7 +1749,7 @@
       alert(error.message);
       return;
     }
-    await loadLibraryData();
+    await reloadLibraryData();
   }
 
   async function toggleLibraryFavorite(item) {
@@ -1660,7 +1798,11 @@
       return openLibraryTemplate(item);
     }
     if (!item.url) {
-      alert(state.lang === 'zh' ? '预览图链接还没准备好，请刷新素材库后再试。' : 'The preview link is not ready. Refresh the library and try again.');
+      await signLibraryPreviewUrls([item.preview.preview_path]);
+      item.url = state.libraryPreviewUrls[item.preview.preview_path] || '';
+    }
+    if (!item.url) {
+      alert(state.lang === 'zh' ? '预览图链接还没准备好，请稍后再试。' : 'The preview link is not ready. Try again shortly.');
       return;
     }
     const target = tool === 'dynamic' ? 'dynamic' : 'static';
@@ -1886,14 +2028,26 @@
     const item = map[type];
     els.content.innerHTML = `
       <div class="tool-layout">
-        <iframe id="tool-frame" class="tool-frame" src="${item.src}" title="${type}"></iframe>
+        <div id="tool-frame-mount" class="tool-frame-mount"></div>
       </div>
     `;
-    state.activeFrame = document.getElementById('tool-frame');
+    const mount = document.getElementById('tool-frame-mount');
+    let frame = state.toolFrames[type];
+    if (!frame) {
+      frame = document.createElement('iframe');
+      frame.id = `tool-frame-${type}`;
+      frame.className = 'tool-frame';
+      frame.src = item.src;
+      frame.title = type;
+      frame.dataset.toolFrame = type;
+      state.toolFrames[type] = frame;
+    }
+    mount.appendChild(frame);
+    state.activeFrame = frame;
   }
 
   async function renderProjects() {
-    state.activeFrame = null;
+    parkActiveToolFrame();
     els.content.innerHTML = `
       <div class="panel-page">
         <div class="panel card">
@@ -1912,7 +2066,7 @@
   }
 
   async function renderStatus() {
-    state.activeFrame = null;
+    parkActiveToolFrame();
     els.content.innerHTML = `
       <div class="panel-page">
         <section class="panel card">
@@ -2081,7 +2235,7 @@
   }
 
   async function renderAdmin() {
-    state.activeFrame = null;
+    parkActiveToolFrame();
     els.content.innerHTML = `
       <div class="panel-page">
         <section class="admin-section">

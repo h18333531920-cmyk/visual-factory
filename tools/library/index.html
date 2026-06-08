@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Marketing Visual Super Factory</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/tools/vendor/supabase-js.js"></script>
 <script src="/config.js"></script>
 <script src="/tool-auth-guard.js"></script>
 <style>
@@ -398,7 +398,7 @@
   // ==========================================
   const supabaseUrl = 'https://juuqvjmhzdgfggzrivbb.supabase.co';
   const supabaseKey = 'sb_publishable_PIa3V0LGlOn1K6G1nBUeqw_kiFB6fjt';
-  const SUPABASE_BACKUP_CDN = 'https://unpkg.com/@supabase/supabase-js@2';
+  const SUPABASE_BACKUP_CDN = '/tools/vendor/supabase-js.js';
   let vfSupabaseClient = null;
   let realtimeChannel = null;
   let cloudPollTimer = null;
