@@ -106,7 +106,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260608-v1perf1';
+  const TOOL_UI_VERSION = '20260608-v1ui2';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -723,10 +723,10 @@
         <section class="library-hero">
           <div class="library-hero-panel"></div>
           <div class="library-module-row">
-            <button type="button" data-route="library">${state.lang === 'zh' ? '超级库' : 'Super Library'} <span>›</span></button>
-            <button type="button" data-route="static">${state.lang === 'zh' ? '静态设计师' : 'Static Designer'} <span>›</span></button>
-            <button type="button" data-route="dynamic">${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'} <span>›</span></button>
+            <button type="button" data-route="static">${state.lang === 'zh' ? '静态设计' : 'Static Design'} <span>›</span></button>
+            <button type="button" data-route="dynamic">${state.lang === 'zh' ? '动态设计' : 'Motion Design'} <span>›</span></button>
             <button type="button" data-route="request">${state.lang === 'zh' ? '提需流程' : 'Request Flow'} <span>›</span></button>
+            <button type="button" data-route="request">${state.lang === 'zh' ? '设计审核' : 'Review'} <span>›</span></button>
           </div>
         </section>
 
@@ -760,7 +760,7 @@
   }
 
   function renderUploadModal() {
-    const defaultKind = state.libraryFilters.kind === 'gallery' ? 'gallery' : 'source';
+    const defaultKind = state.libraryFilters.kind === 'source' ? 'source' : 'gallery';
     return `
       <div id="library-upload-modal" class="modal-backdrop" hidden>
         <section class="modal library-modal">
@@ -769,10 +769,20 @@
             <button class="icon-btn" id="close-library-upload" type="button" aria-label="Close">x</button>
           </div>
           <form id="library-upload-form" class="library-form">
-            <label><span>${state.lang === 'zh' ? '入库位置' : 'Library section'}</span><select name="library_kind" id="library-upload-kind">
-              <option value="gallery" ${defaultKind === 'gallery' ? 'selected' : ''}>${state.lang === 'zh' ? '图库：上传 JPG / PNG / WEBP' : 'Gallery: JPG / PNG / WEBP'}</option>
-              <option value="source" ${defaultKind === 'source' ? 'selected' : ''}>${state.lang === 'zh' ? '源文件库：PSD / AI / PDF + 预览图' : 'Source Files: PSD / AI / PDF + previews'}</option>
-            </select></label>
+            <input type="hidden" name="library_kind" id="library-upload-kind" value="${defaultKind}">
+            <div class="library-upload-section">
+              <span>${state.lang === 'zh' ? '入库位置' : 'Library section'}</span>
+              <div class="library-kind-card-grid" role="radiogroup" aria-label="${state.lang === 'zh' ? '入库位置' : 'Library section'}">
+                <button type="button" class="library-kind-card ${defaultKind === 'gallery' ? 'active' : ''}" data-upload-kind-card="gallery">
+                  <strong>${state.lang === 'zh' ? '图库' : 'Gallery'}</strong>
+                  <small>${state.lang === 'zh' ? 'JPG / PNG / WEBP，可多选' : 'JPG / PNG / WEBP, multiple allowed'}</small>
+                </button>
+                <button type="button" class="library-kind-card ${defaultKind === 'source' ? 'active' : ''}" data-upload-kind-card="source">
+                  <strong>${state.lang === 'zh' ? '源文件库' : 'Source Files'}</strong>
+                  <small>${state.lang === 'zh' ? 'PSD / AI / PDF + 预览图' : 'PSD / AI / PDF + previews'}</small>
+                </button>
+              </div>
+            </div>
             <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" id="library-upload-title" maxlength="120" required></label>
             <div id="library-upload-tag-controls" class="library-upload-tags">${renderUploadTagControls(defaultKind)}</div>
             <div class="library-form-grid two">
@@ -809,12 +819,43 @@
   }
 
   function renderUploadTagControls(kind) {
-    return libraryTagRows(kind).map(row => `
-      <label><span>${escapeHtml(row.label)}</span><select name="${row.key}" data-upload-tag="${row.key}">
-        <option value="all">${state.lang === 'zh' ? '未分类' : 'Unclassified'}</option>
-        ${row.values.map(value => `<option value="${escapeAttr(value)}">${escapeHtml(value)}</option>`).join('')}
-      </select></label>
+    const emptyLabel = state.lang === 'zh' ? '未分类' : 'Unclassified';
+    return uploadLibraryTagRows(kind).map(row => `
+      <div class="upload-tag-picker" data-upload-tag-picker="${row.key}">
+        <span>${escapeHtml(row.label)}</span>
+        <input type="hidden" name="${row.key}" value="all" data-upload-tag-input="${row.key}">
+        <button type="button" class="upload-tag-trigger" data-upload-tag-trigger="${row.key}">
+          <strong>${escapeHtml(emptyLabel)}</strong>
+          <small>${state.lang === 'zh' ? '悬浮选择' : 'Hover to choose'}</small>
+        </button>
+        <div class="upload-tag-menu" role="menu">
+          ${['all', ...row.values].map(value => {
+            const label = value === 'all' ? emptyLabel : value;
+            return `<button type="button" class="${value === 'all' ? 'active' : ''}" data-upload-tag-option="${row.key}" data-upload-tag-value="${escapeAttr(value)}">${escapeHtml(label)}</button>`;
+          }).join('')}
+        </div>
+      </div>
     `).join('');
+  }
+
+  function uploadLibraryTagRows(kind) {
+    const config = LIBRARY_TAGS[kind];
+    if (!config) return [];
+    const labels = state.lang === 'zh'
+      ? { tag1: '标签一', tag2: '标签二', tag3: '标签三', tag4: '标签四' }
+      : { tag1: 'Tag 1', tag2: 'Tag 2', tag3: 'Tag 3', tag4: 'Tag 4' };
+    const rows = [];
+    if (config.tag1) rows.push({ key: 'tag1', label: labels.tag1, values: config.tag1 });
+    if (config.tag2) rows.push({ key: 'tag2', label: labels.tag2, values: config.tag2 });
+    const tag3Values = config.tag3 || Object.values(config.tag3ByTag2 || {}).flat();
+    if (tag3Values?.length) rows.push({ key: 'tag3', label: labels.tag3, values: uniqueValues(tag3Values) });
+    const tag4Values = Object.values(config.tag4ByTag3 || {}).flat();
+    if (tag4Values.length) rows.push({ key: 'tag4', label: labels.tag4, values: uniqueValues(tag4Values) });
+    return rows;
+  }
+
+  function uniqueValues(values) {
+    return [...new Set((values || []).filter(Boolean))];
   }
 
   function renderEditModal() {
@@ -875,10 +916,18 @@
     document.getElementById('cancel-library-upload')?.addEventListener('click', closeLibraryUploadModal);
     document.getElementById('library-upload-form')?.addEventListener('submit', uploadLibraryAsset);
     wireLibraryUploadDrops();
-    document.getElementById('library-upload-kind')?.addEventListener('change', event => {
-      const kind = event.target.value === 'gallery' ? 'gallery' : 'source';
-      document.getElementById('library-upload-tag-controls').innerHTML = renderUploadTagControls(kind);
-      updateLibraryUploadMode(kind);
+    wireLibraryUploadKindCards();
+    wireUploadTagPickers();
+    document.querySelectorAll('[data-upload-kind-card]').forEach(button => {
+      button.addEventListener('click', () => {
+        const kind = button.dataset.uploadKindCard === 'gallery' ? 'gallery' : 'source';
+        const input = document.getElementById('library-upload-kind');
+        if (input) input.value = kind;
+        document.getElementById('library-upload-tag-controls').innerHTML = renderUploadTagControls(kind);
+        updateLibraryUploadMode(kind);
+        wireLibraryUploadKindCards();
+        wireUploadTagPickers();
+      });
     });
     document.getElementById('close-library-edit')?.addEventListener('click', closeLibraryEditModal);
     document.getElementById('cancel-library-edit')?.addEventListener('click', closeLibraryEditModal);
@@ -1432,10 +1481,18 @@
     renderLibrarySelects();
     const form = document.getElementById('library-upload-form');
     form.reset();
+    const defaultKind = state.libraryFilters.kind === 'source' ? 'source' : 'gallery';
+    const kindInput = document.getElementById('library-upload-kind');
+    if (kindInput) kindInput.value = defaultKind;
+    const tagControls = document.getElementById('library-upload-tag-controls');
+    if (tagControls) tagControls.innerHTML = renderUploadTagControls(defaultKind);
     document.getElementById('library-upload-title').value = '';
     document.getElementById('library-upload-message').textContent = '';
     document.getElementById('library-upload-modal').hidden = false;
-    updateLibraryUploadMode(document.getElementById('library-upload-kind')?.value || 'source');
+    updateLibraryUploadMode(defaultKind);
+    wireLibraryUploadKindCards();
+    wireUploadTagPickers();
+    document.querySelectorAll('.library-drop-zone').forEach(zone => updateDropZoneSummary(zone, []));
   }
 
   function closeLibraryUploadModal() {
@@ -1446,6 +1503,35 @@
   function updateLibraryUploadMode(kind) {
     document.querySelectorAll('[data-upload-mode]').forEach(node => {
       node.hidden = node.dataset.uploadMode !== kind;
+    });
+    document.querySelectorAll('[data-upload-kind-card]').forEach(button => {
+      button.classList.toggle('active', button.dataset.uploadKindCard === kind);
+      button.setAttribute('aria-checked', button.dataset.uploadKindCard === kind ? 'true' : 'false');
+    });
+  }
+
+  function wireLibraryUploadKindCards() {
+    const kind = document.getElementById('library-upload-kind')?.value || 'source';
+    updateLibraryUploadMode(kind);
+  }
+
+  function wireUploadTagPickers() {
+    document.querySelectorAll('[data-upload-tag-option]').forEach(button => {
+      if (button.dataset.bound === 'true') return;
+      button.dataset.bound = 'true';
+      button.addEventListener('click', () => {
+        const key = button.dataset.uploadTagOption;
+        const value = button.dataset.uploadTagValue || 'all';
+        const picker = button.closest('[data-upload-tag-picker]');
+        const input = document.querySelector(`[data-upload-tag-input="${key}"]`);
+        if (input) input.value = value;
+        if (picker) {
+          picker.querySelectorAll('[data-upload-tag-option]').forEach(option => option.classList.toggle('active', option === button));
+          const label = value === 'all' ? (state.lang === 'zh' ? '未分类' : 'Unclassified') : value;
+          const triggerLabel = picker.querySelector('[data-upload-tag-trigger] strong');
+          if (triggerLabel) triggerLabel.textContent = label;
+        }
+      });
     });
   }
 
