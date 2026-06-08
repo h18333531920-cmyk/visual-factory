@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GCC Design</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="./styles.css?v=20260605-stability2">
-  <script src="./config.js?v=20260605-stability2"></script>
-  <script src="./app.js?v=20260605-stability2" defer></script>
+  <link rel="stylesheet" href="./styles.css?v=20260608-v1base1">
+  <script src="./config.js?v=20260608-v1base1"></script>
+  <script src="./app.js?v=20260608-v1base1" defer></script>
 </head>
 <body>
   <main id="login-view" class="login-view">
@@ -59,6 +59,7 @@
           <h2 id="route-title"></h2>
         </div>
         <div class="topbar-actions">
+          <button id="save-template-btn" class="secondary-btn" type="button" hidden>保存到模板库</button>
           <button id="save-project-btn" class="secondary-btn" type="button" hidden data-i18n="saveProject">保存项目</button>
           <div id="user-chip" class="user-chip"></div>
         </div>

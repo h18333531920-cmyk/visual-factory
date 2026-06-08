@@ -54,6 +54,23 @@
     }
   };
 
+  window.VF_EXPORT_TEMPLATE_ASSET = async function VF_EXPORT_TEMPLATE_ASSET(options = {}) {
+    const toolType = detectToolType();
+    if (toolType !== 'static') {
+      throw new Error('Only Static Designer can export template assets.');
+    }
+    const snapshot = await window.VF_EXPORT_PROJECT();
+    if (options.title) snapshot.title = options.title;
+    const previewDataUrl = await captureStaticPreviewDataUrl();
+    return {
+      schema: 'vf-template-asset/v1',
+      title: options.title || snapshot.title || 'Static Template',
+      exportedAt: new Date().toISOString(),
+      snapshot,
+      previewDataUrl
+    };
+  };
+
   window.VF_IMPORT_PROJECT = async function VF_IMPORT_PROJECT(snapshot) {
     const toolType = detectToolType();
     if (!snapshot || snapshot.schema !== 'vf-project-snapshot/v1') {
@@ -197,6 +214,39 @@
     if (typeof pushHistory === 'function') pushHistory();
     if (typeof rebuildAnimations === 'function') rebuildAnimations();
     if (typeof syncTimeToRenderers === 'function') syncTimeToRenderers();
+  }
+
+  async function captureStaticPreviewDataUrl() {
+    await waitFor(() => typeof html2canvas === 'function' && !!document.getElementById('canvas-wrapper'), 8000);
+    if (document.fonts?.ready) {
+      try {
+        await document.fonts.ready;
+      } catch (_error) {}
+    }
+    const wrap = document.getElementById('canvas-wrapper');
+    const oldActive = typeof activeLayerIds !== 'undefined' && Array.isArray(activeLayerIds) ? safeClone(activeLayerIds) : null;
+    try {
+      if (oldActive) {
+        activeLayerIds = [];
+        if (typeof renderCanvas === 'function') renderCanvas();
+      }
+      const canvas = await html2canvas(wrap, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#FFFFFF',
+        logging: false,
+        imageTimeout: 0
+      });
+      return canvas.toDataURL('image/png');
+    } finally {
+      if (oldActive) {
+        activeLayerIds = oldActive;
+        if (typeof renderCanvas === 'function') renderCanvas();
+        if (typeof renderLayersList === 'function') renderLayersList();
+        if (typeof renderProperties === 'function') renderProperties();
+      }
+    }
   }
 
   async function importStaticProject(snapshot) {

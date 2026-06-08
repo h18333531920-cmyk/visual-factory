@@ -106,13 +106,53 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260605-stability2';
+  const TOOL_UI_VERSION = '20260608-v1base1';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const SUPABASE_IN_BATCH_SIZE = 200;
   const SIGNED_URL_BATCH_SIZE = 100;
   const SOURCE_EXTENSIONS = ['psd', 'ai', 'pdf'];
+  const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
   const PREVIEW_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  const TEMPLATE_EXTENSIONS = ['json'];
+  const LIBRARY_KIND_MARKERS = {
+    gallery: 'vf:kind:gallery',
+    source: 'vf:kind:source',
+    template: 'vf:kind:template'
+  };
+  const LIBRARY_KIND_TABS = [
+    { id: 'all', zh: '全部', en: 'All' },
+    { id: 'source', zh: '源文件库', en: 'Source Files' },
+    { id: 'gallery', zh: '图库', en: 'Gallery' },
+    { id: 'template', zh: '模板库', en: 'Templates' }
+  ];
+  const LIBRARY_TAGS = {
+    gallery: {
+      tag1: ['未分类', '沙特阿拉伯', '阿联酋', '卡塔尔', '科威特', '巴林', '阿曼'],
+      tag2: ['未分类', '虚拟食物', '商家食物', 'Logo素材', 'kiki素材', '其他素材'],
+      tag3ByTag2: {
+        '虚拟食物': ['未分类', '汉堡', '披萨', '阿拉伯菜', '三明治', '小吃', '健康餐', '烧烤', '甜品', '饮品'],
+        '商家食物': ['未分类', '汉堡', '披萨', '阿拉伯菜', '三明治', '小吃', '健康餐', '烧烤', '甜品', '饮品']
+      }
+    },
+    source: {
+      tag1: ['未分类', '沙特阿拉伯', '阿联酋', '卡塔尔', '科威特', '巴林', '阿曼'],
+      tag2: ['未分类', '日常运营', '大促营销', '异业合作', '品牌规范'],
+      tag3: ['未分类', 'C端', 'B端', 'D端', 'M端'],
+      tag4ByTag3: {
+        'C端': ['头图', 'banner', '弹窗', '其他'],
+        'M端': ['OB', 'OOH', '社媒物料', '其他']
+      }
+    },
+    template: {
+      tag1: ['未分类', '沙特阿拉伯', '阿联酋', '卡塔尔', '科威特', '巴林', '阿曼'],
+      tag2: ['未分类', '静态模板', '动态模板'],
+      tag3ByTag2: {
+        '静态模板': ['头图', 'banner', '弹窗', '社媒物料', '其他'],
+        '动态模板': ['弹窗', '社媒物料', '其他']
+      }
+    }
+  };
   const state = {
     lang: localStorage.getItem('vf_lang') || 'zh',
     supabase: null,
@@ -131,6 +171,11 @@
     recentProjects: [],
     libraryFilters: {
       query: '',
+      kind: 'all',
+      tag1: 'all',
+      tag2: 'all',
+      tag3: 'all',
+      tag4: 'all',
       country: 'all',
       activity: 'all',
       category: 'all',
@@ -159,7 +204,7 @@
       'login-view', 'app-shell', 'login-form', 'login-email', 'login-password',
       'login-message', 'local-preview-actions', 'nav-list', 'lang-toggle',
       'sign-out-btn', 'route-kicker', 'route-title', 'content', 'user-chip',
-      'save-project-btn', 'project-modal', 'project-form', 'project-title-input',
+      'save-project-btn', 'save-template-btn', 'project-modal', 'project-form', 'project-title-input',
       'project-save-note', 'project-modal-message', 'close-project-modal',
       'cancel-project-modal'
     ].forEach(id => {
@@ -176,6 +221,7 @@
     els.signOutBtn.addEventListener('click', signOut);
     els.langToggle.addEventListener('click', toggleLanguage);
     els.saveProjectBtn.addEventListener('click', openProjectModal);
+    els.saveTemplateBtn.addEventListener('click', saveStaticTemplateToLibrary);
     els.projectForm.addEventListener('submit', saveProject);
     els.closeProjectModal.addEventListener('click', closeProjectModal);
     els.cancelProjectModal.addEventListener('click', closeProjectModal);
@@ -330,11 +376,13 @@
     const allowed = ROUTES.some(route => route.id === routeId && (!route.adminOnly || currentRole() === 'admin'));
     state.route = allowed ? routeId : 'home';
     els.appShell.dataset.route = state.route;
+    if (els.projectModal) els.projectModal.hidden = true;
     renderNav();
     const route = ROUTES.find(item => item.id === state.route);
     els.routeKicker.textContent = state.localPreview ? 'Local Preview' : 'gccdesign.app';
     els.routeTitle.textContent = t(route.title);
     els.saveProjectBtn.hidden = !['static', 'dynamic'].includes(state.route);
+    els.saveTemplateBtn.hidden = state.route !== 'static';
     if (state.route === 'home') renderCreativeHome();
     if (state.route === 'library') renderLibrary();
     if (state.route === 'static') renderTool('static');
@@ -644,26 +692,32 @@
   async function renderLibrary() {
     state.activeFrame = null;
     const canUpload = canUploadAssets();
+    const activeKind = state.libraryFilters.kind || 'all';
     els.content.innerHTML = `
       <div class="library-page">
-        <section class="library-head">
-          <div>
-            <div class="kicker">GCC DESIGN LIBRARY</div>
-            <h3>${t('library')}</h3>
-            <p>${state.lang === 'zh' ? '设计师上传源文件与预览图，运营直接下载预览或带入 DIY。' : 'Designers upload sources and previews; operators use previews in DIY.'}</p>
-          </div>
-          <div class="library-actions">
-            <span class="role-pill">${escapeHtml(roleLabel(currentRole()))}</span>
-            ${canUpload ? `<button class="primary-btn" type="button" id="open-upload-modal">${t('uploadAsset')}</button>` : ''}
+        <section class="library-hero">
+          <div class="library-hero-panel"></div>
+          <div class="library-module-row">
+            <button type="button" data-route="library">${state.lang === 'zh' ? '超级库' : 'Super Library'} <span>›</span></button>
+            <button type="button" data-route="static">${state.lang === 'zh' ? '静态设计师' : 'Static Designer'} <span>›</span></button>
+            <button type="button" data-route="dynamic">${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'} <span>›</span></button>
+            <button type="button" data-route="request">${state.lang === 'zh' ? '提需流程' : 'Request Flow'} <span>›</span></button>
           </div>
         </section>
 
-        <section class="library-filterbar panel">
-          <label class="library-search-field"><span>${state.lang === 'zh' ? '搜索' : 'Search'}</span><input id="library-search" placeholder="${state.lang === 'zh' ? '搜索名称、文件名、标签' : 'Search title, filename, tags'}" value="${escapeAttr(state.libraryFilters.query)}"></label>
-          <label><span>${state.lang === 'zh' ? '国家' : 'Country'}</span><select id="library-country-filter"></select></label>
-          <label><span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span><select id="library-activity-filter"></select></label>
-          <label><span>${state.lang === 'zh' ? '品类' : 'Category'}</span><select id="library-category-filter"></select></label>
+        <section class="library-control-strip">
+          <div class="library-kind-tabs" role="tablist">
+            ${LIBRARY_KIND_TABS.map(tab => `<button type="button" class="${activeKind === tab.id ? 'active' : ''}" data-library-kind="${tab.id}">${escapeHtml(state.lang === 'zh' ? tab.zh : tab.en)}</button>`).join('')}
+          </div>
+          <div class="library-upload-area">
+            ${canUpload ? `<button class="library-upload-pill" type="button" id="open-upload-modal">${state.lang === 'zh' ? '上传素材 +' : 'Upload +'}</button>` : ''}
+          </div>
           <button class="ghost-btn" type="button" id="library-favorite-filter">${state.libraryFilters.favorites ? t('favoritesOnly') : t('allAssets')}</button>
+          <div id="library-tag-rows" class="library-tag-rows">${renderLibraryTagRows(activeKind)}</div>
+          <label class="library-search-pill" aria-label="${state.lang === 'zh' ? '搜索内容' : 'Search'}">
+            <input id="library-search" placeholder="${state.lang === 'zh' ? '搜索内容' : 'Search content'}" value="${escapeAttr(state.libraryFilters.query)}">
+            <span>⌕</span>
+          </label>
         </section>
 
         <section id="library-status" class="library-status">${state.lang === 'zh' ? '正在读取素材库...' : 'Loading library...'}</section>
@@ -681,26 +735,28 @@
   }
 
   function renderUploadModal() {
+    const defaultKind = state.libraryFilters.kind === 'gallery' ? 'gallery' : 'source';
     return `
       <div id="library-upload-modal" class="modal-backdrop" hidden>
         <section class="modal library-modal">
           <div class="modal-head">
-            <h3>${state.lang === 'zh' ? '上传源文件与预览图' : 'Upload Source and Previews'}</h3>
+            <h3>${state.lang === 'zh' ? '上传素材' : 'Upload Asset'}</h3>
             <button class="icon-btn" id="close-library-upload" type="button" aria-label="Close">x</button>
           </div>
           <form id="library-upload-form" class="library-form">
+            <label><span>${state.lang === 'zh' ? '入库位置' : 'Library section'}</span><select name="library_kind" id="library-upload-kind">
+              <option value="gallery" ${defaultKind === 'gallery' ? 'selected' : ''}>${state.lang === 'zh' ? '图库：上传 JPG / PNG / WEBP' : 'Gallery: JPG / PNG / WEBP'}</option>
+              <option value="source" ${defaultKind === 'source' ? 'selected' : ''}>${state.lang === 'zh' ? '源文件库：PSD / AI / PDF + 预览图' : 'Source Files: PSD / AI / PDF + previews'}</option>
+            </select></label>
             <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" id="library-upload-title" maxlength="120" required></label>
-            <div class="library-form-grid">
-              <label><span>${state.lang === 'zh' ? '国家' : 'Country'}</span><select name="country_id" id="library-upload-country" required></select></label>
-              <label><span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span><select name="activity_id" id="library-upload-activity" required></select></label>
-              <label><span>${state.lang === 'zh' ? '品类' : 'Category'}</span><select name="category_id" id="library-upload-category" required></select></label>
-            </div>
+            <div id="library-upload-tag-controls" class="library-upload-tags">${renderUploadTagControls(defaultKind)}</div>
             <div class="library-form-grid two">
-              <label><span>${t('visibility')}</span><select name="visibility"><option value="all">${t('allVisible')}</option><option value="designers">${t('designersOnly')}</option><option value="operators">${t('operatorsOnly')}</option></select></label>
+              <label><span>${t('visibility')}</span><select name="visibility"><option value="all">${t('allVisible')}</option></select></label>
               <label><span>${state.lang === 'zh' ? '标签' : 'Tags'}</span><input name="tags" placeholder="${state.lang === 'zh' ? '用逗号分隔，可选' : 'Comma separated, optional'}"></label>
             </div>
-            <label><span>${state.lang === 'zh' ? '源文件 PSD / AI / PDF' : 'Source file PSD / AI / PDF'}</span><input name="source_file" id="library-source-input" type="file" accept=".psd,.ai,.pdf,application/pdf" required></label>
-            <label><span>${state.lang === 'zh' ? '预览图 JPG / PNG / WEBP，可多选' : 'Preview images JPG / PNG / WEBP, multiple allowed'}</span><input name="preview_files" id="library-preview-input" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>
+            <label data-upload-mode="gallery"><span>${state.lang === 'zh' ? '图库图片 JPG / PNG / WEBP，可多选' : 'Gallery images JPG / PNG / WEBP, multiple allowed'}</span><input name="gallery_files" id="library-gallery-input" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
+            <label data-upload-mode="source"><span>${state.lang === 'zh' ? '源文件 PSD / AI / PDF' : 'Source file PSD / AI / PDF'}</span><input name="source_file" id="library-source-input" type="file" accept=".psd,.ai,.pdf,application/pdf"></label>
+            <label data-upload-mode="source"><span>${state.lang === 'zh' ? '预览图 JPG / PNG / WEBP，1-5 张' : 'Preview images JPG / PNG / WEBP, 1-5 files'}</span><input name="preview_files" id="library-preview-input" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
             <div id="library-upload-message" class="message"></div>
             <div class="modal-actions">
               <button class="ghost-btn" id="cancel-library-upload" type="button">${t('cancel')}</button>
@@ -710,6 +766,15 @@
         </section>
       </div>
     `;
+  }
+
+  function renderUploadTagControls(kind) {
+    return libraryTagRows(kind).map(row => `
+      <label><span>${escapeHtml(row.label)}</span><select name="${row.key}" data-upload-tag="${row.key}">
+        <option value="all">${state.lang === 'zh' ? '未分类' : 'Unclassified'}</option>
+        ${row.values.map(value => `<option value="${escapeAttr(value)}">${escapeHtml(value)}</option>`).join('')}
+      </select></label>
+    `).join('');
   }
 
   function renderEditModal() {
@@ -722,14 +787,13 @@
           </div>
           <form id="library-edit-form" class="library-form">
             <input type="hidden" name="id">
+            <input type="hidden" name="library_kind">
             <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" maxlength="120" required></label>
-            <div class="library-form-grid">
-              <label><span>${state.lang === 'zh' ? '国家' : 'Country'}</span><select name="country_id" id="library-edit-country" required></select></label>
-              <label><span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span><select name="activity_id" id="library-edit-activity" required></select></label>
-              <label><span>${state.lang === 'zh' ? '品类' : 'Category'}</span><select name="category_id" id="library-edit-category" required></select></label>
-            </div>
             <div class="library-form-grid two">
-              <label><span>${t('visibility')}</span><select name="visibility"><option value="all">${t('allVisible')}</option><option value="designers">${t('designersOnly')}</option><option value="operators">${t('operatorsOnly')}</option></select></label>
+              <label><span>${state.lang === 'zh' ? '所在库' : 'Library section'}</span><input name="kind_label" readonly></label>
+              <label><span>${t('visibility')}</span><select name="visibility"><option value="all">${t('allVisible')}</option></select></label>
+            </div>
+            <div class="library-form-grid">
               <label><span>${state.lang === 'zh' ? '标签' : 'Tags'}</span><input name="tags" placeholder="${state.lang === 'zh' ? '用逗号分隔' : 'Comma separated'}"></label>
             </div>
             <div id="library-edit-message" class="message"></div>
@@ -744,10 +808,33 @@
   }
 
   function wireLibraryShell() {
+    document.querySelectorAll('.library-module-row button[data-route]').forEach(button => {
+      button.addEventListener('click', () => {
+        const route = button.dataset.route;
+        location.hash = route;
+        navigate(route);
+      });
+    });
+    document.querySelectorAll('[data-library-kind]').forEach(button => {
+      button.addEventListener('click', () => {
+        state.libraryFilters.kind = button.dataset.libraryKind || 'all';
+        state.libraryFilters.tag1 = 'all';
+        state.libraryFilters.tag2 = 'all';
+        state.libraryFilters.tag3 = 'all';
+        state.libraryFilters.tag4 = 'all';
+        renderLibrary();
+      });
+    });
+    wireLibraryTagButtons();
     document.getElementById('open-upload-modal')?.addEventListener('click', openLibraryUploadModal);
     document.getElementById('close-library-upload')?.addEventListener('click', closeLibraryUploadModal);
     document.getElementById('cancel-library-upload')?.addEventListener('click', closeLibraryUploadModal);
     document.getElementById('library-upload-form')?.addEventListener('submit', uploadLibraryAsset);
+    document.getElementById('library-upload-kind')?.addEventListener('change', event => {
+      const kind = event.target.value === 'gallery' ? 'gallery' : 'source';
+      document.getElementById('library-upload-tag-controls').innerHTML = renderUploadTagControls(kind);
+      updateLibraryUploadMode(kind);
+    });
     document.getElementById('close-library-edit')?.addEventListener('click', closeLibraryEditModal);
     document.getElementById('cancel-library-edit')?.addEventListener('click', closeLibraryEditModal);
     document.getElementById('library-edit-form')?.addEventListener('submit', saveLibraryEdit);
@@ -759,12 +846,62 @@
       state.libraryFilters.favorites = !state.libraryFilters.favorites;
       renderLibrary();
     });
-    ['country', 'activity', 'category'].forEach(type => {
-      document.getElementById(`library-${type}-filter`)?.addEventListener('change', event => {
-        state.libraryFilters[type] = event.target.value;
-        loadLibraryData();
+  }
+
+  function wireLibraryTagButtons() {
+    document.querySelectorAll('[data-library-tag-key]').forEach(button => {
+      button.addEventListener('click', () => {
+        const key = button.dataset.libraryTagKey;
+        state.libraryFilters[key] = button.dataset.libraryTagValue || 'all';
+        if (key === 'tag1') {
+          state.libraryFilters.tag2 = 'all';
+          state.libraryFilters.tag3 = 'all';
+          state.libraryFilters.tag4 = 'all';
+        }
+        if (key === 'tag2') {
+          state.libraryFilters.tag3 = 'all';
+          state.libraryFilters.tag4 = 'all';
+        }
+        if (key === 'tag3') state.libraryFilters.tag4 = 'all';
+        renderLibraryGrid();
+        document.getElementById('library-tag-rows').innerHTML = renderLibraryTagRows(state.libraryFilters.kind || 'all');
+        wireLibraryTagButtons();
       });
     });
+  }
+
+  function renderLibraryTagRows(kind) {
+    if (!kind || kind === 'all') return '';
+    const rows = libraryTagRows(kind);
+    return rows.map(row => `
+      <div class="library-tag-row">
+        <span>${escapeHtml(row.label)}</span>
+        <div>
+          ${['all', ...row.values].map(value => {
+            const label = value === 'all' ? (state.lang === 'zh' ? '全部' : 'All') : value;
+            const active = (state.libraryFilters[row.key] || 'all') === value;
+            return `<button type="button" class="${active ? 'active' : ''}" data-library-tag-key="${row.key}" data-library-tag-value="${escapeAttr(value)}">${escapeHtml(label)}</button>`;
+          }).join('')}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function libraryTagRows(kind) {
+    const config = LIBRARY_TAGS[kind];
+    if (!config) return [];
+    const labels = state.lang === 'zh'
+      ? { tag1: '标签一', tag2: '标签二', tag3: '标签三', tag4: '标签四' }
+      : { tag1: 'Tag 1', tag2: 'Tag 2', tag3: 'Tag 3', tag4: 'Tag 4' };
+    const rows = [];
+    if (config.tag1) rows.push({ key: 'tag1', label: labels.tag1, values: config.tag1 });
+    if (config.tag2) rows.push({ key: 'tag2', label: labels.tag2, values: config.tag2 });
+    if (config.tag3) rows.push({ key: 'tag3', label: labels.tag3, values: config.tag3 });
+    const tag2 = state.libraryFilters.tag2;
+    const tag3 = state.libraryFilters.tag3;
+    if (config.tag3ByTag2?.[tag2]) rows.push({ key: 'tag3', label: labels.tag3, values: config.tag3ByTag2[tag2] });
+    if (config.tag4ByTag3?.[tag3]) rows.push({ key: 'tag4', label: labels.tag4, values: config.tag4ByTag3[tag3] });
+    return rows;
   }
 
   async function loadLibraryData() {
@@ -901,10 +1038,11 @@
       .map(preview => ({ preview, source: sourcesById.get(preview.source_file_id), url: state.libraryPreviewUrls[preview.preview_path] || '' }))
       .filter(item => item.source)
       .filter(item => {
-        return ['country', 'activity', 'category'].every(type => {
-          const value = state.libraryFilters[type];
-          return !value || value === 'all' || item.source[`${type}_id`] === value;
-        });
+        const kind = libraryKindOfSource(item.source);
+        return state.libraryFilters.kind === 'all' || state.libraryFilters.kind === kind;
+      })
+      .filter(item => {
+        return selectedLibraryTagValues().every(tag => visibleLibraryTags(item.source).includes(tag));
       })
       .filter(item => !state.libraryFilters.favorites || state.libraryFavorites.has(item.preview.id))
       .filter(item => {
@@ -913,20 +1051,26 @@
           item.source.title,
           item.source.source_filename,
           item.preview.preview_filename,
-          ...(item.source.tags || [])
+          libraryKindLabel(libraryKindOfSource(item.source)),
+          optionNameById(item.source.country_id),
+          optionNameById(item.source.activity_id),
+          optionNameById(item.source.category_id),
+          ...visibleLibraryTags(item.source)
         ].join(' ').toLowerCase();
         return text.includes(query);
       });
+    const counts = countLibraryKinds();
     status.innerHTML = `
-      <span class="library-stat"><small>${state.lang === 'zh' ? '预览图' : 'Previews'}</small><strong>${state.libraryItems.length}</strong></span>
-      <span class="library-stat"><small>${state.lang === 'zh' ? '源文件' : 'Sources'}</small><strong>${state.librarySources.length}</strong></span>
-      <span class="library-stat"><small>${state.lang === 'zh' ? '收藏' : 'Favorites'}</small><strong>${state.libraryFavorites.size}</strong></span>
+      <span class="library-stat"><small>${state.lang === 'zh' ? '当前结果' : 'Results'}</small><strong>${state.libraryItems.length}</strong></span>
+      <span class="library-stat"><small>${state.lang === 'zh' ? '图库' : 'Gallery'}</small><strong>${counts.gallery}</strong></span>
+      <span class="library-stat"><small>${state.lang === 'zh' ? '源文件库' : 'Sources'}</small><strong>${counts.source}</strong></span>
+      <span class="library-stat"><small>${state.lang === 'zh' ? '模板库' : 'Templates'}</small><strong>${counts.template}</strong></span>
     `;
     if (state.libraryItems.length === 0) {
       state.librarySelectedPreviewId = '';
       grid.innerHTML = `<div class="empty-card">
         <strong>${state.lang === 'zh' ? '还没有符合条件的素材' : 'No matching assets'}</strong>
-        <span>${state.lang === 'zh' ? '设计师可以先上传一组源文件和预览图。' : 'Designers can upload a source file and previews first.'}</span>
+        <span>${state.lang === 'zh' ? '可以先上传图库图片或源文件素材。模板库素材从静态设计师保存进入。' : 'Upload gallery images or source assets first. Templates come from Static Designer.'}</span>
       </div>`;
       renderLibraryInspector();
       return;
@@ -1037,14 +1181,22 @@
   function renderLibraryCard(item) {
     const source = item.source;
     const preview = item.preview;
+    const kind = libraryKindOfSource(source);
     const favorite = state.libraryFavorites.has(preview.id);
     const canManage = canManageSource(source);
     const canSource = canDownloadSource();
-    const tags = (source.tags || []).slice(0, 4);
+    const tags = visibleLibraryTags(source).slice(0, 4);
     const selected = state.librarySelectedPreviewId === preview.id;
     const dimensions = formatDimensions(preview);
-    const ext = sourceFileLabel(source);
+    const ext = kind === 'template' ? 'TEMPLATE' : sourceFileLabel(source);
     const thumbStyle = previewAspectStyle(preview);
+    const meta = [libraryKindLabel(kind), ...tags.slice(0, 3)];
+    const previewLabel = kind === 'gallery'
+      ? (state.lang === 'zh' ? '原图' : 'Image')
+      : (state.lang === 'zh' ? '预览图' : 'Preview');
+    const sourceLabel = kind === 'template'
+      ? (state.lang === 'zh' ? '模板文件' : 'Template')
+      : (state.lang === 'zh' ? '源文件' : 'Source');
     return `
       <article class="library-card ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
         <div class="library-thumb-wrap">
@@ -1058,9 +1210,7 @@
             <div class="library-subline">${escapeHtml(preview.preview_filename)}${dimensions ? ` · ${escapeHtml(dimensions)}` : ''}</div>
           </div>
           <div class="library-meta">
-            <span>${escapeHtml(optionNameById(source.country_id))}</span>
-            <span>${escapeHtml(optionNameById(source.activity_id))}</span>
-            <span>${escapeHtml(optionNameById(source.category_id))}</span>
+            ${meta.map(label => `<span>${escapeHtml(label)}</span>`).join('')}
           </div>
           <div class="library-tags">
             <span class="badge">${visibilityLabel(source.visibility)}</span>
@@ -1068,10 +1218,10 @@
           </div>
           <div class="library-fileline">${escapeHtml(source.source_filename)} · ${formatFileSize(source.source_size_bytes)}</div>
           <div class="library-card-actions">
-            <button class="secondary-btn" type="button" data-action="use-static">${state.lang === 'zh' ? '静态' : 'Static'}</button>
-            <button class="secondary-btn" type="button" data-action="use-dynamic">${state.lang === 'zh' ? '动态' : 'Motion'}</button>
-            <button class="ghost-btn" type="button" data-action="download-preview">${state.lang === 'zh' ? '预览图' : 'Preview'}</button>
-            ${canSource ? `<button class="ghost-btn" type="button" data-action="download-source">${state.lang === 'zh' ? '源文件' : 'Source'}</button>` : ''}
+            ${kind === 'gallery' ? `<button class="secondary-btn" type="button" data-action="use-static">${state.lang === 'zh' ? '静态' : 'Static'}</button><button class="secondary-btn" type="button" data-action="use-dynamic">${state.lang === 'zh' ? '动态' : 'Motion'}</button>` : ''}
+            ${kind === 'template' ? `<button class="secondary-btn" type="button" data-action="use-static">${state.lang === 'zh' ? '打开模板' : 'Open Template'}</button>` : ''}
+            <button class="ghost-btn" type="button" data-action="download-preview">${previewLabel}</button>
+            ${canSource && kind !== 'gallery' ? `<button class="ghost-btn" type="button" data-action="download-source">${sourceLabel}</button>` : ''}
             ${canManage ? `<button class="ghost-btn" type="button" data-action="edit">${state.lang === 'zh' ? '编辑' : 'Edit'}</button><button class="ghost-btn danger" type="button" data-action="delete">${state.lang === 'zh' ? '删除' : 'Delete'}</button>` : ''}
           </div>
         </div>
@@ -1121,34 +1271,43 @@
       return;
     }
     const { source, preview } = item;
+    const kind = libraryKindOfSource(source);
     const canManage = canManageSource(source);
     const canSource = canDownloadSource();
-    const tags = source.tags || [];
+    const tags = visibleLibraryTags(source);
+    const primaryActions = [
+      kind === 'gallery' ? `<button class="primary-btn" type="button" data-preview-id="${preview.id}" data-action="use-static">${state.lang === 'zh' ? '带入静态 DIY' : 'Use in Static'}</button>` : '',
+      kind === 'gallery' ? `<button class="secondary-btn" type="button" data-preview-id="${preview.id}" data-action="use-dynamic">${state.lang === 'zh' ? '带入动态 DIY' : 'Use in Motion'}</button>` : '',
+      kind === 'template' ? `<button class="primary-btn" type="button" data-preview-id="${preview.id}" data-action="use-static">${state.lang === 'zh' ? '打开静态模板' : 'Open Static Template'}</button>` : ''
+    ].filter(Boolean).join('');
+    const previewLabel = kind === 'gallery'
+      ? (state.lang === 'zh' ? '下载原图' : 'Download image')
+      : (state.lang === 'zh' ? '下载预览图' : 'Download preview');
+    const sourceLabel = kind === 'template'
+      ? (state.lang === 'zh' ? '下载模板文件' : 'Download template')
+      : (state.lang === 'zh' ? '下载源文件' : 'Download source');
     inspector.innerHTML = `
       <div class="inspector-sticky">
         <div class="inspector-preview">${item.url ? `<img src="${escapeAttr(item.url)}" alt="${escapeAttr(source.title)}">` : `<span>${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`}</div>
         <div class="inspector-content">
           <div>
-            <div class="kicker">${escapeHtml(sourceFileLabel(source))} SOURCE</div>
+            <div class="kicker">${escapeHtml(libraryKindLabel(kind))} / ${escapeHtml(sourceFileLabel(source))}</div>
             <h3>${escapeHtml(source.title)}</h3>
             <p>${escapeHtml(source.source_filename)} · ${formatFileSize(source.source_size_bytes)}</p>
           </div>
-          <div class="inspector-actions">
-            <button class="primary-btn" type="button" data-preview-id="${preview.id}" data-action="use-static">${state.lang === 'zh' ? '带入静态 DIY' : 'Use in Static'}</button>
-            <button class="secondary-btn" type="button" data-preview-id="${preview.id}" data-action="use-dynamic">${state.lang === 'zh' ? '带入动态 DIY' : 'Use in Motion'}</button>
-          </div>
+          ${primaryActions ? `<div class="inspector-actions">${primaryActions}</div>` : `<div class="inspector-note">${state.lang === 'zh' ? '源文件库用于团队下载与归档，暂不直接带入编辑器。' : 'Source assets are for team download and archive, not direct editor import.'}</div>`}
           <dl class="inspector-list">
-            <div><dt>${state.lang === 'zh' ? '国家' : 'Country'}</dt><dd>${escapeHtml(optionNameById(source.country_id))}</dd></div>
-            <div><dt>${state.lang === 'zh' ? '活动' : 'Activity'}</dt><dd>${escapeHtml(optionNameById(source.activity_id))}</dd></div>
-            <div><dt>${state.lang === 'zh' ? '品类' : 'Category'}</dt><dd>${escapeHtml(optionNameById(source.category_id))}</dd></div>
+            <div><dt>${state.lang === 'zh' ? '所在库' : 'Section'}</dt><dd>${escapeHtml(libraryKindLabel(kind))}</dd></div>
+            <div><dt>${state.lang === 'zh' ? '标签' : 'Tags'}</dt><dd>${tags.length ? escapeHtml(tags.join(' / ')) : '-'}</dd></div>
+            <div><dt>${state.lang === 'zh' ? '文件类型' : 'File type'}</dt><dd>${escapeHtml(sourceFileLabel(source))}</dd></div>
             <div><dt>${state.lang === 'zh' ? '可见范围' : 'Visibility'}</dt><dd>${visibilityLabel(source.visibility)}</dd></div>
             <div><dt>${state.lang === 'zh' ? '预览尺寸' : 'Preview size'}</dt><dd>${escapeHtml(formatDimensions(preview) || '-')}</dd></div>
             <div><dt>${state.lang === 'zh' ? '更新时间' : 'Updated'}</dt><dd>${formatDate(source.updated_at || source.created_at)}</dd></div>
           </dl>
           ${tags.length ? `<div class="inspector-tags">${tags.map(tag => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
           <div class="inspector-secondary-actions">
-            <button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="download-preview">${state.lang === 'zh' ? '下载预览图' : 'Download preview'}</button>
-            ${canSource ? `<button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="download-source">${state.lang === 'zh' ? '下载源文件' : 'Download source'}</button>` : ''}
+            <button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="download-preview">${previewLabel}</button>
+            ${canSource && kind !== 'gallery' ? `<button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="download-source">${sourceLabel}</button>` : ''}
             ${canManage ? `<button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="edit">${state.lang === 'zh' ? '编辑信息' : 'Edit details'}</button><button class="ghost-btn danger" type="button" data-preview-id="${preview.id}" data-action="delete">${state.lang === 'zh' ? '删除整组' : 'Delete source'}</button>` : ''}
           </div>
         </div>
@@ -1184,11 +1343,18 @@
     document.getElementById('library-upload-title').value = '';
     document.getElementById('library-upload-message').textContent = '';
     document.getElementById('library-upload-modal').hidden = false;
+    updateLibraryUploadMode(document.getElementById('library-upload-kind')?.value || 'source');
   }
 
   function closeLibraryUploadModal() {
     const modal = document.getElementById('library-upload-modal');
     if (modal) modal.hidden = true;
+  }
+
+  function updateLibraryUploadMode(kind) {
+    document.querySelectorAll('[data-upload-mode]').forEach(node => {
+      node.hidden = node.dataset.uploadMode !== kind;
+    });
   }
 
   async function uploadLibraryAsset(event) {
@@ -1207,6 +1373,15 @@
     let sourceId = '';
     try {
       const formData = new FormData(form);
+      const libraryKind = formData.get('library_kind') === 'gallery' ? 'gallery' : 'source';
+      if (libraryKind === 'gallery') {
+        await uploadGalleryAssets(formData);
+        setMessage(message, state.lang === 'zh' ? '图库素材已上传。' : 'Gallery assets uploaded.', false, true);
+        setTimeout(closeLibraryUploadModal, 600);
+        state.libraryFilters.kind = 'gallery';
+        await loadLibraryData();
+        return;
+      }
       const sourceFile = formData.get('source_file');
       const previewFiles = Array.from(formData.getAll('preview_files')).filter(file => file && file.size > 0);
       validateLibraryUpload(sourceFile, previewFiles);
@@ -1220,10 +1395,10 @@
       const sourceRow = {
         id: sourceId,
         title,
-        country_id: formData.get('country_id'),
-        activity_id: formData.get('activity_id'),
-        category_id: formData.get('category_id'),
-        tags: parseTags(formData.get('tags')),
+        country_id: null,
+        activity_id: null,
+        category_id: null,
+        tags: libraryTagsForForm(formData, 'source'),
         visibility: formData.get('visibility') || 'all',
         source_path: sourcePath,
         source_filename: sourceFile.name,
@@ -1272,6 +1447,68 @@
     }
   }
 
+  async function uploadGalleryAssets(formData) {
+    const files = Array.from(formData.getAll('gallery_files')).filter(file => file && file.size > 0);
+    validateGalleryUpload(files);
+    const userId = state.session.user.id;
+    const baseTitle = formData.get('title').trim();
+    const uploadedPaths = [];
+    const insertedSourceIds = [];
+    try {
+      for (const file of files) {
+        const sourceId = crypto.randomUUID();
+        const sourcePath = `${userId}/sources/${sourceId}/${safeStorageName(file.name)}`;
+        const sourceUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, file, { upsert: false, contentType: file.type });
+        if (sourceUpload.error) throw sourceUpload.error;
+        uploadedPaths.push(sourcePath);
+        const dimensions = await readImageDimensions(file);
+        const title = files.length === 1 ? (baseTitle || stripExtension(file.name)) : `${baseTitle || stripExtension(file.name)} · ${stripExtension(file.name)}`;
+        const sourceRow = {
+          id: sourceId,
+          title,
+          country_id: null,
+          activity_id: null,
+          category_id: null,
+          tags: libraryTagsForForm(formData, 'gallery'),
+          visibility: formData.get('visibility') || 'all',
+          source_path: sourcePath,
+          source_filename: file.name,
+          source_mime_type: file.type || '',
+          source_size_bytes: file.size,
+          source_ext: fileExt(file.name),
+          uploaded_by: userId
+        };
+        const sourceInsert = await state.supabase.from('vf_source_files').insert([sourceRow]);
+        if (sourceInsert.error) throw sourceInsert.error;
+        insertedSourceIds.push(sourceId);
+        const previewInsert = await state.supabase.from('vf_asset_previews').insert([{
+          id: crypto.randomUUID(),
+          source_file_id: sourceId,
+          preview_path: sourcePath,
+          preview_filename: file.name,
+          preview_mime_type: file.type,
+          preview_size_bytes: file.size,
+          width: dimensions.width,
+          height: dimensions.height,
+          sort_order: 10
+        }]);
+        if (previewInsert.error) throw previewInsert.error;
+      }
+    } catch (error) {
+      await cleanupGalleryUpload(insertedSourceIds, uploadedPaths);
+      throw error;
+    }
+  }
+
+  async function cleanupGalleryUpload(sourceIds, uploadedPaths) {
+    try {
+      if (sourceIds.length) await state.supabase.from('vf_source_files').delete().in('id', sourceIds);
+      if (uploadedPaths.length) await state.supabase.storage.from(LIBRARY_BUCKET).remove(uploadedPaths);
+    } catch (error) {
+      console.warn('Gallery upload cleanup failed:', error);
+    }
+  }
+
   async function cleanupFailedLibraryUpload(sourceId, sourceInserted, uploadedPaths) {
     if (state.localPreview || !state.supabase) return;
     try {
@@ -1290,8 +1527,18 @@
     if (!sourceFile || !sourceFile.size) throw new Error(state.lang === 'zh' ? '请选择源文件。' : 'Choose a source file.');
     if (!SOURCE_EXTENSIONS.includes(fileExt(sourceFile.name))) throw new Error(state.lang === 'zh' ? '源文件仅支持 PSD / AI / PDF。' : 'Source must be PSD / AI / PDF.');
     if (previewFiles.length === 0) throw new Error(state.lang === 'zh' ? '至少上传一张预览图。' : 'Upload at least one preview image.');
+    if (previewFiles.length > 5) throw new Error(state.lang === 'zh' ? '一个源文件最多绑定 5 张预览图。' : 'A source file can have at most 5 previews.');
     previewFiles.forEach(file => {
       if (!PREVIEW_MIME_TYPES.includes(file.type)) throw new Error(state.lang === 'zh' ? '预览图仅支持 JPG / PNG / WEBP。' : 'Preview must be JPG / PNG / WEBP.');
+    });
+  }
+
+  function validateGalleryUpload(files) {
+    if (!files.length) throw new Error(state.lang === 'zh' ? '请选择至少一张图库图片。' : 'Choose at least one gallery image.');
+    files.forEach(file => {
+      if (!PREVIEW_MIME_TYPES.includes(file.type) || !IMAGE_EXTENSIONS.includes(fileExt(file.name))) {
+        throw new Error(state.lang === 'zh' ? '图库仅支持 JPG / PNG / WEBP。' : 'Gallery only supports JPG / PNG / WEBP.');
+      }
     });
   }
 
@@ -1300,13 +1547,13 @@
     if (!source) return;
     renderLibrarySelects();
     const form = document.getElementById('library-edit-form');
+    const kind = libraryKindOfSource(source);
     form.elements.id.value = source.id;
+    form.elements.library_kind.value = kind;
+    form.elements.kind_label.value = libraryKindLabel(kind);
     form.elements.title.value = source.title || '';
-    form.elements.country_id.value = source.country_id || '';
-    form.elements.activity_id.value = source.activity_id || '';
-    form.elements.category_id.value = source.category_id || '';
     form.elements.visibility.value = source.visibility || 'all';
-    form.elements.tags.value = (source.tags || []).join(', ');
+    form.elements.tags.value = visibleLibraryTags(source).join(', ');
     document.getElementById('library-edit-message').textContent = '';
     document.getElementById('library-edit-modal').hidden = false;
   }
@@ -1323,13 +1570,15 @@
     try {
       const form = new FormData(event.currentTarget);
       const id = form.get('id');
+      const source = state.librarySources.find(item => item.id === id);
+      const kind = source ? libraryKindOfSource(source) : (form.get('library_kind') || 'source');
       const update = {
         title: form.get('title').trim(),
-        country_id: form.get('country_id'),
-        activity_id: form.get('activity_id'),
-        category_id: form.get('category_id'),
+        country_id: null,
+        activity_id: null,
+        category_id: null,
         visibility: form.get('visibility') || 'all',
-        tags: parseTags(form.get('tags'))
+        tags: normalizeLibraryTags(kind, parseTags(form.get('tags')))
       };
       const { error } = await state.supabase.from('vf_source_files').update(update).eq('id', id);
       if (error) throw error;
@@ -1402,6 +1651,14 @@
   }
 
   async function useLibraryAsset(item, tool) {
+    const kind = libraryKindOfSource(item.source);
+    if (kind === 'source') {
+      alert(state.lang === 'zh' ? '源文件库素材用于下载归档，暂不直接带入编辑器。' : 'Source library assets are for download/archive and cannot be imported directly yet.');
+      return;
+    }
+    if (kind === 'template') {
+      return openLibraryTemplate(item);
+    }
     if (!item.url) {
       alert(state.lang === 'zh' ? '预览图链接还没准备好，请刷新素材库后再试。' : 'The preview link is not ready. Refresh the library and try again.');
       return;
@@ -1419,6 +1676,31 @@
     await logAssetEvent(target === 'dynamic' ? 'use_dynamic' : 'use_static', item);
     location.hash = target;
     navigate(target);
+  }
+
+  async function openLibraryTemplate(item) {
+    if (state.localPreview || !state.supabase) {
+      alert(state.lang === 'zh' ? '本地预览不能打开云端模板。' : 'Local preview cannot open cloud templates.');
+      return;
+    }
+    try {
+      const snapshot = await loadLibraryTemplateSnapshot(item);
+      validateProjectSnapshot(snapshot, 'static');
+      location.hash = 'static';
+      navigate('static');
+      await waitForToolImporter();
+      const result = await state.activeFrame.contentWindow.VF_IMPORT_PROJECT(snapshot);
+      if (!result?.success) throw new Error(result?.message || (state.lang === 'zh' ? '模板打开失败。' : 'Failed to open template.'));
+      await logAssetEvent('use_template', item);
+    } catch (error) {
+      alert(error.message);
+    }
+  }
+
+  async function loadLibraryTemplateSnapshot(item) {
+    const { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).download(item.source.source_path);
+    if (error) throw error;
+    return JSON.parse(await data.text());
   }
 
   async function logAssetEvent(eventType, item) {
@@ -1444,6 +1726,61 @@
     return state.libraryOptions.filter(item => item.option_type === type);
   }
 
+  function libraryKindOfSource(source) {
+    const tags = source?.tags || [];
+    if (tags.includes(LIBRARY_KIND_MARKERS.gallery)) return 'gallery';
+    if (tags.includes(LIBRARY_KIND_MARKERS.template)) return 'template';
+    if (tags.includes(LIBRARY_KIND_MARKERS.source)) return 'source';
+    const ext = fileExt(source?.source_filename || source?.source_ext || '');
+    if (IMAGE_EXTENSIONS.includes(ext)) return 'gallery';
+    if (TEMPLATE_EXTENSIONS.includes(ext)) return 'template';
+    return 'source';
+  }
+
+  function libraryKindLabel(kind) {
+    const item = LIBRARY_KIND_TABS.find(tab => tab.id === kind);
+    return item ? (state.lang === 'zh' ? item.zh : item.en) : kind;
+  }
+
+  function visibleLibraryTags(source) {
+    return (source?.tags || [])
+      .filter(tag => !String(tag).startsWith('vf:'))
+      .filter(Boolean);
+  }
+
+  function selectedLibraryTagValues() {
+    return ['tag1', 'tag2', 'tag3', 'tag4']
+      .map(key => state.libraryFilters[key])
+      .filter(value => value && value !== 'all');
+  }
+
+  function countLibraryKinds() {
+    return state.librarySources.reduce((counts, source) => {
+      const kind = libraryKindOfSource(source);
+      counts[kind] = (counts[kind] || 0) + 1;
+      return counts;
+    }, { gallery: 0, source: 0, template: 0 });
+  }
+
+  function libraryTagsForForm(formData, kind) {
+    const tags = [];
+    ['tag1', 'tag2', 'tag3', 'tag4'].forEach(key => {
+      const value = String(formData.get(key) || '').trim();
+      if (value && value !== 'all') tags.push(value);
+    });
+    tags.push(...parseTags(formData.get('tags')));
+    return normalizeLibraryTags(kind, tags);
+  }
+
+  function normalizeLibraryTags(kind, tags) {
+    const marker = LIBRARY_KIND_MARKERS[kind] || LIBRARY_KIND_MARKERS.source;
+    const cleaned = tags
+      .map(tag => String(tag || '').trim())
+      .filter(Boolean)
+      .filter(tag => !String(tag).startsWith('vf:'));
+    return [marker, ...Array.from(new Set(cleaned))].slice(0, 18);
+  }
+
   function optionName(option) {
     if (!option) return '-';
     return state.lang === 'zh' ? (option.name_zh || option.name_en) : option.name_en;
@@ -1458,15 +1795,15 @@
   }
 
   function canUploadAssets() {
-    return !state.localPreview && ['admin', 'designer'].includes(currentRole());
+    return !state.localPreview && !!state.session;
   }
 
   function canDownloadSource() {
-    return ['admin', 'designer'].includes(currentRole());
+    return !!state.session;
   }
 
-  function canManageSource(source) {
-    return currentRole() === 'admin' || source.uploaded_by === state.session?.user?.id;
+  function canManageSource(_source) {
+    return !state.localPreview && !!state.session;
   }
 
   function parseTags(value) {
@@ -1511,6 +1848,15 @@
       };
       img.src = url;
     });
+  }
+
+  function dataUrlToBlob(dataUrl) {
+    const [header, body] = String(dataUrl || '').split(',');
+    const mime = header.match(/data:([^;]+)/)?.[1] || 'application/octet-stream';
+    const binary = atob(body || '');
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return new Blob([bytes], { type: mime });
   }
 
   function triggerBlobDownload(blob, filename) {
@@ -1868,6 +2214,84 @@
     els.projectModal.hidden = true;
   }
 
+  async function saveStaticTemplateToLibrary() {
+    if (state.route !== 'static') return;
+    if (state.localPreview || !state.supabase || !state.session) {
+      alert(state.lang === 'zh' ? '模板库保存需要登录云端账号。' : 'Saving templates requires a cloud login.');
+      return;
+    }
+    const title = window.prompt(state.lang === 'zh' ? '模板名称' : 'Template name', `${state.lang === 'zh' ? '静态模板' : 'Static Template'} ${new Date().toLocaleString()}`);
+    if (!title || !title.trim()) return;
+    const button = els.saveTemplateBtn;
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = state.lang === 'zh' ? '保存中...' : 'Saving...';
+    const sourceId = crypto.randomUUID();
+    const uploadedPaths = [];
+    let sourceInserted = false;
+    try {
+      await waitForToolTemplateExporter();
+      const exported = await state.activeFrame.contentWindow.VF_EXPORT_TEMPLATE_ASSET({ title: title.trim() });
+      const snapshot = exported?.snapshot;
+      validateProjectSnapshot(snapshot, 'static');
+      if (!exported?.previewDataUrl) throw new Error(state.lang === 'zh' ? '没有生成模板预览图。' : 'Template preview was not generated.');
+      const userId = state.session.user.id;
+      const templateBlob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+      const previewBlob = dataUrlToBlob(exported.previewDataUrl);
+      const sourcePath = `${userId}/sources/${sourceId}/${safeStorageName(`${title.trim()}.json`)}`;
+      const previewPath = `${userId}/previews/${sourceId}/${safeStorageName(`${title.trim()}-preview.png`)}`;
+      const sourceUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, templateBlob, {
+        upsert: false,
+        contentType: 'application/json'
+      });
+      if (sourceUpload.error) throw sourceUpload.error;
+      uploadedPaths.push(sourcePath);
+      const previewUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(previewPath, previewBlob, {
+        upsert: false,
+        contentType: previewBlob.type || 'image/png'
+      });
+      if (previewUpload.error) throw previewUpload.error;
+      uploadedPaths.push(previewPath);
+      const dimensions = await readImageDimensions(new File([previewBlob], 'template-preview.png', { type: previewBlob.type || 'image/png' }));
+      const sourceInsert = await state.supabase.from('vf_source_files').insert([{
+        id: sourceId,
+        title: title.trim(),
+        country_id: null,
+        activity_id: null,
+        category_id: null,
+        tags: normalizeLibraryTags('template', ['未分类', '静态模板']),
+        visibility: 'all',
+        source_path: sourcePath,
+        source_filename: `${title.trim()}.json`,
+        source_mime_type: 'application/json',
+        source_size_bytes: templateBlob.size,
+        source_ext: 'json',
+        uploaded_by: userId
+      }]);
+      if (sourceInsert.error) throw sourceInsert.error;
+      sourceInserted = true;
+      const previewInsert = await state.supabase.from('vf_asset_previews').insert([{
+        id: crypto.randomUUID(),
+        source_file_id: sourceId,
+        preview_path: previewPath,
+        preview_filename: `${title.trim()}-preview.png`,
+        preview_mime_type: previewBlob.type || 'image/png',
+        preview_size_bytes: previewBlob.size,
+        width: dimensions.width,
+        height: dimensions.height,
+        sort_order: 10
+      }]);
+      if (previewInsert.error) throw previewInsert.error;
+      alert(state.lang === 'zh' ? '已保存到模板库。' : 'Saved to Template Library.');
+    } catch (error) {
+      await cleanupFailedLibraryUpload(sourceId, sourceInserted, uploadedPaths);
+      alert(error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+
   async function saveProject(event) {
     event.preventDefault();
     const submitButton = event.submitter || els.projectForm.querySelector('button[type="submit"]');
@@ -1967,6 +2391,26 @@
         } catch (_error) {}
         if (Date.now() - start > timeoutMs) {
           reject(new Error(state.lang === 'zh' ? '编辑器保存桥接还没有准备好，请稍后再试。' : 'The editor save bridge is not ready yet. Please try again.'));
+          return;
+        }
+        setTimeout(tick, 120);
+      };
+      tick();
+    });
+  }
+
+  function waitForToolTemplateExporter(timeoutMs = 10000) {
+    const start = Date.now();
+    return new Promise((resolve, reject) => {
+      const tick = () => {
+        try {
+          if (state.activeFrame?.contentWindow && typeof state.activeFrame.contentWindow.VF_EXPORT_TEMPLATE_ASSET === 'function') {
+            resolve();
+            return;
+          }
+        } catch (_error) {}
+        if (Date.now() - start > timeoutMs) {
+          reject(new Error(state.lang === 'zh' ? '静态设计师模板导出还没有准备好，请稍后再试。' : 'The Static Designer template exporter is not ready yet.'));
           return;
         }
         setTimeout(tick, 120);
