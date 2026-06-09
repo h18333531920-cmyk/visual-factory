@@ -421,6 +421,194 @@
                 flex-basis: auto;
             }
         }
+
+        /* GCC decisive creative workspace skin v1ui6 */
+        :root {
+            --primary: #0b0d12;
+            --primary-hover: #050608;
+            --bg-canvas: #f5f6f3;
+            --panel-bg: #ffffff;
+            --card-bg: #e7e8e4;
+            --border: #d9dbd7;
+            --text-main: #0b0d12;
+            --text-sub: #7c828b;
+            --accent-lime: #d8ff4f;
+        }
+
+        html,
+        body {
+            background: #f5f6f3;
+        }
+
+        body {
+            padding: 30px 38px 34px;
+            gap: 20px;
+            overflow: hidden;
+        }
+
+        .workspace-tabs {
+            width: min(1780px, 100%);
+            height: 34px;
+            gap: 30px;
+            padding-left: 18px;
+        }
+
+        .workspace-tabs strong,
+        .workspace-tabs button {
+            font-size: 14px;
+        }
+
+        .workspace-tabs strong::after {
+            bottom: -10px;
+            height: 3px;
+        }
+
+        .editor-layout {
+            width: min(1780px, 100%);
+            max-width: 1780px;
+            height: calc(100vh - 104px);
+            gap: 32px;
+            align-items: stretch;
+        }
+
+        .left-pane {
+            position: relative;
+            flex: 1 1 auto;
+            background: #e5e6e2;
+            border-radius: 10px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
+        }
+
+        .left-pane::before {
+            background-image: radial-gradient(circle, rgba(11, 13, 18, 0.16) 1px, transparent 1px);
+            background-size: 22px 22px;
+            opacity: 0.42;
+        }
+
+        .ratio-nav {
+            top: 22px;
+            padding: 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.76);
+            box-shadow: 0 14px 36px rgba(11, 13, 18, 0.06);
+        }
+
+        .ratio-nav button,
+        .canvas-actions button {
+            min-width: 70px;
+            border-radius: 999px;
+            border-color: #0b0d12;
+            font-weight: 850;
+        }
+
+        .canvas-actions {
+            top: 28px;
+            right: 28px;
+        }
+
+        .canvas-wrapper {
+            border-radius: 0;
+            box-shadow: 0 22px 64px rgba(11, 13, 18, 0.08);
+        }
+
+        .right-pane {
+            width: 426px;
+            flex: 0 0 426px;
+            padding-right: 0;
+        }
+
+        .pane-content {
+            gap: 18px;
+        }
+
+        .module-card {
+            background: #e5e6e2;
+            border-radius: 10px;
+            padding: 22px;
+            box-shadow: none;
+        }
+
+        .card-title {
+            font-size: 16px;
+            letter-spacing: 0;
+        }
+
+        .card-title::before {
+            width: 5px;
+            height: 22px;
+            border-radius: 999px;
+            background: #d0d2cd;
+        }
+
+        .asset-tab {
+            min-height: 30px;
+            padding-inline: 18px;
+            border-radius: 999px;
+            background: #767875;
+        }
+
+        .asset-tab.active,
+        .btn-dark,
+        .p-tab.active,
+        .prompt-tag-chip.active {
+            background: #0b0d12;
+            border-color: #0b0d12;
+        }
+
+        .asset-empty,
+        .asset-item,
+        .layer-item,
+        .setting-row,
+        .keyword-setting-row,
+        .input-text,
+        .input-select,
+        .textarea,
+        .semantic-select,
+        .preset-card {
+            border-radius: 9px;
+            background: rgba(255, 255, 255, 0.82);
+            border-color: #d4d6d2;
+        }
+
+        .btn-outline,
+        .btn-icon {
+            background: rgba(255, 255, 255, 0.86);
+            border-color: #d4d6d2;
+        }
+
+        .btn-outline:hover,
+        .btn-icon:hover,
+        .asset-item:hover,
+        .layer-item:hover {
+            border-color: #0b0d12;
+        }
+
+        .btn,
+        .btn-icon,
+        .p-tab,
+        .prompt-tag-chip {
+            border-radius: 9px;
+        }
+
+        .modal-content {
+            border-radius: 12px;
+        }
+
+        @media (max-width: 1180px) {
+            body {
+                overflow: auto;
+            }
+
+            .editor-layout {
+                width: 100%;
+                height: auto;
+            }
+
+            .right-pane {
+                width: 100%;
+                flex-basis: auto;
+            }
+        }
     </style>
 </head>
 <body>

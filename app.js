@@ -106,7 +106,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260608-v1ui5';
+  const TOOL_UI_VERSION = '20260609-v1ui6';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -721,7 +721,18 @@
     els.content.innerHTML = `
       <div class="library-page ${homeMode ? 'library-page-home' : ''}">
         <section class="library-hero">
-          <div class="library-hero-panel"></div>
+          <div class="library-hero-panel">
+            <div class="library-hero-badge">${state.lang === 'zh' ? 'GCC Creative Beta 已开放团队体验 ↗' : 'GCC Creative Beta is open ↗'}</div>
+            <div class="library-hero-title">
+              <span>Hey</span>
+              <i aria-hidden="true"></i>
+              <strong>${state.lang === 'zh' ? '你的创意工作台已就绪' : 'Your creative workspace is ready'}</strong>
+            </div>
+            <label class="library-hero-command" aria-label="${state.lang === 'zh' ? '搜索素材或发起创作' : 'Search or create'}">
+              <input id="library-hero-search" placeholder="${state.lang === 'zh' ? '可以问我找素材、做海报、做动效，也可以输入国家、活动、品类' : 'Search assets, posters, motion, country, campaign, category'}" value="${escapeAttr(state.libraryFilters.query)}">
+              <button type="button" data-route="library" aria-label="${state.lang === 'zh' ? '进入超级库' : 'Open library'}">↑</button>
+            </label>
+          </div>
           <div class="library-module-row">
             <button type="button" data-route="library">${state.lang === 'zh' ? '超级库' : 'Super Library'} <span>›</span></button>
             <button type="button" data-route="static">${state.lang === 'zh' ? '静态设计师' : 'Static Designer'} <span>›</span></button>
@@ -934,6 +945,13 @@
     document.getElementById('library-edit-form')?.addEventListener('submit', saveLibraryEdit);
     document.getElementById('library-search')?.addEventListener('input', event => {
       state.libraryFilters.query = event.target.value.trim();
+      state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
+      renderLibraryGrid();
+    });
+    document.getElementById('library-hero-search')?.addEventListener('input', event => {
+      state.libraryFilters.query = event.target.value.trim();
+      const search = document.getElementById('library-search');
+      if (search) search.value = state.libraryFilters.query;
       state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
       renderLibraryGrid();
     });
