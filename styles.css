@@ -4765,6 +4765,10 @@ body,
   display: none;
 }
 
+.app-shell[data-route="library"] .main-area {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .library-page,
 .library-page-home {
   padding: 46px clamp(30px, 3.8vw, 72px) 78px;
