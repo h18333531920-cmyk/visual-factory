@@ -106,7 +106,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260608-v1ui2';
+  const TOOL_UI_VERSION = '20260608-v1ui5';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -723,10 +723,10 @@
         <section class="library-hero">
           <div class="library-hero-panel"></div>
           <div class="library-module-row">
-            <button type="button" data-route="static">${state.lang === 'zh' ? '静态设计' : 'Static Design'} <span>›</span></button>
-            <button type="button" data-route="dynamic">${state.lang === 'zh' ? '动态设计' : 'Motion Design'} <span>›</span></button>
+            <button type="button" data-route="library">${state.lang === 'zh' ? '超级库' : 'Super Library'} <span>›</span></button>
+            <button type="button" data-route="static">${state.lang === 'zh' ? '静态设计师' : 'Static Designer'} <span>›</span></button>
+            <button type="button" data-route="dynamic">${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'} <span>›</span></button>
             <button type="button" data-route="request">${state.lang === 'zh' ? '提需流程' : 'Request Flow'} <span>›</span></button>
-            <button type="button" data-route="request">${state.lang === 'zh' ? '设计审核' : 'Review'} <span>›</span></button>
           </div>
         </section>
 
