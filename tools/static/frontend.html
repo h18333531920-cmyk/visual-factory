@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GCC Design - Static DIY</title>
-    <script src="../../config.js"></script>
-    <script src="../../tool-auth-guard.js"></script>
+    <script src="../../config.js?v=20260626-home-kiki3"></script>
+    <script src="../../tool-auth-guard.js?v=20260626-home-kiki3"></script>
     <script src="../vendor/html2canvas.min.js"></script>
     
     <style>
@@ -15,7 +15,8 @@
         
         .workspace-tabs { width: min(1560px, 100%); height: 24px; display: flex; align-items: center; gap: 26px; color: #111827; font-size: 14px; font-weight: 520; }
         .workspace-tabs strong { font-weight: 860; }
-        .workspace-tabs button { border: 0; background: transparent; padding: 0; color: #111827; font-size: 14px; font-weight: 520; }
+        .workspace-tabs button { border: 0; background: transparent; padding: 0; color: #111827; font-size: 14px; font-weight: 520; cursor: pointer; }
+        .workspace-tabs button.active { color: #101114; font-weight: 880; }
         .editor-layout { display: flex; gap: 30px; max-width: 1560px; width: 100%; height: calc(100vh - 110px); }
         .left-pane { flex: 1; background: #EAEAEA; border-radius: 9px; position: relative; display: flex; align-items: center; justify-content: center; border: 0; overflow: hidden; background-image: none; }
         .ratio-nav { position: absolute; top: 26px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; gap: 8px; background: transparent; padding: 0; border-radius: 0; box-shadow: none; border: 0; }
@@ -24,17 +25,29 @@
         .ratio-nav button.active { background: #717171; border-color: #717171; color: #FFFFFF; }
         .canvas-actions { position: absolute; right: 28px; top: 26px; z-index: 12; display: flex; gap: 8px; }
         .canvas-actions button { min-width: 70px; height: 28px; border: 1px solid #111827; border-radius: 999px; background: #FFFFFF; color: #111827; font-size: 12px; font-weight: 800; }
-        .canvas-actions button:last-child { background: #717171; border-color: #717171; color: #FFFFFF; }
+        .canvas-actions button:last-child,
+        .canvas-actions button.primary { background: #717171; border-color: #717171; color: #FFFFFF; }
 
         .canvas-wrapper { position: absolute; left: 50%; top: 50%; background: #FFFFFF; box-shadow: none; overflow: hidden; transform-origin: center center; }
+        .artboard-preview-dock { position: absolute; inset: 74px 28px 28px; z-index: 16; display: none; align-items: center; justify-content: center; gap: 24px; pointer-events: auto; }
+        .left-pane.overview-mode .artboard-preview-dock { display: flex; }
+        .left-pane.overview-mode .canvas-wrapper { opacity: 0; pointer-events: none; }
+        .artboard-preview-card { width: auto; min-height: 112px; border: 1px solid rgba(16,17,20,0.18); border-radius: 8px; background: rgba(255,255,255,0.86); padding: 10px; cursor: pointer; box-shadow: 0 10px 28px rgba(16,17,20,0.08); }
+        .artboard-preview-card.active { border-color: var(--text-main); box-shadow: 0 0 0 2px var(--text-main), 0 12px 30px rgba(16,17,20,0.12); }
+        .artboard-preview-title { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 850; color: var(--text-main); margin-bottom: 7px; }
+        .artboard-preview-title span:last-child { color: var(--text-sub); font-weight: 760; }
+        .artboard-preview-viewport { position: relative; overflow: hidden; margin: 0 auto; background: #FFFFFF; }
+        .artboard-preview-canvas { position: absolute; left: 0; top: 0; transform-origin: top left; overflow: hidden; background: #FFFFFF; }
         .layer-base { position: absolute; pointer-events: none; }
         
         .layer-image-wrapper { position: absolute; cursor: grab; transform-origin: center center; pointer-events: auto; box-shadow: 0 0 0 1px rgba(0,0,0,0.05); }
         .layer-image-wrapper:active { cursor: grabbing; }
         .layer-image-div { width: 100%; height: 100%; background-size: cover; background-position: center; pointer-events: none; }
         .layer-image-img { width: 100%; height: 100%; display: block; pointer-events: none; }
+        .layer-solid-wrapper { position: absolute; transform-origin: center center; pointer-events: auto; }
 
         .empty-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #9CA3AF; background: #FFFFFF; z-index: 0; pointer-events: none;}
+        .safe-guide { position: absolute; border: 2px dashed rgba(16,17,20,0.28); border-radius: 2px; z-index: 75; pointer-events: none; box-shadow: 0 0 0 9999px rgba(16,17,20,0.025) inset; }
 
         .layer-arc-wrapper { transform-origin: center center; position: absolute; pointer-events: none; }
         .layer-arc-wrapper circle { pointer-events: stroke; cursor: grab; } .layer-arc-wrapper circle:active { cursor: grabbing; }
@@ -107,17 +120,28 @@
         .asset-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
         .asset-tab { border: 1px solid var(--border); background: #FFFFFF; border-radius: 9px; padding: 8px 6px; font-size: 12px; font-weight: 800; cursor: pointer; color: var(--text-sub); }
         .asset-tab.active { background: var(--text-main); border-color: var(--text-main); color: #FFFFFF; }
-        .asset-list { display: flex; flex-direction: column; gap: 8px; max-height: 190px; overflow-y: auto; padding-right: 4px; }
-        .asset-item { display: grid; grid-template-columns: 42px 1fr auto; align-items: center; gap: 10px; padding: 9px; border: 1px solid var(--border); border-radius: 10px; background: #FFFFFF; cursor: pointer; }
+        .asset-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-height: 260px; overflow-y: auto; padding: 0 4px 4px 0; align-items: start; }
+        .asset-item { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: #FFFFFF; cursor: pointer; }
         .asset-item:hover { border-color: var(--primary); }
-        .asset-thumb { width: 42px; height: 30px; border-radius: 6px; background: #F3F5F7; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 10px; font-weight: 800; color: var(--text-sub); }
+        .asset-item.current { border-color: var(--text-main); box-shadow: 0 0 0 2px rgba(16,17,20,0.08); }
+        .asset-thumb { width: 100%; aspect-ratio: 1.38; border-radius: 7px; background: #F3F5F7; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 10px; font-weight: 800; color: var(--text-sub); }
         .asset-thumb img { width: 100%; height: 100%; object-fit: contain; }
+        .asset-thumb.logo-thumb { background-color: #f7f8f6; background-image: linear-gradient(45deg, #e3e5e1 25%, transparent 25%), linear-gradient(-45deg, #e3e5e1 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e3e5e1 75%), linear-gradient(-45deg, transparent 75%, #e3e5e1 75%); background-size: 14px 14px; background-position: 0 0, 0 7px, 7px -7px, -7px 0; }
+        .asset-preview-stage { position: relative; overflow: hidden; background: #FFFFFF; }
+        .asset-preview-canvas { position: absolute; left: 0; top: 0; transform-origin: top left; overflow: hidden; background: #FFFFFF; }
+        .asset-pack-hover { display: none; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; padding-top: 2px; }
+        .asset-item:hover .asset-pack-hover { display: grid; }
+        .asset-pack-mini { min-width: 0; }
+        .asset-pack-mini-label { font-size: 9px; font-weight: 850; color: var(--text-sub); margin-bottom: 3px; text-align: center; }
+        .asset-info { min-width: 0; padding-right: 18px; }
         .asset-name { font-size: 12px; font-weight: 800; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .asset-meta { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
-        .asset-actions { display: flex; gap: 6px; align-items: center; }
-        .asset-action { border: none; background: transparent; cursor: pointer; font-size: 13px; color: var(--text-sub); padding: 3px; }
+        .asset-actions { position: absolute; right: 7px; bottom: 8px; display: flex; gap: 4px; align-items: center; opacity: 0; transition: opacity 0.16s; }
+        .asset-item:hover .asset-actions { opacity: 1; }
+        .asset-action { width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 999px; background: rgba(255,255,255,0.92); cursor: pointer; font-size: 12px; color: var(--text-sub); padding: 0; }
         .asset-action:hover { color: var(--danger); }
-        .asset-empty { color: var(--text-sub); font-size: 12px; text-align: center; padding: 14px 8px; border: 1px dashed var(--border); border-radius: 10px; background: #FFFFFF; }
+        .asset-status { position: absolute; top: 12px; left: 12px; background: #0b0d12; color: #fff; border-radius: 999px; padding: 3px 7px; font-size: 9px; font-weight: 850; }
+        .asset-empty { grid-column: 1 / -1; color: var(--text-sub); font-size: 12px; text-align: center; padding: 14px 8px; border: 1px dashed var(--border); border-radius: 10px; background: #FFFFFF; }
         .prompt-tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
         .prompt-tag-chip { border: 1px solid var(--border); background: #FFFFFF; color: var(--text-sub); border-radius: 999px; padding: 7px 11px; cursor: pointer; font-size: 12px; font-weight: 800; transition: 0.2s; }
         .prompt-tag-chip:hover { border-color: var(--primary); color: var(--text-main); }
@@ -208,6 +232,11 @@
             font-weight: 620;
         }
 
+        .workspace-tabs button.active {
+            color: var(--text-main);
+            font-weight: 880;
+        }
+
         .editor-layout {
             width: min(1680px, 100%);
             max-width: 1680px;
@@ -251,7 +280,8 @@
         }
 
         .ratio-nav button.active,
-        .canvas-actions button:last-child {
+        .canvas-actions button:last-child,
+        .canvas-actions button.primary {
             border-color: var(--text-main);
             background: var(--text-main);
             color: #ffffff;
@@ -262,9 +292,18 @@
             box-shadow: 0 16px 48px rgba(16, 17, 20, 0.06);
         }
 
+        .artboard-preview-card {
+            background: rgba(255, 255, 255, 0.90);
+            backdrop-filter: blur(10px);
+        }
+
         .empty-hint {
             color: #9aa0a8;
             font-weight: 720;
+        }
+
+        .safe-guide {
+            border-color: rgba(16, 17, 20, 0.32);
         }
 
         .is-active-layer {
@@ -609,6 +648,345 @@
                 flex-basis: auto;
             }
         }
+
+        /* GCC design system rollout v1: align static designer with the full site. */
+        :root {
+            --primary: #101318;
+            --primary-hover: #050608;
+            --bg-canvas: #f6f7f3;
+            --panel-bg: #ffffff;
+            --card-bg: #f6f7f3;
+            --border: rgba(16, 19, 24, 0.09);
+            --border-strong: rgba(16, 19, 24, 0.15);
+            --text-main: #101318;
+            --text-sub: #69717c;
+            --danger: #d92d20;
+            --accent-lime: #d8ff4f;
+            --shadow: 0 18px 54px rgba(16, 19, 24, 0.07);
+            --shadow-soft: 0 10px 30px rgba(16, 19, 24, 0.05);
+        }
+
+        html,
+        body {
+            background: #ffffff;
+        }
+
+        body {
+            padding: 28px 34px 32px;
+            gap: 18px;
+            color: var(--text-main);
+            text-rendering: geometricPrecision;
+        }
+
+        button,
+        input,
+        select,
+        textarea {
+            letter-spacing: 0;
+        }
+
+        .workspace-tabs {
+            width: min(1780px, 100%);
+            height: 34px;
+            gap: 30px;
+            padding-left: 6px;
+            color: var(--text-main);
+        }
+
+        .workspace-tabs strong,
+        .workspace-tabs button {
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .workspace-tabs strong {
+            font-weight: 860;
+        }
+
+        .workspace-tabs button {
+            color: #56606b;
+            font-weight: 680;
+        }
+
+        .workspace-tabs button.active {
+            color: var(--text-main);
+            font-weight: 840;
+        }
+
+        .editor-layout {
+            width: min(1780px, 100%);
+            max-width: 1780px;
+            height: calc(100vh - 102px);
+            gap: 32px;
+        }
+
+        .left-pane {
+            background: var(--bg-canvas);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .left-pane::before {
+            background-image: radial-gradient(circle, rgba(16, 19, 24, 0.13) 1px, transparent 1px);
+            background-size: 24px 24px;
+            opacity: 0.32;
+        }
+
+        .ratio-nav {
+            top: 24px;
+            padding: 6px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.86);
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(14px);
+        }
+
+        .ratio-nav button,
+        .canvas-actions button {
+            min-width: 72px;
+            height: 32px;
+            border: 1px solid var(--border-strong);
+            border-radius: 999px;
+            background: #ffffff;
+            color: var(--text-main);
+            font-size: 12px;
+            font-weight: 820;
+            box-shadow: none;
+        }
+
+        .ratio-nav button.active,
+        .canvas-actions button.primary,
+        .canvas-actions button:last-child {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: #ffffff;
+        }
+
+        .canvas-actions {
+            top: 24px;
+            right: 26px;
+            gap: 8px;
+        }
+
+        .canvas-wrapper {
+            box-shadow: 0 18px 50px rgba(16, 19, 24, 0.08);
+        }
+
+        .artboard-preview-card {
+            border-color: var(--border);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .artboard-preview-card.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px var(--primary), var(--shadow-soft);
+        }
+
+        .right-pane {
+            width: 426px;
+            flex: 0 0 426px;
+        }
+
+        .pane-content {
+            gap: 18px;
+            padding-right: 0;
+        }
+
+        .module-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: none;
+        }
+
+        .card-title {
+            margin-bottom: 14px;
+            color: var(--text-main);
+            font-size: 15px;
+            line-height: 1.2;
+            font-weight: 840;
+        }
+
+        .card-title::before {
+            width: 4px;
+            height: 20px;
+            border-radius: 999px;
+            background: rgba(16, 19, 24, 0.10);
+        }
+
+        .asset-tabs {
+            gap: 8px;
+        }
+
+        .asset-tab {
+            min-height: 34px;
+            border: 0;
+            border-radius: 999px;
+            background: rgba(16, 19, 24, 0.46);
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 820;
+        }
+
+        .asset-tab.active {
+            background: var(--primary);
+            color: #ffffff;
+        }
+
+        .asset-list {
+            gap: 10px;
+        }
+
+        .asset-item,
+        .layer-item,
+        .setting-row,
+        .keyword-setting-row,
+        .asset-empty,
+        .input-text,
+        .input-select,
+        .textarea,
+        .semantic-select,
+        .preset-card,
+        .asset-thumb,
+        .add-menu {
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.92);
+            box-shadow: none;
+        }
+
+        .asset-item:hover,
+        .asset-item.current,
+        .layer-item:hover,
+        .layer-item.active,
+        .preset-card:hover,
+        .input-text:focus,
+        .input-select:focus,
+        .textarea:focus {
+            border-color: var(--border-strong);
+            box-shadow: 0 0 0 4px rgba(16, 19, 24, 0.05);
+        }
+
+        .asset-name,
+        .layer-item,
+        .label {
+            color: var(--text-main);
+        }
+
+        .asset-meta,
+        .asset-pack-mini-label,
+        .empty-hint,
+        .slider-row span.s-label,
+        .slider-val {
+            color: var(--text-sub);
+        }
+
+        .btn,
+        .btn-icon,
+        .prompt-tag-chip,
+        .p-tab,
+        .add-menu button {
+            border-radius: 14px;
+            font-size: 12px;
+            font-weight: 820;
+        }
+
+        .btn-icon {
+            min-height: 32px;
+            border-color: var(--border);
+            background: #ffffff;
+            color: var(--text-main);
+        }
+
+        .btn-outline {
+            border: 1px solid var(--border);
+            background: #ffffff;
+            color: var(--text-main);
+        }
+
+        .btn-outline:hover,
+        .btn-icon:hover {
+            border-color: var(--border-strong);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .btn-dark,
+        .p-tab.active,
+        .prompt-tag-chip.active {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: #ffffff;
+            box-shadow: none;
+        }
+
+        .btn-dark:hover {
+            background: var(--primary-hover);
+        }
+
+        .prompt-tag-chip {
+            border: 1px solid var(--border);
+            background: #ffffff;
+            color: var(--text-sub);
+        }
+
+        .modal-content {
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: 0 28px 80px rgba(16, 19, 24, 0.16);
+        }
+
+        .modal-header h3 {
+            color: var(--text-main);
+            font-size: 20px;
+            line-height: 1.2;
+            font-weight: 860;
+        }
+
+        .toast {
+            border-radius: 999px;
+            background: var(--primary);
+            box-shadow: var(--shadow);
+        }
+
+        .ai-loading {
+            border-radius: 18px;
+            background: rgba(16, 19, 24, 0.94);
+            box-shadow: 0 20px 58px rgba(16, 19, 24, 0.18);
+        }
+
+        .ai-spinner {
+            border-top-color: var(--accent-lime);
+        }
+
+        .ai-progress-bar {
+            background: var(--accent-lime);
+        }
+
+        @media (max-width: 1180px) {
+            body {
+                overflow: auto;
+                padding: 22px;
+            }
+
+            .editor-layout {
+                height: auto;
+                flex-direction: column;
+            }
+
+            .left-pane {
+                min-height: 720px;
+            }
+
+            .right-pane {
+                width: 100%;
+                flex-basis: auto;
+            }
+        }
     </style>
 </head>
 <body>
@@ -643,7 +1021,7 @@
                 <button class="btn btn-outline" onclick="exportAssetBackup()">导出资产备份</button>
                 <button class="btn btn-dark" onclick="document.getElementById('backup-import').click()">导入资产备份</button>
             </div>
-            <div style="font-size:12px; color:var(--text-sub); line-height:1.6; margin-top:10px;">从 file:// 旧页面导出，再到 localhost 页面导入，可恢复原来的版式、色彩、字体与 Logo。</div>
+            <div style="font-size:12px; color:var(--text-sub); line-height:1.6; margin-top:10px;">正式版和测试版按域名隔离。先在正式版导出资产备份，再到测试版导入，可恢复版式、标签组、色彩、字体与 Logo。</div>
         </div>
         <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
             <div class="card-title"><div class="card-title-wrap">生图关键词标签</div></div>
@@ -664,31 +1042,33 @@
 </div>
 
 <div class="workspace-tabs">
-    <strong>我要做</strong>
-    <button type="button">头图</button>
-    <button type="button">弹窗</button>
-    <button type="button">竖版banner</button>
-    <button type="button">横版banner</button>
+    <strong>同项目画布</strong>
+    <button type="button" class="artboard-tab active" data-artboard="head" onclick="switchArtboard('head')">头图 750×500</button>
+    <button type="button" class="artboard-tab" data-artboard="splash" onclick="switchArtboard('splash')">开屏 750×1626</button>
+    <button type="button" class="artboard-tab" data-artboard="banner" onclick="switchArtboard('banner')">Banner 1396×424</button>
 </div>
 
 <div class="editor-layout">
     <div class="left-pane" id="left-pane">
         <div class="canvas-actions">
             <button type="button" onclick="openSettingsModal()">样机</button>
+            <button type="button" class="primary" onclick="extendFromHead()">一键延展</button>
+            <button type="button" id="safe-guide-toggle" onclick="toggleSafeGuide()">安全区</button>
             <button type="button" onclick="exportPNG()">导出</button>
         </div>
         <div class="ratio-nav" id="ratio-nav">
-            <button class="active" onclick="setRatio('1:1')">1:1</button>
-            <button onclick="setRatio('3:4')">3:4</button>
-            <button onclick="setRatio('4:3')">4:3</button>
-            <button onclick="setRatio('16:9')">16:9</button>
-            <button onclick="setRatio('9:16')">9:16</button>
+            <button onclick="toggleOverviewMode()">总览</button>
+            <button class="active" onclick="switchArtboard('head')">头图</button>
+            <button onclick="switchArtboard('splash')">开屏</button>
+            <button onclick="switchArtboard('banner')">Banner</button>
         </div>
 
         <div class="canvas-wrapper" id="canvas-wrapper">
             <div class="empty-hint" id="empty-hint">暂无背景，请生成或导入图片</div>
             <div id="dynamic-layers"></div>
+            <div class="safe-guide" id="safe-guide"></div>
         </div>
+        <div class="artboard-preview-dock" id="artboard-preview-dock"></div>
         <div class="ai-loading" id="ai-loading">
             <div class="ai-row">
                 <div class="ai-spinner"></div>
@@ -710,17 +1090,23 @@
 
         <div class="pane-content">
             <div class="module-card">
-                <div class="card-title">
-                    <div class="card-title-wrap">资产库</div>
+            <div class="card-title">
+                <div class="card-title-wrap">资产库</div>
+                <div style="display:flex; gap:6px;">
+                    <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="exportAssetBackup()" title="导出当前域名下的版式、标签组、Logo 和字体">导出包</button>
+                    <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="document.getElementById('backup-import').click()" title="导入从正式版导出的资产包">导入包</button>
+                    <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="saveTemplatePack()">保存套组</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="saveActiveAsset()">保存当前</button>
                 </div>
-                <div class="asset-tabs">
-                    <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')">版式</button>
-                    <button class="asset-tab" data-asset-tab="tag" onclick="switchAssetTab('tag')">标签组</button>
-                    <button class="asset-tab" data-asset-tab="logo" onclick="switchAssetTab('logo')">Logo</button>
-                </div>
-                <div class="asset-list" id="asset-list-ui"></div>
             </div>
+            <div class="asset-tabs">
+                <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')">版式</button>
+                <button class="asset-tab" data-asset-tab="tag" onclick="switchAssetTab('tag')">标签组</button>
+                <button class="asset-tab" data-asset-tab="logo" onclick="switchAssetTab('logo')">Logo</button>
+            </div>
+            <div class="asset-list" id="asset-list-ui"></div>
+            <div style="font-size:11px; color:var(--text-sub); line-height:1.5; margin-top:8px;">测试版和正式版资产库按域名隔离。可在正式版导出资产包，再在测试版导入。</div>
+        </div>
 
             <div class="module-card">
                 <div class="card-title">
@@ -760,18 +1146,40 @@
                 </div>
             </div>
 
-            <button class="btn btn-dark" style="padding: 14px; font-size: 14px;" onclick="exportPNG()">导出高清 PNG</button>
+            <button class="btn btn-outline" style="padding: 14px; font-size: 14px;" onclick="exportAllArtboards()">导出全部画布</button>
+            <button class="btn btn-dark" style="padding: 14px; font-size: 14px;" onclick="exportPNG()">导出当前 PNG</button>
         </div>
     </div>
 </div>
 
 <script>
     /* ================= 全局状态与常量 ================= */
-    const SIZES = { '1:1': { w: 1080, h: 1080 }, '3:4': { w: 1080, h: 1440 }, '4:3': { w: 1440, h: 1080 }, '16:9': { w: 1920, h: 1080 }, '9:16': { w: 1080, h: 1920 } };
-    let currentRatio = '1:1'; let currentScale = 1; 
+    const ARTBOARD_PRESETS = [
+        { id: 'head', ratio: 'head', label: '头图', w: 750, h: 500, apiRatio: '4:3' },
+        { id: 'splash', ratio: 'splash', label: '开屏', w: 750, h: 1626, apiRatio: '9:16' },
+        { id: 'banner', ratio: 'banner', label: 'Banner', w: 1396, h: 424, apiRatio: '16:9' }
+    ];
+    const SIZES = {
+        head: { w: 750, h: 500 },
+        splash: { w: 750, h: 1626 },
+        banner: { w: 1396, h: 424 },
+        '1:1': { w: 1080, h: 1080 },
+        '3:4': { w: 1080, h: 1440 },
+        '4:3': { w: 1440, h: 1080 },
+        '16:9': { w: 1920, h: 1080 },
+        '9:16': { w: 1080, h: 1920 }
+    };
+    let currentArtboardId = 'head';
+    let currentRatio = 'head'; let currentScale = 1;
     let activeLayerIds = []; 
     let customFonts = []; 
     let layers = []; // 万物皆图层
+    let showSafeGuide = true;
+    let overviewMode = false;
+    let artboards = ARTBOARD_PRESETS.reduce((acc, preset) => {
+        acc[preset.id] = { id: preset.id, label: preset.label, ratio: preset.ratio, layers: [] };
+        return acc;
+    }, {});
 
     let tagColorPresets = [{ id: 'c1', name: '品牌绿', bg: '#00D06C', text: '#FFFFFF', shadow: '#111827', shadowOpacity: 1 }, { id: 'c2', name: '警示红', bg: '#EF4444', text: '#FFFFFF', shadow: '#450a0a', shadowOpacity: 1 }];
     let arcColorPresets = [{ id: 'a1', name: '经典黄绿', cIn: '#FFCC00', cOut: '#00D06C' }, { id: 'a2', name: '极简黑白', cIn: '#111827', cOut: '#E5E7EB' }];
@@ -784,10 +1192,14 @@
     let presetLibrary = [];
     let tagPresetLibrary = [];
     let logoAssets = [];
+    let activeTemplatePackId = null;
     let currentAssetTab = 'layout';
     let draggingLayerId = null;
     let aiProgressTimer = null;
     let historyStack = []; let historyIdx = -1; let isRestoring = false;
+    const SHARED_TAG_PROPS = ['text', 'font', 'fontWeight', 'bgCol', 'textCol', 'shadowCol', 'shadowOpacity', 'shadowThickness', 'letterSpacing'];
+    const SHARED_ARC_PROPS = ['cIn', 'cOut'];
+    const SHARED_SOLID_PROPS = ['color'];
 
     /* ================= 数据持久化 ================= */
     const DB_NAME = 'SuperFactoryDB';
@@ -897,9 +1309,88 @@
         } catch(e) {}
     }
 
+    function cloneData(value) {
+        return JSON.parse(JSON.stringify(value));
+    }
+    function getArtboardPreset(id = currentArtboardId) {
+        return ARTBOARD_PRESETS.find(p => p.id === id) || ARTBOARD_PRESETS[0];
+    }
+    function normalizeArtboardSnapshot(snapshot = {}) {
+        const next = ARTBOARD_PRESETS.reduce((acc, preset) => {
+            const incoming = snapshot[preset.id] || {};
+            acc[preset.id] = {
+                id: preset.id,
+                label: preset.label,
+                ratio: preset.ratio,
+                layers: cloneData(incoming.layers || [])
+            };
+            return acc;
+        }, {});
+        return next;
+    }
+    function saveCurrentArtboardState() {
+        if(!artboards[currentArtboardId]) {
+            const preset = getArtboardPreset(currentArtboardId);
+            artboards[currentArtboardId] = { id: preset.id, label: preset.label, ratio: preset.ratio, layers: [] };
+        }
+        artboards[currentArtboardId].ratio = currentRatio;
+        artboards[currentArtboardId].layers = cloneData(layers);
+    }
+    function loadArtboard(id, saveCurrent = true) {
+        if(!artboards[id]) return;
+        if(saveCurrent) saveCurrentArtboardState();
+        const preset = getArtboardPreset(id);
+        currentArtboardId = id;
+        currentRatio = preset.ratio;
+        layers = cloneData(artboards[id].layers || []);
+        activeLayerIds = activeLayerIds.filter(layerId => layers.some(l => l.id === layerId));
+        syncArtboardTabs();
+        syncRatioNav();
+        resizeCanvas();
+        renderCanvas();
+        renderLayersList();
+        renderProperties();
+        renderAssetLibrary();
+    }
+    function switchArtboard(id) {
+        const wasOverview = overviewMode;
+        if(overviewMode) overviewMode = false;
+        if(id === currentArtboardId) { if(wasOverview) syncOverviewMode(); return; }
+        loadArtboard(id, true);
+        saveHistory();
+        syncOverviewMode();
+    }
+    function syncArtboardTabs() {
+        document.querySelectorAll('.artboard-tab').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.artboard === currentArtboardId);
+        });
+    }
+    function getArtboardSnapshot() {
+        saveCurrentArtboardState();
+        return {
+            currentArtboardId,
+            artboards: cloneData(artboards)
+        };
+    }
+    function importArtboardSnapshot(snapshot = {}) {
+        if(snapshot.artboards) {
+            artboards = normalizeArtboardSnapshot(snapshot.artboards);
+            currentArtboardId = artboards[snapshot.currentArtboardId] ? snapshot.currentArtboardId : 'head';
+        } else {
+            artboards = normalizeArtboardSnapshot({
+                head: { layers: snapshot.layers || [] }
+            });
+            currentArtboardId = 'head';
+        }
+        loadArtboard(currentArtboardId, false);
+    }
+    window.getArtboardSnapshot = getArtboardSnapshot;
+    window.importArtboardSnapshot = importArtboardSnapshot;
+
     function saveHistory() {
         if(isRestoring) return;
-        const state = { ratio: currentRatio, layers: JSON.parse(JSON.stringify(layers)) };
+        saveCurrentArtboardState();
+        const state = { currentArtboardId, artboards: cloneData(artboards) };
         const stateText = JSON.stringify(state);
         if(historyIdx >= 0 && JSON.stringify(historyStack[historyIdx]) === stateText) { updateHistoryButtons(); return; }
         historyStack = historyStack.slice(0, historyIdx + 1);
@@ -911,9 +1402,20 @@
     function applyHistory(state) {
         if(!state) return;
         isRestoring = true;
-        layers = JSON.parse(JSON.stringify(state.layers));
+        if(state.artboards) {
+            artboards = normalizeArtboardSnapshot(state.artboards);
+            currentArtboardId = artboards[state.currentArtboardId] ? state.currentArtboardId : 'head';
+            const preset = getArtboardPreset(currentArtboardId);
+            currentRatio = preset.ratio;
+            layers = cloneData(artboards[currentArtboardId].layers || []);
+        } else {
+            currentArtboardId = 'head';
+            currentRatio = state.ratio || 'head';
+            layers = cloneData(state.layers || []);
+            artboards = normalizeArtboardSnapshot({ head: { layers } });
+        }
         activeLayerIds = activeLayerIds.filter(id => layers.some(l => l.id === id));
-        if(currentRatio !== state.ratio) currentRatio = state.ratio;
+        syncArtboardTabs();
         syncRatioNav();
         resizeCanvas();
         renderCanvas();
@@ -1014,6 +1516,37 @@
         });
     }
     function genId(prefix) { return prefix + '_' + Date.now() + '_' + Math.floor(Math.random()*1000); }
+    function ensureSharedKey(layer) {
+        if(!layer) return '';
+        if(!layer.sharedKey) layer.sharedKey = genId('shared_' + layer.type);
+        return layer.sharedKey;
+    }
+    function getSharedPropsForLayer(layer) {
+        if(!layer) return [];
+        if(layer.type === 'tag') return SHARED_TAG_PROPS;
+        if(layer.type === 'arc') return SHARED_ARC_PROPS;
+        if(layer.type === 'solid') return SHARED_SOLID_PROPS;
+        return [];
+    }
+    function collectSharedValues(layer, props = getSharedPropsForLayer(layer)) {
+        const values = {};
+        props.forEach(prop => { values[prop] = layer[prop]; });
+        return values;
+    }
+    function propagateSharedLayerChange(layer, props = getSharedPropsForLayer(layer)) {
+        if(!layer || !layer.sharedKey || props.length === 0) return;
+        saveCurrentArtboardState();
+        const values = collectSharedValues(layer, props);
+        Object.values(artboards).forEach(board => {
+            (board.layers || []).forEach(item => {
+                if(item.sharedKey !== layer.sharedKey || item.id === layer.id) return;
+                Object.assign(item, cloneData(values));
+            });
+        });
+        layers.forEach(item => {
+            if(item.sharedKey === layer.sharedKey && item.id !== layer.id) Object.assign(item, cloneData(values));
+        });
+    }
     function escapeHtml(v) { return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
     function normalizeFontDataUrl(dataUrl, fileName = '') {
         const ext = fileName.split('.').pop().toLowerCase();
@@ -1075,6 +1608,30 @@
         }
         return expand;
     }
+    function getGenerationRatio() {
+        return getArtboardPreset(currentArtboardId)?.apiRatio || currentRatio;
+    }
+    function getSafeMarginForArtboard(id = currentArtboardId) {
+        if(id === 'banner') return 64;
+        if(id === 'splash') return 54;
+        return 36;
+    }
+    function syncSafeGuide() {
+        const guide = document.getElementById('safe-guide');
+        const toggle = document.getElementById('safe-guide-toggle');
+        if(!guide) return;
+        const margin = getSafeMarginForArtboard(currentArtboardId);
+        guide.style.left = margin + 'px';
+        guide.style.top = margin + 'px';
+        guide.style.right = margin + 'px';
+        guide.style.bottom = margin + 'px';
+        guide.style.display = showSafeGuide ? 'block' : 'none';
+        if(toggle) toggle.classList.toggle('primary', showSafeGuide);
+    }
+    function toggleSafeGuide() {
+        showSafeGuide = !showSafeGuide;
+        syncSafeGuide();
+    }
     function preservePaneScroll(fn) {
         const pane = document.querySelector('.pane-content');
         const y = pane ? pane.scrollTop : 0;
@@ -1082,6 +1639,7 @@
         if(pane) requestAnimationFrame(() => { pane.scrollTop = y; });
     }
     function getLayerIcon(l) {
+        if(l.type === 'solid') return '■ 色块';
         if(l.type === 'arc') return '⭕ 圆弧';
         if(l.type === 'logo') return '🔖 Logo';
         if(l.type === 'image') return '🖼️ 图像';
@@ -1104,8 +1662,30 @@
             if(cloned.type === 'tag' && cloned.shadowThickness === undefined) cloned.shadowThickness = 12;
             if(cloned.type === 'tag' && cloned.letterSpacing === undefined) cloned.letterSpacing = 0;
             if(cloned.type === 'tag' && cloned.shadowOpacity === undefined) cloned.shadowOpacity = 1;
-            if((cloned.type === 'image' || cloned.type === 'logo') && cloned.flipX === undefined) cloned.flipX = false;
+            if((cloned.type === 'image' || cloned.type === 'logo' || cloned.type === 'solid') && cloned.flipX === undefined) cloned.flipX = false;
             return cloned;
+        });
+    }
+    function adaptPresetElementsToCurrent(elements, presetSize) {
+        const cloned = cloneLayersForInsert(elements, false);
+        const source = SIZES[presetSize] || SIZES[currentRatio];
+        const target = SIZES[currentRatio];
+        if(!source || !target || presetSize === currentRatio) return cloned;
+        const scaleX = target.w / source.w;
+        const scaleY = target.h / source.h;
+        const uniform = Math.min(scaleX, scaleY);
+        return cloned.map(layer => {
+            layer.x = (Number(layer.x) || source.w / 2) * scaleX;
+            layer.y = (Number(layer.y) || source.h / 2) * scaleY;
+            layer.scale = (Number(layer.scale) || 1) * uniform;
+            if(layer.type === 'image' && Math.abs((Number(layer.baseW) || 0) - source.w) < 4 && Math.abs((Number(layer.baseH) || 0) - source.h) < 4) {
+                layer.baseW = target.w;
+                layer.baseH = target.h;
+                layer.x = target.w / 2;
+                layer.y = target.h / 2;
+                layer.scale = 1;
+            }
+            return layer;
         });
     }
     function readImageSize(src) {
@@ -1125,6 +1705,222 @@
                 img.onerror = resolve;
             });
         }));
+    }
+    function loadImageElement(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('原图读取失败'));
+            img.src = src;
+        });
+    }
+    function drawImageCover(ctx, img, x, y, w, h) {
+        const iw = img.naturalWidth || img.width;
+        const ih = img.naturalHeight || img.height;
+        const scale = Math.max(w / iw, h / ih);
+        const sw = w / scale;
+        const sh = h / scale;
+        const sx = Math.max(0, (iw - sw) / 2);
+        const sy = Math.max(0, (ih - sh) / 2);
+        ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+    }
+    function drawImageCoverAt(ctx, img, x, y, w, h, focusX = 0.5, focusY = 0.5) {
+        const iw = img.naturalWidth || img.width;
+        const ih = img.naturalHeight || img.height;
+        const scale = Math.max(w / iw, h / ih);
+        const sw = w / scale;
+        const sh = h / scale;
+        const sx = Math.min(Math.max(0, iw - sw), Math.max(0, iw * focusX - sw / 2));
+        const sy = Math.min(Math.max(0, ih - sh), Math.max(0, ih * focusY - sh / 2));
+        ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+    }
+    function drawFeatheredSource(ctx, img, frame, targetId) {
+        const temp = document.createElement('canvas');
+        temp.width = ctx.canvas.width;
+        temp.height = ctx.canvas.height;
+        const tempCtx = temp.getContext('2d');
+        const focusX = targetId === 'banner' ? 0.62 : 0.55;
+        const focusY = targetId === 'banner' ? 0.54 : 0.58;
+        drawImageCoverAt(tempCtx, img, frame.x, frame.y, frame.w, frame.h, focusX, focusY);
+        tempCtx.globalCompositeOperation = 'destination-in';
+        if(targetId === 'banner') {
+            const fade = Math.max(80, Math.min(180, frame.w * 0.26));
+            const grad = tempCtx.createLinearGradient(frame.x, 0, frame.x + frame.w, 0);
+            const stop = Math.min(0.48, fade / frame.w);
+            grad.addColorStop(0, 'rgba(0,0,0,0)');
+            grad.addColorStop(stop, '#000000');
+            grad.addColorStop(1 - stop, '#000000');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            tempCtx.fillStyle = grad;
+            tempCtx.fillRect(frame.x, frame.y, frame.w, frame.h);
+        } else {
+            const fade = Math.max(110, Math.min(240, frame.h * 0.28));
+            const grad = tempCtx.createLinearGradient(0, frame.y, 0, frame.y + frame.h);
+            const stop = Math.min(0.48, fade / frame.h);
+            grad.addColorStop(0, 'rgba(0,0,0,0)');
+            grad.addColorStop(stop, '#000000');
+            grad.addColorStop(1 - stop, '#000000');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            tempCtx.fillStyle = grad;
+            tempCtx.fillRect(frame.x, frame.y, frame.w, frame.h);
+        }
+        ctx.drawImage(temp, 0, 0);
+    }
+    function getBrandGreen() {
+        const arc = (artboards.head?.layers || layers || []).find(l => l.type === 'arc');
+        return arc?.cOut || '#00875f';
+    }
+    async function buildLocalExtendedBackground(targetId, sourceLayer) {
+        const preset = getArtboardPreset(targetId);
+        const target = SIZES[preset.ratio];
+        const canvas = document.createElement('canvas');
+        canvas.width = target.w;
+        canvas.height = target.h;
+        const ctx = canvas.getContext('2d');
+        const img = await loadImageElement(sourceLayer.src);
+        const green = getBrandGreen();
+        ctx.fillStyle = green;
+        ctx.fillRect(0, 0, target.w, target.h);
+
+        ctx.save();
+        ctx.globalAlpha = 0.74;
+        ctx.filter = 'blur(18px) saturate(112%) brightness(0.82)';
+        drawImageCoverAt(ctx, img, -40, -40, target.w + 80, target.h + 80, targetId === 'banner' ? 0.70 : 0.58, 0.50);
+        ctx.restore();
+
+        if(targetId === 'banner') {
+            const photoX = Math.round(target.w * 0.49);
+            const photoW = target.w - photoX;
+            drawFeatheredSource(ctx, img, { x: photoX, y: 0, w: photoW, h: target.h }, targetId);
+            const grad = ctx.createLinearGradient(photoX - 120, 0, photoX + 160, 0);
+            grad.addColorStop(0, green);
+            grad.addColorStop(0.38, 'rgba(0,0,0,0)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(photoX - 120, 0, 300, target.h);
+        } else if(targetId === 'splash') {
+            const photoY = Math.round(target.h * 0.24);
+            const photoH = Math.round(target.h * 0.46);
+            drawFeatheredSource(ctx, img, { x: 0, y: photoY, w: target.w, h: photoH }, targetId);
+            const top = ctx.createLinearGradient(0, 0, 0, photoY + 80);
+            top.addColorStop(0, green);
+            top.addColorStop(0.45, 'rgba(0,0,0,0)');
+            top.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = top;
+            ctx.fillRect(0, 0, target.w, photoY + 80);
+            const bottom = ctx.createLinearGradient(0, photoY + photoH - 80, 0, target.h);
+            bottom.addColorStop(0, 'rgba(0,0,0,0)');
+            bottom.addColorStop(0.42, green);
+            ctx.fillStyle = bottom;
+            ctx.fillRect(0, photoY + photoH - 80, target.w, target.h - photoY - photoH + 80);
+        } else {
+            drawImageCoverAt(ctx, img, 0, 0, target.w, target.h, 0.55, 0.55);
+        }
+        return canvas.toDataURL('image/png');
+    }
+    function softenGeneratedSeams(ctx, sourceImg, targetId, frame) {
+        const target = { w: ctx.canvas.width, h: ctx.canvas.height };
+        const soft = document.createElement('canvas');
+        soft.width = target.w;
+        soft.height = target.h;
+        const softCtx = soft.getContext('2d');
+        softCtx.save();
+        softCtx.filter = 'blur(7px)';
+        softCtx.drawImage(sourceImg, -8, -8, target.w + 16, target.h + 16);
+        softCtx.restore();
+        const mask = document.createElement('canvas');
+        mask.width = target.w;
+        mask.height = target.h;
+        const maskCtx = mask.getContext('2d');
+        if(targetId === 'banner') {
+            const center = frame.x;
+            const width = Math.max(90, Math.round(target.w * 0.075));
+            const x = Math.max(0, center - width / 2);
+            const w = Math.min(target.w - x, width);
+            const grad = maskCtx.createLinearGradient(x, 0, x + w, 0);
+            grad.addColorStop(0, 'rgba(0,0,0,0)');
+            grad.addColorStop(0.5, 'rgba(0,0,0,0.28)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            maskCtx.fillStyle = grad;
+            maskCtx.fillRect(x, 0, w, target.h);
+        } else {
+            const height = Math.max(70, Math.round(target.h * 0.055));
+            [frame.y, frame.y + frame.h].forEach(center => {
+                const y = Math.max(0, center - height / 2);
+                const h = Math.min(target.h - y, height);
+                const grad = maskCtx.createLinearGradient(0, y, 0, y + h);
+                grad.addColorStop(0, 'rgba(0,0,0,0)');
+                grad.addColorStop(0.5, 'rgba(0,0,0,0.24)');
+                grad.addColorStop(1, 'rgba(0,0,0,0)');
+                maskCtx.fillStyle = grad;
+                maskCtx.fillRect(0, y, target.w, h);
+            });
+        }
+        softCtx.globalCompositeOperation = 'destination-in';
+        softCtx.drawImage(mask, 0, 0);
+        ctx.drawImage(soft, 0, 0);
+    }
+    async function repairExtendedBackground(targetId, generatedDataUrl, sourceLayer, seed) {
+        const target = SIZES[getArtboardPreset(targetId).ratio];
+        const canvas = document.createElement('canvas');
+        canvas.width = target.w;
+        canvas.height = target.h;
+        const ctx = canvas.getContext('2d');
+        const generated = await loadImageElement(generatedDataUrl);
+        ctx.drawImage(generated, 0, 0, target.w, target.h);
+        softenGeneratedSeams(ctx, generated, targetId, seed.frame);
+        return canvas.toDataURL('image/png');
+    }
+    async function applyLocalExtendedBackground(targetId, sourceLayer, targetLayer) {
+        const preset = getArtboardPreset(targetId);
+        const targetSize = SIZES[preset.ratio];
+        targetLayer.src = await buildLocalExtendedBackground(targetId, sourceLayer);
+        targetLayer.x = targetSize.w / 2;
+        targetLayer.y = targetSize.h / 2;
+        targetLayer.baseW = targetSize.w;
+        targetLayer.baseH = targetSize.h;
+        targetLayer.scale = 1;
+        targetLayer.rotation = 0;
+        targetLayer.flipX = false;
+    }
+    async function buildOutpaintSeed(targetId, sourceLayer) {
+        const target = SIZES[getArtboardPreset(targetId).ratio];
+        const canvas = document.createElement('canvas');
+        const mask = document.createElement('canvas');
+        canvas.width = mask.width = target.w;
+        canvas.height = mask.height = target.h;
+        const ctx = canvas.getContext('2d');
+        const maskCtx = mask.getContext('2d');
+        ctx.clearRect(0, 0, target.w, target.h);
+        maskCtx.clearRect(0, 0, target.w, target.h);
+        const img = await loadImageElement(sourceLayer.src);
+        const frame = targetId === 'banner'
+            ? { x: Math.round(target.w * 0.50), y: 0, w: Math.round(target.w * 0.50), h: target.h }
+            : { x: 0, y: Math.round(target.h * 0.24), w: target.w, h: Math.round(target.h * 0.44) };
+        ctx.save();
+        ctx.filter = 'blur(28px) saturate(112%) brightness(0.78)';
+        drawImageCoverAt(
+            ctx,
+            img,
+            -64,
+            -64,
+            target.w + 128,
+            target.h + 128,
+            targetId === 'banner' ? 0.68 : 0.56,
+            targetId === 'banner' ? 0.54 : 0.58
+        );
+        ctx.restore();
+        ctx.fillStyle = 'rgba(0,0,0,0.16)';
+        ctx.fillRect(0, 0, target.w, target.h);
+        drawFeatheredSource(ctx, img, frame, targetId);
+        maskCtx.fillStyle = '#ffffff';
+        maskCtx.fillRect(frame.x, frame.y, frame.w, frame.h);
+        return {
+            imageBase64: stripDataUrl(canvas.toDataURL('image/png')),
+            maskBase64: stripDataUrl(mask.toDataURL('image/png')),
+            frame
+        };
     }
     function startAIProgress(text) {
         const box = document.getElementById('ai-loading');
@@ -1155,7 +1951,20 @@
     }
 
     function syncRatioNav() {
-        document.querySelectorAll('.ratio-nav button').forEach(b => { b.classList.toggle('active', b.innerText === currentRatio); });
+        const preset = getArtboardPreset(currentArtboardId);
+        document.querySelectorAll('.ratio-nav button').forEach(b => {
+            b.classList.toggle('active', overviewMode ? b.innerText === '总览' : b.innerText === preset.label);
+        });
+        syncArtboardTabs();
+    }
+    function syncOverviewMode() {
+        document.getElementById('left-pane')?.classList.toggle('overview-mode', overviewMode);
+        syncRatioNav();
+        renderArtboardPreviews();
+    }
+    function toggleOverviewMode(force) {
+        overviewMode = typeof force === 'boolean' ? force : !overviewMode;
+        syncOverviewMode();
     }
     function renderPromptTags() {
         const list = document.getElementById('prompt-tag-list'); if(!list) return;
@@ -1188,6 +1997,7 @@
         wrap.style.width = w + 'px'; wrap.style.height = h + 'px';
         const scale = Math.min((pane.clientWidth - 160) / w, (pane.clientHeight - 160) / h);
         currentScale = scale; wrap.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        syncSafeGuide();
     }
     window.addEventListener('resize', resizeCanvas);
 
@@ -1236,48 +2046,88 @@
             if(type === 'arc') Object.assign(newL, { rIn: 400, wIn: 40, wOut: 120, cIn: '#00D06C', cOut: '#111827' });
             else if(type === 'tag') Object.assign(newL, { rotation: -3, shadowThickness: 12, shadowOpacity: 1, letterSpacing: 0, text: 'NEW TAG', font: '-apple-system, sans-serif', bgCol: '#00D06C', textCol: '#FFFFFF', shadowCol: '#111827' });
         }
+        if(['tag', 'arc', 'solid'].includes(type)) ensureSharedKey(newL);
         layers.push(newL); activeLayerIds = [newL.id]; saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
     }
 
     /* ================= 核心渲染 ================= */
+    function createLayerElement(l, options = {}) {
+        const { active = false, interactive = true, idPrefix = '' } = options;
+        const wrapper = document.createElement('div');
+        wrapper.dataset.id = l.id;
+        if(idPrefix) wrapper.dataset.previewId = idPrefix + l.id;
+        else wrapper.id = l.id;
+        wrapper.style.left = l.x + 'px';
+        wrapper.style.top = l.y + 'px';
+        wrapper.style.zIndex = l.zIndex;
+        if(active) wrapper.classList.add('is-active-layer');
+        if(l.locked || !interactive) wrapper.style.pointerEvents = 'none';
+
+        if(l.type === 'image' || l.type === 'logo') {
+            wrapper.className = 'layer-image-wrapper layer-base';
+            wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation}deg) scale(${l.scale}) scaleX(${l.flipX ? -1 : 1})`;
+            wrapper.style.width = l.baseW + 'px'; wrapper.style.height = l.baseH + 'px';
+            wrapper.innerHTML = `<img class="layer-image-img" src="${l.src}" style="object-fit:${l.type === 'logo' ? 'contain' : 'cover'};">`;
+        }
+        else if(l.type === 'solid') {
+            wrapper.className = 'layer-solid-wrapper layer-base';
+            wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation || 0}deg) scale(${l.scale || 1})`;
+            wrapper.style.width = l.baseW + 'px'; wrapper.style.height = l.baseH + 'px';
+            wrapper.style.background = l.color || '#00875f';
+        }
+        else if(l.type === 'arc') {
+            wrapper.className = 'layer-arc-wrapper layer-base';
+            wrapper.style.transform = `translate(-50%, -50%) scale(${l.scale})`;
+            const rIn = parseInt(l.rIn); const wIn = parseInt(l.wIn); const wOut = parseInt(l.wOut); const total = rIn + (wIn/2) + wOut; const size = total*2+4;
+            wrapper.innerHTML = `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}"><circle cx="${total+2}" cy="${total+2}" r="${rIn}" fill="none" stroke="${l.cIn}" stroke-width="${wIn}" style="pointer-events:stroke; cursor:grab;"></circle><circle cx="${total+2}" cy="${total+2}" r="${rIn+wIn/2+wOut/2}" fill="none" stroke="${l.cOut}" stroke-width="${wOut}" style="pointer-events:stroke; cursor:grab;"></circle></svg>`;
+        }
+        else if(l.type === 'tag') {
+            wrapper.className = 'layer-tag-wrapper layer-base';
+            wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation}deg) scale(${l.scale})`;
+            wrapper.style.fontFamily = l.font || '-apple-system, sans-serif';
+            wrapper.style.fontWeight = getTagFontWeight(l);
+            wrapper.style.letterSpacing = (l.letterSpacing ?? 0) + 'px';
+            const thick = l.shadowThickness !== undefined ? l.shadowThickness : 12;
+            const shadowAlpha = normalizeAlpha(l.shadowOpacity ?? 1);
+            const shadowColor = colorWithAlpha(l.shadowCol, shadowAlpha);
+            const safeText = escapeHtml(l.text);
+            const autoAngle = Math.atan2(thick, 72 + String(l.text || '').length * 22) * (180/Math.PI);
+            wrapper.innerHTML = `<div style="position:relative; display:inline-block;"><div class="tag-pill" style="position:absolute; left:0; top:0; width:100%; height:100%; background:${shadowColor}; color:transparent; z-index:0; transform-origin: 30px 30px; transform: rotate(${autoAngle}deg); clip-path: inset(-100px -100px -100px 30px);">${safeText}</div><div class="tag-pill" style="position:relative; background:${l.bgCol}; color:${l.textCol}; z-index:1;">${safeText}</div></div>`;
+        }
+        if(active) wrapper.classList.add('is-active-layer');
+        return wrapper;
+    }
     function renderCanvas() {
         const container = document.getElementById('dynamic-layers'); container.innerHTML = '';
         const hintEl = document.getElementById('empty-hint');
         hintEl.style.display = layers.some(l => l.type === 'image' || l.type === 'logo') ? 'none' : 'flex';
-        
         layers.sort((a,b) => a.zIndex - b.zIndex).forEach(l => {
-            const wrapper = document.createElement('div'); wrapper.dataset.id = l.id; wrapper.id = l.id; wrapper.style.left = l.x + 'px'; wrapper.style.top = l.y + 'px'; wrapper.style.zIndex = l.zIndex;
-            if(activeLayerIds.includes(l.id)) wrapper.classList.add('is-active-layer');
-            if(l.locked) wrapper.style.pointerEvents = 'none';
-            
-            if(l.type === 'image' || l.type === 'logo') {
-                wrapper.className = 'layer-image-wrapper layer-base';
-                wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation}deg) scale(${l.scale}) scaleX(${l.flipX ? -1 : 1})`;
-                wrapper.style.width = l.baseW + 'px'; wrapper.style.height = l.baseH + 'px';
-                wrapper.innerHTML = `<img class="layer-image-img" src="${l.src}" style="object-fit:${l.type === 'logo' ? 'contain' : 'cover'};">`;
-            }
-            else if(l.type === 'arc') {
-                wrapper.className = 'layer-arc-wrapper layer-base';
-                wrapper.style.transform = `translate(-50%, -50%) scale(${l.scale})`;
-                const rIn = parseInt(l.rIn); const wIn = parseInt(l.wIn); const wOut = parseInt(l.wOut); const total = rIn + (wIn/2) + wOut; const size = total*2+4;
-                wrapper.innerHTML = `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}"><circle cx="${total+2}" cy="${total+2}" r="${rIn}" fill="none" stroke="${l.cIn}" stroke-width="${wIn}" style="pointer-events:stroke; cursor:grab;"></circle><circle cx="${total+2}" cy="${total+2}" r="${rIn+wIn/2+wOut/2}" fill="none" stroke="${l.cOut}" stroke-width="${wOut}" style="pointer-events:stroke; cursor:grab;"></circle></svg>`;
-            } 
-            else if(l.type === 'tag') {
-                wrapper.className = 'layer-tag-wrapper layer-base';
-                wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation}deg) scale(${l.scale})`;
-                wrapper.style.fontFamily = l.font || '-apple-system, sans-serif';
-                wrapper.style.fontWeight = getTagFontWeight(l);
-                wrapper.style.letterSpacing = (l.letterSpacing ?? 0) + 'px';
-                const thick = l.shadowThickness !== undefined ? l.shadowThickness : 12; 
-                const shadowAlpha = normalizeAlpha(l.shadowOpacity ?? 1);
-                const shadowColor = colorWithAlpha(l.shadowCol, shadowAlpha);
-                const safeText = escapeHtml(l.text);
-                const autoAngle = Math.atan2(thick, 72 + String(l.text || '').length * 22) * (180/Math.PI);
-                // 紧凑 HTML 避免幽灵空格
-                wrapper.innerHTML = `<div style="position:relative; display:inline-block;"><div class="tag-pill" style="position:absolute; left:0; top:0; width:100%; height:100%; background:${shadowColor}; color:transparent; z-index:0; transform-origin: 30px 30px; transform: rotate(${autoAngle}deg); clip-path: inset(-100px -100px -100px 30px);">${safeText}</div><div class="tag-pill" style="position:relative; background:${l.bgCol}; color:${l.textCol}; z-index:1;">${safeText}</div></div>`;
-            }
-            if(activeLayerIds.includes(l.id)) wrapper.classList.add('is-active-layer');
-            container.appendChild(wrapper);
+            container.appendChild(createLayerElement(l, { active: activeLayerIds.includes(l.id), interactive: true }));
+        });
+        renderArtboardPreviews();
+    }
+    function renderArtboardPreviews() {
+        saveCurrentArtboardState();
+        const dock = document.getElementById('artboard-preview-dock');
+        if(!dock) return;
+        dock.innerHTML = '';
+        ARTBOARD_PRESETS.forEach(preset => {
+            const size = SIZES[preset.ratio];
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = `artboard-preview-card ${preset.id === currentArtboardId ? 'active' : ''}`;
+            card.onclick = () => switchArtboard(preset.id);
+            const maxPreviewW = preset.id === 'banner' ? 430 : (preset.id === 'splash' ? 220 : 260);
+            const maxPreviewH = preset.id === 'splash' ? 470 : 190;
+            const scale = Math.min(maxPreviewW / size.w, maxPreviewH / size.h);
+            const viewportW = Math.max(34, Math.round(size.w * scale));
+            const viewportH = Math.max(34, Math.round(size.h * scale));
+            card.innerHTML = `<div class="artboard-preview-title"><span>${preset.label}</span><span>${size.w}×${size.h}</span></div><div class="artboard-preview-viewport" style="width:${viewportW}px;height:${viewportH}px;"><div class="artboard-preview-canvas" style="width:${size.w}px;height:${size.h}px;transform:scale(${scale});"><div class="preview-layers"></div></div></div>`;
+            const layerRoot = card.querySelector('.preview-layers');
+            (artboards[preset.id]?.layers || []).slice().sort((a,b) => a.zIndex - b.zIndex).forEach(layer => {
+                layerRoot.appendChild(createLayerElement(layer, { active: false, interactive: false, idPrefix: `preview_${preset.id}_` }));
+            });
+            dock.appendChild(card);
         });
     }
 
@@ -1322,9 +2172,37 @@
     function deleteSelectedLayers() { preservePaneScroll(() => { const ids = new Set(activeLayerIds); layers = layers.filter(l => !ids.has(l.id)); activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); showToast('已删除选中图层'); }); }
     function toggleLock(id) { preservePaneScroll(() => { const l = layers.find(x => x.id === id); if(l) l.locked = !l.locked; renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); }); }
 
-    window.updateProp = function(p, v) { activeLayerIds.forEach(id => { const l = layers.find(x => x.id === id); if(l) l[p] = v; }); renderCanvas(); if(activeLayerIds.length === 1) { const el = document.getElementById('val-'+p); if(el) el.innerText = formatPropValue(p, v); } };
-    window.applyTagColor = function(b, t, s, o = 1) { activeLayerIds.forEach(id => { const l = layers.find(x => x.id === id); if(l && l.type === 'tag') { l.bgCol = b; l.textCol = t; l.shadowCol = s; l.shadowOpacity = normalizeAlpha(o); }}); renderCanvas(); renderProperties(); saveHistory(); };
-    window.applyArcColor = function(cIn, cOut) { activeLayerIds.forEach(id => { const l = layers.find(x => x.id === id); if(l && l.type === 'arc') { l.cIn = cIn; l.cOut = cOut; }}); renderCanvas(); renderProperties(); saveHistory(); };
+    window.updateProp = function(p, v) {
+        activeLayerIds.forEach(id => {
+            const l = layers.find(x => x.id === id);
+            if(l) {
+                l[p] = v;
+                if(getSharedPropsForLayer(l).includes(p)) propagateSharedLayerChange(l, [p]);
+            }
+        });
+        renderCanvas(); renderArtboardPreviews();
+        if(activeLayerIds.length === 1) { const el = document.getElementById('val-'+p); if(el) el.innerText = formatPropValue(p, v); }
+    };
+    window.applyTagColor = function(b, t, s, o = 1) {
+        activeLayerIds.forEach(id => {
+            const l = layers.find(x => x.id === id);
+            if(l && l.type === 'tag') {
+                l.bgCol = b; l.textCol = t; l.shadowCol = s; l.shadowOpacity = normalizeAlpha(o);
+                propagateSharedLayerChange(l, ['bgCol', 'textCol', 'shadowCol', 'shadowOpacity']);
+            }
+        });
+        renderCanvas(); renderProperties(); renderArtboardPreviews(); saveHistory();
+    };
+    window.applyArcColor = function(cIn, cOut) {
+        activeLayerIds.forEach(id => {
+            const l = layers.find(x => x.id === id);
+            if(l && l.type === 'arc') {
+                l.cIn = cIn; l.cOut = cOut;
+                propagateSharedLayerChange(l, ['cIn', 'cOut']);
+            }
+        });
+        renderCanvas(); renderProperties(); renderArtboardPreviews(); saveHistory();
+    };
 
     function renderProperties() {
         const area = document.getElementById('prop-edit-area'); 
@@ -1344,6 +2222,9 @@
         if(l.type === 'image' || l.type === 'logo') {
             const title = l.type === 'logo' ? 'Logo属性调整' : '图片属性调整';
             area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">${title}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.2" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div style="display:flex; gap:8px; margin-top:16px;"><button class="btn btn-outline" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="centerLayer()">🔄 居中</button><button class="btn btn-outline" style="flex:1;" onclick="toggleFlipX()" title="镜像反转">⇋ 镜像</button></div>`;
+        }
+        else if(l.type === 'solid') {
+            area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">延展背景色块</div><label class="label">颜色</label><input type="text" class="input-text" value="${escapeHtml(l.color || '#00875f')}" oninput="updateProp('color', this.value)" onchange="saveHistory()"><div style="font-size:12px; color:var(--text-sub); line-height:1.6;">用于开屏和 Banner 的品牌色背景，可按项目需要微调。</div>`;
         }
         else if(l.type === 'tag') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="applyTagColor('${p.bg}', '${p.text}', '${p.shadow}', ${alpha})" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;"></div>`; });
@@ -1419,28 +2300,133 @@
         const list = document.getElementById('asset-list-ui'); if(!list) return;
         list.innerHTML = '';
         if(currentAssetTab === 'layout') {
-            const items = presetLibrary.filter(p => p.size === currentRatio);
-            if(items.length === 0) { list.innerHTML = `<div class="asset-empty">当前比例暂无版式，点击“保存当前”存一个。</div>`; return; }
-            items.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.size} · ${p.elements?.length || 0} 图层`, thumb: '版式', onApply: () => applyLayoutPreset(p.id), onDelete: () => deleteLayoutPreset(p.id) })));
+            const items = presetLibrary;
+            if(items.length === 0) { list.innerHTML = `<div class="asset-empty">暂无版式，点击“保存套组”存三画板模板。</div>`; return; }
+            items.forEach(p => {
+                const isPack = p.kind === 'pack';
+                const meta = isPack ? `三画板套组 · ${ARTBOARD_PRESETS.map(item => p.artboards?.[item.id]?.layers?.length || 0).join('/')} 图层` : `${p.size} · ${p.elements?.length || 0} 图层`;
+                list.appendChild(createAssetItem({ title: p.name, meta, asset: p, type: isPack ? 'pack' : 'layout', current: isPack && p.id === activeTemplatePackId, onApply: () => applyLayoutPreset(p.id), onDelete: () => deleteLayoutPreset(p.id) }));
+            });
         } else if(currentAssetTab === 'tag') {
             if(tagPresetLibrary.length === 0) { list.innerHTML = `<div class="asset-empty">多选标签后点击“保存当前”，可保存标签组合。</div>`; return; }
-            tagPresetLibrary.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, thumb: '标签', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
+            tagPresetLibrary.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, asset: p, type: 'tag', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
         } else {
             if(logoAssets.length === 0) { list.innerHTML = `<div class="asset-empty">点击“保存当前”上传常用 Logo，之后可固定调用。</div>`; return; }
-            logoAssets.forEach(l => list.appendChild(createAssetItem({ title: l.name, meta: '点击添加到画布', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
+            logoAssets.forEach(l => list.appendChild(createAssetItem({ title: l.name, meta: '点击添加到画布', asset: l, type: 'logo', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
         }
     }
-    function createAssetItem({ title, meta, thumb, img, onApply, onDelete }) {
-        const item = document.createElement('div'); item.className = 'asset-item'; item.onclick = onApply;
-        item.innerHTML = `<div class="asset-thumb">${img ? `<img src="${img}">` : escapeHtml(thumb || '')}</div><div style="min-width:0;"><div class="asset-name">${escapeHtml(title)}</div><div class="asset-meta">${escapeHtml(meta || '')}</div></div><div class="asset-actions"><button class="asset-action" title="删除">✖</button></div>`;
-        item.querySelector('.asset-action').onclick = e => { e.stopPropagation(); onDelete(); };
+    function createAssetItem({ title, meta, type, asset, img, current = false, onApply, onDelete }) {
+        const item = document.createElement('div'); item.className = `asset-item ${current ? 'current' : ''}`; item.onclick = onApply;
+        const thumb = document.createElement('div');
+        thumb.className = `asset-thumb ${type === 'logo' ? 'logo-thumb' : ''}`;
+        renderAssetPreview(thumb, { type, asset, img });
+        const info = document.createElement('div');
+        info.className = 'asset-info';
+        info.innerHTML = `<div class="asset-name">${escapeHtml(title)}</div><div class="asset-meta">${escapeHtml(meta || '')}</div>`;
+        const actions = document.createElement('div');
+        actions.className = 'asset-actions';
+        actions.innerHTML = `<button class="asset-action" title="删除">✖</button>`;
+        actions.querySelector('.asset-action').onclick = e => { e.stopPropagation(); onDelete(); };
+        if(current) {
+            const badge = document.createElement('div');
+            badge.className = 'asset-status';
+            badge.textContent = '当前';
+            item.appendChild(badge);
+        }
+        item.appendChild(thumb);
+        if(type === 'pack') item.appendChild(createPackHoverPreview(asset));
+        item.appendChild(info);
+        item.appendChild(actions);
         return item;
+    }
+    function renderAssetPreview(root, { type, asset, img }) {
+        root.innerHTML = '';
+        if(type === 'logo') {
+            root.innerHTML = `<img src="${img}" alt="">`;
+            return;
+        }
+        if(type === 'tag') {
+            root.appendChild(createLayerGroupPreview(asset?.elements || [], { maxW: 138, maxH: 92 }));
+            return;
+        }
+        if(type === 'pack') {
+            const board = asset?.artboards?.head || asset?.artboards?.banner || asset?.artboards?.splash;
+            const ratio = board?.ratio || 'head';
+            root.appendChild(createMiniArtboardPreview(board?.layers || [], ratio, { maxW: 138, maxH: 92 }));
+            return;
+        }
+        root.appendChild(createMiniArtboardPreview(asset?.elements || [], asset?.size || currentRatio, { maxW: 138, maxH: 92 }));
+    }
+    function createMiniArtboardPreview(sourceLayers, ratio, options = {}) {
+        const maxW = options.maxW || 140;
+        const maxH = options.maxH || 90;
+        const size = SIZES[ratio] || SIZES.head;
+        const scale = Math.min(maxW / size.w, maxH / size.h);
+        const viewportW = Math.max(24, Math.round(size.w * scale));
+        const viewportH = Math.max(24, Math.round(size.h * scale));
+        const viewport = document.createElement('div');
+        viewport.className = 'asset-preview-stage';
+        viewport.style.width = viewportW + 'px';
+        viewport.style.height = viewportH + 'px';
+        const canvas = document.createElement('div');
+        canvas.className = 'asset-preview-canvas';
+        canvas.style.width = size.w + 'px';
+        canvas.style.height = size.h + 'px';
+        canvas.style.transform = `scale(${scale})`;
+        (sourceLayers || []).slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).forEach(layer => {
+            canvas.appendChild(createLayerElement(layer, { active: false, interactive: false, idPrefix: `asset_${genId('prev')}_` }));
+        });
+        viewport.appendChild(canvas);
+        return viewport;
+    }
+    function createLayerGroupPreview(sourceLayers, options = {}) {
+        const maxW = options.maxW || 140;
+        const maxH = options.maxH || 90;
+        const group = sourceLayers || [];
+        const bounds = getGroupBounds(group) || { x1: 0, y1: 0, w: 300, h: 120 };
+        const padding = 36;
+        const stageW = Math.max(80, bounds.w + padding * 2);
+        const stageH = Math.max(54, bounds.h + padding * 2);
+        const scale = Math.min(maxW / stageW, maxH / stageH);
+        const viewport = document.createElement('div');
+        viewport.className = 'asset-preview-stage';
+        viewport.style.width = Math.round(stageW * scale) + 'px';
+        viewport.style.height = Math.round(stageH * scale) + 'px';
+        const canvas = document.createElement('div');
+        canvas.className = 'asset-preview-canvas';
+        canvas.style.width = stageW + 'px';
+        canvas.style.height = stageH + 'px';
+        canvas.style.transform = `scale(${scale})`;
+        group.slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).forEach(layer => {
+            const cloned = cloneData(layer);
+            cloned.x = (Number(cloned.x) || 0) - bounds.x1 + padding;
+            cloned.y = (Number(cloned.y) || 0) - bounds.y1 + padding;
+            canvas.appendChild(createLayerElement(cloned, { active: false, interactive: false, idPrefix: `asset_tag_${genId('prev')}_` }));
+        });
+        viewport.appendChild(canvas);
+        return viewport;
+    }
+    function createPackHoverPreview(pack) {
+        const wrap = document.createElement('div');
+        wrap.className = 'asset-pack-hover';
+        ARTBOARD_PRESETS.forEach(preset => {
+            const mini = document.createElement('div');
+            mini.className = 'asset-pack-mini';
+            const label = document.createElement('div');
+            label.className = 'asset-pack-mini-label';
+            label.textContent = preset.label;
+            mini.appendChild(label);
+            const board = pack?.artboards?.[preset.id];
+            mini.appendChild(createMiniArtboardPreview(board?.layers || [], board?.ratio || preset.ratio, { maxW: 42, maxH: 46 }));
+            wrap.appendChild(mini);
+        });
+        return wrap;
     }
     function applyLayoutPreset(id) {
         const p = presetLibrary.find(x => x.id === id); if(!p) return;
-        if(currentRatio !== p.size) return showToast('预设和画板尺寸不匹配！', true);
+        if(p.kind === 'pack') return applyTemplatePack(p);
         const currentImages = layers.filter(l => l.type === 'image').map(l => JSON.parse(JSON.stringify(l)));
-        const newLayers = cloneLayersForInsert(p.elements, false);
+        const newLayers = adaptPresetElementsToCurrent(p.elements, p.size);
         if(currentImages.length > 0) {
             const presetImages = newLayers.filter(l => l.type === 'image');
             if(presetImages.length > 0) {
@@ -1481,6 +2467,37 @@
         renderAssetLibrary();
         showToast(ok ? '已保存到版式库' : '已保存到当前页面，但本地持久化失败', !ok);
     }
+    async function saveTemplatePack() {
+        saveCurrentArtboardState();
+        const hasAnyLayer = ARTBOARD_PRESETS.some(preset => (artboards[preset.id]?.layers || []).length > 0);
+        if(!hasAnyLayer) return showToast('三块画板都是空的，无法保存套组', true);
+        const name = await askText('命名三画板套组', `套组 ${formatPresetTime()}`); if(!name) return;
+        const packArtboards = {};
+        ARTBOARD_PRESETS.forEach(preset => {
+            packArtboards[preset.id] = {
+                id: preset.id,
+                ratio: preset.ratio,
+                layers: cloneData(artboards[preset.id]?.layers || [])
+            };
+        });
+        const pack = { id: genId('pack'), kind: 'pack', name, artboards: packArtboards, createdAt: new Date().toISOString() };
+        presetLibrary.push(pack);
+        activeTemplatePackId = pack.id;
+        const ok = await saveGlobalData();
+        renderAssetLibrary();
+        showToast(ok ? '已保存三画板套组' : '已保存到当前页面，但本地持久化失败', !ok);
+    }
+    function applyTemplatePack(pack) {
+        saveCurrentArtboardState();
+        const nextArtboards = normalizeArtboardSnapshot(pack.artboards || {});
+        artboards = nextArtboards;
+        activeTemplatePackId = pack.id;
+        loadArtboard(currentArtboardId, false);
+        activeLayerIds = [];
+        saveHistory();
+        renderCanvas(); renderLayersList(); renderProperties(); renderAssetLibrary();
+        showToast('已应用三画板套组');
+    }
     async function saveTagComboPreset() {
         const tags = getSelectedTagLayers();
         if(tags.length === 0) return showToast('请先选择一个或多个标签图层', true);
@@ -1513,6 +2530,380 @@
             logoAssets = logoAssets.filter(l => l.id !== id);
             deleteLogoFromDB(id); renderAssetLibrary(); showToast('已删除 Logo 素材');
         });
+    }
+
+    function getLayerBounds(l) {
+        const scale = Number(l.scale) || 1;
+        if(l.type === 'image' || l.type === 'logo' || l.type === 'solid') {
+            const w = (Number(l.baseW) || 260) * scale;
+            const h = (Number(l.baseH) || 160) * scale;
+            return { x1: l.x - w / 2, y1: l.y - h / 2, x2: l.x + w / 2, y2: l.y + h / 2, w, h, cx: l.x, cy: l.y, area: w * h };
+        }
+        if(l.type === 'tag') {
+            const textLen = Math.max(4, String(l.text || '').length);
+            const w = (textLen * 28 + 116) * scale;
+            const h = 78 * scale;
+            return { x1: l.x - w / 2, y1: l.y - h / 2, x2: l.x + w / 2, y2: l.y + h / 2, w, h, cx: l.x, cy: l.y, area: w * h };
+        }
+        if(l.type === 'arc') {
+            const rIn = Number(l.rIn) || 400;
+            const wIn = Number(l.wIn) || 40;
+            const wOut = Number(l.wOut) || 120;
+            const size = (rIn + wIn + wOut) * 2 * scale;
+            return { x1: l.x - size / 2, y1: l.y - size / 2, x2: l.x + size / 2, y2: l.y + size / 2, w: size, h: size, cx: l.x, cy: l.y, area: size * size };
+        }
+        return { x1: l.x, y1: l.y, x2: l.x, y2: l.y, w: 0, h: 0, cx: l.x, cy: l.y, area: 0 };
+    }
+    function getGroupBounds(group) {
+        if(group.length === 0) return null;
+        const boxes = group.map(getLayerBounds);
+        const x1 = Math.min(...boxes.map(b => b.x1));
+        const y1 = Math.min(...boxes.map(b => b.y1));
+        const x2 = Math.max(...boxes.map(b => b.x2));
+        const y2 = Math.max(...boxes.map(b => b.y2));
+        return { x1, y1, x2, y2, w: x2 - x1, h: y2 - y1, cx: (x1 + x2) / 2, cy: (y1 + y2) / 2 };
+    }
+    function clampLayerToSafeArea(l, target, safe) {
+        if(l.type === 'arc') return l;
+        const b = getLayerBounds(l);
+        const minX = safe + b.w / 2;
+        const maxX = target.w - safe - b.w / 2;
+        const minY = safe + b.h / 2;
+        const maxY = target.h - safe - b.h / 2;
+        if(maxX >= minX) l.x = Math.min(maxX, Math.max(minX, l.x));
+        if(maxY >= minY) l.y = Math.min(maxY, Math.max(minY, l.y));
+        return l;
+    }
+    function classifyHeadLayers(sourceLayers, sourceSize) {
+        const canvasArea = sourceSize.w * sourceSize.h;
+        const images = sourceLayers.filter(l => l.type === 'image');
+        const imageCandidates = images
+            .map(l => ({ layer: l, bounds: getLayerBounds(l) }))
+            .sort((a, b) => b.bounds.area - a.bounds.area);
+        const background = imageCandidates.find(item => item.bounds.area >= canvasArea * 0.55)?.layer
+            || [...images].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))[0]
+            || null;
+        const infoIds = new Set(sourceLayers.filter(l => l.type === 'tag').map(l => l.id));
+        const bgId = background?.id;
+        const visualIds = new Set(sourceLayers
+            .filter(l => (l.type === 'image' || l.type === 'logo') && l.id !== bgId)
+            .map(l => l.id));
+        return { bgId, infoIds, visualIds, infoBounds: getGroupBounds(sourceLayers.filter(l => infoIds.has(l.id))) };
+    }
+    function transformLayerForArtboard(layer, sourceSize, targetPreset, meta) {
+        const target = SIZES[targetPreset.ratio];
+        const safe = targetPreset.id === 'banner' ? 64 : 54;
+        const l = cloneData(layer);
+        l.id = genId(l.type);
+        l.locked = false;
+        const srcXRatio = (Number(layer.x) || sourceSize.w / 2) / sourceSize.w;
+        const srcYRatio = (Number(layer.y) || sourceSize.h / 2) / sourceSize.h;
+
+        if(layer.id === meta.bgId) {
+            l.role = 'extended-background';
+            l.sourceLayerId = layer.id;
+            if(targetPreset.id === 'splash') {
+                l.x = target.w * 0.06;
+                l.y = target.h * 0.45;
+                l.baseW = sourceSize.w;
+                l.baseH = sourceSize.h;
+                l.scale = 2.18;
+                l.zIndex = (Number(layer.zIndex) || 1) + 1;
+                return l;
+            }
+            if(targetPreset.id === 'banner') {
+                l.x = target.w * 0.76;
+                l.y = target.h * 0.50;
+                l.baseW = target.w * 0.54;
+                l.baseH = target.h;
+                l.scale = 1;
+                l.zIndex = (Number(layer.zIndex) || 1) + 1;
+                return l;
+            }
+            const cover = Math.max(target.w / sourceSize.w, target.h / sourceSize.h);
+            l.x = target.w / 2;
+            l.y = target.h / 2;
+            l.scale = (Number(layer.scale) || 1) * cover;
+            return l;
+        }
+
+        if(meta.infoIds.has(layer.id)) {
+            const group = meta.infoBounds || { cx: sourceSize.w * 0.35, cy: sourceSize.h * 0.32, w: sourceSize.w * 0.45, h: sourceSize.h * 0.24 };
+            const factor = targetPreset.id === 'banner' ? 1.05 : 1.42;
+            const targetCx = targetPreset.id === 'banner' ? target.w * 0.26 : target.w * 0.47;
+            const targetCy = targetPreset.id === 'banner' ? target.h * 0.42 : target.h * 0.19;
+            l.x = targetCx + ((Number(layer.x) || group.cx) - group.cx) * factor;
+            l.y = targetCy + ((Number(layer.y) || group.cy) - group.cy) * factor;
+            l.scale = (Number(layer.scale) || 1) * factor;
+            return clampLayerToSafeArea(l, target, safe);
+        }
+
+        if(meta.visualIds.has(layer.id)) {
+            const factor = targetPreset.id === 'banner'
+                ? Math.min(1.08, target.h / sourceSize.h * 1.02)
+                : Math.min(1.28, target.w / sourceSize.w * 1.08);
+            l.x = targetPreset.id === 'banner'
+                ? target.w * 0.76 + (srcXRatio - 0.68) * target.w * 0.22
+                : target.w * 0.55 + (srcXRatio - 0.62) * target.w * 0.26;
+            l.y = targetPreset.id === 'banner'
+                ? target.h * 0.54 + (srcYRatio - 0.56) * target.h * 0.34
+                : target.h * 0.61 + (srcYRatio - 0.58) * target.w * 0.46;
+            l.scale = (Number(layer.scale) || 1) * factor;
+            return clampLayerToSafeArea(l, target, safe);
+        }
+
+        if(layer.type === 'arc') {
+            if(targetPreset.id === 'splash') {
+                l.x = target.w * 0.50;
+                l.y = target.h + 120;
+                l.scale = (Number(layer.scale) || 1) * 1.05;
+                return l;
+            }
+            if(targetPreset.id === 'banner') {
+                l.x = target.w * 0.82;
+                l.y = target.h * 1.05;
+                l.scale = (Number(layer.scale) || 1) * 0.74;
+                return l;
+            }
+            const factor = targetPreset.id === 'banner' ? target.h / sourceSize.h : target.w / sourceSize.w;
+            l.x = srcXRatio * target.w;
+            l.y = srcYRatio > 0.55 ? target.h - (sourceSize.h - layer.y) * factor : srcYRatio * target.h;
+            l.scale = (Number(layer.scale) || 1) * factor;
+            return l;
+        }
+
+        const fallback = targetPreset.id === 'banner' ? target.h / sourceSize.h : target.w / sourceSize.w;
+        l.x = srcXRatio * target.w;
+        l.y = srcYRatio * target.h;
+        l.scale = (Number(layer.scale) || 1) * fallback;
+        return clampLayerToSafeArea(l, target, safe);
+    }
+    function buildExtendedArtboard(targetId, sourceLayers) {
+        const sourceSize = SIZES.head;
+        const preset = getArtboardPreset(targetId);
+        const meta = classifyHeadLayers(sourceLayers, sourceSize);
+        const minZ = sourceLayers.length > 0 ? Math.min(...sourceLayers.map(l => Number(l.zIndex) || 1)) : 1;
+        const arcLayer = sourceLayers.find(l => l.type === 'arc');
+        const brandGreen = arcLayer?.cOut || '#00875f';
+        const underlays = [];
+        if(targetId === 'splash' || targetId === 'banner') {
+            const target = SIZES[preset.ratio];
+            underlays.push({
+                id: genId('solid'),
+                type: 'solid',
+                sharedKey: 'shared_brand_background',
+                color: brandGreen,
+                x: target.w / 2,
+                y: target.h / 2,
+                baseW: target.w,
+                baseH: target.h,
+                scale: 1,
+                rotation: 0,
+                zIndex: minZ - 8,
+                locked: true
+            });
+        }
+        return [
+            ...underlays,
+            ...sourceLayers
+            .map(layer => transformLayerForArtboard(layer, sourceSize, preset, meta))
+        ].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+    }
+    function isUsableTemplatePack(pack) {
+        return pack?.kind === 'pack'
+            && (pack.artboards?.splash?.layers || []).length > 0
+            && (pack.artboards?.banner?.layers || []).length > 0;
+    }
+    function getExtensionTemplatePack() {
+        const active = presetLibrary.find(p => p.id === activeTemplatePackId && isUsableTemplatePack(p));
+        if(active) return active;
+        return [...presetLibrary].reverse().find(isUsableTemplatePack) || null;
+    }
+    function getSortedLayersByType(sourceLayers, type) {
+        return (sourceLayers || [])
+            .filter(layer => layer.type === type)
+            .sort((a, b) => (Number(a.zIndex) || 0) - (Number(b.zIndex) || 0));
+    }
+    function findTemplateSourceLayer(templateLayer, sourceLayers, orderedSources, index) {
+        if(templateLayer.sharedKey) {
+            const matched = sourceLayers.find(layer => layer.type === templateLayer.type && layer.sharedKey === templateLayer.sharedKey);
+            if(matched) return matched;
+        }
+        return orderedSources[index] || orderedSources[orderedSources.length - 1] || null;
+    }
+    function copySharedStyleProps(targetLayer, sourceLayer) {
+        if(!targetLayer || !sourceLayer) return;
+        const props = getSharedPropsForLayer(targetLayer);
+        props.forEach(prop => {
+            if(sourceLayer[prop] !== undefined) targetLayer[prop] = cloneData(sourceLayer[prop]);
+        });
+        if(sourceLayer.sharedKey) targetLayer.sharedKey = sourceLayer.sharedKey;
+    }
+    function syncTemplateLayersFromHead(boardLayers, headLayers) {
+        ['tag', 'arc', 'solid'].forEach(type => {
+            const templateLayers = getSortedLayersByType(boardLayers, type);
+            const sourceLayers = getSortedLayersByType(headLayers, type);
+            templateLayers.forEach((templateLayer, index) => {
+                const sourceLayer = findTemplateSourceLayer(templateLayer, headLayers, sourceLayers, index);
+                copySharedStyleProps(templateLayer, sourceLayer);
+            });
+        });
+    }
+    function ensureTemplateBackgroundLayer(boardLayers, targetId, sourceLayer) {
+        const preset = getArtboardPreset(targetId);
+        const target = SIZES[preset.ratio];
+        let bgLayer = boardLayers.find(layer => layer.role === 'extended-background');
+        if(!bgLayer) {
+            const imageLayers = boardLayers
+                .filter(layer => layer.type === 'image')
+                .map(layer => ({ layer, bounds: getLayerBounds(layer) }))
+                .sort((a, b) => b.bounds.area - a.bounds.area);
+            bgLayer = imageLayers[0]?.layer || null;
+        }
+        if(!bgLayer && sourceLayer?.src) {
+            const minZ = boardLayers.length > 0 ? Math.min(...boardLayers.map(layer => Number(layer.zIndex) || 1)) : 1;
+            bgLayer = {
+                ...cloneData(sourceLayer),
+                id: genId('image'),
+                type: 'image',
+                x: target.w / 2,
+                y: target.h / 2,
+                baseW: target.w,
+                baseH: target.h,
+                scale: 1,
+                rotation: 0,
+                flipX: false,
+                zIndex: minZ - 4,
+                locked: false
+            };
+            boardLayers.push(bgLayer);
+        }
+        if(bgLayer) {
+            bgLayer.role = 'extended-background';
+            bgLayer.sourceLayerId = sourceLayer?.id || bgLayer.sourceLayerId;
+        }
+        return bgLayer;
+    }
+    function buildExtendedArtboardsFromTemplatePack(pack, headLayers) {
+        const nextArtboards = normalizeArtboardSnapshot(pack.artboards || {});
+        const sourceLayer = getHeadBackgroundLayer(headLayers);
+        ARTBOARD_PRESETS.forEach(preset => {
+            if(preset.id === 'head') {
+                nextArtboards.head.layers = cloneData(headLayers);
+                return;
+            }
+            const boardLayers = cloneData(nextArtboards[preset.id]?.layers || []);
+            syncTemplateLayersFromHead(boardLayers, headLayers);
+            ensureTemplateBackgroundLayer(boardLayers, preset.id, sourceLayer);
+            nextArtboards[preset.id].layers = boardLayers.sort((a, b) => (Number(a.zIndex) || 0) - (Number(b.zIndex) || 0));
+        });
+        return nextArtboards;
+    }
+    function getHeadBackgroundLayer(sourceLayers) {
+        const meta = classifyHeadLayers(sourceLayers, SIZES.head);
+        return sourceLayers.find(layer => layer.id === meta.bgId) || sourceLayers.find(layer => layer.type === 'image') || null;
+    }
+    function buildOutpaintPrompt(targetId) {
+        const manual = getPromptText();
+        const targetText = targetId === 'splash'
+            ? 'vertical mobile splash screen background, extend the scene upward and downward, keep the food product complete in the lower middle, leave clean space for promotional text near the top'
+            : 'wide horizontal banner background, extend the scene left and right, keep the food product on the right side, leave clean space on the left for promotional text';
+        return [
+            manual,
+            targetText,
+            'commercial food photography, natural table surface, consistent lighting, no text, no logo, no watermark'
+        ].filter(Boolean).join(', ');
+    }
+    async function outpaintExtendedArtboard(targetId, sourceLayer) {
+        if(!sourceLayer?.src) return false;
+        const preset = getArtboardPreset(targetId);
+        const board = artboards[targetId];
+        const targetSize = SIZES[preset.ratio];
+        const targetLayer = (board.layers || []).find(layer => layer.role === 'extended-background')
+            || (board.layers || []).find(layer => layer.type === 'image');
+        if(!targetLayer) return false;
+        try {
+            const seed = await buildOutpaintSeed(targetId, sourceLayer);
+            const sourceSize = await readImageSize(sourceLayer.src);
+            const expand = getOutpaintExpand(sourceSize.w, sourceSize.h, targetSize.w, targetSize.h);
+            const res = await fetch('/api/outpaint-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt: buildOutpaintPrompt(targetId),
+                    ratio: preset.apiRatio,
+                    baseImage: seed.imageBase64,
+                    volcBaseImage: stripDataUrl(sourceLayer.src),
+                    expand,
+                    maskBase64: seed.maskBase64,
+                    mimeType: 'image/png'
+                })
+            });
+            const data = await res.json().catch(() => ({}));
+            if(!res.ok || !data.success) throw new Error(data.message || `HTTP ${res.status}`);
+            targetLayer.src = `data:image/png;base64,${data.imageBase64}`;
+            targetLayer.x = targetSize.w / 2;
+            targetLayer.y = targetSize.h / 2;
+            targetLayer.baseW = targetSize.w;
+            targetLayer.baseH = targetSize.h;
+        } catch(error) {
+            await applyLocalExtendedBackground(targetId, sourceLayer, targetLayer);
+            targetLayer.outpaintFallback = true;
+            targetLayer.outpaintFallbackMessage = error.message || 'AI 扩图暂不可用';
+            return 'fallback';
+        }
+        targetLayer.scale = 1;
+        targetLayer.rotation = 0;
+        targetLayer.flipX = false;
+        return true;
+    }
+    async function outpaintExtendedArtboards(sourceLayers) {
+        const sourceLayer = getHeadBackgroundLayer(sourceLayers);
+        if(!sourceLayer?.src) return;
+        updateAIProgress('正在为开屏补图...', 28);
+        const splashResult = await outpaintExtendedArtboard('splash', sourceLayer);
+        renderArtboardPreviews();
+        updateAIProgress('正在为 Banner 补图...', 62);
+        const bannerResult = await outpaintExtendedArtboard('banner', sourceLayer);
+        renderArtboardPreviews();
+        if(splashResult === 'fallback' || bannerResult === 'fallback') {
+            showToast('AI 扩图暂不可用，已自动使用本地补底方案');
+        }
+    }
+    async function extendFromHead() {
+        saveCurrentArtboardState();
+        const headLayers = cloneData(artboards.head?.layers || []);
+        if(headLayers.length === 0) return showToast('头图画布为空，先完成头图再延展。', true);
+        headLayers.forEach(layer => {
+            if(['tag', 'arc', 'solid'].includes(layer.type)) ensureSharedKey(layer);
+        });
+        artboards.head.layers = cloneData(headLayers);
+        layers = cloneData(headLayers);
+        const templatePack = getExtensionTemplatePack();
+        if(templatePack) {
+            artboards = buildExtendedArtboardsFromTemplatePack(templatePack, headLayers);
+            activeTemplatePackId = templatePack.id;
+        } else {
+            artboards.splash.layers = buildExtendedArtboard('splash', headLayers);
+            artboards.banner.layers = buildExtendedArtboard('banner', headLayers);
+        }
+        activeLayerIds = [];
+        startAIProgress(templatePack ? '正在套用三画板模板，并补全底图...' : '正在生成开屏和 Banner，并补全底图...');
+        try {
+            await outpaintExtendedArtboards(headLayers);
+            showToast(templatePack ? '已按模板延展并完成开屏 / Banner 补图' : '已延展并完成开屏 / Banner 补图');
+        } catch(error) {
+            console.warn('自动补图失败:', error);
+            showToast('已生成三画板，补图失败：' + (error.message || '请稍后重试'), true);
+        } finally {
+            stopAIProgress();
+            saveHistory();
+            overviewMode = true;
+            syncOverviewMode();
+            renderCanvas();
+            renderLayersList();
+            renderProperties();
+        }
     }
 
     async function exportAssetBackup() {
@@ -1629,7 +3020,7 @@
         startAIProgress('AI 正在生成新图片...');
         try {
             updateAIProgress('正在提交生成请求...', 22);
-            const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: p, ratio: currentRatio }) });
+            const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: p, ratio: getGenerationRatio() }) });
             updateAIProgress('模型正在生成画面...', 70);
             const data = await res.json(); 
             if(data.success) { addLayer('image', { src: `data:image/png;base64,${data.imageBase64}` }); showToast('✅ 成功生成新图片'); } else { showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true); }
@@ -1660,7 +3051,7 @@
             
             const res = await fetch('/api/outpaint-image', { 
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ prompt: p, ratio: currentRatio, baseImage: base64Image, expand }) 
+                body: JSON.stringify({ prompt: p, ratio: getGenerationRatio(), baseImage: base64Image, expand })
             });
             updateAIProgress('AI 正在延展背景...', 74);
             const data = await res.json(); 
@@ -1668,34 +3059,97 @@
             if(data.success) { 
                 targetLayer.src = `data:image/jpeg;base64,${data.imageBase64}`; targetLayer.scale = 1; targetLayer.rotation = 0; targetLayer.x = w/2; targetLayer.y = h/2; targetLayer.baseW = w; targetLayer.baseH = h;
                 renderCanvas(); saveHistory(); showToast('✅ 扩图成功，主体已完美保留！'); 
-            } else { showToast('❌ 扩图失败: ' + (data.message || `HTTP ${res.status}`), true); }
-        } catch(e) { showToast('❌ 扩图失败: ' + (e.message || '请看后端终端日志'), true); } finally { updateAIProgress('正在应用扩图结果...', 96); stopAIProgress(); if(btn) { btn.innerText = ogText; btn.disabled = false; } }
+            } else {
+                throw new Error(data.message || `HTTP ${res.status}`);
+            }
+        } catch(e) {
+            try {
+                await applyLocalExtendedBackground(currentArtboardId, targetLayer, targetLayer);
+                renderCanvas();
+                saveHistory();
+                showToast('AI 扩图暂不可用，已使用本地补底方案');
+            } catch(fallbackError) {
+                showToast('❌ 扩图失败: ' + (e.message || fallbackError.message || '请看后端终端日志'), true);
+            }
+        } finally { updateAIProgress('正在应用扩图结果...', 96); stopAIProgress(); if(btn) { btn.innerText = ogText; btn.disabled = false; } }
     }
 
+    async function renderCurrentArtboardBlob(scale = 3) {
+        const wrap = document.getElementById('canvas-wrapper');
+        const safeGuide = document.getElementById('safe-guide');
+        const origCss = wrap.style.cssText;
+        const oldGuideDisplay = safeGuide ? safeGuide.style.display : '';
+        const {w, h} = SIZES[currentRatio];
+        if(safeGuide) safeGuide.style.display = 'none';
+        wrap.style.cssText = `position: fixed; left: 0px; top: 0px; width: ${w}px; height: ${h}px; transform: none; z-index: 10001; background: #FFFFFF; overflow: hidden;`;
+        try {
+            void wrap.offsetWidth;
+            await waitForImagesIn(wrap);
+            await new Promise(r => setTimeout(r, 300));
+            const canvas = await html2canvas(wrap, { scale, useCORS: true, allowTaint: true, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 0 });
+            return await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        } finally {
+            wrap.style.cssText = origCss;
+            if(safeGuide) safeGuide.style.display = oldGuideDisplay;
+            syncSafeGuide();
+        }
+    }
+    function downloadBlob(blob, filename) {
+        if(!blob) throw new Error('empty blob');
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = URL.createObjectURL(blob);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(link.href);
+    }
     async function exportPNG() {
         if(layers.length === 0) return showToast('画板为空，无法导出', true);
-        await document.fonts.ready; const oldActive = activeLayerIds; activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); 
-        const wrap = document.getElementById('canvas-wrapper'); const overlay = document.getElementById('export-overlay');
-        overlay.style.display = 'flex'; 
-        
-        const origCss = wrap.style.cssText;
-        const {w, h} = SIZES[currentRatio];
-        wrap.style.cssText = `position: fixed; left: 0px; top: 0px; width: ${w}px; height: ${h}px; transform: none; z-index: 10001; background: #FFFFFF; overflow: hidden;`;
-        
-        void wrap.offsetWidth; await waitForImagesIn(wrap); await new Promise(r => setTimeout(r, 500));
+        await document.fonts.ready;
+        const oldActive = [...activeLayerIds];
+        const overlay = document.getElementById('export-overlay');
+        activeLayerIds = [];
+        renderCanvas(); renderLayersList(); renderProperties();
+        overlay.style.display = 'flex';
         try {
-            const canvas = await html2canvas(wrap, { scale: 3, useCORS: true, allowTaint: true, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 0 });
-            canvas.toBlob(blob => {
-                if(!blob) { showToast('❌ 导出异常', true); return; }
-                const link = document.createElement('a');
-                link.download = `GCC_Poster_${Date.now()}.png`;
-                link.href = URL.createObjectURL(blob);
-                link.click();
-                URL.revokeObjectURL(link.href);
-                showToast('✅ 3倍超清 PNG 导出成功');
-            }, 'image/png');
-        } catch (e) { showToast('❌ 导出异常', true); } finally {
-            wrap.style.cssText = origCss; overlay.style.display = 'none'; activeLayerIds = oldActive; renderCanvas(); renderLayersList(); renderProperties();
+            const blob = await renderCurrentArtboardBlob(3);
+            downloadBlob(blob, `GCC_${getArtboardPreset(currentArtboardId).label}_${Date.now()}.png`);
+            showToast('✅ 3倍超清 PNG 导出成功');
+        } catch (e) {
+            showToast('❌ 导出异常', true);
+        } finally {
+            overlay.style.display = 'none';
+            activeLayerIds = oldActive;
+            renderCanvas(); renderLayersList(); renderProperties();
+        }
+    }
+    async function exportAllArtboards() {
+        saveCurrentArtboardState();
+        const exportable = ARTBOARD_PRESETS.filter(p => (artboards[p.id]?.layers || []).length > 0);
+        if(exportable.length === 0) return showToast('三个画布都是空的，无法导出', true);
+        await document.fonts.ready;
+        const originalArtboardId = currentArtboardId;
+        const originalActive = [...activeLayerIds];
+        const overlay = document.getElementById('export-overlay');
+        overlay.style.display = 'flex';
+        try {
+            for(const preset of exportable) {
+                loadArtboard(preset.id, false);
+                activeLayerIds = [];
+                renderCanvas(); renderLayersList(); renderProperties();
+                const blob = await renderCurrentArtboardBlob(3);
+                downloadBlob(blob, `GCC_${preset.label}_${Date.now()}.png`);
+                await new Promise(r => setTimeout(r, 180));
+            }
+            showToast(`✅ 已导出 ${exportable.length} 个画布`);
+        } catch(e) {
+            showToast('❌ 批量导出异常', true);
+        } finally {
+            loadArtboard(originalArtboardId, false);
+            activeLayerIds = originalActive.filter(id => layers.some(l => l.id === id));
+            renderCanvas(); renderLayersList(); renderProperties();
+            overlay.style.display = 'none';
         }
     }
 
@@ -1715,6 +3169,6 @@
     bootApp();
 
 </script>
-<script src="../../tool-bridge.js?v=20260609-v1ui9"></script>
+<script src="../../tool-bridge.js?v=20260626-home-kiki3"></script>
 </body>
 </html>

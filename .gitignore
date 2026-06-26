@@ -1,4 +1,7 @@
 .vercel
+.wrangler
+.DS_Store
+public/recovered/platform/
 dist
 .dev.vars*
 .env*

@@ -1,3 +1,5 @@
+import { verifyEmergencyToken } from './_emergency-auth.js';
+
 const DEFAULT_SUPABASE_URL = 'https://juuqvjmhzdgfggzrivbb.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_PIa3V0LGlOn1K6G1nBUeqw_kiFB6fjt';
 
@@ -63,13 +65,20 @@ export async function supabaseFetch(env, path, options = {}, serviceRole = false
 
 export async function getUserFromToken(env, token) {
   if (!token) throw new Error('Missing bearer token');
+  const emergencyUser = await verifyEmergencyToken(env, token);
+  if (emergencyUser) return emergencyUser;
   const config = getSupabaseConfig(env);
-  const response = await fetch(`${config.url}/auth/v1/user`, {
-    headers: {
-      apikey: config.anonKey,
-      Authorization: `Bearer ${token}`
-    }
-  });
+  let response;
+  try {
+    response = await fetch(`${config.url}/auth/v1/user`, {
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${token}`
+      }
+    });
+  } catch (_error) {
+    throw new Error('Supabase auth is currently unreachable.');
+  }
   const data = await response.json();
   if (!response.ok) throw new Error(data.msg || data.message || 'Invalid session');
   return data;
@@ -79,6 +88,10 @@ export async function requireAdmin(request, env) {
   requireCloudflareEnv(env);
   const token = getBearerToken(request);
   const user = await getUserFromToken(env, token);
+  if (user.app_metadata?.emergency) {
+    if (user.user_metadata?.role !== 'admin') throw new Error('Admin permission required');
+    return user;
+  }
   const profiles = await supabaseFetch(env, `/rest/v1/vf_profiles?id=eq.${encodeURIComponent(user.id)}&select=role`, {
     method: 'GET',
     headers: { Prefer: 'return=representation' }

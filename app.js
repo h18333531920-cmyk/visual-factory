@@ -106,7 +106,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260609-v1ui9';
+  const TOOL_UI_VERSION = '20260626-home-kiki3';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -160,6 +160,7 @@
     session: null,
     profile: null,
     localPreview: false,
+    emergencyMode: false,
     route: 'home',
     activeFrame: null,
     toolFrames: {},
@@ -172,6 +173,7 @@
     librarySelectedPreviewId: '',
     libraryDataLoaded: false,
     libraryDataPromise: null,
+    libraryRecoveryLabel: '',
     libraryVisibleLimit: LIBRARY_RENDER_STEP,
     recentProjects: [],
     libraryFilters: {
@@ -262,6 +264,7 @@
     if (window.supabase && config.supabaseUrl && config.supabaseAnonKey) {
       state.supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
       state.supabase.auth.onAuthStateChange((_event, session) => {
+        if (!session && (state.emergencyMode || isEmergencyToken(localStorage.getItem('vf_access_token')))) return;
         state.session = session;
         syncAccessToken();
       });
@@ -271,6 +274,11 @@
   }
 
   async function restoreSession() {
+    const savedToken = localStorage.getItem('vf_access_token');
+    if (isEmergencyToken(savedToken)) {
+      const restored = await restoreEmergencySession(savedToken);
+      if (restored) return;
+    }
     if (!state.supabase) {
       showLoginMessage('Supabase config is missing or SDK failed to load.', true);
       return;
@@ -289,21 +297,80 @@
   async function handleLogin(event) {
     event.preventDefault();
     showLoginMessage('');
-    if (!state.supabase) {
-      showLoginMessage('Supabase is not ready. Check config.js and network.', true);
-      return;
-    }
     const email = els.loginEmail.value.trim();
     const password = els.loginPassword.value;
-    const { data, error } = await state.supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      showLoginMessage(error.message, true);
+    if (!state.supabase) {
+      await emergencyLogin(email, password, 'Supabase SDK is not ready.');
       return;
     }
-    state.session = data.session;
-    syncAccessToken();
-    await loadProfile();
-    showApp();
+    try {
+      const { data, error } = await state.supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        if (isSupabaseNetworkError(error)) {
+          await emergencyLogin(email, password, error.message);
+          return;
+        }
+        showLoginMessage(error.message, true);
+        return;
+      }
+      state.localPreview = false;
+      state.emergencyMode = false;
+      state.session = data.session;
+      syncAccessToken();
+      await loadProfile();
+      showApp();
+    } catch (error) {
+      if (isSupabaseNetworkError(error)) {
+        await emergencyLogin(email, password, error.message);
+        return;
+      }
+      showLoginMessage(error.message || '登录失败。', true);
+    }
+  }
+
+  function isSupabaseNetworkError(error) {
+    const message = String(error?.message || error || '').toLowerCase();
+    return message.includes('failed to fetch') ||
+      message.includes('fetch failed') ||
+      message.includes('network') ||
+      message.includes('unreachable');
+  }
+
+  function isEmergencyToken(value) {
+    return String(value || '').startsWith('vfem.');
+  }
+
+  async function emergencyLogin(email, password, reason = '') {
+    showLoginMessage(state.lang === 'zh' ? '主登录服务暂不可用，正在启用应急登录...' : 'Primary login is unavailable. Trying emergency login...');
+    try {
+      const response = await fetch('/api/emergency-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) throw new Error(data.message || `HTTP ${response.status}`);
+      startEmergencySession(data.profile, data.token);
+    } catch (error) {
+      const detail = error.message || reason || 'Emergency login failed.';
+      showLoginMessage(state.lang === 'zh' ? `登录服务不可用：${detail}` : `Login unavailable: ${detail}`, true);
+    }
+  }
+
+  async function restoreEmergencySession(token) {
+    try {
+      const response = await fetch('/api/emergency-session', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) throw new Error(data.message || `HTTP ${response.status}`);
+      startEmergencySession(data.profile, token);
+      return true;
+    } catch (error) {
+      localStorage.removeItem('vf_access_token');
+      console.warn('Emergency session restore failed:', error);
+      return false;
+    }
   }
 
   async function loadProfile() {
@@ -325,6 +392,7 @@
 
   function startLocalPreview(role) {
     state.localPreview = true;
+    state.emergencyMode = false;
     state.profile = {
       id: `local_${role}`,
       email: `${role}@local.preview`,
@@ -336,11 +404,32 @@
     showApp();
   }
 
+  function startEmergencySession(profile, token) {
+    state.localPreview = true;
+    state.emergencyMode = true;
+    state.profile = {
+      id: profile.id,
+      email: profile.email || '',
+      display_name: profile.display_name || profile.email || 'Emergency User',
+      role: profile.role || 'operator'
+    };
+    state.session = {
+      access_token: token,
+      user: {
+        id: state.profile.id,
+        email: state.profile.email
+      }
+    };
+    syncAccessToken();
+    showApp();
+  }
+
   async function signOut() {
     localStorage.removeItem('vf_access_token');
     state.session = null;
     state.profile = null;
     state.localPreview = false;
+    state.emergencyMode = false;
     if (state.supabase) await state.supabase.auth.signOut();
     showLogin();
   }
@@ -404,7 +493,7 @@
     if (els.projectModal) els.projectModal.hidden = true;
     renderNav();
     const route = ROUTES.find(item => item.id === state.route);
-    els.routeKicker.textContent = state.localPreview ? 'Local Preview' : 'gccdesign.app';
+    els.routeKicker.textContent = state.emergencyMode ? 'Emergency Mode' : state.localPreview ? 'Local Preview' : 'gccdesign.app';
     els.routeTitle.textContent = t(route.title);
     els.saveProjectBtn.hidden = !['static', 'dynamic'].includes(state.route);
     els.saveTemplateBtn.hidden = state.route !== 'static';
@@ -430,99 +519,6 @@
 
   function renderCreativeHome() {
     return renderLibrary({ homeMode: true });
-    els.content.innerHTML = `
-      <div class="home-page">
-        <section class="home-composer">
-          <a class="home-announcement" href="#library">
-            <span>${state.lang === 'zh' ? 'GCC Creative Beta 已开放团队体验' : 'GCC Creative Beta is open for teams'}</span>
-            <strong>↗</strong>
-          </a>
-          <div class="home-title-row">
-            <span>Hey</span>
-            <span class="home-aurora-mark" aria-hidden="true"></span>
-            <h3>${state.lang === 'zh' ? '你的创意工作台已就绪' : 'Your creative workspace is ready'}</h3>
-          </div>
-          <form id="home-search-form" class="home-search">
-            <textarea id="home-search-input" rows="3" placeholder="${state.lang === 'zh' ? '可以问我找素材、做海报、做动效，也可以输入国家、活动、品类' : 'Ask for assets, posters, motion, countries, campaigns, or categories'}"></textarea>
-            <div class="home-search-tools">
-              <div class="home-tool-switches">
-                <button type="button" data-route="library">${navIcon('library')}<span>${state.lang === 'zh' ? '超级库' : 'Super Library'}</span></button>
-                <button type="button" data-route="static">${navIcon('static')}<span>${state.lang === 'zh' ? '静态设计师' : 'Static Designer'}</span></button>
-                <button type="button" data-route="dynamic">${navIcon('dynamic')}<span>${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'}</span></button>
-                <button type="button" data-route="request">${state.lang === 'zh' ? '提需流程' : 'Request Flow'}</button>
-              </div>
-              <button class="home-submit-btn" type="submit" aria-label="${state.lang === 'zh' ? '开始' : 'Start'}">↑</button>
-            </div>
-          </form>
-          <section class="home-tool-row">
-            <article class="home-tool-card library-card-visual" data-route="library">
-              <span>${state.lang === 'zh' ? '超级库' : 'Super Library'}</span>
-              <strong>›</strong>
-            </article>
-            <article class="home-tool-card static-card-visual" data-route="static">
-              <span>${state.lang === 'zh' ? '静态设计师' : 'Static Designer'}</span>
-              <strong>›</strong>
-            </article>
-            <article class="home-tool-card dynamic-card-visual" data-route="dynamic">
-              <span>${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'}</span>
-              <strong>›</strong>
-            </article>
-            <article class="home-tool-card request-card-visual" data-placeholder="request">
-              <span>${state.lang === 'zh' ? '提需流程' : 'Request Flow'}</span>
-              <strong>›</strong>
-            </article>
-          </section>
-          <section id="home-recent-projects" class="home-recent-projects" hidden></section>
-        </section>
-
-        <section class="home-discovery">
-          <div class="home-tabs">
-            <button class="active" type="button">${state.lang === 'zh' ? '精选' : 'Featured'}</button>
-            <button type="button">${state.lang === 'zh' ? '营销专辑' : 'Marketing'}</button>
-            <button type="button">${state.lang === 'zh' ? '商业海报' : 'Posters'}</button>
-            <button type="button">${state.lang === 'zh' ? '视频特效' : 'Video FX'}</button>
-            <button type="button">${state.lang === 'zh' ? '大赛活动' : 'Events'}</button>
-            <label class="home-mini-search">
-              <input placeholder="${state.lang === 'zh' ? '搜索内容' : 'Search'}">
-              <span>${navIcon('library')}</span>
-            </label>
-          </div>
-          <div class="home-channel-row">
-            <button type="button" data-query="">${state.lang === 'zh' ? '全部' : 'All'}</button>
-            <button type="button" data-query="${state.lang === 'zh' ? '电商' : 'Commerce'}">${state.lang === 'zh' ? '电商营销' : 'Commerce'}</button>
-            <button type="button" data-query="${state.lang === 'zh' ? '创意' : 'Creative'}">${state.lang === 'zh' ? '创意建筑' : 'Creative'}</button>
-            <button type="button" data-query="${state.lang === 'zh' ? '节日' : 'Festival'}">${state.lang === 'zh' ? '热点节日' : 'Festival'}</button>
-            <button type="button" data-query="${state.lang === 'zh' ? '视频' : 'Video'}">${state.lang === 'zh' ? '视频生成' : 'Video'}</button>
-            <button type="button" data-query="ICON">ICON&LOGO</button>
-            <button type="button" data-query="${state.lang === 'zh' ? '字体' : 'Type'}">${state.lang === 'zh' ? '字体设计' : 'Typography'}</button>
-            <button type="button" data-query="${state.lang === 'zh' ? 'IP' : 'IP'}">IP${state.lang === 'zh' ? '设计' : ' Design'}</button>
-            <button type="button" data-query="${state.lang === 'zh' ? '餐饮' : 'Food'}">${state.lang === 'zh' ? '餐饮营销' : 'Food'}</button>
-          </div>
-          <div class="home-filter-actions">
-            <button type="button">${state.lang === 'zh' ? '推荐' : 'Recommended'}⌄</button>
-            <button type="button">${state.lang === 'zh' ? '筛选' : 'Filter'}⌄</button>
-          </div>
-          <div class="home-gallery">
-            ${renderHomeInspirationCard('斋月餐饮活动海报', '#031716', '#08b978', 'tall', '查看素材')}
-            ${renderHomeInspirationCard('你的 AI 设计部来了', '#111111', '#9ef01a', 'short', '查看更多')}
-            ${renderHomeInspirationCard('夏日清凉饮品海报', '#7dd3fc', '#facc15', 'tall', '立即创作')}
-            ${renderHomeInspirationCard('青蛙 IP 系列视觉', '#d9f99d', '#84cc16', 'portrait', '查看灵感')}
-            ${renderHomeInspirationCard('Travel Vlog 视觉封面', '#164e63', '#fb923c', 'short', '')}
-            ${renderHomeInspirationCard('芒种节气活动主视觉', '#fef3c7', '#22c55e', 'portrait', '')}
-            ${renderHomeInspirationCard('毕业季人物海报', '#166534', '#f9a8d4', 'tall', '')}
-            ${renderHomeInspirationCard('门店开业宣传图', '#78350f', '#fcd34d', 'short', '')}
-            ${renderHomeInspirationCard('App 弹窗动效分镜', '#1d4ed8', '#67e8f9', 'portrait', '')}
-            ${renderHomeInspirationCard('周末促销社媒图', '#be123c', '#fb7185', 'tall', '')}
-            ${renderHomeInspirationCard('ICON&LOGO 灵感板', '#0f172a', '#a78bfa', 'short', '')}
-            ${renderHomeInspirationCard('中东新品上市图', '#0f766e', '#f97316', 'portrait', '')}
-            ${renderHomeInspirationCard('品牌视觉手册封面', '#312e81', '#facc15', 'tall', '')}
-            ${renderHomeInspirationCard('视频特效封面模板', '#020617', '#22d3ee', 'short', '')}
-          </div>
-        </section>
-      </div>
-    `;
-    wireCreativeHome();
-    void loadHomeRecentProjects();
   }
 
   function renderHomeInspirationCard(title, colorA, colorB, size, action) {
@@ -538,7 +534,7 @@
   }
 
   function wireCreativeHome() {
-    document.querySelectorAll('.home-tool-card[data-route], .section-row button[data-route]').forEach(node => {
+    document.querySelectorAll('.home-page-demo [data-route], .home-tool-card[data-route], .section-row button[data-route]').forEach(node => {
       node.addEventListener('click', () => {
         location.hash = node.dataset.route;
         navigate(node.dataset.route);
@@ -722,22 +718,22 @@
       <div class="library-page ${homeMode ? 'library-page-home' : ''}">
         <section class="library-hero">
           <div class="library-hero-panel">
-            <div class="library-hero-badge">${state.lang === 'zh' ? 'GCC Creative Beta 已开放团队体验 ↗' : 'GCC Creative Beta is open ↗'}</div>
+            <div class="library-hero-badge">${state.lang === 'zh' ? 'GCC Creative 1.1 已上线 ↗' : 'GCC Creative 1.1 is live ↗'}</div>
             <div class="library-hero-title">
               <span>Hey</span>
-              <i aria-hidden="true"></i>
-              <strong>${state.lang === 'zh' ? '你的创意工作台已就绪' : 'Your creative workspace is ready'}</strong>
+              <img class="library-hero-kiki" src="./assets/kiki-home.png" alt="" aria-hidden="true">
+              <strong>${state.lang === 'zh' ? '你的高效设计伙伴' : 'Your efficient design partner'}</strong>
             </div>
             <label class="library-hero-command" aria-label="${state.lang === 'zh' ? '搜索素材或发起创作' : 'Search or create'}">
-              <input id="library-hero-search" placeholder="${state.lang === 'zh' ? '可以问我找素材、做海报、做动效，也可以输入国家、活动、品类' : 'Search assets, posters, motion, country, campaign, category'}" value="${escapeAttr(state.libraryFilters.query)}">
+              <input id="library-hero-search" placeholder="${state.lang === 'zh' ? '输入任务或搜索素材' : 'Enter a task or search assets'}" value="${escapeAttr(state.libraryFilters.query)}">
               <button type="button" data-route="library" aria-label="${state.lang === 'zh' ? '进入超级库' : 'Open library'}">↑</button>
             </label>
           </div>
           <div class="library-module-row">
-            <button type="button" data-route="library">${state.lang === 'zh' ? '超级库' : 'Super Library'} <span>›</span></button>
-            <button type="button" data-route="static">${state.lang === 'zh' ? '静态设计师' : 'Static Designer'} <span>›</span></button>
-            <button type="button" data-route="dynamic">${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'} <span>›</span></button>
-            <button type="button" data-route="request">${state.lang === 'zh' ? '提需流程' : 'Request Flow'} <span>›</span></button>
+            <button type="button" data-route="library"><strong>${state.lang === 'zh' ? '超级库' : 'Super Library'}</strong><span>›</span></button>
+            <button type="button" data-route="static"><strong>${state.lang === 'zh' ? '静态设计师' : 'Static Designer'}</strong><span>›</span></button>
+            <button type="button" data-route="dynamic"><strong>${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'}</strong><span>›</span></button>
+            <button type="button" data-route="request"><strong>${state.lang === 'zh' ? '提需流程' : 'Request Flow'}</strong><span>›</span></button>
           </div>
         </section>
 
@@ -781,47 +777,51 @@
           </div>
           <form id="library-upload-form" class="library-form">
             <input type="hidden" name="library_kind" id="library-upload-kind" value="${defaultKind}">
-            <div class="library-upload-section">
-              <span>${state.lang === 'zh' ? '入库位置' : 'Library section'}</span>
-              <div class="library-kind-card-grid" role="radiogroup" aria-label="${state.lang === 'zh' ? '入库位置' : 'Library section'}">
-                <button type="button" class="library-kind-card ${defaultKind === 'gallery' ? 'active' : ''}" data-upload-kind-card="gallery">
-                  <strong>${state.lang === 'zh' ? '图库' : 'Gallery'}</strong>
-                  <small>${state.lang === 'zh' ? 'JPG / PNG / WEBP，可多选' : 'JPG / PNG / WEBP, multiple allowed'}</small>
-                </button>
-                <button type="button" class="library-kind-card ${defaultKind === 'source' ? 'active' : ''}" data-upload-kind-card="source">
-                  <strong>${state.lang === 'zh' ? '源文件库' : 'Source Files'}</strong>
-                  <small>${state.lang === 'zh' ? 'PSD / AI / PDF + 预览图' : 'PSD / AI / PDF + previews'}</small>
-                </button>
+            <div class="library-upload-scroll">
+              <div class="library-upload-section">
+                <span>${state.lang === 'zh' ? '入库位置' : 'Library section'}</span>
+                <div class="library-kind-card-grid" role="radiogroup" aria-label="${state.lang === 'zh' ? '入库位置' : 'Library section'}">
+                  <button type="button" class="library-kind-card ${defaultKind === 'gallery' ? 'active' : ''}" data-upload-kind-card="gallery">
+                    <strong>${state.lang === 'zh' ? '图库' : 'Gallery'}</strong>
+                    <small>${state.lang === 'zh' ? 'JPG / PNG / WEBP，可多选' : 'JPG / PNG / WEBP, multiple allowed'}</small>
+                  </button>
+                  <button type="button" class="library-kind-card ${defaultKind === 'source' ? 'active' : ''}" data-upload-kind-card="source">
+                    <strong>${state.lang === 'zh' ? '源文件库' : 'Source Files'}</strong>
+                    <small>${state.lang === 'zh' ? 'PSD / AI / PDF + 预览图' : 'PSD / AI / PDF + previews'}</small>
+                  </button>
+                </div>
               </div>
+              <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" id="library-upload-title" maxlength="120" required></label>
+              <div id="library-upload-tag-controls" class="library-upload-tags">${renderUploadTagControls(defaultKind)}</div>
+              <div class="library-form-grid two">
+                <label><span>${t('visibility')}</span><select name="visibility"><option value="all">${t('allVisible')}</option></select></label>
+                <label><span>${state.lang === 'zh' ? '标签' : 'Tags'}</span><input name="tags" placeholder="${state.lang === 'zh' ? '用逗号分隔，可选' : 'Comma separated, optional'}"></label>
+              </div>
+              <label class="library-drop-zone" data-upload-mode="gallery" data-drop-input="library-gallery-input">
+                <input name="gallery_files" id="library-gallery-input" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+                <span>${state.lang === 'zh' ? '图库图片' : 'Gallery images'}</span>
+                <strong>${state.lang === 'zh' ? '拖拽 JPG / PNG / WEBP 到这里，可多选' : 'Drop JPG / PNG / WEBP here, multiple allowed'}</strong>
+                <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No files selected'}</small>
+              </label>
+              <label class="library-drop-zone" data-upload-mode="source" data-drop-input="library-source-input">
+                <input name="source_file" id="library-source-input" type="file" accept=".psd,.ai,.pdf,application/pdf">
+                <span>${state.lang === 'zh' ? '源文件' : 'Source file'}</span>
+                <strong>${state.lang === 'zh' ? '拖拽 1 个 PSD / AI / PDF 到这里' : 'Drop one PSD / AI / PDF here'}</strong>
+                <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No file selected'}</small>
+              </label>
+              <label class="library-drop-zone" data-upload-mode="source" data-drop-input="library-preview-input">
+                <input name="preview_files" id="library-preview-input" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+                <span>${state.lang === 'zh' ? '预览图' : 'Preview images'}</span>
+                <strong>${state.lang === 'zh' ? '拖拽 1-5 张 JPG / PNG / WEBP 到这里' : 'Drop 1-5 JPG / PNG / WEBP files here'}</strong>
+                <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No files selected'}</small>
+              </label>
             </div>
-            <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" id="library-upload-title" maxlength="120" required></label>
-            <div id="library-upload-tag-controls" class="library-upload-tags">${renderUploadTagControls(defaultKind)}</div>
-            <div class="library-form-grid two">
-              <label><span>${t('visibility')}</span><select name="visibility"><option value="all">${t('allVisible')}</option></select></label>
-              <label><span>${state.lang === 'zh' ? '标签' : 'Tags'}</span><input name="tags" placeholder="${state.lang === 'zh' ? '用逗号分隔，可选' : 'Comma separated, optional'}"></label>
-            </div>
-            <label class="library-drop-zone" data-upload-mode="gallery" data-drop-input="library-gallery-input">
-              <input name="gallery_files" id="library-gallery-input" type="file" accept="image/jpeg,image/png,image/webp" multiple>
-              <span>${state.lang === 'zh' ? '图库图片' : 'Gallery images'}</span>
-              <strong>${state.lang === 'zh' ? '拖拽 JPG / PNG / WEBP 到这里，可多选' : 'Drop JPG / PNG / WEBP here, multiple allowed'}</strong>
-              <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No files selected'}</small>
-            </label>
-            <label class="library-drop-zone" data-upload-mode="source" data-drop-input="library-source-input">
-              <input name="source_file" id="library-source-input" type="file" accept=".psd,.ai,.pdf,application/pdf">
-              <span>${state.lang === 'zh' ? '源文件' : 'Source file'}</span>
-              <strong>${state.lang === 'zh' ? '拖拽 1 个 PSD / AI / PDF 到这里' : 'Drop one PSD / AI / PDF here'}</strong>
-              <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No file selected'}</small>
-            </label>
-            <label class="library-drop-zone" data-upload-mode="source" data-drop-input="library-preview-input">
-              <input name="preview_files" id="library-preview-input" type="file" accept="image/jpeg,image/png,image/webp" multiple>
-              <span>${state.lang === 'zh' ? '预览图' : 'Preview images'}</span>
-              <strong>${state.lang === 'zh' ? '拖拽 1-5 张 JPG / PNG / WEBP 到这里' : 'Drop 1-5 JPG / PNG / WEBP files here'}</strong>
-              <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No files selected'}</small>
-            </label>
-            <div id="library-upload-message" class="message"></div>
-            <div class="modal-actions">
-              <button class="ghost-btn" id="cancel-library-upload" type="button">${t('cancel')}</button>
-              <button class="primary-btn" type="submit">${state.lang === 'zh' ? '上传入库' : 'Upload'}</button>
+            <div class="library-upload-footer">
+              <div id="library-upload-message" class="message"></div>
+              <div class="modal-actions">
+                <button class="ghost-btn" id="cancel-library-upload" type="button">${t('cancel')}</button>
+                <button class="primary-btn" type="submit">${state.lang === 'zh' ? '上传入库' : 'Upload'}</button>
+              </div>
             </div>
           </form>
         </section>
@@ -1036,7 +1036,9 @@
     }
     try {
       if (state.localPreview || !state.supabase) {
-        loadLocalLibraryDemo();
+        status.textContent = state.lang === 'zh' ? '正在读取旧平台恢复素材...' : 'Loading recovered platform assets...';
+        const recovered = await loadRecoveredPlatformLibrary();
+        if (!recovered) loadLocalLibraryDemo();
         return;
       }
       status.textContent = state.lang === 'zh' ? '正在读取分类和素材...' : 'Loading options and assets...';
@@ -1216,7 +1218,11 @@
     const visibleItems = state.libraryItems.slice(0, state.libraryVisibleLimit);
     const hasMore = visibleItems.length < state.libraryItems.length;
     const counts = countLibraryKinds();
+    const sourceBadge = state.libraryRecoveryLabel
+      ? `<span class="library-stat recovery"><small>${state.lang === 'zh' ? '来源' : 'Source'}</small><strong>${escapeHtml(state.libraryRecoveryLabel)}</strong></span>`
+      : '';
     status.innerHTML = `
+      ${sourceBadge}
       <span class="library-stat"><small>${state.lang === 'zh' ? '当前展示' : 'Showing'}</small><strong>${visibleItems.length}/${state.libraryItems.length}</strong></span>
       <span class="library-stat"><small>${state.lang === 'zh' ? '图库' : 'Gallery'}</small><strong>${counts.gallery}</strong></span>
       <span class="library-stat"><small>${state.lang === 'zh' ? '源文件库' : 'Sources'}</small><strong>${counts.source}</strong></span>
@@ -1247,8 +1253,39 @@
     void signVisibleLibraryUrls(visibleItems);
   }
 
+  async function loadRecoveredPlatformLibrary() {
+    try {
+      const response = await fetch(`recovered/platform/index.json?v=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Recovery index ${response.status}`);
+      const data = await response.json();
+      if (!Array.isArray(data.sources) || !Array.isArray(data.previews) || data.sources.length === 0) {
+        throw new Error('Recovery index is empty');
+      }
+      state.libraryOptions = Array.isArray(data.options) ? data.options : [];
+      state.librarySources = data.sources;
+      state.libraryPreviews = data.previews;
+      state.libraryPreviewUrls = Object.fromEntries(
+        Object.entries(data.previewUrls || {}).map(([key, value]) => {
+          if (String(value).startsWith('data:')) return [key, value];
+          return [key, new URL(value, location.href).toString()];
+        })
+      );
+      state.libraryFavorites = new Set();
+      state.libraryRecoveryLabel = state.lang === 'zh' ? `旧平台恢复 ${data.totalSources || data.sources.length}` : `Recovered ${data.totalSources || data.sources.length}`;
+      state.libraryDataLoaded = true;
+      renderLibrarySelects();
+      renderLibraryGrid();
+      return true;
+    } catch (error) {
+      console.warn('Recovered platform library unavailable:', error);
+      state.libraryRecoveryLabel = '';
+      return false;
+    }
+  }
+
   function loadLocalLibraryDemo() {
     const now = new Date().toISOString();
+    state.libraryRecoveryLabel = state.lang === 'zh' ? '演示数据' : 'Demo';
     state.libraryOptions = [
       { id: 'local-uae', option_type: 'country', name_zh: '阿联酋', name_en: 'UAE', sort_order: 10 },
       { id: 'local-ksa', option_type: 'country', name_zh: '沙特', name_en: 'Saudi Arabia', sort_order: 20 },
@@ -1507,6 +1544,7 @@
     document.getElementById('library-upload-title').value = '';
     document.getElementById('library-upload-message').textContent = '';
     document.getElementById('library-upload-modal').hidden = false;
+    document.querySelector('.library-upload-scroll')?.scrollTo({ top: 0, behavior: 'auto' });
     updateLibraryUploadMode(defaultKind);
     wireLibraryUploadKindCards();
     wireUploadTagPickers();
@@ -1872,13 +1910,16 @@
   async function downloadLibraryFile(item, kind) {
     if (kind === 'source' && !canDownloadSource()) return;
     if (state.localPreview) {
-      if (kind === 'preview' && item.url) {
-        const response = await fetch(item.url);
-        const blob = await response.blob();
-        triggerBlobDownload(blob, item.preview.preview_filename || 'preview.svg');
+      const recoveredUrl = kind === 'source'
+        ? item.source.source_public_url
+        : item.url;
+      if (!recoveredUrl) {
+        alert(state.lang === 'zh' ? '这个恢复记录缺少对应文件，暂时不能下载。' : 'This recovered record is missing its file.');
         return;
       }
-      alert(state.lang === 'zh' ? '本地预览不下载真实源文件。' : 'Local preview does not download real source files.');
+      const response = await fetch(new URL(recoveredUrl, location.href).toString());
+      const blob = await response.blob();
+      triggerBlobDownload(blob, kind === 'source' ? item.source.source_filename : item.preview.preview_filename || 'preview.svg');
       return;
     }
     const path = kind === 'source' ? item.source.source_path : item.preview.preview_path;

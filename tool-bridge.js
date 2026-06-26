@@ -27,8 +27,11 @@
 
     try {
       if (toolType === 'static') {
+        const artboardSnapshot = typeof getArtboardSnapshot === 'function' ? safeClone(getArtboardSnapshot()) : null;
         const editorState = {
           currentRatio: typeof currentRatio !== 'undefined' ? currentRatio : null,
+          currentArtboardId: artboardSnapshot?.currentArtboardId || null,
+          artboards: artboardSnapshot?.artboards || null,
           activeLayerIds: typeof activeLayerIds !== 'undefined' ? safeClone(activeLayerIds) : [],
           layers: typeof layers !== 'undefined' ? safeClone(layers) : [],
           globals: typeof getGlobalSnapshot === 'function' ? safeClone(getGlobalSnapshot()) : null
@@ -224,8 +227,11 @@
       } catch (_error) {}
     }
     const wrap = document.getElementById('canvas-wrapper');
+    const safeGuide = document.getElementById('safe-guide');
+    const oldGuideDisplay = safeGuide ? safeGuide.style.display : '';
     const oldActive = typeof activeLayerIds !== 'undefined' && Array.isArray(activeLayerIds) ? safeClone(activeLayerIds) : null;
     try {
+      if (safeGuide) safeGuide.style.display = 'none';
       if (oldActive) {
         activeLayerIds = [];
         if (typeof renderCanvas === 'function') renderCanvas();
@@ -240,6 +246,8 @@
       });
       return canvas.toDataURL('image/png');
     } finally {
+      if (safeGuide) safeGuide.style.display = oldGuideDisplay;
+      if (typeof syncSafeGuide === 'function') syncSafeGuide();
       if (oldActive) {
         activeLayerIds = oldActive;
         if (typeof renderCanvas === 'function') renderCanvas();
@@ -252,8 +260,16 @@
   async function importStaticProject(snapshot) {
     await waitFor(() => typeof renderCanvas === 'function' && typeof resizeCanvas === 'function' && typeof renderLayersList === 'function', 6000);
     const editorState = snapshot.editorState || {};
-    if (editorState.currentRatio) currentRatio = editorState.currentRatio;
-    layers = safeClone(editorState.layers || []);
+    if (typeof importArtboardSnapshot === 'function') {
+      importArtboardSnapshot({
+        currentArtboardId: editorState.currentArtboardId,
+        artboards: editorState.artboards,
+        layers: editorState.layers || []
+      });
+    } else {
+      if (editorState.currentRatio) currentRatio = editorState.currentRatio;
+      layers = safeClone(editorState.layers || []);
+    }
     activeLayerIds = Array.isArray(editorState.activeLayerIds) ? safeClone(editorState.activeLayerIds) : [];
     if (typeof syncRatioNav === 'function') syncRatioNav();
     resizeCanvas();
