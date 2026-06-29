@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GCC Design - Static DIY</title>
-    <script src="../../config.js?v=20260626-home-kiki3"></script>
-    <script src="../../tool-auth-guard.js?v=20260626-home-kiki3"></script>
+    <script src="../../config.js?v=20260629-discount-tag4"></script>
+    <script src="../../tool-auth-guard.js?v=20260629-discount-tag4"></script>
     <script src="../vendor/html2canvas.min.js"></script>
     
     <style>
@@ -58,6 +58,9 @@
         .is-active-layer { outline: 3px dashed var(--primary); outline-offset: 4px; }
         
         .tag-pill { display: inline-block; height: 60px; line-height: 60px; padding: 0 36px; border-radius: 30px; font-size: 36px; font-weight: inherit; white-space: pre; letter-spacing: inherit; font-kerning: normal; font-feature-settings: "kern" 1; pointer-events: auto; text-align: center; }
+        .discount-pill { position: relative; display: inline-flex; align-items: center; white-space: nowrap; font-kerning: normal; font-feature-settings: "kern" 1; pointer-events: auto; }
+        .discount-main { display: block; line-height: 0.82; font-weight: inherit; }
+        .discount-side { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; line-height: 0.86; font-weight: inherit; text-transform: none; }
 
         .right-pane { width: 390px; background: transparent; border-radius: 0; display: flex; flex-direction: column; border: 0; box-shadow: none; overflow: hidden; }
         .pane-header { display: none; padding: 16px 18px; border-bottom: 1px solid var(--border); justify-content: space-between; align-items: center; }
@@ -142,6 +145,13 @@
         .asset-action:hover { color: var(--danger); }
         .asset-status { position: absolute; top: 12px; left: 12px; background: #0b0d12; color: #fff; border-radius: 999px; padding: 3px 7px; font-size: 9px; font-weight: 850; }
         .asset-empty { grid-column: 1 / -1; color: var(--text-sub); font-size: 12px; text-align: center; padding: 14px 8px; border: 1px dashed var(--border); border-radius: 10px; background: #FFFFFF; }
+        .asset-hover-preview { position: fixed; z-index: 900; width: 465px; padding: 16px; border: 1px solid rgba(16,17,20,0.12); border-radius: 18px; background: rgba(255,255,255,0.96); box-shadow: 0 24px 64px rgba(16,17,20,0.18); opacity: 0; transform: translateY(6px) scale(0.98); transition: opacity 0.14s ease, transform 0.14s ease; pointer-events: none; backdrop-filter: blur(10px); }
+        .asset-hover-preview.show { opacity: 1; transform: translateY(0) scale(1); }
+        .asset-hover-stage { min-height: 285px; border: 1px solid var(--border); border-radius: 14px; background: #F8FAFC; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .asset-hover-stage.logo-thumb { background-color: #f7f8f6; background-image: linear-gradient(45deg, #e3e5e1 25%, transparent 25%), linear-gradient(-45deg, #e3e5e1 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e3e5e1 75%), linear-gradient(-45deg, transparent 75%, #e3e5e1 75%); background-size: 18px 18px; background-position: 0 0, 0 9px, 9px -9px, -9px 0; }
+        .asset-hover-stage img { max-width: 92%; max-height: 285px; object-fit: contain; display: block; }
+        .asset-hover-title { margin-top: 10px; font-size: 13px; line-height: 1.35; font-weight: 880; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .asset-hover-meta { margin-top: 3px; font-size: 11px; line-height: 1.35; font-weight: 720; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .prompt-tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
         .prompt-tag-chip { border: 1px solid var(--border); background: #FFFFFF; color: var(--text-sub); border-radius: 999px; padding: 7px 11px; cursor: pointer; font-size: 12px; font-weight: 800; transition: 0.2s; }
         .prompt-tag-chip:hover { border-color: var(--primary); color: var(--text-main); }
@@ -1118,6 +1128,7 @@
                             <button onclick="document.getElementById('logo-upload').click(); closeAddMenu();">上传Logo</button>
                             <button onclick="addLayer('arc'); closeAddMenu();">圆弧</button>
                             <button onclick="addLayer('tag'); closeAddMenu();">标签</button>
+                            <button onclick="addLayer('discountTag'); closeAddMenu();">折扣标签</button>
                         </div>
                     </div>
                 </div>
@@ -1197,7 +1208,8 @@
     let draggingLayerId = null;
     let aiProgressTimer = null;
     let historyStack = []; let historyIdx = -1; let isRestoring = false;
-    const SHARED_TAG_PROPS = ['text', 'font', 'fontWeight', 'bgCol', 'textCol', 'shadowCol', 'shadowOpacity', 'shadowThickness', 'letterSpacing'];
+    const SHARED_TAG_PROPS = ['text', 'font', 'fontWeight', 'bgCol', 'textCol', 'shadowCol', 'shadowOpacity', 'shadowThickness', 'letterSpacing', 'tagPaddingX', 'tagTextOffsetY'];
+    const SHARED_DISCOUNT_TAG_PROPS = ['mainText', 'topText', 'bottomText', 'font', 'fontWeight', 'bgCol', 'textCol', 'shadowCol', 'shadowOpacity', 'shadowThickness', 'letterSpacing', 'tagPaddingX', 'tagPaddingY', 'tagTextOffsetY', 'mainFontSize', 'topFontSize', 'bottomFontSize', 'sideGap', 'sideLineGap'];
     const SHARED_ARC_PROPS = ['cIn', 'cOut'];
     const SHARED_SOLID_PROPS = ['color'];
 
@@ -1524,6 +1536,7 @@
     function getSharedPropsForLayer(layer) {
         if(!layer) return [];
         if(layer.type === 'tag') return SHARED_TAG_PROPS;
+        if(layer.type === 'discountTag') return SHARED_DISCOUNT_TAG_PROPS;
         if(layer.type === 'arc') return SHARED_ARC_PROPS;
         if(layer.type === 'solid') return SHARED_SOLID_PROPS;
         return [];
@@ -1564,6 +1577,29 @@
     function normalizeTagPreset(p = {}) {
         return { ...p, shadowOpacity: normalizeAlpha(p.shadowOpacity ?? 1) };
     }
+    function normalizeDiscountTagLayer(layer) {
+        if(!layer || layer.type !== 'discountTag') return layer;
+        if(layer.mainText === undefined) layer.mainText = '60';
+        if(layer.topText === undefined) layer.topText = '%';
+        if(layer.bottomText === undefined) layer.bottomText = 'off';
+        if(layer.font === undefined) layer.font = 'Arial Black, sans-serif';
+        if(layer.bgCol === undefined) layer.bgCol = '#050505';
+        if(layer.textCol === undefined) layer.textCol = '#7CFF00';
+        if(layer.shadowCol === undefined) layer.shadowCol = '#111827';
+        if(layer.shadowOpacity === undefined) layer.shadowOpacity = 0.45;
+        if(layer.shadowThickness === undefined) layer.shadowThickness = 12;
+        if(layer.letterSpacing === undefined) layer.letterSpacing = -3;
+        if(layer.tagPaddingX === undefined) layer.tagPaddingX = 34;
+        if(layer.tagPaddingY === undefined) layer.tagPaddingY = 15;
+        if(layer.tagTextOffsetY === undefined) layer.tagTextOffsetY = 0;
+        if(layer.mainFontSize === undefined) layer.mainFontSize = 96;
+        if(layer.sideFontSize === undefined) layer.sideFontSize = 42;
+        if(layer.topFontSize === undefined) layer.topFontSize = layer.sideFontSize;
+        if(layer.bottomFontSize === undefined) layer.bottomFontSize = layer.sideFontSize;
+        if(layer.sideGap === undefined) layer.sideGap = 8;
+        if(layer.sideLineGap === undefined) layer.sideLineGap = -2;
+        return layer;
+    }
     function colorWithAlpha(color, alpha = 1) {
         const a = normalizeAlpha(alpha);
         const raw = String(color || '#111827').trim();
@@ -1581,7 +1617,7 @@
     function formatPropValue(p, v) {
         if(p === 'scale') return v + 'x';
         if(p.includes('rotation')) return v + '°';
-        if(p.includes('Thickness') || p === 'letterSpacing') return v + 'px';
+        if(p.includes('Thickness') || p === 'letterSpacing' || p === 'tagPaddingX' || p === 'tagPaddingY' || p === 'tagTextOffsetY' || p === 'mainFontSize' || p === 'topFontSize' || p === 'bottomFontSize' || p === 'sideFontSize' || p === 'sideGap' || p === 'sideLineGap') return v + 'px';
         if(p === 'shadowOpacity') return Math.round(normalizeAlpha(v) * 100) + '%';
         return v;
     }
@@ -1643,10 +1679,11 @@
         if(l.type === 'arc') return '⭕ 圆弧';
         if(l.type === 'logo') return '🔖 Logo';
         if(l.type === 'image') return '🖼️ 图像';
+        if(l.type === 'discountTag') return '🏷️ 折扣标签';
         return '🏷️ 标签';
     }
     function getSelectedTagLayers() {
-        return activeLayerIds.map(id => layers.find(l => l.id === id)).filter(l => l && l.type === 'tag');
+        return activeLayerIds.map(id => layers.find(l => l.id === id)).filter(l => l && ['tag', 'discountTag'].includes(l.type));
     }
     function cloneLayersForInsert(elements, centerOnCanvas = false) {
         const {w, h} = SIZES[currentRatio];
@@ -1661,7 +1698,10 @@
             if(centerOnCanvas) { cloned.x = w / 2 + ((Number(el.x) || 0) - cx); cloned.y = h / 2 + ((Number(el.y) || 0) - cy); }
             if(cloned.type === 'tag' && cloned.shadowThickness === undefined) cloned.shadowThickness = 12;
             if(cloned.type === 'tag' && cloned.letterSpacing === undefined) cloned.letterSpacing = 0;
+            if(cloned.type === 'tag' && cloned.tagPaddingX === undefined) cloned.tagPaddingX = 36;
+            if(cloned.type === 'tag' && cloned.tagTextOffsetY === undefined) cloned.tagTextOffsetY = 0;
             if(cloned.type === 'tag' && cloned.shadowOpacity === undefined) cloned.shadowOpacity = 1;
+            normalizeDiscountTagLayer(cloned);
             if((cloned.type === 'image' || cloned.type === 'logo' || cloned.type === 'solid') && cloned.flipX === undefined) cloned.flipX = false;
             return cloned;
         });
@@ -2044,9 +2084,10 @@
         } else {
             newL.zIndex = maxZ + 1; 
             if(type === 'arc') Object.assign(newL, { rIn: 400, wIn: 40, wOut: 120, cIn: '#00D06C', cOut: '#111827' });
-            else if(type === 'tag') Object.assign(newL, { rotation: -3, shadowThickness: 12, shadowOpacity: 1, letterSpacing: 0, text: 'NEW TAG', font: '-apple-system, sans-serif', bgCol: '#00D06C', textCol: '#FFFFFF', shadowCol: '#111827' });
+            else if(type === 'tag') Object.assign(newL, { rotation: -3, shadowThickness: 12, shadowOpacity: 1, letterSpacing: 0, tagPaddingX: 36, tagTextOffsetY: 0, text: 'NEW TAG', font: '-apple-system, sans-serif', bgCol: '#00D06C', textCol: '#FFFFFF', shadowCol: '#111827' });
+            else if(type === 'discountTag') Object.assign(newL, { rotation: -5, shadowThickness: 12, shadowOpacity: 0.45, letterSpacing: -3, tagPaddingX: 34, tagPaddingY: 15, tagTextOffsetY: 0, mainText: '60', topText: '%', bottomText: 'off', mainFontSize: 96, topFontSize: 52, bottomFontSize: 42, sideGap: 8, sideLineGap: -2, font: 'Arial Black, sans-serif', bgCol: '#050505', textCol: '#7CFF00', shadowCol: '#111827' });
         }
-        if(['tag', 'arc', 'solid'].includes(type)) ensureSharedKey(newL);
+        if(['tag', 'discountTag', 'arc', 'solid'].includes(type)) ensureSharedKey(newL);
         layers.push(newL); activeLayerIds = [newL.id]; saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
     }
 
@@ -2091,8 +2132,43 @@
             const shadowAlpha = normalizeAlpha(l.shadowOpacity ?? 1);
             const shadowColor = colorWithAlpha(l.shadowCol, shadowAlpha);
             const safeText = escapeHtml(l.text);
-            const autoAngle = Math.atan2(thick, 72 + String(l.text || '').length * 22) * (180/Math.PI);
-            wrapper.innerHTML = `<div style="position:relative; display:inline-block;"><div class="tag-pill" style="position:absolute; left:0; top:0; width:100%; height:100%; background:${shadowColor}; color:transparent; z-index:0; transform-origin: 30px 30px; transform: rotate(${autoAngle}deg); clip-path: inset(-100px -100px -100px 30px);">${safeText}</div><div class="tag-pill" style="position:relative; background:${l.bgCol}; color:${l.textCol}; z-index:1;">${safeText}</div></div>`;
+            const paddingX = Number.isFinite(Number(l.tagPaddingX)) ? Number(l.tagPaddingX) : 36;
+            const textOffsetY = Number.isFinite(Number(l.tagTextOffsetY)) ? Number(l.tagTextOffsetY) : 0;
+            const textSpan = `<span style="display:inline-block; transform:translateY(${textOffsetY}px);">${safeText}</span>`;
+            const pillBox = `height:60px; line-height:60px; padding:0 ${paddingX}px; border-radius:30px;`;
+            const autoAngle = Math.atan2(thick, paddingX * 2 + String(l.text || '').length * 22) * (180/Math.PI);
+            wrapper.innerHTML = `<div style="position:relative; display:inline-block;"><div class="tag-pill" style="position:absolute; left:0; top:0; width:100%; ${pillBox} background:${shadowColor}; color:transparent; z-index:0; transform-origin: 30px 30px; transform: rotate(${autoAngle}deg); clip-path: inset(-100px -100px -100px 30px);">${textSpan}</div><div class="tag-pill" style="position:relative; ${pillBox} background:${l.bgCol}; color:${l.textCol}; z-index:1;">${textSpan}</div></div>`;
+        }
+        else if(l.type === 'discountTag') {
+            normalizeDiscountTagLayer(l);
+            wrapper.className = 'layer-tag-wrapper layer-base';
+            wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation}deg) scale(${l.scale})`;
+            wrapper.style.fontFamily = l.font || 'Arial Black, sans-serif';
+            wrapper.style.fontWeight = getTagFontWeight(l);
+            wrapper.style.letterSpacing = (l.letterSpacing ?? -3) + 'px';
+            const thick = l.shadowThickness !== undefined ? l.shadowThickness : 12;
+            const shadowAlpha = normalizeAlpha(l.shadowOpacity ?? 0.45);
+            const shadowColor = colorWithAlpha(l.shadowCol, shadowAlpha);
+            const paddingX = Number.isFinite(Number(l.tagPaddingX)) ? Number(l.tagPaddingX) : 34;
+            const paddingY = Number.isFinite(Number(l.tagPaddingY)) ? Number(l.tagPaddingY) : 15;
+            const textOffsetY = Number.isFinite(Number(l.tagTextOffsetY)) ? Number(l.tagTextOffsetY) : 0;
+            const mainSize = Number.isFinite(Number(l.mainFontSize)) ? Number(l.mainFontSize) : 96;
+            const topSize = Number.isFinite(Number(l.topFontSize)) ? Number(l.topFontSize) : (Number(l.sideFontSize) || 52);
+            const bottomSize = Number.isFinite(Number(l.bottomFontSize)) ? Number(l.bottomFontSize) : (Number(l.sideFontSize) || 42);
+            const sideGap = Number.isFinite(Number(l.sideGap)) ? Number(l.sideGap) : 8;
+            const sideLineGap = Number.isFinite(Number(l.sideLineGap)) ? Number(l.sideLineGap) : -2;
+            const safeMain = escapeHtml(l.mainText);
+            const safeTop = escapeHtml(l.topText);
+            const safeBottom = escapeHtml(l.bottomText);
+            const sideMax = Math.max(String(l.topText || '').length * topSize, String(l.bottomText || '').length * bottomSize);
+            const approxW = paddingX * 2 + String(l.mainText || '').length * mainSize * 0.62 + sideMax * 0.5 + sideGap;
+            const approxH = Math.max(mainSize * 0.92, topSize + bottomSize + sideLineGap) + paddingY * 2;
+            const autoAngle = Math.atan2(thick, approxW) * (180/Math.PI);
+            const leftClip = Math.round(Math.max(34, Math.min(approxW * 0.18, approxH * 0.78)));
+            const transformOriginX = Math.round(Math.max(28, approxH * 0.42));
+            const inner = `<span class="discount-main" style="font-size:${mainSize}px; transform:translateY(${textOffsetY}px);">${safeMain}</span><span class="discount-side" style="gap:${sideLineGap}px; transform:translateY(${textOffsetY}px);"><span style="font-size:${topSize}px;">${safeTop}</span><span style="font-size:${bottomSize}px;">${safeBottom}</span></span>`;
+            const pillStyle = `gap:${sideGap}px; padding:${paddingY}px ${paddingX}px; border-radius:999px;`;
+            wrapper.innerHTML = `<div style="position:relative; display:inline-block;"><div class="discount-pill" style="position:absolute; left:0; top:0; width:100%; height:100%; ${pillStyle} background:${shadowColor}; color:transparent; z-index:0; transform-origin:${transformOriginX}px 50%; transform:rotate(${autoAngle}deg); clip-path:inset(-160px -160px -160px ${leftClip}px);">${inner}</div><div class="discount-pill" style="position:relative; ${pillStyle} color:${l.textCol}; background:${l.bgCol}; z-index:1;">${inner}</div></div>`;
         }
         if(active) wrapper.classList.add('is-active-layer');
         return wrapper;
@@ -2186,7 +2262,7 @@
     window.applyTagColor = function(b, t, s, o = 1) {
         activeLayerIds.forEach(id => {
             const l = layers.find(x => x.id === id);
-            if(l && l.type === 'tag') {
+            if(l && ['tag', 'discountTag'].includes(l.type)) {
                 l.bgCol = b; l.textCol = t; l.shadowCol = s; l.shadowOpacity = normalizeAlpha(o);
                 propagateSharedLayerChange(l, ['bgCol', 'textCol', 'shadowCol', 'shadowOpacity']);
             }
@@ -2208,7 +2284,7 @@
         const area = document.getElementById('prop-edit-area'); 
         if(activeLayerIds.length === 0) { area.innerHTML = `<div style="text-align: center; color: var(--text-sub); font-size: 13px; padding: 20px 0;">请在上方或画板中选择图层</div>`; return; }
         if(activeLayerIds.length > 1) {
-            const types = activeLayerIds.map(id => layers.find(l => l.id === id)?.type); const allTags = types.every(t => t === 'tag'); const allArcs = types.every(t => t === 'arc');
+            const types = activeLayerIds.map(id => layers.find(l => l.id === id)?.type); const allTags = types.every(t => ['tag', 'discountTag'].includes(t)); const allArcs = types.every(t => t === 'arc');
             let batchUI = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0;">已选择 ${activeLayerIds.length} 个图层</div>`;
             if(allTags) { let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); presetHtml += `<div onclick="applyTagColor('${p.bg}', '${p.text}', '${p.shadow}', ${alpha})" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid #FFF; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;" title="${p.name}"></div>`; }); batchUI += `<label class="label">批量修改标签品牌色</label>${presetHtml}</div>`; } 
             else if (allArcs) { let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; arcColorPresets.forEach(p => { presetHtml += `<div onclick="applyArcColor('${p.cIn}', '${p.cOut}')" style="width:36px; height:36px; border-radius:50%; background:${p.cIn}; border: 4px solid ${p.cOut}; cursor:pointer;" title="${p.name}"></div>`; }); batchUI += `<label class="label">批量修改圆弧品牌色</label>${presetHtml}</div>`; }
@@ -2228,8 +2304,13 @@
         }
         else if(l.type === 'tag') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="applyTagColor('${p.bg}', '${p.text}', '${p.shadow}', ${alpha})" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;"></div>`; });
-            area.innerHTML = `<label class="label">文案内容</label><input type="text" class="input-text" value="${escapeHtml(l.text)}" oninput="updateProp('text', this.value)" onchange="saveHistory()"><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.3" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-8" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="30" step="1" value="${l.shadowThickness||12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness||12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 1)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 1)*100)}%</span></div>`;
+            area.innerHTML = `<label class="label">文案内容</label><input type="text" class="input-text" value="${escapeHtml(l.text)}" oninput="updateProp('text', this.value)" onchange="saveHistory()"><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.3" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-8" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">内边距</span><input type="range" min="8" max="80" step="1" value="${l.tagPaddingX ?? 36}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 36}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-18" max="18" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="30" step="1" value="${l.shadowThickness||12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness||12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 1)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 1)*100)}%</span></div>`;
         } 
+        else if(l.type === 'discountTag') {
+            normalizeDiscountTagLayer(l);
+            let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="applyTagColor('${p.bg}', '${p.text}', '${p.shadow}', ${alpha})" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;"></div>`; });
+            area.innerHTML = `<label class="label">主文字</label><input type="text" class="input-text" value="${escapeHtml(l.mainText)}" oninput="updateProp('mainText', this.value)" onchange="saveHistory()"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><div><label class="label">右上角</label><input type="text" class="input-text" value="${escapeHtml(l.topText)}" oninput="updateProp('topText', this.value)" onchange="saveHistory()"></div><div><label class="label">右下角</label><input type="text" class="input-text" value="${escapeHtml(l.bottomText)}" oninput="updateProp('bottomText', this.value)" onchange="saveHistory()"></div></div><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.3" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">主字大小</span><input type="range" min="48" max="150" step="1" value="${l.mainFontSize ?? 96}" oninput="updateProp('mainFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-mainFontSize">${l.mainFontSize ?? 96}px</span></div><div class="slider-row"><span class="s-label">%大小</span><input type="range" min="20" max="90" step="1" value="${l.topFontSize ?? l.sideFontSize ?? 52}" oninput="updateProp('topFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-topFontSize">${l.topFontSize ?? l.sideFontSize ?? 52}px</span></div><div class="slider-row"><span class="s-label">Off大小</span><input type="range" min="16" max="80" step="1" value="${l.bottomFontSize ?? l.sideFontSize ?? 42}" oninput="updateProp('bottomFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-bottomFontSize">${l.bottomFontSize ?? l.sideFontSize ?? 42}px</span></div><div class="slider-row"><span class="s-label">左右间距</span><input type="range" min="-8" max="32" step="1" value="${l.sideGap ?? 8}" oninput="updateProp('sideGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideGap">${l.sideGap ?? 8}px</span></div><div class="slider-row"><span class="s-label">%/Off间距</span><input type="range" min="-18" max="24" step="1" value="${l.sideLineGap ?? -2}" oninput="updateProp('sideLineGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideLineGap">${l.sideLineGap ?? -2}px</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="18" step="0.5" value="${l.letterSpacing ?? -3}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? -3}px</span></div><div class="slider-row"><span class="s-label">左右边距</span><input type="range" min="8" max="90" step="1" value="${l.tagPaddingX ?? 34}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 34}px</span></div><div class="slider-row"><span class="s-label">上下边距</span><input type="range" min="4" max="48" step="1" value="${l.tagPaddingY ?? 15}" oninput="updateProp('tagPaddingY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingY">${l.tagPaddingY ?? 15}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-24" max="24" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="36" step="1" value="${l.shadowThickness ?? 12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness ?? 12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 0.45)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 0.45)*100)}%</span></div>`;
+        }
         else if(l.type === 'arc') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; arcColorPresets.forEach(p => { const isActive = l.cIn === p.cIn && l.cOut === p.cOut; presetHtml += `<div onclick="applyArcColor('${p.cIn}', '${p.cOut}')" style="width:36px; height:36px; border-radius:50%; background:${p.cIn}; border: 4px solid ${p.cOut}; box-shadow: 0 0 0 ${isActive ? '2px' : '0'} var(--text-main); cursor:pointer;"></div>`; });
             area.innerHTML = `<label class="label">一键圆弧品牌色</label>${presetHtml}</div><div class="slider-row"><span class="s-label">整体缩放</span><input type="range" min="0.2" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">中心半径</span><input type="range" min="100" max="1000" step="1" value="${l.rIn}" oninput="updateProp('rIn', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rIn">${l.rIn}</span></div><div class="slider-row"><span class="s-label">内环粗细</span><input type="range" min="10" max="400" step="1" value="${l.wIn}" oninput="updateProp('wIn', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-wIn">${l.wIn}</span></div><div class="slider-row"><span class="s-label">外环粗细</span><input type="range" min="0" max="400" step="1" value="${l.wOut}" oninput="updateProp('wOut', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-wOut">${l.wOut}</span></div>`;
@@ -2337,25 +2418,74 @@
         if(type === 'pack') item.appendChild(createPackHoverPreview(asset));
         item.appendChild(info);
         item.appendChild(actions);
+        item.addEventListener('mouseenter', () => showAssetHoverPreview(item, { title, meta, type, asset, img }));
+        item.addEventListener('mousemove', () => positionAssetHoverPreview(item));
+        item.addEventListener('mouseleave', hideAssetHoverPreview);
         return item;
+    }
+    function getAssetHoverEl() {
+        let el = document.getElementById('asset-hover-preview');
+        if(el) return el;
+        el = document.createElement('div');
+        el.id = 'asset-hover-preview';
+        el.className = 'asset-hover-preview';
+        document.body.appendChild(el);
+        return el;
+    }
+    function showAssetHoverPreview(anchor, data) {
+        const el = getAssetHoverEl();
+        el.innerHTML = '';
+        const stage = document.createElement('div');
+        stage.className = `asset-hover-stage ${data.type === 'logo' ? 'logo-thumb' : ''}`;
+        renderAssetPreview(stage, { type: data.type, asset: data.asset, img: data.img, large: true });
+        const titleEl = document.createElement('div');
+        titleEl.className = 'asset-hover-title';
+        titleEl.textContent = data.title || '';
+        const metaEl = document.createElement('div');
+        metaEl.className = 'asset-hover-meta';
+        metaEl.textContent = data.meta || '';
+        el.appendChild(stage);
+        el.appendChild(titleEl);
+        el.appendChild(metaEl);
+        positionAssetHoverPreview(anchor);
+        requestAnimationFrame(() => el.classList.add('show'));
+    }
+    function positionAssetHoverPreview(anchor) {
+        const el = document.getElementById('asset-hover-preview');
+        if(!el || !anchor) return;
+        const rect = anchor.getBoundingClientRect();
+        const previewW = el.offsetWidth || 465;
+        const previewH = el.offsetHeight || 240;
+        const gap = 14;
+        let left = rect.left - previewW - gap;
+        if(left < 16) left = rect.right + gap;
+        left = Math.min(window.innerWidth - previewW - 16, Math.max(16, left));
+        let top = rect.top + rect.height / 2 - previewH / 2;
+        top = Math.min(window.innerHeight - previewH - 16, Math.max(16, top));
+        el.style.left = `${left}px`;
+        el.style.top = `${top}px`;
+    }
+    function hideAssetHoverPreview() {
+        document.getElementById('asset-hover-preview')?.classList.remove('show');
     }
     function renderAssetPreview(root, { type, asset, img }) {
         root.innerHTML = '';
+        const large = arguments[1]?.large;
         if(type === 'logo') {
             root.innerHTML = `<img src="${img}" alt="">`;
             return;
         }
         if(type === 'tag') {
-            root.appendChild(createLayerGroupPreview(asset?.elements || [], { maxW: 138, maxH: 92 }));
+            root.appendChild(createLayerGroupPreview(asset?.elements || [], { maxW: large ? 405 : 138, maxH: large ? 267 : 92 }));
             return;
         }
         if(type === 'pack') {
             const board = asset?.artboards?.head || asset?.artboards?.banner || asset?.artboards?.splash;
             const ratio = board?.ratio || 'head';
-            root.appendChild(createMiniArtboardPreview(board?.layers || [], ratio, { maxW: 138, maxH: 92 }));
+            root.appendChild(createMiniArtboardPreview(board?.layers || [], ratio, { maxW: large ? 405 : 138, maxH: large ? 267 : 92 }));
             return;
         }
-        root.appendChild(createMiniArtboardPreview(asset?.elements || [], asset?.size || currentRatio, { maxW: 138, maxH: 92 }));
+        root.appendChild(createMiniArtboardPreview(asset?.elements || [], asset?.size || currentRatio, { maxW: large ? 405 : 138, maxH: large ? 267 : 92 }));
     }
     function createMiniArtboardPreview(sourceLayers, ratio, options = {}) {
         const maxW = options.maxW || 140;
@@ -2545,6 +2675,15 @@
             const h = 78 * scale;
             return { x1: l.x - w / 2, y1: l.y - h / 2, x2: l.x + w / 2, y2: l.y + h / 2, w, h, cx: l.x, cy: l.y, area: w * h };
         }
+        if(l.type === 'discountTag') {
+            normalizeDiscountTagLayer(l);
+            const mainLen = Math.max(1, String(l.mainText || '').length);
+            const sideLen = Math.max(String(l.topText || '').length, String(l.bottomText || '').length, 1);
+            const sideSize = Math.max(Number(l.topFontSize) || Number(l.sideFontSize) || 52, Number(l.bottomFontSize) || Number(l.sideFontSize) || 42);
+            const w = (mainLen * (Number(l.mainFontSize) || 96) * 0.64 + sideLen * sideSize * 0.72 + (Number(l.sideGap) || 8) + (Number(l.tagPaddingX) || 34) * 2) * scale;
+            const h = ((Number(l.mainFontSize) || 96) * 0.92 + (Number(l.tagPaddingY) || 15) * 2 + (Number(l.shadowThickness) || 0)) * scale;
+            return { x1: l.x - w / 2, y1: l.y - h / 2, x2: l.x + w / 2, y2: l.y + h / 2, w, h, cx: l.x, cy: l.y, area: w * h };
+        }
         if(l.type === 'arc') {
             const rIn = Number(l.rIn) || 400;
             const wIn = Number(l.wIn) || 40;
@@ -2583,7 +2722,7 @@
         const background = imageCandidates.find(item => item.bounds.area >= canvasArea * 0.55)?.layer
             || [...images].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))[0]
             || null;
-        const infoIds = new Set(sourceLayers.filter(l => l.type === 'tag').map(l => l.id));
+        const infoIds = new Set(sourceLayers.filter(l => ['tag', 'discountTag'].includes(l.type)).map(l => l.id));
         const bgId = background?.id;
         const visualIds = new Set(sourceLayers
             .filter(l => (l.type === 'image' || l.type === 'logo') && l.id !== bgId)
@@ -2740,7 +2879,7 @@
         if(sourceLayer.sharedKey) targetLayer.sharedKey = sourceLayer.sharedKey;
     }
     function syncTemplateLayersFromHead(boardLayers, headLayers) {
-        ['tag', 'arc', 'solid'].forEach(type => {
+        ['tag', 'discountTag', 'arc', 'solid'].forEach(type => {
             const templateLayers = getSortedLayersByType(boardLayers, type);
             const sourceLayers = getSortedLayersByType(headLayers, type);
             templateLayers.forEach((templateLayer, index) => {
@@ -2875,7 +3014,7 @@
         const headLayers = cloneData(artboards.head?.layers || []);
         if(headLayers.length === 0) return showToast('头图画布为空，先完成头图再延展。', true);
         headLayers.forEach(layer => {
-            if(['tag', 'arc', 'solid'].includes(layer.type)) ensureSharedKey(layer);
+            if(['tag', 'discountTag', 'arc', 'solid'].includes(layer.type)) ensureSharedKey(layer);
         });
         artboards.head.layers = cloneData(headLayers);
         layers = cloneData(headLayers);
@@ -3004,7 +3143,7 @@
                 const fontValue = cssFontFamily(fontName);
                 const fontData = { name: name, value: fontValue, data: fontDataUrl, id: fontName, fileName: file.name }; 
                 customFonts.push(fontData); saveFontToDB(fontData); 
-                if(activeLayerIds.length === 1) { const l = layers.find(x => x.id === activeLayerIds[0]); if(l && l.type === 'tag') { l.font = fontValue; renderCanvas(); } } 
+                if(activeLayerIds.length === 1) { const l = layers.find(x => x.id === activeLayerIds[0]); if(l && ['tag', 'discountTag'].includes(l.type)) { l.font = fontValue; renderCanvas(); } } 
                 renderProperties(); renderSettings(); showToast(`字体 [${name}] 安装且持久化成功`); saveHistory(); 
             }).catch(() => showToast('字体解析失败，请确保格式正确', true)); 
         }; 
@@ -3169,6 +3308,6 @@
     bootApp();
 
 </script>
-<script src="../../tool-bridge.js?v=20260626-home-kiki3"></script>
+<script src="../../tool-bridge.js?v=20260629-discount-tag4"></script>
 </body>
 </html>
