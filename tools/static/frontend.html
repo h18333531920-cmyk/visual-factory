@@ -1350,7 +1350,8 @@
                     <textarea class="textarea" id="ai-prompt-input" rows="3" placeholder="提示：扩图时务必输入主体！如：一个汉堡，延伸四周背景..."></textarea>
                     
                     <div style="display: flex; gap: 8px; margin-top: 8px;">
-                        <button class="btn btn-dark" style="flex:1;" onclick="generateAIBG()">生成新图</button>
+                        <button class="btn btn-outline" style="flex:1;" onclick="enhanceAIPrompt()">优化提示词</button>
+                        <button class="btn btn-dark" style="flex:1;" onclick="generateAIBG()">GPT生成新图</button>
                         <button class="btn btn-outline" style="flex:1; border-color: var(--primary); color: var(--primary);" onclick="outpaintAIBG()">智能扩图</button>
                     </div>
                 </div>
@@ -2030,6 +2031,10 @@
     }
     function getGenerationRatio() {
         return getArtboardPreset(currentArtboardId)?.apiRatio || currentRatio;
+    }
+    function setPromptText(text) {
+        const input = document.getElementById('ai-prompt-input');
+        if(input) input.value = text || '';
     }
     function getSafeMarginForArtboard(id = currentArtboardId) {
         if(id === 'banner') return 64;
@@ -3671,12 +3676,42 @@
     });
 
     /* ================= AI 图形引擎集成 ================= */
+    async function enhanceAIPrompt() {
+        const p = getPromptText(); if(!p) return showToast('请输入需要优化的描述词', true);
+        const btn = window.event?.target || document.activeElement;
+        const ogText = btn?.innerText || '优化提示词';
+        if(btn) { btn.innerText = '优化中...'; btn.disabled = true; }
+        startAIProgress('GPT 正在优化提示词...');
+        try {
+            updateAIProgress('正在分析画面需求...', 30);
+            const res = await fetch('/api/enhance-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: p, ratio: getGenerationRatio() })
+            });
+            updateAIProgress('正在整理商业生图提示词...', 78);
+            const data = await res.json();
+            if(data.success && data.enhancedPrompt) {
+                setPromptText(data.enhancedPrompt);
+                showToast('已优化提示词');
+            } else {
+                showToast('提示词优化失败：' + (data.message || `HTTP ${res.status}`), true);
+            }
+        } catch(e) {
+            showToast('提示词优化失败：' + (e.message || '无法连接服务器'), true);
+        } finally {
+            updateAIProgress('完成', 96);
+            stopAIProgress();
+            if(btn) { btn.innerText = ogText; btn.disabled = false; }
+        }
+    }
+
     async function generateAIBG() {
         const p = getPromptText(); if(!p) return showToast('请输入描述词或选择关键词标签', true);
         const btn = window.event?.target || document.activeElement;
-        const ogText = btn?.innerText || '生成新图';
-        if(btn) { btn.innerText = '⏳ 渲染中...'; btn.disabled = true; }
-        startAIProgress('AI 正在生成新图片...');
+        const ogText = btn?.innerText || 'GPT生成新图';
+        if(btn) { btn.innerText = '渲染中...'; btn.disabled = true; }
+        startAIProgress('GPT 正在生成新图片...');
         try {
             updateAIProgress('正在提交生成请求...', 22);
             const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: p, ratio: getGenerationRatio() }) });
