@@ -2072,7 +2072,8 @@
     function cloneLayersForInsert(elements, centerOnCanvas = false) {
         const {w, h} = SIZES[currentRatio];
         const maxZ = layers.length > 0 ? Math.max(...layers.map(l => l.zIndex)) : 1;
-        const source = JSON.parse(JSON.stringify(elements || []));
+        const source = JSON.parse(JSON.stringify(elements || []))
+            .sort((a, b) => (Number(a.zIndex) || 0) - (Number(b.zIndex) || 0));
         if(source.length === 0) return [];
         let cx = 0, cy = 0;
         source.forEach(l => { cx += Number(l.x) || 0; cy += Number(l.y) || 0; });
