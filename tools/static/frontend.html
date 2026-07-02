@@ -29,6 +29,8 @@
         .canvas-actions button.primary { background: #717171; border-color: #717171; color: #FFFFFF; }
 
         .canvas-wrapper { position: absolute; left: 50%; top: 50%; background: #FFFFFF; box-shadow: none; overflow: hidden; transform-origin: center center; }
+        .left-pane.drag-file-over .canvas-wrapper { box-shadow: 0 0 0 3px rgba(16,17,20,0.18), 0 20px 60px rgba(16,17,20,0.10); }
+        .left-pane.drag-file-over .empty-hint { color: #101114; background: rgba(255,255,255,0.92); }
         .artboard-preview-dock { position: absolute; inset: 74px 28px 28px; z-index: 16; display: none; align-items: center; justify-content: center; gap: 24px; pointer-events: auto; }
         .left-pane.overview-mode .artboard-preview-dock { display: flex; }
         .left-pane.overview-mode .canvas-wrapper { opacity: 0; pointer-events: none; }
@@ -111,6 +113,8 @@
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .modal-header h3 { margin: 0; font-size: 16px; font-weight: 800; }
         .close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-sub); }
+        .custom-board-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .custom-board-grid .input-text { margin-bottom: 0; }
         
         .preset-tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
         .p-tab { background: transparent; border: none; font-size: 13px; font-weight: bold; color: var(--text-sub); cursor: pointer; padding: 6px 12px; border-radius: 8px; }
@@ -997,13 +1001,198 @@
                 flex-basis: auto;
             }
         }
+
+        .workspace-tabs {
+            overflow-x: auto;
+            overflow-y: hidden;
+            white-space: nowrap;
+            scrollbar-width: thin;
+            padding-bottom: 8px;
+        }
+
+        .workspace-tabs button {
+            flex: 0 0 auto;
+        }
+
+        .canvas-toolbar {
+            position: absolute;
+            inset: 0;
+            z-index: 18;
+            display: block;
+            pointer-events: none;
+        }
+
+        .left-pane .ratio-nav,
+        .left-pane .canvas-actions {
+            position: absolute;
+            transform: none;
+            display: flex;
+            align-items: center;
+            min-width: 0;
+            gap: 8px;
+            height: auto;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+            backdrop-filter: none;
+            pointer-events: auto;
+        }
+
+        .left-pane .ratio-nav {
+            left: 22px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 22;
+            flex-direction: column;
+            justify-content: center;
+            overflow: visible;
+            scrollbar-width: none;
+        }
+
+        .left-pane .ratio-nav::-webkit-scrollbar {
+            display: none;
+        }
+
+        .left-pane .canvas-actions {
+            top: 26px;
+            right: 28px;
+            z-index: 23;
+            justify-content: flex-end;
+            flex-wrap: nowrap;
+            width: max-content;
+        }
+
+        .left-pane .ratio-nav button,
+        .left-pane .canvas-actions button {
+            flex: 0 0 auto;
+            height: 34px;
+            padding: 0 13px;
+            border: 1px solid rgba(16, 19, 24, 0.12);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.72);
+            color: var(--text-main);
+            font-size: 12px;
+            line-height: 1;
+            font-weight: 800;
+            box-shadow: 0 10px 28px rgba(16, 19, 24, 0.08);
+            white-space: nowrap;
+            backdrop-filter: blur(12px);
+        }
+
+        .left-pane .ratio-nav button {
+            width: 54px;
+            min-width: 54px;
+            padding: 0;
+        }
+
+        .left-pane .canvas-actions button {
+            min-width: 72px;
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #ffffff;
+        }
+
+        .left-pane .ratio-nav button.active,
+        .left-pane .canvas-actions button.primary {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: #ffffff;
+        }
+
+        .toolbar-more-wrap {
+            position: relative;
+            flex: 0 0 auto;
+        }
+
+        .toolbar-more-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 10px);
+            z-index: 60;
+            min-width: 136px;
+            padding: 7px;
+            border: 1px solid rgba(16, 19, 24, 0.10);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 20px 48px rgba(16, 19, 24, 0.14);
+            backdrop-filter: blur(16px);
+        }
+
+        .toolbar-more-menu.open {
+            display: block;
+        }
+
+        .left-pane .toolbar-more-menu button {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            width: 100%;
+            min-width: 0;
+            height: 36px;
+            padding: 0 12px;
+            border: 0;
+            border-radius: 12px;
+            background: transparent;
+            color: var(--text-main);
+            font-size: 13px;
+            font-weight: 760;
+            text-align: left;
+        }
+
+        .left-pane .toolbar-more-menu button:hover {
+            background: rgba(16, 19, 24, 0.06);
+        }
+
+        .custom-board-menu-item {
+            display: none !important;
+        }
+
+        .custom-board-active .custom-board-menu-item {
+            display: inline-flex;
+        }
+
+        @media (max-width: 1440px) {
+            .left-pane .ratio-nav button,
+            .left-pane .canvas-actions button {
+                height: 32px;
+                font-size: 11px;
+            }
+
+            .left-pane .ratio-nav button {
+                width: 50px;
+                min-width: 50px;
+            }
+
+            .left-pane .canvas-actions button {
+                min-width: 68px;
+                padding: 0 12px;
+            }
+        }
+
+        @media (max-width: 1280px) {
+            .left-pane .canvas-actions {
+                top: 18px;
+                right: 18px;
+            }
+
+            .left-pane .ratio-nav {
+                left: 16px;
+            }
+
+            .artboard-preview-dock {
+                inset: 128px 28px 28px;
+            }
+        }
     </style>
 </head>
 <body>
 
 <div class="toast" id="toast">提示信息</div>
 <input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2" style="display:none">
-<input type="file" id="bg-upload" accept="image/png, image/jpeg" style="display:none">
+<input type="file" id="bg-upload" accept="image/png, image/jpeg, image/webp" style="display:none">
 <input type="file" id="logo-upload" accept="image/png, image/jpeg, image/svg+xml" multiple style="display:none">
 <input type="file" id="backup-import" accept="application/json,.json" style="display:none">
 
@@ -1056,21 +1245,31 @@
     <button type="button" class="artboard-tab active" data-artboard="head" onclick="switchArtboard('head')">头图 750×500</button>
     <button type="button" class="artboard-tab" data-artboard="splash" onclick="switchArtboard('splash')">开屏 750×1626</button>
     <button type="button" class="artboard-tab" data-artboard="banner" onclick="switchArtboard('banner')">Banner 1396×424</button>
+    <button type="button" class="add-custom-artboard-tab" onclick="openCustomArtboardDialog()">+ 空画板</button>
 </div>
 
 <div class="editor-layout">
     <div class="left-pane" id="left-pane">
-        <div class="canvas-actions">
-            <button type="button" onclick="openSettingsModal()">样机</button>
-            <button type="button" class="primary" onclick="extendFromHead()">一键延展</button>
-            <button type="button" id="safe-guide-toggle" onclick="toggleSafeGuide()">安全区</button>
-            <button type="button" onclick="exportPNG()">导出</button>
-        </div>
-        <div class="ratio-nav" id="ratio-nav">
-            <button onclick="toggleOverviewMode()">总览</button>
-            <button class="active" onclick="switchArtboard('head')">头图</button>
-            <button onclick="switchArtboard('splash')">开屏</button>
-            <button onclick="switchArtboard('banner')">Banner</button>
+        <div class="canvas-toolbar">
+            <div class="ratio-nav" id="ratio-nav">
+                <button data-overview="1" onclick="toggleOverviewMode()">总览</button>
+                <button class="active" data-artboard="head" onclick="switchArtboard('head')">头图</button>
+                <button data-artboard="splash" onclick="switchArtboard('splash')">开屏</button>
+                <button data-artboard="banner" onclick="switchArtboard('banner')">Banner</button>
+                <button type="button" class="add-custom-ratio-tab" onclick="openCustomArtboardDialog()">+ 自定义</button>
+            </div>
+            <div class="canvas-actions">
+                <button type="button" class="primary" onclick="extendFromHead()">一键延展</button>
+                <button type="button" class="primary" onclick="exportPNG()">导出</button>
+                <div class="toolbar-more-wrap">
+                    <button type="button" onclick="toggleToolbarMore(event)">更多</button>
+                    <div class="toolbar-more-menu" id="toolbar-more-menu">
+                        <button type="button" class="custom-board-menu-item" onclick="openCustomArtboardDialog(currentArtboardId); closeToolbarMore();">尺寸</button>
+                        <button type="button" onclick="openSettingsModal(); closeToolbarMore();">设置</button>
+                        <button type="button" id="safe-guide-toggle" onclick="toggleSafeGuide(); closeToolbarMore();">安全区</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="canvas-wrapper" id="canvas-wrapper">
@@ -1170,6 +1369,7 @@
         { id: 'splash', ratio: 'splash', label: '开屏', w: 750, h: 1626, apiRatio: '9:16' },
         { id: 'banner', ratio: 'banner', label: 'Banner', w: 1396, h: 424, apiRatio: '16:9' }
     ];
+    const FIXED_ARTBOARD_IDS = ['head', 'splash', 'banner'];
     const SIZES = {
         head: { w: 750, h: 500 },
         splash: { w: 750, h: 1626 },
@@ -1324,8 +1524,117 @@
     function cloneData(value) {
         return JSON.parse(JSON.stringify(value));
     }
+    function getFixedArtboardPresets() {
+        return ARTBOARD_PRESETS.filter(p => FIXED_ARTBOARD_IDS.includes(p.id));
+    }
+    function getCustomArtboardPresets() {
+        return ARTBOARD_PRESETS.filter(p => !FIXED_ARTBOARD_IDS.includes(p.id));
+    }
+    function isCustomArtboardId(id = currentArtboardId) {
+        return !FIXED_ARTBOARD_IDS.includes(id) && !!ARTBOARD_PRESETS.find(p => p.id === id);
+    }
     function getArtboardPreset(id = currentArtboardId) {
         return ARTBOARD_PRESETS.find(p => p.id === id) || ARTBOARD_PRESETS[0];
+    }
+    function getArtboardTopLabel(preset) {
+        const size = SIZES[preset.ratio] || preset;
+        return `${preset.label} ${size.w}×${size.h}`;
+    }
+    function createCustomArtboardPreset({ id = genId('custom_board'), label = '自定义', w = 1080, h = 1080 } = {}, switchTo = true) {
+        const safeW = Math.max(64, Math.min(6000, Math.round(Number(w) || 1080)));
+        const safeH = Math.max(64, Math.min(6000, Math.round(Number(h) || 1080)));
+        const safeLabel = String(label || '自定义').trim().slice(0, 16) || '自定义';
+        const ratio = id;
+        const existing = ARTBOARD_PRESETS.find(p => p.id === id);
+        if(existing) {
+            existing.label = safeLabel;
+            existing.ratio = ratio;
+            existing.w = safeW;
+            existing.h = safeH;
+        } else {
+            ARTBOARD_PRESETS.push({ id, ratio, label: safeLabel, w: safeW, h: safeH, apiRatio: '1:1', custom: true });
+        }
+        SIZES[ratio] = { w: safeW, h: safeH };
+        if(!artboards[id]) artboards[id] = { id, label: safeLabel, ratio, layers: [] };
+        artboards[id].label = safeLabel;
+        artboards[id].ratio = ratio;
+        renderCustomArtboardControls();
+        if(switchTo) switchArtboard(id);
+        return id;
+    }
+    function updateCustomArtboardSize(id, { label, w, h } = {}) {
+        const preset = getCustomArtboardPresets().find(p => p.id === id);
+        if(!preset) return false;
+        saveCurrentArtboardState();
+        const oldSize = SIZES[preset.ratio] || { w: preset.w || 1080, h: preset.h || 1080 };
+        const safeW = Math.max(64, Math.min(6000, Math.round(Number(w) || oldSize.w)));
+        const safeH = Math.max(64, Math.min(6000, Math.round(Number(h) || oldSize.h)));
+        const sx = safeW / Math.max(1, oldSize.w);
+        const sy = safeH / Math.max(1, oldSize.h);
+        const uniform = Math.min(sx, sy);
+        const safeLabel = String(label || preset.label || '自定义').trim().slice(0, 16) || '自定义';
+        preset.label = safeLabel;
+        preset.w = safeW;
+        preset.h = safeH;
+        SIZES[preset.ratio] = { w: safeW, h: safeH };
+        const board = artboards[id];
+        if(board) {
+            board.label = safeLabel;
+            board.ratio = preset.ratio;
+            board.layers = (board.layers || []).map(layer => {
+                const next = cloneData(layer);
+                next.x = (Number(next.x) || oldSize.w / 2) * sx;
+                next.y = (Number(next.y) || oldSize.h / 2) * sy;
+                if(next.type === 'solid' || next.role === 'extended-background') {
+                    next.x = safeW / 2;
+                    next.y = safeH / 2;
+                    next.baseW = safeW;
+                    next.baseH = safeH;
+                    next.scale = 1;
+                } else if(next.type === 'image') {
+                    next.baseW = Math.max(1, Math.round((Number(next.baseW) || oldSize.w) * sx));
+                    next.baseH = Math.max(1, Math.round((Number(next.baseH) || oldSize.h) * sy));
+                } else if(next.type === 'logo') {
+                    next.baseW = Math.max(1, Math.round((Number(next.baseW) || 260) * uniform));
+                    next.baseH = Math.max(1, Math.round((Number(next.baseH) || 160) * uniform));
+                } else {
+                    next.scale = (Number(next.scale) || 1) * uniform;
+                }
+                return next;
+            });
+        }
+        if(currentArtboardId === id) {
+            layers = cloneData(board?.layers || []);
+            currentRatio = preset.ratio;
+            activeLayerIds = activeLayerIds.filter(layerId => layers.some(l => l.id === layerId));
+        }
+        renderCustomArtboardControls();
+        syncArtboardTabs();
+        syncRatioNav();
+        resizeCanvas();
+        renderCanvas();
+        renderLayersList();
+        renderProperties();
+        return true;
+    }
+    function restoreCustomArtboardPresets(presets = []) {
+        const customIds = new Set((presets || []).map(p => p.id).filter(Boolean));
+        for(let i = ARTBOARD_PRESETS.length - 1; i >= 0; i--) {
+            const preset = ARTBOARD_PRESETS[i];
+            if(!FIXED_ARTBOARD_IDS.includes(preset.id) && !customIds.has(preset.id)) {
+                ARTBOARD_PRESETS.splice(i, 1);
+                delete SIZES[preset.ratio];
+            }
+        }
+        (presets || []).forEach(preset => {
+            createCustomArtboardPreset({
+                id: preset.id,
+                label: preset.label,
+                w: preset.w || SIZES[preset.ratio]?.w || 1080,
+                h: preset.h || SIZES[preset.ratio]?.h || 1080
+            }, false);
+        });
+        renderCustomArtboardControls();
     }
     function normalizeArtboardSnapshot(snapshot = {}) {
         const next = ARTBOARD_PRESETS.reduce((acc, preset) => {
@@ -1373,18 +1682,43 @@
         syncOverviewMode();
     }
     function syncArtboardTabs() {
+        renderCustomArtboardControls();
         document.querySelectorAll('.artboard-tab').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.artboard === currentArtboardId);
+        });
+    }
+    function renderCustomArtboardControls() {
+        document.querySelectorAll('.custom-artboard-tab, .custom-ratio-tab').forEach(el => el.remove());
+        const topAnchor = document.querySelector('.add-custom-artboard-tab');
+        const ratioAnchor = document.querySelector('.add-custom-ratio-tab');
+        getCustomArtboardPresets().forEach(preset => {
+            const topBtn = document.createElement('button');
+            topBtn.type = 'button';
+            topBtn.className = 'artboard-tab custom-artboard-tab';
+            topBtn.dataset.artboard = preset.id;
+            topBtn.textContent = getArtboardTopLabel(preset);
+            topBtn.onclick = () => switchArtboard(preset.id);
+            topAnchor?.parentNode?.insertBefore(topBtn, topAnchor);
+
+            const ratioBtn = document.createElement('button');
+            ratioBtn.type = 'button';
+            ratioBtn.className = 'custom-ratio-tab';
+            ratioBtn.dataset.artboard = preset.id;
+            ratioBtn.textContent = preset.label;
+            ratioBtn.onclick = () => switchArtboard(preset.id);
+            ratioAnchor?.parentNode?.insertBefore(ratioBtn, ratioAnchor);
         });
     }
     function getArtboardSnapshot() {
         saveCurrentArtboardState();
         return {
             currentArtboardId,
+            artboardPresets: cloneData(getCustomArtboardPresets()),
             artboards: cloneData(artboards)
         };
     }
     function importArtboardSnapshot(snapshot = {}) {
+        restoreCustomArtboardPresets(snapshot.artboardPresets || []);
         if(snapshot.artboards) {
             artboards = normalizeArtboardSnapshot(snapshot.artboards);
             currentArtboardId = artboards[snapshot.currentArtboardId] ? snapshot.currentArtboardId : 'head';
@@ -1402,7 +1736,7 @@
     function saveHistory() {
         if(isRestoring) return;
         saveCurrentArtboardState();
-        const state = { currentArtboardId, artboards: cloneData(artboards) };
+        const state = { currentArtboardId, artboardPresets: cloneData(getCustomArtboardPresets()), artboards: cloneData(artboards) };
         const stateText = JSON.stringify(state);
         if(historyIdx >= 0 && JSON.stringify(historyStack[historyIdx]) === stateText) { updateHistoryButtons(); return; }
         historyStack = historyStack.slice(0, historyIdx + 1);
@@ -1414,6 +1748,7 @@
     function applyHistory(state) {
         if(!state) return;
         isRestoring = true;
+        restoreCustomArtboardPresets(state.artboardPresets || []);
         if(state.artboards) {
             artboards = normalizeArtboardSnapshot(state.artboards);
             currentArtboardId = artboards[state.currentArtboardId] ? state.currentArtboardId : 'head';
@@ -1622,6 +1957,55 @@
         return v;
     }
     function stripDataUrl(dataUrl = '') { return String(dataUrl).includes(',') ? String(dataUrl).split(',')[1] : String(dataUrl); }
+    function loadImageElement(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('图片读取失败'));
+            img.src = src;
+        });
+    }
+    function getImageFrameForMode(imgW, imgH, mode, target = SIZES[currentRatio]) {
+        const safeW = Math.max(1, Number(imgW) || target.w);
+        const safeH = Math.max(1, Number(imgH) || target.h);
+        if(mode === 'cover') return { x: target.w / 2, y: target.h / 2, baseW: target.w, baseH: target.h, scale: 1, fitMode: 'cover' };
+        const maxRatio = mode === 'original' ? 0.78 : 1;
+        const fit = Math.min((target.w * maxRatio) / safeW, (target.h * maxRatio) / safeH, mode === 'original' ? 1 : Infinity);
+        return {
+            x: target.w / 2,
+            y: target.h / 2,
+            baseW: Math.round(safeW * fit),
+            baseH: Math.round(safeH * fit),
+            scale: 1,
+            fitMode: 'contain'
+        };
+    }
+    async function addImportedImageLayer(src) {
+        const img = await loadImageElement(src);
+        const frame = getImageFrameForMode(img.naturalWidth || img.width, img.naturalHeight || img.height, 'contain');
+        addLayer('image', { src, ...frame, originalW: img.naturalWidth || img.width, originalH: img.naturalHeight || img.height });
+    }
+    async function applyImageFitMode(mode) {
+        if(activeLayerIds.length !== 1) return;
+        const l = layers.find(x => x.id === activeLayerIds[0]);
+        if(!l || l.type !== 'image') return;
+        const target = SIZES[currentRatio];
+        let imgW = Number(l.originalW), imgH = Number(l.originalH);
+        if(!imgW || !imgH) {
+            try {
+                const img = await loadImageElement(l.src);
+                imgW = img.naturalWidth || img.width;
+                imgH = img.naturalHeight || img.height;
+                l.originalW = imgW;
+                l.originalH = imgH;
+            } catch(e) {
+                imgW = l.baseW || target.w;
+                imgH = l.baseH || target.h;
+            }
+        }
+        Object.assign(l, getImageFrameForMode(imgW, imgH, mode, target));
+        renderCanvas(); renderLayersList(); renderProperties(); saveHistory();
+    }
     function getPromptText() {
         const manual = document.getElementById('ai-prompt-input')?.value.trim() || '';
         const tagPrompts = selectedKeywordTagIds
@@ -1991,11 +2375,12 @@
     }
 
     function syncRatioNav() {
-        const preset = getArtboardPreset(currentArtboardId);
-        document.querySelectorAll('.ratio-nav button').forEach(b => {
-            b.classList.toggle('active', overviewMode ? b.innerText === '总览' : b.innerText === preset.label);
-        });
         syncArtboardTabs();
+        document.getElementById('left-pane')?.classList.toggle('custom-board-active', isCustomArtboardId(currentArtboardId));
+        document.querySelectorAll('.ratio-nav button').forEach(b => {
+            const isOverview = b.dataset.overview === '1';
+            b.classList.toggle('active', overviewMode ? isOverview : b.dataset.artboard === currentArtboardId);
+        });
     }
     function syncOverviewMode() {
         document.getElementById('left-pane')?.classList.toggle('overview-mode', overviewMode);
@@ -2005,6 +2390,60 @@
     function toggleOverviewMode(force) {
         overviewMode = typeof force === 'boolean' ? force : !overviewMode;
         syncOverviewMode();
+    }
+    function ensureCustomArtboardDialog() {
+        let overlay = document.getElementById('custom-artboard-dialog');
+        if(overlay) return overlay;
+        overlay = document.createElement('div');
+        overlay.id = 'custom-artboard-dialog';
+        overlay.className = 'modal-overlay';
+        overlay.style.zIndex = 10003;
+        overlay.innerHTML = `<div class="modal-content" style="width:420px;"><div class="modal-header"><h3 id="custom-board-title">新建空画板</h3><button class="close-btn" type="button" data-close-custom-board>×</button></div><label class="label">画板名称</label><input id="custom-board-name" class="input-text" value="自定义"><div class="custom-board-grid"><div><label class="label">宽度 px</label><input id="custom-board-width" class="input-text" type="number" min="64" max="6000" step="1" value="1080"></div><div><label class="label">高度 px</label><input id="custom-board-height" class="input-text" type="number" min="64" max="6000" step="1" value="1080"></div></div><div style="display:flex; gap:10px; margin-top:18px;"><button class="btn btn-outline" type="button" data-close-custom-board style="flex:1;">取消</button><button class="btn btn-dark" type="button" id="custom-board-create" style="flex:1;">创建</button></div></div>`;
+        document.body.appendChild(overlay);
+        overlay.querySelectorAll('[data-close-custom-board]').forEach(btn => btn.onclick = () => { overlay.style.display = 'none'; });
+        overlay.addEventListener('click', e => { if(e.target === overlay) overlay.style.display = 'none'; });
+        overlay.querySelector('#custom-board-create').onclick = () => {
+            const editId = overlay.dataset.editArtboard || '';
+            const name = overlay.querySelector('#custom-board-name').value.trim() || '自定义';
+            const width = overlay.querySelector('#custom-board-width').value;
+            const height = overlay.querySelector('#custom-board-height').value;
+            overlay.style.display = 'none';
+            if(editId && isCustomArtboardId(editId)) {
+                updateCustomArtboardSize(editId, { label: name, w: width, h: height });
+                saveHistory();
+                showToast('已更新画板尺寸');
+            } else {
+                createCustomArtboardPreset({ label: name, w: width, h: height }, true);
+                saveHistory();
+                showToast('已创建空画板');
+            }
+        };
+        return overlay;
+    }
+    function openCustomArtboardDialog(editId = '') {
+        const overlay = ensureCustomArtboardDialog();
+        const preset = editId && isCustomArtboardId(editId) ? getArtboardPreset(editId) : null;
+        const size = preset ? SIZES[preset.ratio] : null;
+        overlay.dataset.editArtboard = preset ? preset.id : '';
+        const title = overlay.querySelector('#custom-board-title');
+        const name = overlay.querySelector('#custom-board-name');
+        const width = overlay.querySelector('#custom-board-width');
+        const height = overlay.querySelector('#custom-board-height');
+        const ok = overlay.querySelector('#custom-board-create');
+        if(title) title.innerText = preset ? '编辑画板尺寸' : '新建空画板';
+        if(ok) ok.innerText = preset ? '保存' : '创建';
+        if(preset) {
+            if(name) name.value = preset.label || '自定义';
+            if(width) width.value = size?.w || preset.w || 1080;
+            if(height) height.value = size?.h || preset.h || 1080;
+        } else {
+            const count = getCustomArtboardPresets().length + 1;
+            if(name) name.value = count > 1 ? `自定义${count}` : '自定义';
+            if(width) width.value = 1080;
+            if(height) height.value = 1080;
+        }
+        overlay.style.display = 'flex';
+        setTimeout(() => overlay.querySelector('#custom-board-width')?.focus(), 30);
     }
     function renderPromptTags() {
         const list = document.getElementById('prompt-tag-list'); if(!list) return;
@@ -2108,7 +2547,8 @@
             wrapper.className = 'layer-image-wrapper layer-base';
             wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation}deg) scale(${l.scale}) scaleX(${l.flipX ? -1 : 1})`;
             wrapper.style.width = l.baseW + 'px'; wrapper.style.height = l.baseH + 'px';
-            wrapper.innerHTML = `<img class="layer-image-img" src="${l.src}" style="object-fit:${l.type === 'logo' ? 'contain' : 'cover'};">`;
+            const objectFit = l.type === 'logo' ? 'contain' : (l.fitMode === 'contain' ? 'contain' : 'cover');
+            wrapper.innerHTML = `<img class="layer-image-img" src="${l.src}" style="object-fit:${objectFit};">`;
         }
         else if(l.type === 'solid') {
             wrapper.className = 'layer-solid-wrapper layer-base';
@@ -2297,7 +2737,9 @@
 
         if(l.type === 'image' || l.type === 'logo') {
             const title = l.type === 'logo' ? 'Logo属性调整' : '图片属性调整';
-            area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">${title}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.2" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div style="display:flex; gap:8px; margin-top:16px;"><button class="btn btn-outline" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="centerLayer()">🔄 居中</button><button class="btn btn-outline" style="flex:1;" onclick="toggleFlipX()" title="镜像反转">⇋ 镜像</button></div>`;
+            const fitMode = l.fitMode || 'cover';
+            const fitControls = l.type === 'image' ? `<label class="label">图片适配</label><div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px;"><button class="btn ${fitMode === 'cover' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="applyImageFitMode('cover')">铺满</button><button class="btn ${fitMode === 'contain' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="applyImageFitMode('contain')">完整</button><button class="btn btn-outline" type="button" onclick="applyImageFitMode('original')">原图</button></div><div style="font-size:11px; color:var(--text-sub); line-height:1.55; margin:-4px 0 14px;">铺满会裁切；完整不裁切；原图按原比例放入画布。</div>` : '';
+            area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">${title}</div>${fitControls}<div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.2" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div style="display:flex; gap:8px; margin-top:16px;"><button class="btn btn-outline" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="centerLayer()">居中</button><button class="btn btn-outline" style="flex:1;" onclick="toggleFlipX()" title="镜像反转">镜像</button></div>`;
         }
         else if(l.type === 'solid') {
             area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">延展背景色块</div><label class="label">颜色</label><input type="text" class="input-text" value="${escapeHtml(l.color || '#00875f')}" oninput="updateProp('color', this.value)" onchange="saveHistory()"><div style="font-size:12px; color:var(--text-sub); line-height:1.6;">用于开屏和 Banner 的品牌色背景，可按项目需要微调。</div>`;
@@ -2372,6 +2814,14 @@
     function toggleAddMenu(e) { e.stopPropagation(); document.getElementById('add-menu')?.classList.toggle('open'); }
     function closeAddMenu() { document.getElementById('add-menu')?.classList.remove('open'); }
     document.addEventListener('click', e => { if(!e.target.closest('.add-menu-wrap')) closeAddMenu(); });
+    function toggleToolbarMore(e) {
+        e?.stopPropagation();
+        document.getElementById('toolbar-more-menu')?.classList.toggle('open');
+    }
+    function closeToolbarMore() {
+        document.getElementById('toolbar-more-menu')?.classList.remove('open');
+    }
+    document.addEventListener('click', e => { if(!e.target.closest('.toolbar-more-wrap')) closeToolbarMore(); });
     async function saveActiveAsset() {
         if(currentAssetTab === 'layout') return await saveToPreset();
         if(currentAssetTab === 'tag') return await saveTagComboPreset();
@@ -2385,7 +2835,7 @@
             if(items.length === 0) { list.innerHTML = `<div class="asset-empty">暂无版式，点击“保存套组”存三画板模板。</div>`; return; }
             items.forEach(p => {
                 const isPack = p.kind === 'pack';
-                const meta = isPack ? `三画板套组 · ${ARTBOARD_PRESETS.map(item => p.artboards?.[item.id]?.layers?.length || 0).join('/')} 图层` : `${p.size} · ${p.elements?.length || 0} 图层`;
+                const meta = isPack ? `三画板套组 · ${getFixedArtboardPresets().map(item => p.artboards?.[item.id]?.layers?.length || 0).join('/')} 图层` : `${p.size} · ${p.elements?.length || 0} 图层`;
                 list.appendChild(createAssetItem({ title: p.name, meta, asset: p, type: isPack ? 'pack' : 'layout', current: isPack && p.id === activeTemplatePackId, onApply: () => applyLayoutPreset(p.id), onDelete: () => deleteLayoutPreset(p.id) }));
             });
         } else if(currentAssetTab === 'tag') {
@@ -2539,7 +2989,7 @@
     function createPackHoverPreview(pack) {
         const wrap = document.createElement('div');
         wrap.className = 'asset-pack-hover';
-        ARTBOARD_PRESETS.forEach(preset => {
+        getFixedArtboardPresets().forEach(preset => {
             const mini = document.createElement('div');
             mini.className = 'asset-pack-mini';
             const label = document.createElement('div');
@@ -2599,11 +3049,11 @@
     }
     async function saveTemplatePack() {
         saveCurrentArtboardState();
-        const hasAnyLayer = ARTBOARD_PRESETS.some(preset => (artboards[preset.id]?.layers || []).length > 0);
+        const hasAnyLayer = getFixedArtboardPresets().some(preset => (artboards[preset.id]?.layers || []).length > 0);
         if(!hasAnyLayer) return showToast('三块画板都是空的，无法保存套组', true);
         const name = await askText('命名三画板套组', `套组 ${formatPresetTime()}`); if(!name) return;
         const packArtboards = {};
-        ARTBOARD_PRESETS.forEach(preset => {
+        getFixedArtboardPresets().forEach(preset => {
             packArtboards[preset.id] = {
                 id: preset.id,
                 ratio: preset.ratio,
@@ -2924,9 +3374,13 @@
         return bgLayer;
     }
     function buildExtendedArtboardsFromTemplatePack(pack, headLayers) {
+        const previousCustomBoards = {};
+        getCustomArtboardPresets().forEach(preset => {
+            previousCustomBoards[preset.id] = cloneData(artboards[preset.id] || { id: preset.id, label: preset.label, ratio: preset.ratio, layers: [] });
+        });
         const nextArtboards = normalizeArtboardSnapshot(pack.artboards || {});
         const sourceLayer = getHeadBackgroundLayer(headLayers);
-        ARTBOARD_PRESETS.forEach(preset => {
+        getFixedArtboardPresets().forEach(preset => {
             if(preset.id === 'head') {
                 nextArtboards.head.layers = cloneData(headLayers);
                 return;
@@ -2936,6 +3390,7 @@
             ensureTemplateBackgroundLayer(boardLayers, preset.id, sourceLayer);
             nextArtboards[preset.id].layers = boardLayers.sort((a, b) => (Number(a.zIndex) || 0) - (Number(b.zIndex) || 0));
         });
+        Object.assign(nextArtboards, previousCustomBoards);
         return nextArtboards;
     }
     function getHeadBackgroundLayer(sourceLayers) {
@@ -3100,11 +3555,75 @@
     }
 
     /* ================= 导入本地图层 / 字体并解决 MIME 拦截 ================= */
+    function isFileDragEvent(e) {
+        return Array.from(e.dataTransfer?.types || []).includes('Files');
+    }
+    async function importImageFile(file) {
+        if(!file || !file.type?.startsWith('image/')) return false;
+        const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = ev => resolve(ev.target.result);
+            reader.onerror = () => reject(new Error('图片读取失败'));
+            reader.readAsDataURL(file);
+        });
+        await addImportedImageLayer(dataUrl);
+        return true;
+    }
+    async function handleDroppedImageFiles(files) {
+        const imageFiles = [...files].filter(file => file.type?.startsWith('image/'));
+        if(imageFiles.length === 0) return showToast('请拖入 PNG / JPG / WEBP 图片', true);
+        if(overviewMode) toggleOverviewMode(false);
+        let imported = 0;
+        for(const file of imageFiles) {
+            try {
+                if(await importImageFile(file)) imported++;
+            } catch(e) {
+                console.warn('拖拽导入失败:', e);
+            }
+        }
+        if(imported > 0) {
+            renderCanvas(); renderLayersList(); renderProperties(); saveHistory();
+            showToast(imported === 1 ? '已拖入图片，默认完整显示' : `已拖入 ${imported} 张图片`);
+        } else {
+            showToast('图片导入失败，请换一张图试试', true);
+        }
+    }
+    function setupCanvasDropImport() {
+        const pane = document.getElementById('left-pane');
+        if(!pane) return;
+        ['dragenter', 'dragover'].forEach(type => {
+            pane.addEventListener(type, e => {
+                if(!isFileDragEvent(e)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                pane.classList.add('drag-file-over');
+            });
+        });
+        ['dragleave', 'dragend'].forEach(type => {
+            pane.addEventListener(type, e => {
+                if(type === 'dragleave' && pane.contains(e.relatedTarget)) return;
+                pane.classList.remove('drag-file-over');
+            });
+        });
+        pane.addEventListener('drop', e => {
+            if(!isFileDragEvent(e)) return;
+            e.preventDefault();
+            pane.classList.remove('drag-file-over');
+            handleDroppedImageFiles(e.dataTransfer.files);
+        });
+    }
     document.getElementById('bg-upload').addEventListener('change', e => { 
         const file = e.target.files[0]; if(!file) return;
-        const reader = new FileReader();
-        reader.onload = ev => { addLayer('image', { src: ev.target.result }); };
-        reader.readAsDataURL(file); e.target.value = '';
+        importImageFile(file).then(ok => {
+            if(ok) showToast('已导入图片，默认完整显示');
+        }).catch(err => {
+            const reader = new FileReader();
+            reader.onload = ev => {
+                addLayer('image', { src: ev.target.result });
+                showToast('图片已导入，但尺寸读取失败，已按铺满模式放入', true);
+            };
+            reader.readAsDataURL(file);
+        }).finally(() => { e.target.value = ''; });
     });
 
     document.getElementById('logo-upload').addEventListener('change', e => {
@@ -3296,6 +3815,8 @@
         await loadGlobalData();
         loadFontsFromDB();
         loadLogosFromDB();
+        setupCanvasDropImport();
+        renderCustomArtboardControls();
         syncRatioNav();
         resizeCanvas();
         renderCanvas();
