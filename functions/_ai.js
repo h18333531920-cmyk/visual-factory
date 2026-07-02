@@ -1,5 +1,5 @@
 const DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-2';
-const DEFAULT_OPENAI_TEXT_MODEL = 'gpt-5.1-mini';
+const DEFAULT_OPENAI_TEXT_MODEL = 'gpt-5.4-mini';
 const OPENAI_IMAGE_SIZE_BY_RATIO = {
   '1:1': '1024x1024',
   '3:4': '1024x1536',
