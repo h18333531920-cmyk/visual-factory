@@ -19,7 +19,8 @@ export async function onRequest({ request, env }) {
       volcBaseImage: body.volcBaseImage,
       maskBase64: body.maskBase64,
       mimeType: body.mimeType,
-      expand: body.expand
+      expand: body.expand,
+      provider: body.provider
     });
 
     return json({ success: true, provider: result.provider, imageBase64: result.imageBase64 });

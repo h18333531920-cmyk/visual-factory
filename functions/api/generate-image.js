@@ -1,5 +1,5 @@
 import { getBearerToken, getUserFromToken, json, requireCloudflareEnv } from '../_shared.js';
-import { generateWithOpenAI, generateWithVolc, hasOpenAI, requireAI } from '../_ai.js';
+import { generateWithOpenAI, generateWithOpenAIReference, generateWithVolc, hasOpenAI, hasVolcImage, requireAI } from '../_ai.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -12,9 +12,22 @@ export async function onRequest({ request, env }) {
     requireAI(env, 'image generation');
 
     const body = await request.json().catch(() => ({}));
-    const provider = hasOpenAI(env) ? 'openai' : 'volc';
-    const imageBase64 = hasOpenAI(env)
-      ? await generateWithOpenAI(env, body.prompt, body.ratio)
+    const requestedProvider = body.provider === 'volc' ? 'volc' : body.provider === 'openai' ? 'openai' : '';
+    const provider = requestedProvider || (hasOpenAI(env) ? 'openai' : 'volc');
+    if (body.referenceImage && provider !== 'openai') {
+      throw new Error('火山大模型暂不支持参考图生图，请切换到 GPT 大模型。');
+    }
+    if (provider === 'openai' && !hasOpenAI(env)) {
+      throw new Error('GPT 生图未配置：请在 Cloudflare Pages 环境变量中设置 OPENAI_API_KEY。');
+    }
+    if (provider === 'volc' && !hasVolcImage(env)) {
+      throw new Error('火山生图未配置：请设置 VOLC_API_KEY + ENDPOINT_ID。');
+    }
+
+    const imageBase64 = provider === 'openai'
+      ? body.referenceImage
+        ? await generateWithOpenAIReference(env, body.prompt, body.ratio, body.referenceImage, body.referenceMimeType)
+        : await generateWithOpenAI(env, body.prompt, body.ratio)
       : await generateWithVolc(env, body.prompt, body.ratio);
 
     return json({ success: true, provider, imageBase64 });

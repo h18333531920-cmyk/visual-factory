@@ -160,6 +160,31 @@
         .prompt-tag-chip { border: 1px solid var(--border); background: #FFFFFF; color: var(--text-sub); border-radius: 999px; padding: 7px 11px; cursor: pointer; font-size: 12px; font-weight: 800; transition: 0.2s; }
         .prompt-tag-chip:hover { border-color: var(--primary); color: var(--text-main); }
         .prompt-tag-chip.active { background: var(--text-main); border-color: var(--text-main); color: #FFFFFF; }
+        .ai-console { border: 1px solid #d7d9d6; border-radius: 18px; background: rgba(255,255,255,0.92); padding: 14px; box-shadow: 0 16px 36px rgba(16,17,20,0.05); }
+        .ai-reference-strip { display: flex; gap: 10px; align-items: center; min-height: 82px; margin-bottom: 12px; }
+        .ai-reference-add { width: 64px; height: 74px; flex: 0 0 64px; border: 1px dashed #cfd3d8; border-radius: 10px; background: #f6f7f6; color: #7c838c; font-size: 24px; line-height: 1; cursor: pointer; transform: rotate(-7deg); display: flex; align-items: center; justify-content: center; }
+        .ai-reference-add:hover { border-color: var(--text-main); color: var(--text-main); background: #ffffff; }
+        .ai-reference-card { position: relative; width: 78px; height: 78px; flex: 0 0 78px; border: 1px solid #d7d9d6; border-radius: 10px; background: #ffffff; overflow: hidden; }
+        .ai-reference-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .ai-reference-card button { position: absolute; right: 5px; top: 5px; width: 22px; height: 22px; border: 0; border-radius: 999px; background: rgba(16,17,20,0.82); color: #fff; font-size: 13px; cursor: pointer; }
+        .ai-reference-hint { color: #8b929b; font-size: 13px; line-height: 1.55; font-weight: 720; }
+        .ai-prompt-shell { border: 1px solid #d7d9d6; border-radius: 15px; background: #ffffff; padding: 10px; margin-bottom: 12px; }
+        .ai-prompt-shell .textarea { border: 0; box-shadow: none; margin: 0; padding: 6px; min-height: 112px; background: transparent; font-size: 14px; line-height: 1.55; }
+        .ai-prompt-shell .textarea:focus { border: 0; box-shadow: none; }
+        .ai-control-bar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+        .ai-menu-wrap { position: relative; min-width: 0; }
+        .ai-menu-btn { width: 100%; height: 44px; border: 1px solid #d7d9d6; border-radius: 12px; background: #ffffff; color: var(--text-main); font-size: 13px; font-weight: 880; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 0 10px; }
+        .ai-menu-btn strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ai-menu-btn.active { color: #009bc1; border-color: #d7d9d6; }
+        .ai-menu-btn .chev { color: #7d858e; font-size: 12px; }
+        .ai-dropdown { display: none; position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: 60; border: 1px solid #d7d9d6; border-radius: 12px; background: #ffffff; padding: 6px; box-shadow: 0 18px 44px rgba(16,17,20,0.14); }
+        .ai-dropdown.open { display: block; }
+        .ai-dropdown button { width: 100%; border: 0; background: transparent; border-radius: 9px; padding: 9px 10px; color: var(--text-main); text-align: left; font-size: 12px; font-weight: 840; cursor: pointer; }
+        .ai-dropdown button:hover, .ai-dropdown button.active { background: #f0f1ef; }
+        .ai-dropdown button.disabled { opacity: 0.45; cursor: not-allowed; }
+        .ai-submit-btn { width: 46px; height: 46px; border: 0; border-radius: 999px; background: var(--text-main); color: #ffffff; font-size: 24px; font-weight: 900; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .ai-submit-btn:disabled { opacity: 0.42; cursor: progress; }
+        .ai-mini-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
         .keyword-setting-row { display: grid; grid-template-columns: 92px 1fr auto; gap: 8px; align-items: center; background: var(--card-bg); padding: 10px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 10px; }
         .keyword-setting-row textarea { margin: 0; min-height: 54px; }
         .add-menu-wrap { position: relative; }
@@ -1193,6 +1218,7 @@
 <div class="toast" id="toast">提示信息</div>
 <input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2" style="display:none">
 <input type="file" id="bg-upload" accept="image/png, image/jpeg, image/webp" style="display:none">
+<input type="file" id="ai-reference-upload" accept="image/png, image/jpeg, image/webp" style="display:none">
 <input type="file" id="logo-upload" accept="image/png, image/jpeg, image/svg+xml" multiple style="display:none">
 <input type="file" id="backup-import" accept="application/json,.json" style="display:none">
 
@@ -1343,16 +1369,36 @@
 
             <div class="module-card">
                 <div class="card-title"><div class="card-title-wrap">图像与 AI 引擎</div></div>
-                <button class="btn btn-outline" style="margin-bottom: 16px;" onclick="document.getElementById('bg-upload').click()">导入本地图片图层</button>
-                <div style="border-top: 1px dashed var(--border); padding-top: 16px;">
-                    <label class="label">AI 画面描述词</label>
+                <div class="ai-console">
+                    <div class="ai-reference-strip" id="ai-reference-strip">
+                        <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
+                        <div class="ai-reference-hint">上传参考图，或输入文字描述想生成的图片。</div>
+                    </div>
                     <div class="prompt-tag-list" id="prompt-tag-list"></div>
-                    <textarea class="textarea" id="ai-prompt-input" rows="3" placeholder="提示：扩图时务必输入主体！如：一个汉堡，延伸四周背景..."></textarea>
-                    
-                    <div style="display: flex; gap: 8px; margin-top: 8px;">
-                        <button class="btn btn-outline" style="flex:1;" onclick="enhanceAIPrompt()">优化提示词</button>
-                        <button class="btn btn-dark" style="flex:1;" onclick="generateAIBG()">GPT生成新图</button>
-                        <button class="btn btn-outline" style="flex:1; border-color: var(--primary); color: var(--primary);" onclick="outpaintAIBG()">智能扩图</button>
+                    <div class="ai-prompt-shell">
+                        <textarea class="textarea" id="ai-prompt-input" rows="4" placeholder="上传参考图、输入文字或 @ 主体，描述你想生成的图片。"></textarea>
+                    </div>
+                    <div class="ai-control-bar">
+                        <div class="ai-menu-wrap">
+                            <button class="ai-menu-btn active" type="button" onclick="toggleAIMenu('feature', event)"><span>▣</span><strong id="ai-feature-label">图片生成</strong><span class="chev">⌄</span></button>
+                            <div class="ai-dropdown" id="ai-feature-menu">
+                                <button type="button" data-ai-feature="generate" onclick="selectAIFeature('generate')">图片生成</button>
+                                <button type="button" data-ai-feature="outpaint" onclick="selectAIFeature('outpaint')">智能扩图</button>
+                                <button type="button" data-ai-feature="upscale" onclick="selectAIFeature('upscale')">图片清晰</button>
+                            </div>
+                        </div>
+                        <div class="ai-menu-wrap">
+                            <button class="ai-menu-btn" type="button" onclick="toggleAIMenu('provider', event)"><span>⬡</span><strong id="ai-provider-label">GPT 大模型</strong><span class="chev">⌄</span></button>
+                            <div class="ai-dropdown" id="ai-provider-menu">
+                                <button type="button" data-ai-provider="openai" onclick="selectAIProvider('openai')">GPT 大模型</button>
+                                <button type="button" data-ai-provider="volc" onclick="selectAIProvider('volc')">火山大模型</button>
+                            </div>
+                        </div>
+                        <button class="ai-submit-btn" id="ai-submit-btn" type="button" onclick="runSelectedAIAction()" title="开始生成">↑</button>
+                    </div>
+                    <div class="ai-mini-actions">
+                        <button class="btn btn-outline" type="button" onclick="document.getElementById('bg-upload').click()">导入图片图层</button>
+                        <button class="btn btn-outline" type="button" onclick="enhanceAIPrompt()">优化提示词</button>
                     </div>
                 </div>
             </div>
@@ -1400,6 +1446,11 @@
         { id: 'kw_clean', name: '干净背景', prompt: '干净背景，画面简洁，留出版式和文字空间' },
         { id: 'kw_vivid', name: '鲜艳色彩', prompt: '高饱和色彩，明亮活泼，社交媒体广告风格' }
     ];
+    const AI_FEATURE_LABELS = { generate: '图片生成', outpaint: '智能扩图', upscale: '图片清晰' };
+    const AI_PROVIDER_LABELS = { openai: 'GPT 大模型', volc: '火山大模型' };
+    let aiFeatureMode = 'generate';
+    let aiProvider = 'openai';
+    let aiReferenceImage = null;
     let selectedKeywordTagIds = [];
     let presetLibrary = [];
     let tagPresetLibrary = [];
@@ -2035,6 +2086,111 @@
     function setPromptText(text) {
         const input = document.getElementById('ai-prompt-input');
         if(input) input.value = text || '';
+    }
+    function closeAIMenus() {
+        document.getElementById('ai-feature-menu')?.classList.remove('open');
+        document.getElementById('ai-provider-menu')?.classList.remove('open');
+    }
+    function toggleAIMenu(type, event) {
+        event?.stopPropagation?.();
+        const id = type === 'feature' ? 'ai-feature-menu' : 'ai-provider-menu';
+        const target = document.getElementById(id);
+        if(!target) return;
+        const willOpen = !target.classList.contains('open');
+        closeAIMenus();
+        target.classList.toggle('open', willOpen);
+    }
+    function refreshAIConsole() {
+        const featureLabel = document.getElementById('ai-feature-label');
+        const providerLabel = document.getElementById('ai-provider-label');
+        if(featureLabel) featureLabel.textContent = AI_FEATURE_LABELS[aiFeatureMode] || '图片生成';
+        if(providerLabel) providerLabel.textContent = AI_PROVIDER_LABELS[aiProvider] || 'GPT 大模型';
+        document.querySelectorAll('[data-ai-feature]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiFeature === aiFeatureMode));
+        document.querySelectorAll('[data-ai-provider]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiProvider === aiProvider));
+        renderAIReferenceImage();
+    }
+    function selectAIFeature(value) {
+        aiFeatureMode = value || 'generate';
+        closeAIMenus();
+        refreshAIConsole();
+    }
+    function selectAIProvider(value) {
+        aiProvider = value || 'openai';
+        closeAIMenus();
+        refreshAIConsole();
+    }
+    function renderAIReferenceImage() {
+        const strip = document.getElementById('ai-reference-strip');
+        if(!strip) return;
+        strip.innerHTML = `
+            <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
+            ${aiReferenceImage ? `<div class="ai-reference-card"><img src="${aiReferenceImage.src}" alt=""><button type="button" onclick="clearAIReferenceImage()" title="移除参考图">×</button></div><div class="ai-reference-hint">${escapeHtml(aiReferenceImage.name || '参考图已添加')}</div>` : '<div class="ai-reference-hint">上传参考图，或输入文字描述想生成的图片。</div>'}
+        `;
+    }
+    function clearAIReferenceImage() {
+        aiReferenceImage = null;
+        renderAIReferenceImage();
+    }
+    async function setAIReferenceFile(file) {
+        if(!file || !file.type?.startsWith('image/')) return showToast('请选择 PNG / JPG / WEBP 参考图', true);
+        const src = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = ev => resolve(ev.target.result);
+            reader.onerror = () => reject(new Error('参考图读取失败'));
+            reader.readAsDataURL(file);
+        });
+        aiReferenceImage = { name: file.name, mimeType: file.type || 'image/png', src };
+        renderAIReferenceImage();
+        showToast('已添加参考图');
+    }
+    function runSelectedAIAction() {
+        if(aiFeatureMode === 'generate') return generateAIBG();
+        if(aiFeatureMode === 'outpaint') return outpaintAIBG();
+        if(aiFeatureMode === 'upscale') return upscaleSelectedImage();
+        return generateAIBG();
+    }
+    async function upscaleSelectedImage() {
+        let targetLayer = null;
+        if(activeLayerIds.length === 1) {
+            const l = layers.find(x => x.id === activeLayerIds[0]);
+            if(l && l.type === 'image') targetLayer = l;
+        }
+        if(!targetLayer) targetLayer = layers.find(l => l.type === 'image');
+        if(!targetLayer) return showToast('请先选中一张图片图层，再使用图片清晰', true);
+        const btn = document.getElementById('ai-submit-btn');
+        if(btn) btn.disabled = true;
+        startAIProgress('正在本地增强图片清晰度...');
+        try {
+            const img = await loadImageElement(targetLayer.src);
+            const maxW = Math.min(4096, (img.naturalWidth || img.width) * 2);
+            const maxH = Math.min(4096, (img.naturalHeight || img.height) * 2);
+            const canvas = document.createElement('canvas');
+            canvas.width = maxW; canvas.height = maxH;
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, maxW, maxH);
+            updateAIProgress('正在锐化边缘...', 72);
+            const data = ctx.getImageData(0, 0, maxW, maxH);
+            const src = data.data;
+            for(let i = 0; i < src.length; i += 4) {
+                src[i] = Math.min(255, src[i] * 1.04);
+                src[i + 1] = Math.min(255, src[i + 1] * 1.04);
+                src[i + 2] = Math.min(255, src[i + 2] * 1.04);
+            }
+            ctx.putImageData(data, 0, 0);
+            targetLayer.src = canvas.toDataURL('image/png');
+            targetLayer.originalW = maxW;
+            targetLayer.originalH = maxH;
+            renderCanvas(); renderLayersList(); renderProperties(); saveHistory();
+            showToast('已增强图片清晰度');
+        } catch(e) {
+            showToast('图片清晰失败：' + (e.message || '请换一张图试试'), true);
+        } finally {
+            updateAIProgress('完成', 96);
+            stopAIProgress();
+            if(btn) btn.disabled = false;
+        }
     }
     function getSafeMarginForArtboard(id = currentArtboardId) {
         if(id === 'banner') return 64;
@@ -3652,6 +3808,11 @@
         importAssetBackupFile(file);
         e.target.value = '';
     });
+
+    document.getElementById('ai-reference-upload').addEventListener('change', e => {
+        const file = e.target.files[0]; if(!file) return;
+        setAIReferenceFile(file).catch(err => showToast(err.message || '参考图读取失败', true)).finally(() => { e.target.value = ''; });
+    });
     
     document.getElementById('font-upload').addEventListener('change', e => { 
         const file = e.target.files[0]; if(!file) return; const name = file.name.replace(/\.[^/.]+$/, ""); 
@@ -3708,16 +3869,25 @@
 
     async function generateAIBG() {
         const p = getPromptText(); if(!p) return showToast('请输入描述词或选择关键词标签', true);
-        const btn = window.event?.target || document.activeElement;
-        const ogText = btn?.innerText || 'GPT生成新图';
-        if(btn) { btn.innerText = '渲染中...'; btn.disabled = true; }
-        startAIProgress('GPT 正在生成新图片...');
+        const btn = document.getElementById('ai-submit-btn') || window.event?.target || document.activeElement;
+        const ogText = btn?.innerText || '↑';
+        if(btn) { btn.innerText = '…'; btn.disabled = true; }
+        startAIProgress(`${AI_PROVIDER_LABELS[aiProvider] || 'AI'} 正在生成新图片...`);
         try {
             updateAIProgress('正在提交生成请求...', 22);
-            const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: p, ratio: getGenerationRatio() }) });
+            const body = {
+                prompt: p,
+                ratio: getGenerationRatio(),
+                provider: aiProvider
+            };
+            if(aiReferenceImage) {
+                body.referenceImage = stripDataUrl(aiReferenceImage.src);
+                body.referenceMimeType = aiReferenceImage.mimeType || 'image/png';
+            }
+            const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             updateAIProgress('模型正在生成画面...', 70);
             const data = await res.json(); 
-            if(data.success) { addLayer('image', { src: `data:image/png;base64,${data.imageBase64}` }); showToast('✅ 成功生成新图片'); } else { showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true); }
+            if(data.success) { addLayer('image', { src: `data:image/png;base64,${data.imageBase64}` }); showToast(`✅ ${data.provider || 'AI'} 已生成新图片`); } else { showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true); }
         } catch(e) { showToast('❌ ' + (e.message || '无法连接服务器'), true); } finally { updateAIProgress('正在应用到画布...', 96); stopAIProgress(); if(btn) { btn.innerText = ogText; btn.disabled = false; } }
     }
     
@@ -3731,7 +3901,7 @@
         const p = getPromptText(); 
         if(!p) return showToast('请输入扩图引导或选择关键词标签', true);
         
-        const btn = window.event?.target || document.activeElement; const ogText = btn?.innerText || '智能扩图'; if(btn) { btn.innerText = '🪄 读取原图...'; btn.disabled = true; }
+        const btn = document.getElementById('ai-submit-btn') || window.event?.target || document.activeElement; const ogText = btn?.innerText || '↑'; if(btn) { btn.innerText = '…'; btn.disabled = true; }
         startAIProgress('正在读取原图并计算扩展区域...');
         
         try {
@@ -3745,7 +3915,7 @@
             
             const res = await fetch('/api/outpaint-image', { 
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ prompt: p, ratio: getGenerationRatio(), baseImage: base64Image, expand })
+                body: JSON.stringify({ prompt: p, ratio: getGenerationRatio(), baseImage: base64Image, expand, provider: aiProvider })
             });
             updateAIProgress('AI 正在延展背景...', 74);
             const data = await res.json(); 
@@ -3860,8 +4030,10 @@
         renderProperties();
         renderAssetLibrary();
         renderPromptTags();
+        refreshAIConsole();
         saveHistory();
     }
+    document.addEventListener('click', e => { if(!e.target.closest('.ai-menu-wrap')) closeAIMenus(); });
     bootApp();
 
 </script>

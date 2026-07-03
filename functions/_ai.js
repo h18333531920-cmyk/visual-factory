@@ -1,4 +1,4 @@
-const DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-2';
+const DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-1.5';
 const DEFAULT_OPENAI_TEXT_MODEL = 'gpt-5.4-mini';
 const OPENAI_IMAGE_SIZE_BY_RATIO = {
   '1:1': '1024x1024',
@@ -220,7 +220,9 @@ async function volcVisualHeaders(env, body) {
 }
 
 export async function generateWithOpenAI(env, prompt, ratio) {
-  requireAI(env, 'image generation');
+  if (!hasOpenAI(env)) {
+    throw new Error('GPT 生图未配置：请在 Cloudflare Pages 环境变量中设置 OPENAI_API_KEY。');
+  }
   const data = await postJson('https://api.openai.com/v1/images/generations', {
     model: getOpenAIImageModel(env),
     prompt: finalImagePrompt(prompt),
@@ -230,6 +232,44 @@ export async function generateWithOpenAI(env, prompt, ratio) {
   }, {
     Authorization: `Bearer ${env.OPENAI_API_KEY}`
   });
+  return parseImageBase64(data);
+}
+
+export async function generateWithOpenAIReference(env, prompt, ratio, referenceImage, mimeType = 'image/png') {
+  if (!hasOpenAI(env)) {
+    throw new Error('GPT 参考图生图未配置：请在 Cloudflare Pages 环境变量中设置 OPENAI_API_KEY。');
+  }
+  const form = new FormData();
+  const safeMimeType = String(mimeType || '').startsWith('image/') ? mimeType : 'image/png';
+  const ext = safeMimeType.includes('jpeg') || safeMimeType.includes('jpg') ? 'jpg' : safeMimeType.includes('webp') ? 'webp' : 'png';
+  form.append('model', getOpenAIImageModel(env));
+  form.append('prompt', [
+    finalImagePrompt(prompt),
+    'use the uploaded reference image for subject, composition, product style, or visual direction while creating a polished commercial poster image'
+  ].join(', '));
+  form.append('size', getOpenAIImageSize(ratio));
+  form.append('quality', 'medium');
+  form.append('image', base64ToBlob(referenceImage, safeMimeType), `reference.${ext}`);
+
+  const response = await fetch('https://api.openai.com/v1/images/edits', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`
+    },
+    body: form
+  });
+
+  const text = await response.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
+  }
+  if (!response.ok) {
+    const message = data?.error?.message || data?.message || data?.raw || `HTTP ${response.status}`;
+    throw new Error(message);
+  }
   return parseImageBase64(data);
 }
 
@@ -283,7 +323,9 @@ export async function enhancePromptWithOpenAI(env, prompt, ratio) {
 }
 
 export async function generateWithVolc(env, prompt, ratio) {
-  requireAI(env, 'image generation');
+  if (!hasVolcImage(env)) {
+    throw new Error('火山生图未配置：请设置 VOLC_API_KEY + ENDPOINT_ID。');
+  }
   const data = await postJson('https://ark.cn-beijing.volces.com/api/v3/images/generations', {
     model: env.ENDPOINT_ID,
     prompt: finalImagePrompt(prompt),
@@ -373,10 +415,18 @@ export async function outpaintWithBestProvider(env, options = {}) {
     ratio,
     mimeType,
     maskBase64,
-    expand
+    expand,
+    provider
   } = options;
   requireAI(env, 'outpaint');
-  if (hasOpenAI(env)) {
+  const requestedProvider = provider === 'volc' ? 'volc' : provider === 'openai' ? 'openai' : '';
+  if (requestedProvider === 'openai' && !hasOpenAI(env)) {
+    throw new Error('GPT 扩图未配置：请在 Cloudflare Pages 环境变量中设置 OPENAI_API_KEY。');
+  }
+  if (requestedProvider === 'volc' && !hasVolcOutpaint(env)) {
+    throw new Error('火山扩图未配置：缺少 VOLC_ACCESS_KEY_ID 或 VOLC_SECRET_ACCESS_KEY。');
+  }
+  if ((requestedProvider && requestedProvider === 'openai') || (!requestedProvider && hasOpenAI(env))) {
     return {
       provider: 'openai',
       imageBase64: await outpaintWithOpenAI(env, prompt, baseImage, ratio, mimeType, maskBase64)
