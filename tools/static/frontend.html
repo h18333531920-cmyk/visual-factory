@@ -162,12 +162,14 @@
         .prompt-tag-chip.active { background: var(--text-main); border-color: var(--text-main); color: #FFFFFF; }
         .ai-console { border: 1px solid #d7d9d6; border-radius: 18px; background: rgba(255,255,255,0.92); padding: 14px; box-shadow: 0 16px 36px rgba(16,17,20,0.05); }
         .ai-reference-strip { display: flex; gap: 10px; align-items: center; min-height: 82px; margin-bottom: 12px; }
+        .ai-reference-strip.drag-over { border-radius: 14px; background: rgba(16,17,20,0.04); box-shadow: inset 0 0 0 2px rgba(16,17,20,0.18); }
         .ai-reference-add { width: 64px; height: 74px; flex: 0 0 64px; border: 1px dashed #cfd3d8; border-radius: 10px; background: #f6f7f6; color: #7c838c; font-size: 24px; line-height: 1; cursor: pointer; transform: rotate(-7deg); display: flex; align-items: center; justify-content: center; }
         .ai-reference-add:hover { border-color: var(--text-main); color: var(--text-main); background: #ffffff; }
         .ai-reference-card { position: relative; width: 78px; height: 78px; flex: 0 0 78px; border: 1px solid #d7d9d6; border-radius: 10px; background: #ffffff; overflow: hidden; }
         .ai-reference-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .ai-reference-card button { position: absolute; right: 5px; top: 5px; width: 22px; height: 22px; border: 0; border-radius: 999px; background: rgba(16,17,20,0.82); color: #fff; font-size: 13px; cursor: pointer; }
         .ai-reference-hint { color: #8b929b; font-size: 13px; line-height: 1.55; font-weight: 720; }
+        .ai-reference-count { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 22px; border-radius: 999px; background: #f0f1ef; color: #5f6770; font-size: 11px; font-weight: 860; margin-top: 4px; }
         .ai-prompt-shell { border: 1px solid #d7d9d6; border-radius: 15px; background: #ffffff; padding: 10px; margin-bottom: 12px; }
         .ai-prompt-shell .textarea { border: 0; box-shadow: none; margin: 0; padding: 6px; min-height: 112px; background: transparent; font-size: 14px; line-height: 1.55; }
         .ai-prompt-shell .textarea:focus { border: 0; box-shadow: none; }
@@ -1218,7 +1220,7 @@
 <div class="toast" id="toast">提示信息</div>
 <input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2" style="display:none">
 <input type="file" id="bg-upload" accept="image/png, image/jpeg, image/webp" style="display:none">
-<input type="file" id="ai-reference-upload" accept="image/png, image/jpeg, image/webp" style="display:none">
+<input type="file" id="ai-reference-upload" accept="image/png, image/jpeg, image/webp" multiple style="display:none">
 <input type="file" id="logo-upload" accept="image/png, image/jpeg, image/svg+xml" multiple style="display:none">
 <input type="file" id="backup-import" accept="application/json,.json" style="display:none">
 
@@ -1450,7 +1452,8 @@
     const AI_PROVIDER_LABELS = { openai: 'GPT 大模型', volc: '火山大模型' };
     let aiFeatureMode = 'generate';
     let aiProvider = 'openai';
-    let aiReferenceImage = null;
+    const AI_REFERENCE_LIMIT = 8;
+    let aiReferenceImages = [];
     let selectedKeywordTagIds = [];
     let presetLibrary = [];
     let tagPresetLibrary = [];
@@ -2122,26 +2125,74 @@
     function renderAIReferenceImage() {
         const strip = document.getElementById('ai-reference-strip');
         if(!strip) return;
+        const cards = aiReferenceImages.map((item, index) => `
+            <div class="ai-reference-card">
+                <img src="${item.src}" alt="">
+                <button type="button" onclick="removeAIReferenceImage(${index})" title="移除参考图">×</button>
+            </div>
+        `).join('');
+        const hint = aiReferenceImages.length
+            ? `<div class="ai-reference-hint">已添加参考图<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div></div>`
+            : '<div class="ai-reference-hint">拖拽或上传参考图，最多 8 张；也可以只输入文字描述。</div>';
         strip.innerHTML = `
             <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
-            ${aiReferenceImage ? `<div class="ai-reference-card"><img src="${aiReferenceImage.src}" alt=""><button type="button" onclick="clearAIReferenceImage()" title="移除参考图">×</button></div><div class="ai-reference-hint">${escapeHtml(aiReferenceImage.name || '参考图已添加')}</div>` : '<div class="ai-reference-hint">上传参考图，或输入文字描述想生成的图片。</div>'}
+            ${cards}
+            ${hint}
         `;
     }
-    function clearAIReferenceImage() {
-        aiReferenceImage = null;
+    function removeAIReferenceImage(index) {
+        aiReferenceImages.splice(index, 1);
         renderAIReferenceImage();
     }
-    async function setAIReferenceFile(file) {
-        if(!file || !file.type?.startsWith('image/')) return showToast('请选择 PNG / JPG / WEBP 参考图', true);
+    async function readAIReferenceFile(file) {
+        if(!file || !file.type?.startsWith('image/')) return null;
         const src = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = ev => resolve(ev.target.result);
             reader.onerror = () => reject(new Error('参考图读取失败'));
             reader.readAsDataURL(file);
         });
-        aiReferenceImage = { name: file.name, mimeType: file.type || 'image/png', src };
+        return { name: file.name, mimeType: file.type || 'image/png', src };
+    }
+    async function addAIReferenceFiles(files) {
+        const imageFiles = [...files].filter(file => file.type?.startsWith('image/'));
+        if(imageFiles.length === 0) return showToast('请选择 PNG / JPG / WEBP 参考图', true);
+        const remaining = AI_REFERENCE_LIMIT - aiReferenceImages.length;
+        if(remaining <= 0) return showToast(`最多只能添加 ${AI_REFERENCE_LIMIT} 张参考图`, true);
+        const picked = imageFiles.slice(0, remaining);
+        const loaded = [];
+        for(const file of picked) {
+            const item = await readAIReferenceFile(file);
+            if(item) loaded.push(item);
+        }
+        aiReferenceImages.push(...loaded);
         renderAIReferenceImage();
-        showToast('已添加参考图');
+        const skipped = imageFiles.length - picked.length;
+        showToast(skipped > 0 ? `已添加 ${loaded.length} 张，最多 ${AI_REFERENCE_LIMIT} 张` : `已添加 ${loaded.length} 张参考图`);
+    }
+    function setupAIReferenceDrop() {
+        const strip = document.getElementById('ai-reference-strip');
+        if(!strip) return;
+        ['dragenter', 'dragover'].forEach(type => {
+            strip.addEventListener(type, e => {
+                if(!isFileDragEvent(e)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                strip.classList.add('drag-over');
+            });
+        });
+        ['dragleave', 'dragend'].forEach(type => {
+            strip.addEventListener(type, e => {
+                if(type === 'dragleave' && strip.contains(e.relatedTarget)) return;
+                strip.classList.remove('drag-over');
+            });
+        });
+        strip.addEventListener('drop', e => {
+            if(!isFileDragEvent(e)) return;
+            e.preventDefault();
+            strip.classList.remove('drag-over');
+            addAIReferenceFiles(e.dataTransfer.files).catch(err => showToast(err.message || '参考图读取失败', true));
+        });
     }
     function runSelectedAIAction() {
         if(aiFeatureMode === 'generate') return generateAIBG();
@@ -3810,8 +3861,8 @@
     });
 
     document.getElementById('ai-reference-upload').addEventListener('change', e => {
-        const file = e.target.files[0]; if(!file) return;
-        setAIReferenceFile(file).catch(err => showToast(err.message || '参考图读取失败', true)).finally(() => { e.target.value = ''; });
+        const files = e.target.files; if(!files || files.length === 0) return;
+        addAIReferenceFiles(files).catch(err => showToast(err.message || '参考图读取失败', true)).finally(() => { e.target.value = ''; });
     });
     
     document.getElementById('font-upload').addEventListener('change', e => { 
@@ -3880,9 +3931,11 @@
                 ratio: getGenerationRatio(),
                 provider: aiProvider
             };
-            if(aiReferenceImage) {
-                body.referenceImage = stripDataUrl(aiReferenceImage.src);
-                body.referenceMimeType = aiReferenceImage.mimeType || 'image/png';
+            if(aiReferenceImages.length) {
+                body.referenceImages = aiReferenceImages.map(item => ({
+                    image: stripDataUrl(item.src),
+                    mimeType: item.mimeType || 'image/png'
+                }));
             }
             const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             updateAIProgress('模型正在生成画面...', 70);
@@ -4022,6 +4075,7 @@
         loadFontsFromDB();
         loadLogosFromDB();
         setupCanvasDropImport();
+        setupAIReferenceDrop();
         renderCustomArtboardControls();
         syncRatioNav();
         resizeCanvas();

@@ -235,21 +235,29 @@ export async function generateWithOpenAI(env, prompt, ratio) {
   return parseImageBase64(data);
 }
 
-export async function generateWithOpenAIReference(env, prompt, ratio, referenceImage, mimeType = 'image/png') {
+export async function generateWithOpenAIReference(env, prompt, ratio, referenceImages = []) {
   if (!hasOpenAI(env)) {
     throw new Error('GPT 参考图生图未配置：请在 Cloudflare Pages 环境变量中设置 OPENAI_API_KEY。');
   }
+  const images = Array.isArray(referenceImages)
+    ? referenceImages.slice(0, 8).filter(item => item?.image)
+    : referenceImages
+      ? [{ image: referenceImages, mimeType: 'image/png' }]
+      : [];
+  if (images.length === 0) throw new Error('请先添加参考图。');
   const form = new FormData();
-  const safeMimeType = String(mimeType || '').startsWith('image/') ? mimeType : 'image/png';
-  const ext = safeMimeType.includes('jpeg') || safeMimeType.includes('jpg') ? 'jpg' : safeMimeType.includes('webp') ? 'webp' : 'png';
   form.append('model', getOpenAIImageModel(env));
   form.append('prompt', [
     finalImagePrompt(prompt),
-    'use the uploaded reference image for subject, composition, product style, or visual direction while creating a polished commercial poster image'
+    'use the uploaded reference images for subject, composition, product style, color palette, or visual direction while creating a polished commercial poster image'
   ].join(', '));
   form.append('size', getOpenAIImageSize(ratio));
   form.append('quality', 'medium');
-  form.append('image', base64ToBlob(referenceImage, safeMimeType), `reference.${ext}`);
+  images.forEach((item, index) => {
+    const safeMimeType = String(item.mimeType || '').startsWith('image/') ? item.mimeType : 'image/png';
+    const ext = safeMimeType.includes('jpeg') || safeMimeType.includes('jpg') ? 'jpg' : safeMimeType.includes('webp') ? 'webp' : 'png';
+    form.append('image', base64ToBlob(item.image, safeMimeType), `reference-${index + 1}.${ext}`);
+  });
 
   const response = await fetch('https://api.openai.com/v1/images/edits', {
     method: 'POST',

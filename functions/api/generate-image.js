@@ -14,7 +14,12 @@ export async function onRequest({ request, env }) {
     const body = await request.json().catch(() => ({}));
     const requestedProvider = body.provider === 'volc' ? 'volc' : body.provider === 'openai' ? 'openai' : '';
     const provider = requestedProvider || (hasOpenAI(env) ? 'openai' : 'volc');
-    if (body.referenceImage && provider !== 'openai') {
+    const referenceImages = Array.isArray(body.referenceImages)
+      ? body.referenceImages.slice(0, 8).filter(item => item?.image)
+      : body.referenceImage
+        ? [{ image: body.referenceImage, mimeType: body.referenceMimeType }]
+        : [];
+    if (referenceImages.length && provider !== 'openai') {
       throw new Error('火山大模型暂不支持参考图生图，请切换到 GPT 大模型。');
     }
     if (provider === 'openai' && !hasOpenAI(env)) {
@@ -25,8 +30,8 @@ export async function onRequest({ request, env }) {
     }
 
     const imageBase64 = provider === 'openai'
-      ? body.referenceImage
-        ? await generateWithOpenAIReference(env, body.prompt, body.ratio, body.referenceImage, body.referenceMimeType)
+      ? referenceImages.length
+        ? await generateWithOpenAIReference(env, body.prompt, body.ratio, referenceImages)
         : await generateWithOpenAI(env, body.prompt, body.ratio)
       : await generateWithVolc(env, body.prompt, body.ratio);
 
