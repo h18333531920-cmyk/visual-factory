@@ -2131,11 +2131,9 @@
                 <button type="button" onclick="removeAIReferenceImage(${index})" title="移除参考图">×</button>
             </div>
         `).join('');
-        const hint = aiProvider === 'volc'
-            ? `<div class="ai-reference-hint">火山大模型按文字生成，参考图切回 GPT 时使用<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div></div>`
-            : aiReferenceImages.length
-                ? `<div class="ai-reference-hint">已添加参考图<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div></div>`
-                : '<div class="ai-reference-hint">拖拽或上传参考图，最多 8 张；也可以只输入文字描述。</div>';
+        const hint = aiReferenceImages.length
+            ? `<div class="ai-reference-hint">已添加参考图<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div></div>`
+            : '<div class="ai-reference-hint">拖拽或上传参考图，最多 8 张；也可以只输入文字描述。</div>';
         strip.innerHTML = `
             <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
             ${cards}
@@ -3933,7 +3931,7 @@
                 ratio: getGenerationRatio(),
                 provider: aiProvider
             };
-            if(aiProvider === 'openai' && aiReferenceImages.length) {
+            if(aiReferenceImages.length) {
                 body.referenceImages = aiReferenceImages.map(item => ({
                     image: stripDataUrl(item.src),
                     mimeType: item.mimeType || 'image/png'

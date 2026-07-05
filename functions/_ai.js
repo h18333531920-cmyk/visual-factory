@@ -348,6 +348,64 @@ export async function generateWithVolc(env, prompt, ratio) {
   return fetchImageUrlAsBase64(item?.url);
 }
 
+function normalizeReferenceImages(referenceImages = []) {
+  return (Array.isArray(referenceImages) ? referenceImages : [referenceImages])
+    .slice(0, 8)
+    .filter(item => item?.image)
+    .map(item => {
+      const mimeType = String(item.mimeType || '').startsWith('image/') ? item.mimeType : 'image/png';
+      const clean = String(item.image || '').replace(/^data:[^;]+;base64,/, '');
+      return {
+        mimeType,
+        base64: clean,
+        dataUrl: `data:${mimeType};base64,${clean}`
+      };
+    })
+    .filter(item => item.base64);
+}
+
+async function postVolcImageGeneration(env, payload) {
+  const data = await postJson('https://ark.cn-beijing.volces.com/api/v3/images/generations', payload, {
+    Authorization: `Bearer ${env.VOLC_API_KEY}`
+  });
+  const item = data?.data?.[0];
+  if (item?.b64_json) return item.b64_json;
+  return fetchImageUrlAsBase64(item?.url);
+}
+
+export async function generateWithVolcReference(env, prompt, ratio, referenceImages = []) {
+  if (!hasVolcImage(env)) {
+    throw new Error('火山图生图未配置：请设置 VOLC_API_KEY + ENDPOINT_ID。');
+  }
+  const images = normalizeReferenceImages(referenceImages);
+  if (images.length === 0) throw new Error('请先添加参考图。');
+  const basePayload = {
+    model: env.VOLC_I2I_ENDPOINT_ID || env.ENDPOINT_ID,
+    prompt: [
+      finalImagePrompt(prompt),
+      'use the uploaded reference image as visual reference, keep subject identity, product appearance, composition cues, color palette and commercial poster direction'
+    ].join(', '),
+    size: getVolcImageSize(ratio),
+    response_format: 'url',
+    watermark: false
+  };
+  const imageUrls = images.map(item => item.dataUrl);
+  const payloads = [
+    { ...basePayload, image: imageUrls },
+    { ...basePayload, image_urls: imageUrls },
+    { ...basePayload, image: imageUrls[0] }
+  ];
+  let lastError = null;
+  for (const payload of payloads) {
+    try {
+      return await postVolcImageGeneration(env, payload);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(`火山图生图失败：${lastError?.message || '接口没有接受参考图参数。'}`);
+}
+
 export function normalizeExpand(expand = {}) {
   const pick = key => Math.max(0, Math.min(2, Number(expand?.[key]) || 0));
   return {
