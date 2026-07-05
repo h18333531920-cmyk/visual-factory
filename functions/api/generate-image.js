@@ -1,5 +1,5 @@
 import { getBearerToken, getUserFromToken, json, requireCloudflareEnv } from '../_shared.js';
-import { generateWithOpenAI, generateWithOpenAIReference, generateWithVolc, hasOpenAI, hasVolcImage, requireAI } from '../_ai.js';
+import { generateWithOpenAI, generateWithOpenAIReference, generateWithVolc, generateWithVolcReference, hasOpenAI, hasVolcImage, requireAI } from '../_ai.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -30,12 +30,11 @@ export async function onRequest({ request, env }) {
       ? referenceImages.length
         ? await generateWithOpenAIReference(env, body.prompt, body.ratio, referenceImages)
         : await generateWithOpenAI(env, body.prompt, body.ratio)
-      : await generateWithVolc(env, body.prompt, body.ratio);
-    const warning = referenceImages.length && provider !== 'openai'
-      ? '火山大模型暂不读取参考图，本次已按文字描述生成。'
-      : '';
+      : referenceImages.length
+        ? await generateWithVolcReference(env, body.prompt, body.ratio, referenceImages)
+        : await generateWithVolc(env, body.prompt, body.ratio);
 
-    return json({ success: true, provider, imageBase64, warning });
+    return json({ success: true, provider, imageBase64 });
   } catch (error) {
     const message = error.message || 'AI 生图失败。';
     const status = /未配置/i.test(message) ? 503 : /Unauthorized|Invalid session/i.test(message) ? 401 : 500;
