@@ -2131,9 +2131,11 @@
                 <button type="button" onclick="removeAIReferenceImage(${index})" title="移除参考图">×</button>
             </div>
         `).join('');
-        const hint = aiReferenceImages.length
-            ? `<div class="ai-reference-hint">已添加参考图<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div></div>`
-            : '<div class="ai-reference-hint">拖拽或上传参考图，最多 8 张；也可以只输入文字描述。</div>';
+        const hint = aiProvider === 'volc'
+            ? `<div class="ai-reference-hint">火山大模型按文字生成，参考图切回 GPT 时使用<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div></div>`
+            : aiReferenceImages.length
+                ? `<div class="ai-reference-hint">已添加参考图<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div></div>`
+                : '<div class="ai-reference-hint">拖拽或上传参考图，最多 8 张；也可以只输入文字描述。</div>';
         strip.innerHTML = `
             <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
             ${cards}
@@ -3931,7 +3933,7 @@
                 ratio: getGenerationRatio(),
                 provider: aiProvider
             };
-            if(aiReferenceImages.length) {
+            if(aiProvider === 'openai' && aiReferenceImages.length) {
                 body.referenceImages = aiReferenceImages.map(item => ({
                     image: stripDataUrl(item.src),
                     mimeType: item.mimeType || 'image/png'
@@ -3940,7 +3942,7 @@
             const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             updateAIProgress('模型正在生成画面...', 70);
             const data = await res.json(); 
-            if(data.success) { addLayer('image', { src: `data:image/png;base64,${data.imageBase64}` }); showToast(`✅ ${data.provider || 'AI'} 已生成新图片`); } else { showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true); }
+            if(data.success) { addLayer('image', { src: `data:image/png;base64,${data.imageBase64}` }); showToast(data.warning || `✅ ${data.provider || 'AI'} 已生成新图片`); } else { showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true); }
         } catch(e) { showToast('❌ ' + (e.message || '无法连接服务器'), true); } finally { updateAIProgress('正在应用到画布...', 96); stopAIProgress(); if(btn) { btn.innerText = ogText; btn.disabled = false; } }
     }
     
