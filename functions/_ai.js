@@ -256,7 +256,7 @@ export async function generateWithOpenAIReference(env, prompt, ratio, referenceI
   images.forEach((item, index) => {
     const safeMimeType = String(item.mimeType || '').startsWith('image/') ? item.mimeType : 'image/png';
     const ext = safeMimeType.includes('jpeg') || safeMimeType.includes('jpg') ? 'jpg' : safeMimeType.includes('webp') ? 'webp' : 'png';
-    form.append('image', base64ToBlob(item.image, safeMimeType), `reference-${index + 1}.${ext}`);
+    form.append('image[]', base64ToBlob(item.image, safeMimeType), `reference-${index + 1}.${ext}`);
   });
 
   const response = await fetch('https://api.openai.com/v1/images/edits', {
