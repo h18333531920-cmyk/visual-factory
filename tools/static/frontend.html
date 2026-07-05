@@ -75,9 +75,10 @@
         .pane-content { flex: 1; overflow-y: auto; padding: 0; display: flex; flex-direction: column; gap: 18px; background: transparent; }
         
         .module-card { background: #EAEAEA; border-radius: 9px; padding: 18px; border: 0; }
-        .card-title { font-size: 13px; font-weight: 800; color: var(--text-main); margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; }
+        .card-title { font-size: 13px; font-weight: 800; color: var(--text-main); margin-bottom: 14px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
         .card-title::before { content: ''; display: block; width: 5px; height: 18px; background: #D6D6D6; border-radius: 4px; margin-right: 8px; }
         .card-title-wrap { display: flex; align-items: center; }
+        .card-title > :not(.card-title-wrap):last-child { margin-left: auto; }
 
         .label { display: block; font-size: 12px; color: var(--text-sub); margin-bottom: 8px; font-weight: 600; }
         .input-text, .input-select, .textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-main); background: #FFFFFF; margin-bottom: 12px; transition: 0.2s; }
@@ -1355,7 +1356,7 @@
 
             <div class="module-card">
                 <div class="card-title">
-                    <div class="card-title-wrap">图层管理 (支持Shift多选)</div>
+                    <div class="card-title-wrap">图层</div>
                     <div class="add-menu-wrap">
                         <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="toggleAddMenu(event)">+ 添加</button>
                         <div class="add-menu" id="add-menu">
@@ -1371,14 +1372,14 @@
             </div>
 
             <div class="module-card">
-                <div class="card-title"><div class="card-title-wrap">属性编辑</div></div>
+                <div class="card-title"><div class="card-title-wrap">编辑</div></div>
                 <div id="prop-edit-area">
                     <div style="text-align: center; color: var(--text-sub); font-size: 13px; padding: 20px 0;">请在上方或画板中选择图层</div>
                 </div>
             </div>
 
             <div class="module-card">
-                <div class="card-title"><div class="card-title-wrap">图像与 AI 引擎</div></div>
+                <div class="card-title"><div class="card-title-wrap">生图</div></div>
                 <div class="ai-console">
                     <div class="ai-reference-strip" id="ai-reference-strip">
                         <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
@@ -1408,7 +1409,6 @@
                     </div>
                     <div class="ai-mini-actions">
                         <button class="btn btn-outline" type="button" onclick="document.getElementById('bg-upload').click()">导入图片图层</button>
-                        <button class="btn btn-outline" type="button" onclick="enhanceAIPrompt()">优化提示词</button>
                     </div>
                 </div>
             </div>
