@@ -161,14 +161,22 @@
         .prompt-tag-chip:hover { border-color: var(--primary); color: var(--text-main); }
         .prompt-tag-chip.active { background: var(--text-main); border-color: var(--text-main); color: #FFFFFF; }
         .ai-console { border: 1px solid #d7d9d6; border-radius: 18px; background: rgba(255,255,255,0.92); padding: 14px; box-shadow: 0 16px 36px rgba(16,17,20,0.05); }
-        .ai-reference-strip { display: flex; gap: 10px; align-items: center; min-height: 82px; margin-bottom: 12px; }
+        .ai-reference-strip { display: flex; gap: 10px; align-items: center; min-height: 92px; margin-bottom: 12px; min-width: 0; }
         .ai-reference-strip.drag-over { border-radius: 14px; background: rgba(16,17,20,0.04); box-shadow: inset 0 0 0 2px rgba(16,17,20,0.18); }
         .ai-reference-add { width: 64px; height: 74px; flex: 0 0 64px; border: 1px dashed #cfd3d8; border-radius: 10px; background: #f6f7f6; color: #7c838c; font-size: 24px; line-height: 1; cursor: pointer; transform: rotate(-7deg); display: flex; align-items: center; justify-content: center; }
         .ai-reference-add:hover { border-color: var(--text-main); color: var(--text-main); background: #ffffff; }
-        .ai-reference-card { position: relative; width: 78px; height: 78px; flex: 0 0 78px; border: 1px solid #d7d9d6; border-radius: 10px; background: #ffffff; overflow: hidden; }
+        .ai-reference-stack { position: relative; width: 96px; height: 84px; flex: 0 1 auto; transition: width 0.2s ease; }
+        .ai-reference-stack.has-many:hover,
+        .ai-reference-stack.drag-active { width: min(calc(100% - 84px), var(--expanded-width, 520px)); }
+        .ai-reference-card { position: absolute; left: 0; top: 4px; width: 78px; height: 78px; border: 1px solid #d7d9d6; border-radius: 10px; background: #ffffff; overflow: hidden; cursor: grab; box-shadow: 0 8px 18px rgba(16,17,20,0.10); transform: translateX(var(--stack-x, 0)) rotate(var(--stack-rot, 0deg)); transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.16s ease; z-index: var(--stack-z, 1); }
+        .ai-reference-stack:hover .ai-reference-card,
+        .ai-reference-stack.drag-active .ai-reference-card { transform: translateX(var(--spread-x, 0)) rotate(var(--spread-rot, 0deg)); }
+        .ai-reference-card:hover { box-shadow: 0 12px 26px rgba(16,17,20,0.18); z-index: 30; }
+        .ai-reference-card.dragging { opacity: 0.45; cursor: grabbing; }
+        .ai-reference-card.drop-target { box-shadow: 0 0 0 3px rgba(0,120,255,0.42), 0 12px 26px rgba(16,17,20,0.18); }
         .ai-reference-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .ai-reference-card button { position: absolute; right: 5px; top: 5px; width: 22px; height: 22px; border: 0; border-radius: 999px; background: rgba(16,17,20,0.82); color: #fff; font-size: 13px; cursor: pointer; }
-        .ai-reference-hint { color: #8b929b; font-size: 13px; line-height: 1.55; font-weight: 720; }
+        .ai-reference-hint { color: #8b929b; font-size: 13px; line-height: 1.55; font-weight: 720; min-width: 0; flex: 1 1 auto; }
         .ai-reference-count { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 22px; border-radius: 999px; background: #f0f1ef; color: #5f6770; font-size: 11px; font-weight: 860; margin-top: 4px; }
         .ai-prompt-shell { border: 1px solid #d7d9d6; border-radius: 15px; background: #ffffff; padding: 10px; margin-bottom: 12px; }
         .ai-prompt-shell .textarea { border: 0; box-shadow: none; margin: 0; padding: 6px; min-height: 112px; background: transparent; font-size: 14px; line-height: 1.55; }
@@ -2125,24 +2133,70 @@
     function renderAIReferenceImage() {
         const strip = document.getElementById('ai-reference-strip');
         if(!strip) return;
-        const cards = aiReferenceImages.map((item, index) => `
-            <div class="ai-reference-card">
+        const spreadStep = 64;
+        const expandedWidth = Math.min(520, Math.max(96, 78 + Math.max(0, aiReferenceImages.length - 1) * spreadStep));
+        const cards = aiReferenceImages.map((item, index) => {
+            const stackX = Math.min(index * 8, 28);
+            const stackRot = [-7, 5, -3, 7, -5, 4, -2, 6][index % 8];
+            const spreadRot = [-7, -3, 4, -5, 3, -2, 5, -4][index % 8];
+            const stackZ = aiReferenceImages.length - index + 2;
+            return `
+            <div class="ai-reference-card" draggable="true" data-ai-ref-index="${index}" style="--stack-x:${stackX}px;--stack-rot:${stackRot}deg;--spread-x:${index * spreadStep}px;--spread-rot:${spreadRot}deg;--stack-z:${stackZ};">
                 <img src="${item.src}" alt="">
-                <button type="button" onclick="removeAIReferenceImage(${index})" title="移除参考图">×</button>
+                <button type="button" draggable="false" onclick="event.stopPropagation(); removeAIReferenceImage(${index})" title="移除参考图">×</button>
             </div>
-        `).join('');
+        `}).join('');
         const hint = aiReferenceImages.length
             ? `<div class="ai-reference-hint">已添加参考图<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div></div>`
             : '<div class="ai-reference-hint">拖拽或上传参考图，最多 8 张；也可以只输入文字描述。</div>';
         strip.innerHTML = `
             <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
-            ${cards}
+            ${aiReferenceImages.length ? `<div class="ai-reference-stack ${aiReferenceImages.length > 1 ? 'has-many' : ''}" id="ai-reference-stack" style="--expanded-width:${expandedWidth}px">${cards}</div>` : ''}
             ${hint}
         `;
+        setupAIReferenceSort();
     }
     function removeAIReferenceImage(index) {
         aiReferenceImages.splice(index, 1);
         renderAIReferenceImage();
+    }
+    function moveAIReferenceImage(fromIndex, toIndex) {
+        if(fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= aiReferenceImages.length || toIndex >= aiReferenceImages.length) return;
+        const [item] = aiReferenceImages.splice(fromIndex, 1);
+        aiReferenceImages.splice(toIndex, 0, item);
+        renderAIReferenceImage();
+    }
+    function setupAIReferenceSort() {
+        const stack = document.getElementById('ai-reference-stack');
+        if(!stack) return;
+        let dragIndex = -1;
+        stack.querySelectorAll('.ai-reference-card').forEach(card => {
+            card.addEventListener('dragstart', e => {
+                dragIndex = Number(card.dataset.aiRefIndex);
+                stack.classList.add('drag-active');
+                card.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', String(dragIndex));
+            });
+            card.addEventListener('dragend', () => {
+                stack.classList.remove('drag-active');
+                stack.querySelectorAll('.ai-reference-card').forEach(item => item.classList.remove('dragging', 'drop-target'));
+                dragIndex = -1;
+            });
+            card.addEventListener('dragover', e => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                stack.querySelectorAll('.ai-reference-card').forEach(item => item.classList.remove('drop-target'));
+                card.classList.add('drop-target');
+            });
+            card.addEventListener('dragleave', () => card.classList.remove('drop-target'));
+            card.addEventListener('drop', e => {
+                e.preventDefault();
+                const from = dragIndex >= 0 ? dragIndex : Number(e.dataTransfer.getData('text/plain'));
+                const to = Number(card.dataset.aiRefIndex);
+                moveAIReferenceImage(from, to);
+            });
+        });
     }
     async function readAIReferenceFile(file) {
         if(!file || !file.type?.startsWith('image/')) return null;
