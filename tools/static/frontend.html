@@ -1880,8 +1880,17 @@
     }
     function renderCustomArtboardControls() {
         document.querySelectorAll('.custom-artboard-tab, .custom-ratio-tab').forEach(el => el.remove());
+        const topAnchor = document.querySelector('.add-custom-artboard-tab');
         const ratioAnchor = document.querySelector('.add-custom-ratio-tab');
         getCustomArtboardPresets().forEach(preset => {
+            const topBtn = document.createElement('button');
+            topBtn.type = 'button';
+            topBtn.className = 'artboard-tab custom-artboard-tab';
+            topBtn.dataset.artboard = preset.id;
+            topBtn.textContent = getArtboardTopLabel(preset);
+            topBtn.onclick = () => switchArtboard(preset.id);
+            topAnchor?.parentNode?.appendChild(topBtn);
+
             const ratioBtn = document.createElement('button');
             ratioBtn.type = 'button';
             ratioBtn.className = 'custom-ratio-tab';
