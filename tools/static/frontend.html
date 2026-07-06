@@ -1059,6 +1059,43 @@
             flex: 0 0 auto;
         }
 
+        .workspace-tabs .workspace-overview-tab {
+            position: relative;
+            color: var(--text-main);
+            font-weight: 880;
+        }
+
+        .workspace-tabs .workspace-overview-tab.active::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: -10px;
+            height: 3px;
+            border-radius: 999px;
+            background: var(--text-main);
+        }
+
+        .workspace-tabs .new-artboard-menu-wrap {
+            flex: 0 0 auto;
+        }
+
+        .workspace-tabs .new-artboard-trigger {
+            min-width: 112px;
+            height: 28px;
+            padding: 0 18px;
+            border-radius: 999px;
+            background: #101114;
+            color: #ffffff;
+            font-weight: 850;
+            box-shadow: 0 14px 28px rgba(16,17,20,0.14);
+        }
+
+        .workspace-tabs .new-artboard-trigger:hover {
+            background: #000000;
+            color: #ffffff;
+        }
+
         .canvas-toolbar {
             position: absolute;
             inset: 0;
@@ -1311,38 +1348,31 @@
 </div>
 
 <div class="workspace-tabs">
-    <strong>同项目画布</strong>
+    <button type="button" class="workspace-overview-tab active" data-overview="1" onclick="toggleOverviewMode()">同项目画布</button>
     <button type="button" class="artboard-tab active" data-artboard="head" onclick="switchArtboard('head')">头图 750×500</button>
     <button type="button" class="artboard-tab" data-artboard="splash" onclick="switchArtboard('splash')">开屏 750×1626</button>
     <button type="button" class="artboard-tab" data-artboard="banner" onclick="switchArtboard('banner')">Banner 1396×424</button>
-    <span class="add-custom-artboard-tab" hidden></span>
+    <div class="new-artboard-menu-wrap add-custom-artboard-tab">
+        <button type="button" class="new-artboard-trigger" onclick="toggleNewArtboardMenu(event)">新建画板 +</button>
+        <div class="new-artboard-menu" id="new-artboard-menu">
+            <button type="button" onclick="openCustomArtboardDialog(); closeNewArtboardMenu();">自定义</button>
+            <button type="button" onclick="createPresetArtboard('head'); closeNewArtboardMenu();">头图 750*500</button>
+            <button type="button" onclick="createPresetArtboard('splash'); closeNewArtboardMenu();">开屏 1000*2168</button>
+            <button type="button" onclick="createPresetArtboard('banner'); closeNewArtboardMenu();">Banner 1396*424</button>
+            <button type="button" onclick="createPresetArtboard('16:9'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:12px;--icon-h:7px;"></span>16:9</button>
+            <button type="button" onclick="createPresetArtboard('3:2'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:12px;--icon-h:8px;"></span>3:2</button>
+            <button type="button" onclick="createPresetArtboard('4:3'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:11px;--icon-h:8px;"></span>4:3</button>
+            <button type="button" onclick="createPresetArtboard('1:1'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:9px;--icon-h:9px;"></span>1:1</button>
+            <button type="button" onclick="createPresetArtboard('3:4'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:8px;--icon-h:11px;"></span>3:4</button>
+            <button type="button" onclick="createPresetArtboard('2:3'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:7px;--icon-h:12px;"></span>2:3</button>
+            <button type="button" onclick="createPresetArtboard('9:16'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:7px;--icon-h:13px;"></span>9:16</button>
+        </div>
+    </div>
 </div>
 
 <div class="editor-layout">
     <div class="left-pane" id="left-pane">
         <div class="canvas-toolbar">
-            <div class="ratio-nav" id="ratio-nav">
-                <button data-overview="1" onclick="toggleOverviewMode()">总览</button>
-                <button class="active" data-artboard="head" onclick="switchArtboard('head')">头图</button>
-                <button data-artboard="splash" onclick="switchArtboard('splash')">开屏</button>
-                <button data-artboard="banner" onclick="switchArtboard('banner')">Banner</button>
-                <div class="new-artboard-menu-wrap add-custom-ratio-tab">
-                    <button type="button" class="new-artboard-trigger" onclick="toggleNewArtboardMenu(event)">新建画板 +</button>
-                    <div class="new-artboard-menu" id="new-artboard-menu">
-                        <button type="button" onclick="openCustomArtboardDialog(); closeNewArtboardMenu();">自定义</button>
-                        <button type="button" onclick="createPresetArtboard('head'); closeNewArtboardMenu();">头图 750*500</button>
-                        <button type="button" onclick="createPresetArtboard('splash'); closeNewArtboardMenu();">开屏 1000*2168</button>
-                        <button type="button" onclick="createPresetArtboard('banner'); closeNewArtboardMenu();">Banner 1396*424</button>
-                        <button type="button" onclick="createPresetArtboard('16:9'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:12px;--icon-h:7px;"></span>16:9</button>
-                        <button type="button" onclick="createPresetArtboard('3:2'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:12px;--icon-h:8px;"></span>3:2</button>
-                        <button type="button" onclick="createPresetArtboard('4:3'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:11px;--icon-h:8px;"></span>4:3</button>
-                        <button type="button" onclick="createPresetArtboard('1:1'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:9px;--icon-h:9px;"></span>1:1</button>
-                        <button type="button" onclick="createPresetArtboard('3:4'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:8px;--icon-h:11px;"></span>3:4</button>
-                        <button type="button" onclick="createPresetArtboard('2:3'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:7px;--icon-h:12px;"></span>2:3</button>
-                        <button type="button" onclick="createPresetArtboard('9:16'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:7px;--icon-h:13px;"></span>9:16</button>
-                    </div>
-                </div>
-            </div>
             <div class="canvas-actions">
                 <button type="button" class="primary" onclick="extendFromHead()">一键延展</button>
                 <button type="button" class="primary" onclick="exportPNG()">导出</button>
@@ -1842,8 +1872,11 @@
     }
     function syncArtboardTabs() {
         renderCustomArtboardControls();
+        document.querySelectorAll('.workspace-overview-tab').forEach(btn => {
+            btn.classList.toggle('active', overviewMode);
+        });
         document.querySelectorAll('.artboard-tab').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.artboard === currentArtboardId);
+            btn.classList.toggle('active', !overviewMode && btn.dataset.artboard === currentArtboardId);
         });
     }
     function renderCustomArtboardControls() {
