@@ -1,5 +1,7 @@
 const DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-1.5';
 const DEFAULT_OPENAI_TEXT_MODEL = 'gpt-5.4-mini';
+const DEFAULT_LK888_BASE_URL = 'https://api.lk888.ai';
+const DEFAULT_LK888_TEXT_MODEL = 'gpt-5.5';
 const OPENAI_IMAGE_SIZE_BY_RATIO = {
   '1:1': '1024x1024',
   '3:4': '1024x1536',
@@ -23,6 +25,10 @@ export function hasOpenAI(env) {
   return !!env?.OPENAI_API_KEY;
 }
 
+export function hasLK888(env) {
+  return !!env?.LK888_API_KEY;
+}
+
 export function hasVolcImage(env) {
   return !!env?.VOLC_API_KEY && !!env?.ENDPOINT_ID;
 }
@@ -32,7 +38,7 @@ export function hasVolcOutpaint(env) {
 }
 
 export function aiReady(env) {
-  return hasOpenAI(env) || hasVolcImage(env) || hasVolcOutpaint(env);
+  return hasOpenAI(env) || hasLK888(env) || hasVolcImage(env) || hasVolcOutpaint(env);
 }
 
 export function requireAI(env, capability = 'image generation') {
@@ -58,6 +64,14 @@ function getOpenAIImageModel(env) {
 
 function getOpenAITextModel(env) {
   return env?.OPENAI_TEXT_MODEL || DEFAULT_OPENAI_TEXT_MODEL;
+}
+
+function getLK888BaseUrl(env) {
+  return String(env?.LK888_BASE_URL || DEFAULT_LK888_BASE_URL).replace(/\/+$/, '');
+}
+
+function getLK888TextModel(env) {
+  return env?.LK888_TEXT_MODEL || DEFAULT_LK888_TEXT_MODEL;
 }
 
 export function finalImagePrompt(prompt) {
@@ -104,6 +118,12 @@ export function parseResponseText(data) {
   const text = parts.join('\n').trim();
   if (!text) throw new Error('OpenAI 没有返回提示词内容。');
   return text;
+}
+
+export function parseChatCompletionText(data) {
+  const text = data?.choices?.[0]?.message?.content;
+  if (typeof text === 'string' && text.trim()) return text.trim();
+  throw new Error('GPT-5.5 没有返回提示词内容。');
 }
 
 export async function fetchImageUrlAsBase64(url) {
@@ -282,8 +302,11 @@ export async function generateWithOpenAIReference(env, prompt, ratio, referenceI
 }
 
 export async function enhancePromptWithOpenAI(env, prompt, ratio) {
+  if (hasLK888(env)) {
+    return enhancePromptWithLK888(env, prompt, ratio);
+  }
   if (!hasOpenAI(env)) {
-    throw new Error('提示词增强未配置：请在 Cloudflare Pages 环境变量中设置 OPENAI_API_KEY。');
+    throw new Error('提示词增强未配置：请在 Cloudflare Pages 环境变量中设置 LK888_API_KEY 或 OPENAI_API_KEY。');
   }
   const cleanPrompt = normalizePrompt(prompt);
   if (!cleanPrompt) throw new Error('请输入需要优化的画面描述词。');
@@ -328,6 +351,46 @@ export async function enhancePromptWithOpenAI(env, prompt, ratio) {
     Authorization: `Bearer ${env.OPENAI_API_KEY}`
   });
   return parseResponseText(data).replace(/^["“]|["”]$/g, '').trim();
+}
+
+export async function enhancePromptWithLK888(env, prompt, ratio) {
+  if (!hasLK888(env)) {
+    throw new Error('GPT-5.5 未配置：请在 Cloudflare Pages 环境变量中设置 LK888_API_KEY。');
+  }
+  const cleanPrompt = normalizePrompt(prompt);
+  if (!cleanPrompt) throw new Error('请输入需要优化的画面描述词。');
+  const ratioHint = ratio === '16:9'
+    ? '宽幅 banner，主体和信息区要有明确左右分区，留出干净背景空间'
+    : ratio === '9:16'
+      ? '竖版开屏，主体避免贴边，上方可留品牌/促销信息空间'
+      : ratio === '4:3'
+        ? '横版头图，主体突出，适合叠加促销标签'
+        : '方形商业海报，主体居中但保留排版空间';
+  const data = await postJson(`${getLK888BaseUrl(env)}/v1/chat/completions`, {
+    model: getLK888TextModel(env),
+    messages: [
+      {
+        role: 'system',
+        content: [
+          '你是资深商业美食海报创意指导和AI生图提示词专家。',
+          '把用户的简短中文描述改写成适合图像生成模型的高质量提示词。',
+          '只输出一段提示词，不要解释，不要编号，不要 Markdown。',
+          '提示词可以中英混合，但必须保留用户明确指定的主体、国家、品类、活动和颜色。',
+          '避免生成文字、水印、Logo、奇怪手指、畸形食物；除非用户明确要求，不要让画面里出现可读文字。',
+          '强调商业广告摄影、真实食物质感、可叠加标签的留白、灯光、镜头、构图和背景。'
+        ].join('\n')
+      },
+      {
+        role: 'user',
+        content: `原始描述：${cleanPrompt}\n画板比例：${ratio || '1:1'}\n构图要求：${ratioHint}\n请输出可直接用于AI生图的一段增强提示词。`
+      }
+    ],
+    temperature: 0.6,
+    max_tokens: 520
+  }, {
+    Authorization: `Bearer ${env.LK888_API_KEY}`
+  });
+  return parseChatCompletionText(data).replace(/^["“]|["”]$/g, '').trim();
 }
 
 export async function generateWithVolc(env, prompt, ratio) {
