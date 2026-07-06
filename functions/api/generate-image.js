@@ -1,5 +1,5 @@
 import { getBearerToken, getUserFromToken, json, requireCloudflareEnv } from '../_shared.js';
-import { generateWithOpenAI, generateWithOpenAIReference, generateWithVolc, generateWithVolcReference, hasOpenAI, hasVolcImage, requireAI } from '../_ai.js';
+import { generateWithOpenAI, generateWithOpenAIReference, generateWithVolc, generateWithVolcReference, hasLK888, hasOpenAI, hasVolcImage, requireAI } from '../_ai.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -13,14 +13,15 @@ export async function onRequest({ request, env }) {
 
     const body = await request.json().catch(() => ({}));
     const requestedProvider = body.provider === 'volc' ? 'volc' : body.provider === 'openai' ? 'openai' : '';
-    const provider = requestedProvider || (hasOpenAI(env) ? 'openai' : 'volc');
+    const hasGPTImage = hasLK888(env) || hasOpenAI(env);
+    const provider = requestedProvider || (hasGPTImage ? 'openai' : 'volc');
     const referenceImages = Array.isArray(body.referenceImages)
       ? body.referenceImages.slice(0, 8).filter(item => item?.image)
       : body.referenceImage
         ? [{ image: body.referenceImage, mimeType: body.referenceMimeType }]
         : [];
-    if (provider === 'openai' && !hasOpenAI(env)) {
-      throw new Error('GPT 生图未配置：请在 Cloudflare Pages 环境变量中设置 OPENAI_API_KEY。');
+    if (provider === 'openai' && !hasGPTImage) {
+      throw new Error('GPT 生图未配置：请在 Cloudflare Pages 环境变量中设置 LK888_API_KEY 或 OPENAI_API_KEY。');
     }
     if (provider === 'volc' && !hasVolcImage(env)) {
       throw new Error('火山生图未配置：请设置 VOLC_API_KEY + ENDPOINT_ID。');

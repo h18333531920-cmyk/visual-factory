@@ -1,6 +1,7 @@
 const DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-1.5';
 const DEFAULT_OPENAI_TEXT_MODEL = 'gpt-5.4-mini';
 const DEFAULT_LK888_BASE_URL = 'https://api.lk888.ai';
+const DEFAULT_LK888_IMAGE_MODEL = 'gpt-image-2';
 const DEFAULT_LK888_TEXT_MODEL = 'gpt-5.5';
 const OPENAI_IMAGE_SIZE_BY_RATIO = {
   '1:1': '1024x1024',
@@ -74,6 +75,10 @@ function getLK888TextModel(env) {
   return env?.LK888_TEXT_MODEL || DEFAULT_LK888_TEXT_MODEL;
 }
 
+function getLK888ImageModel(env) {
+  return env?.LK888_IMAGE_MODEL || DEFAULT_LK888_IMAGE_MODEL;
+}
+
 export function finalImagePrompt(prompt) {
   const cleanPrompt = normalizePrompt(prompt);
   if (!cleanPrompt) throw new Error('请输入画面描述词。');
@@ -105,6 +110,15 @@ export function parseImageBase64(data) {
   const base64 = item?.b64_json || item?.image_base64 || item?.base64 || item?.data;
   if (!base64) throw new Error('AI 接口没有返回图片数据。');
   return String(base64).replace(/^data:[^;]+;base64,/, '');
+}
+
+export async function parseImageResultAsBase64(data) {
+  const item = data?.data?.[0] || data?.output?.[0] || data;
+  const base64 = item?.b64_json || item?.image_base64 || item?.base64 || item?.data;
+  if (base64) return String(base64).replace(/^data:[^;]+;base64,/, '');
+  const url = item?.url || item?.image_url || data?.url || data?.image_url;
+  if (url) return fetchImageUrlAsBase64(url);
+  throw new Error('AI 接口没有返回图片数据。');
 }
 
 export function parseResponseText(data) {
@@ -240,8 +254,11 @@ async function volcVisualHeaders(env, body) {
 }
 
 export async function generateWithOpenAI(env, prompt, ratio) {
+  if (hasLK888(env)) {
+    return generateWithLK888Image(env, prompt, ratio);
+  }
   if (!hasOpenAI(env)) {
-    throw new Error('GPT 生图未配置：请在 Cloudflare Pages 环境变量中设置 OPENAI_API_KEY。');
+    throw new Error('GPT 生图未配置：请在 Cloudflare Pages 环境变量中设置 LK888_API_KEY 或 OPENAI_API_KEY。');
   }
   const data = await postJson('https://api.openai.com/v1/images/generations', {
     model: getOpenAIImageModel(env),
@@ -255,9 +272,27 @@ export async function generateWithOpenAI(env, prompt, ratio) {
   return parseImageBase64(data);
 }
 
+export async function generateWithLK888Image(env, prompt, ratio) {
+  if (!hasLK888(env)) {
+    throw new Error('抹尘 GPT Image 2 未配置：请在 Cloudflare Pages 环境变量中设置 LK888_API_KEY。');
+  }
+  const data = await postJson(`${getLK888BaseUrl(env)}/v1/images/generations`, {
+    model: getLK888ImageModel(env),
+    prompt: finalImagePrompt(prompt),
+    size: getOpenAIImageSize(ratio),
+    n: 1
+  }, {
+    Authorization: `Bearer ${env.LK888_API_KEY}`
+  });
+  return parseImageResultAsBase64(data);
+}
+
 export async function generateWithOpenAIReference(env, prompt, ratio, referenceImages = []) {
+  if (hasLK888(env)) {
+    return generateWithLK888ImageReference(env, prompt, ratio, referenceImages);
+  }
   if (!hasOpenAI(env)) {
-    throw new Error('GPT 参考图生图未配置：请在 Cloudflare Pages 环境变量中设置 OPENAI_API_KEY。');
+    throw new Error('GPT 参考图生图未配置：请在 Cloudflare Pages 环境变量中设置 LK888_API_KEY 或 OPENAI_API_KEY。');
   }
   const images = Array.isArray(referenceImages)
     ? referenceImages.slice(0, 8).filter(item => item?.image)
@@ -299,6 +334,50 @@ export async function generateWithOpenAIReference(env, prompt, ratio, referenceI
     throw new Error(message);
   }
   return parseImageBase64(data);
+}
+
+export async function generateWithLK888ImageReference(env, prompt, ratio, referenceImages = []) {
+  if (!hasLK888(env)) {
+    throw new Error('抹尘 GPT Image 2 参考图生图未配置：请在 Cloudflare Pages 环境变量中设置 LK888_API_KEY。');
+  }
+  const images = Array.isArray(referenceImages)
+    ? referenceImages.slice(0, 8).filter(item => item?.image)
+    : referenceImages
+      ? [{ image: referenceImages, mimeType: 'image/png' }]
+      : [];
+  if (images.length === 0) throw new Error('请先添加参考图。');
+  const form = new FormData();
+  form.append('model', getLK888ImageModel(env));
+  form.append('prompt', [
+    finalImagePrompt(prompt),
+    'use the uploaded reference images for subject, composition, product style, color palette, or visual direction while creating a polished commercial poster image'
+  ].join(', '));
+  form.append('size', getOpenAIImageSize(ratio));
+  images.forEach((item, index) => {
+    const safeMimeType = String(item.mimeType || '').startsWith('image/') ? item.mimeType : 'image/png';
+    const ext = safeMimeType.includes('jpeg') || safeMimeType.includes('jpg') ? 'jpg' : safeMimeType.includes('webp') ? 'webp' : 'png';
+    form.append('image[]', base64ToBlob(item.image, safeMimeType), `reference-${index + 1}.${ext}`);
+  });
+
+  const response = await fetch(`${getLK888BaseUrl(env)}/v1/images/edits`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.LK888_API_KEY}`
+    },
+    body: form
+  });
+  const text = await response.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
+  }
+  if (!response.ok) {
+    const message = data?.error?.message || data?.message || data?.raw || `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+  return parseImageResultAsBase64(data);
 }
 
 export async function enhancePromptWithOpenAI(env, prompt, ratio) {
