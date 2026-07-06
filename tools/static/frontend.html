@@ -1348,12 +1348,8 @@
 </div>
 
 <div class="workspace-tabs">
-    <button type="button" class="workspace-overview-tab active" data-overview="1" onclick="toggleOverviewMode()">同项目画布</button>
-    <button type="button" class="artboard-tab active" data-artboard="head" onclick="switchArtboard('head')">头图 750×500</button>
-    <button type="button" class="artboard-tab" data-artboard="splash" onclick="switchArtboard('splash')">开屏 750×1626</button>
-    <button type="button" class="artboard-tab" data-artboard="banner" onclick="switchArtboard('banner')">Banner 1396×424</button>
     <div class="new-artboard-menu-wrap add-custom-artboard-tab">
-        <button type="button" class="new-artboard-trigger" onclick="toggleNewArtboardMenu(event)">新建画板 +</button>
+        <button type="button" class="new-artboard-trigger" onclick="toggleNewArtboardMenu(event)">新建画板</button>
         <div class="new-artboard-menu" id="new-artboard-menu">
             <button type="button" onclick="openCustomArtboardDialog(); closeNewArtboardMenu();">自定义</button>
             <button type="button" onclick="createPresetArtboard('head'); closeNewArtboardMenu();">头图 750*500</button>
@@ -1881,17 +1877,8 @@
     }
     function renderCustomArtboardControls() {
         document.querySelectorAll('.custom-artboard-tab, .custom-ratio-tab').forEach(el => el.remove());
-        const topAnchor = document.querySelector('.add-custom-artboard-tab');
         const ratioAnchor = document.querySelector('.add-custom-ratio-tab');
         getCustomArtboardPresets().forEach(preset => {
-            const topBtn = document.createElement('button');
-            topBtn.type = 'button';
-            topBtn.className = 'artboard-tab custom-artboard-tab';
-            topBtn.dataset.artboard = preset.id;
-            topBtn.textContent = getArtboardTopLabel(preset);
-            topBtn.onclick = () => switchArtboard(preset.id);
-            topAnchor?.parentNode?.insertBefore(topBtn, topAnchor);
-
             const ratioBtn = document.createElement('button');
             ratioBtn.type = 'button';
             ratioBtn.className = 'custom-ratio-tab';
