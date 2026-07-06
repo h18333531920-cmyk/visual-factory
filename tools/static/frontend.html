@@ -1882,7 +1882,10 @@
         document.querySelectorAll('.custom-artboard-tab, .custom-ratio-tab').forEach(el => el.remove());
         const topAnchor = document.querySelector('.add-custom-artboard-tab');
         const ratioAnchor = document.querySelector('.add-custom-ratio-tab');
-        getCustomArtboardPresets().forEach(preset => {
+        const fixedPackTabs = activeTemplatePackId
+            ? getFixedArtboardPresets().filter(preset => (artboards[preset.id]?.layers || []).length > 0)
+            : [];
+        [...fixedPackTabs, ...getCustomArtboardPresets()].forEach(preset => {
             const topBtn = document.createElement('button');
             topBtn.type = 'button';
             topBtn.className = 'artboard-tab custom-artboard-tab';
@@ -3471,6 +3474,7 @@
         const nextArtboards = normalizeArtboardSnapshot(pack.artboards || {});
         artboards = nextArtboards;
         activeTemplatePackId = pack.id;
+        currentArtboardId = getFixedArtboardPresets().find(preset => (artboards[preset.id]?.layers || []).length > 0)?.id || 'head';
         loadArtboard(currentArtboardId, false);
         activeLayerIds = [];
         saveHistory();
