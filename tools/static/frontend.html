@@ -1048,8 +1048,9 @@
         }
 
         .workspace-tabs {
-            overflow-x: auto;
-            overflow-y: hidden;
+            position: relative;
+            z-index: 80;
+            overflow: visible;
             white-space: nowrap;
             scrollbar-width: thin;
             padding-bottom: 8px;
@@ -1077,7 +1078,9 @@
         }
 
         .workspace-tabs .new-artboard-menu-wrap {
+            position: relative;
             flex: 0 0 auto;
+            z-index: 90;
         }
 
         .workspace-tabs .new-artboard-trigger {
