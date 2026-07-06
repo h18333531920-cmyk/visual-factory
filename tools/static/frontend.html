@@ -23,6 +23,15 @@
         .ratio-nav button { background: #FFFFFF; border: 1px solid #111827; padding: 5px 16px; border-radius: 999px; cursor: pointer; color: #111827; font-weight: 760; font-size: 12px; transition: 0.2s; }
         .ratio-nav button:hover { color: var(--text-main); }
         .ratio-nav button.active { background: #717171; border-color: #717171; color: #FFFFFF; }
+        .new-artboard-menu-wrap { position: relative; display: flex; flex-direction: column; align-items: center; }
+        .new-artboard-trigger { min-width: 112px; }
+        .new-artboard-menu { position: absolute; left: 0; top: calc(100% + 8px); z-index: 40; display: none; width: 178px; padding: 10px; border-radius: 18px; background: rgba(255,255,255,0.94); box-shadow: 0 22px 60px rgba(16,17,20,0.16); border: 1px solid rgba(16,17,20,0.08); backdrop-filter: blur(14px); }
+        .new-artboard-menu.open { display: grid; gap: 8px; }
+        .new-artboard-menu button { width: 100%; height: 34px; border: 0; border-radius: 999px; background: #cfcfcf; color: #ffffff; font-size: 13px; font-weight: 850; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: none; }
+        .new-artboard-menu button:hover { background: #b9b9b9; color: #ffffff; }
+        .new-artboard-menu button:first-child { background: #111827; }
+        .new-board-icon { width: 18px; height: 18px; border: 2px solid currentColor; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+        .new-board-icon::after { content: ''; display: block; width: var(--icon-w, 10px); height: var(--icon-h, 7px); border: 2px solid currentColor; border-radius: 3px; }
         .canvas-actions { position: absolute; right: 28px; top: 26px; z-index: 12; display: flex; gap: 8px; }
         .canvas-actions button { min-width: 70px; height: 28px; border: 1px solid #111827; border-radius: 999px; background: #FFFFFF; color: #111827; font-size: 12px; font-weight: 800; }
         .canvas-actions button:last-child,
@@ -1123,6 +1132,30 @@
             padding: 0;
         }
 
+        .left-pane .ratio-nav .new-artboard-trigger {
+            width: 112px;
+            min-width: 112px;
+            padding: 0 14px;
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #ffffff;
+        }
+
+        .left-pane .ratio-nav .new-artboard-menu button {
+            width: 100%;
+            min-width: 0;
+            padding: 0 12px;
+            border: 0;
+            background: #cfcfcf;
+            color: #ffffff;
+            box-shadow: none;
+            backdrop-filter: none;
+        }
+
+        .left-pane .ratio-nav .new-artboard-menu button:first-child {
+            background: #111827;
+        }
+
         .left-pane .canvas-actions button {
             min-width: 72px;
             background: var(--primary);
@@ -1282,7 +1315,7 @@
     <button type="button" class="artboard-tab active" data-artboard="head" onclick="switchArtboard('head')">头图 750×500</button>
     <button type="button" class="artboard-tab" data-artboard="splash" onclick="switchArtboard('splash')">开屏 750×1626</button>
     <button type="button" class="artboard-tab" data-artboard="banner" onclick="switchArtboard('banner')">Banner 1396×424</button>
-    <button type="button" class="add-custom-artboard-tab" onclick="openCustomArtboardDialog()">+ 空画板</button>
+    <span class="add-custom-artboard-tab" hidden></span>
 </div>
 
 <div class="editor-layout">
@@ -1293,7 +1326,22 @@
                 <button class="active" data-artboard="head" onclick="switchArtboard('head')">头图</button>
                 <button data-artboard="splash" onclick="switchArtboard('splash')">开屏</button>
                 <button data-artboard="banner" onclick="switchArtboard('banner')">Banner</button>
-                <button type="button" class="add-custom-ratio-tab" onclick="openCustomArtboardDialog()">+ 自定义</button>
+                <div class="new-artboard-menu-wrap add-custom-ratio-tab">
+                    <button type="button" class="new-artboard-trigger" onclick="toggleNewArtboardMenu(event)">新建画板 +</button>
+                    <div class="new-artboard-menu" id="new-artboard-menu">
+                        <button type="button" onclick="openCustomArtboardDialog(); closeNewArtboardMenu();">自定义</button>
+                        <button type="button" onclick="createPresetArtboard('head'); closeNewArtboardMenu();">头图 750*500</button>
+                        <button type="button" onclick="createPresetArtboard('splash'); closeNewArtboardMenu();">开屏 1000*2168</button>
+                        <button type="button" onclick="createPresetArtboard('banner'); closeNewArtboardMenu();">Banner 1396*424</button>
+                        <button type="button" onclick="createPresetArtboard('16:9'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:12px;--icon-h:7px;"></span>16:9</button>
+                        <button type="button" onclick="createPresetArtboard('3:2'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:12px;--icon-h:8px;"></span>3:2</button>
+                        <button type="button" onclick="createPresetArtboard('4:3'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:11px;--icon-h:8px;"></span>4:3</button>
+                        <button type="button" onclick="createPresetArtboard('1:1'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:9px;--icon-h:9px;"></span>1:1</button>
+                        <button type="button" onclick="createPresetArtboard('3:4'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:8px;--icon-h:11px;"></span>3:4</button>
+                        <button type="button" onclick="createPresetArtboard('2:3'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:7px;--icon-h:12px;"></span>2:3</button>
+                        <button type="button" onclick="createPresetArtboard('9:16'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:7px;--icon-h:13px;"></span>9:16</button>
+                    </div>
+                </div>
             </div>
             <div class="canvas-actions">
                 <button type="button" class="primary" onclick="extendFromHead()">一键延展</button>
@@ -1427,6 +1475,19 @@
         { id: 'banner', ratio: 'banner', label: 'Banner', w: 1396, h: 424, apiRatio: '16:9' }
     ];
     const FIXED_ARTBOARD_IDS = ['head', 'splash', 'banner'];
+    const MAX_CUSTOM_ARTBOARDS = 5;
+    const NEW_ARTBOARD_PRESETS = {
+        head: { label: '头图', w: 750, h: 500 },
+        splash: { label: '开屏', w: 1000, h: 2168 },
+        banner: { label: 'Banner', w: 1396, h: 424 },
+        '16:9': { label: '16:9', w: 1600, h: 900 },
+        '3:2': { label: '3:2', w: 1500, h: 1000 },
+        '4:3': { label: '4:3', w: 1200, h: 900 },
+        '1:1': { label: '1:1', w: 1080, h: 1080 },
+        '3:4': { label: '3:4', w: 900, h: 1200 },
+        '2:3': { label: '2:3', w: 1000, h: 1500 },
+        '9:16': { label: '9:16', w: 1080, h: 1920 }
+    };
     const SIZES = {
         head: { w: 750, h: 500 },
         splash: { w: 750, h: 1626 },
@@ -1603,12 +1664,47 @@
         const size = SIZES[preset.ratio] || preset;
         return `${preset.label} ${size.w}×${size.h}`;
     }
+    function canCreateCustomArtboard() {
+        if(getCustomArtboardPresets().length < MAX_CUSTOM_ARTBOARDS) return true;
+        showToast(`最多只能新建 ${MAX_CUSTOM_ARTBOARDS} 个画板`, true);
+        return false;
+    }
+    function nextArtboardLabel(baseLabel) {
+        const existingLabels = new Set(getCustomArtboardPresets().map(p => p.label));
+        if(!existingLabels.has(baseLabel)) return baseLabel;
+        for(let i = 2; i <= MAX_CUSTOM_ARTBOARDS + 6; i++) {
+            const candidate = `${baseLabel}${i}`;
+            if(!existingLabels.has(candidate)) return candidate;
+        }
+        return `${baseLabel}${Date.now().toString().slice(-3)}`;
+    }
+    function toggleNewArtboardMenu(event) {
+        event?.stopPropagation?.();
+        const menu = document.getElementById('new-artboard-menu');
+        if(!menu) return;
+        menu.classList.toggle('open');
+    }
+    function closeNewArtboardMenu() {
+        document.getElementById('new-artboard-menu')?.classList.remove('open');
+    }
+    function createPresetArtboard(type) {
+        if(!canCreateCustomArtboard()) return;
+        const preset = NEW_ARTBOARD_PRESETS[type] || NEW_ARTBOARD_PRESETS['1:1'];
+        createCustomArtboardPreset({
+            label: nextArtboardLabel(preset.label),
+            w: preset.w,
+            h: preset.h
+        }, true);
+        saveHistory();
+        showToast(`已新建 ${preset.label} 画板`);
+    }
     function createCustomArtboardPreset({ id = genId('custom_board'), label = '自定义', w = 1080, h = 1080 } = {}, switchTo = true) {
+        const existing = ARTBOARD_PRESETS.find(p => p.id === id);
+        if(!existing && !canCreateCustomArtboard()) return '';
         const safeW = Math.max(64, Math.min(6000, Math.round(Number(w) || 1080)));
         const safeH = Math.max(64, Math.min(6000, Math.round(Number(h) || 1080)));
         const safeLabel = String(label || '自定义').trim().slice(0, 16) || '自定义';
         const ratio = id;
-        const existing = ARTBOARD_PRESETS.find(p => p.id === id);
         if(existing) {
             existing.label = safeLabel;
             existing.ratio = ratio;
@@ -2680,14 +2776,17 @@
                 saveHistory();
                 showToast('已更新画板尺寸');
             } else {
-                createCustomArtboardPreset({ label: name, w: width, h: height }, true);
-                saveHistory();
-                showToast('已创建空画板');
+                const createdId = createCustomArtboardPreset({ label: name, w: width, h: height }, true);
+                if(createdId) {
+                    saveHistory();
+                    showToast('已创建空画板');
+                }
             }
         };
         return overlay;
     }
     function openCustomArtboardDialog(editId = '') {
+        if(!editId && !canCreateCustomArtboard()) return;
         const overlay = ensureCustomArtboardDialog();
         const preset = editId && isCustomArtboardId(editId) ? getArtboardPreset(editId) : null;
         const size = preset ? SIZES[preset.ratio] : null;
@@ -3089,6 +3188,7 @@
         document.getElementById('toolbar-more-menu')?.classList.remove('open');
     }
     document.addEventListener('click', e => { if(!e.target.closest('.toolbar-more-wrap')) closeToolbarMore(); });
+    document.addEventListener('click', e => { if(!e.target.closest('.new-artboard-menu-wrap')) closeNewArtboardMenu(); });
     async function saveActiveAsset() {
         if(currentAssetTab === 'layout') return await saveToPreset();
         if(currentAssetTab === 'tag') return await saveTagComboPreset();
