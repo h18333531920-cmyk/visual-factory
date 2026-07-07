@@ -408,11 +408,79 @@ function getLK888TaskId(data) {
   if (typeof data?.data === 'string' && data.data.trim()) return data.data.trim();
   if (typeof data?.result === 'string' && data.result.trim()) return data.result.trim();
   if (typeof data?.task === 'string' && data.task.trim()) return data.task.trim();
-  return data?.task_id || data?.taskId || data?.id || data?.data?.task_id || data?.data?.taskId || data?.data?.id || data?.result?.task_id || data?.result?.taskId || data?.result?.id;
+  return findLK888TaskId(data);
+}
+
+function findLK888TaskId(value, seen = new Set()) {
+  if (!value || typeof value !== 'object') return '';
+  if (seen.has(value)) return '';
+  seen.add(value);
+
+  const taskKeys = new Set([
+    'task_id',
+    'taskId',
+    'taskID',
+    'task',
+    'job_id',
+    'jobId',
+    'request_id',
+    'requestId',
+    'id'
+  ]);
+  for (const key of taskKeys) {
+    const direct = value[key];
+    if ((typeof direct === 'string' || typeof direct === 'number') && String(direct).trim()) {
+      return String(direct).trim();
+    }
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    if (typeof child === 'string' && /(?:task|job|request).*id/i.test(key) && child.trim()) {
+      return child.trim();
+    }
+    if (typeof child === 'number' && /(?:task|job|request).*id/i.test(key)) {
+      return String(child);
+    }
+    const found = findLK888TaskId(child, seen);
+    if (found) return found;
+  }
+  return '';
 }
 
 function getLK888TaskStatus(data) {
   return String(data?.status || data?.data?.status || data?.result?.status || '').toLowerCase();
+}
+
+function getLK888Message(data) {
+  return data?.error?.message || data?.message || data?.msg || data?.raw || data?.data?.message || data?.data?.msg || data?.result?.message || data?.result?.msg || '';
+}
+
+function getLK888ResponseShape(value, depth = 0, seen = new Set()) {
+  if (!value || typeof value !== 'object' || depth > 2 || seen.has(value)) return '';
+  seen.add(value);
+  const keys = Object.keys(value).slice(0, 12);
+  return keys.map(key => {
+    const child = value[key];
+    if (child && typeof child === 'object') {
+      const nested = getLK888ResponseShape(child, depth + 1, seen);
+      return nested ? `${key}.{${nested}}` : key;
+    }
+    return key;
+  }).join(', ');
+}
+
+function assertLK888Accepted(data) {
+  const code = data?.code ?? data?.status_code ?? data?.statusCode;
+  if (code !== undefined && code !== null && !['0', '200', 'success', 'ok'].includes(String(code).toLowerCase())) {
+    throw new Error(getLK888Message(data) || `抹尘 AI 提交失败：${code}`);
+  }
+  if (data?.success === false || data?.ok === false) {
+    throw new Error(getLK888Message(data) || '抹尘 AI 提交失败。');
+  }
+  const status = getLK888TaskStatus(data);
+  if (['failed', 'fail', 'error', 'cancelled', 'canceled'].includes(status)) {
+    throw new Error(getLK888Message(data) || `抹尘 AI 提交失败：${status}`);
+  }
 }
 
 function sleep(ms) {
@@ -420,11 +488,16 @@ function sleep(ms) {
 }
 
 export async function pollLK888MediaTask(env, submitData) {
+  assertLK888Accepted(submitData);
+
   const immediate = findImageValue(submitData);
   if (immediate) return parseImageResultAsBase64(submitData);
 
   const taskId = getLK888TaskId(submitData);
-  if (!taskId) throw new Error('抹尘 AI 没有返回 task_id，无法查询生成结果。');
+  if (!taskId) {
+    const shape = getLK888ResponseShape(submitData);
+    throw new Error(`抹尘 AI 没有返回 task_id，无法查询生成结果${shape ? `（返回字段：${shape}）` : ''}。`);
+  }
 
   const successStatuses = new Set(['success', 'succeeded', 'completed', 'complete', 'done', 'finished']);
   const failedStatuses = new Set(['failed', 'fail', 'error', 'cancelled', 'canceled']);
@@ -434,9 +507,10 @@ export async function pollLK888MediaTask(env, submitData) {
   for (let i = 0; i < 90; i += 1) {
     await sleep(i < 3 ? 1200 : 2000);
     const data = await fetchLK888TaskStatus(env, taskId);
+    assertLK888Accepted(data);
     const status = getLK888TaskStatus(data);
     lastStatus = status || lastStatus;
-    lastMessage = data?.error?.message || data?.message || data?.data?.message || data?.result?.message || lastMessage;
+    lastMessage = getLK888Message(data) || lastMessage;
     if (successStatuses.has(status) || findImageValue(data)) return parseImageResultAsBase64(data);
     if (failedStatuses.has(status)) throw new Error(lastMessage || `抹尘 AI 生成失败：${status}`);
   }
