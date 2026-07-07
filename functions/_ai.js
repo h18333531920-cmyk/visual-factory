@@ -3,6 +3,8 @@ const DEFAULT_OPENAI_TEXT_MODEL = 'gpt-5.4-mini';
 const DEFAULT_LK888_BASE_URL = 'https://api.lk888.ai';
 const DEFAULT_LK888_IMAGE_MODEL = 'gpt-image-2';
 const DEFAULT_LK888_TEXT_MODEL = 'gpt-5.5';
+const DEFAULT_SUPABASE_URL = 'https://juuqvjmhzdgfggzrivbb.supabase.co';
+const LK888_REFERENCE_BUCKET = 'vf-projects';
 const OPENAI_IMAGE_SIZE_BY_RATIO = {
   '1:1': '1024x1024',
   '3:4': '1024x1536',
@@ -201,6 +203,102 @@ export function base64ToBlob(base64, mimeType = 'image/png') {
   return new Blob([bytes], { type: mimeType });
 }
 
+function getSupabaseStorageConfig(env) {
+  return {
+    url: String(env?.SUPABASE_URL || DEFAULT_SUPABASE_URL).replace(/\/+$/, ''),
+    serviceRoleKey: env?.SUPABASE_SERVICE_ROLE_KEY || ''
+  };
+}
+
+function encodeStoragePath(path) {
+  return String(path || '')
+    .split('/')
+    .map(part => encodeURIComponent(part))
+    .join('/');
+}
+
+function getImageExtension(mimeType = 'image/png') {
+  const lower = String(mimeType || '').toLowerCase();
+  if (lower.includes('jpeg') || lower.includes('jpg')) return 'jpg';
+  if (lower.includes('webp')) return 'webp';
+  return 'png';
+}
+
+async function uploadLK888ReferenceImage(env, item, index) {
+  const config = getSupabaseStorageConfig(env);
+  if (!config.serviceRoleKey) {
+    throw new Error('GPT 参考图需要临时图片 URL：请确认 Cloudflare 已配置 SUPABASE_SERVICE_ROLE_KEY。');
+  }
+  const mimeType = String(item.mimeType || '').startsWith('image/') ? item.mimeType : 'image/png';
+  const ext = getImageExtension(mimeType);
+  const path = `ai-reference/${new Date().toISOString().slice(0, 10)}/${Date.now()}-${crypto.randomUUID()}-${index + 1}.${ext}`;
+  const encodedPath = encodeStoragePath(path);
+  const storageUrl = `${config.url}/storage/v1`;
+  const uploadUrl = `${storageUrl}/object/${LK888_REFERENCE_BUCKET}/${encodedPath}`;
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      apikey: config.serviceRoleKey,
+      Authorization: `Bearer ${config.serviceRoleKey}`,
+      'Content-Type': mimeType,
+      'x-upsert': 'true'
+    },
+    body: base64ToBlob(item.image, mimeType)
+  });
+  const uploadText = await uploadResponse.text();
+  if (!uploadResponse.ok) {
+    let errorData = {};
+    try {
+      errorData = uploadText ? JSON.parse(uploadText) : {};
+    } catch {
+      errorData = { raw: uploadText };
+    }
+    throw new Error(errorData?.message || errorData?.error || errorData?.raw || `参考图临时上传失败：HTTP ${uploadResponse.status}`);
+  }
+
+  const signResponse = await fetch(`${storageUrl}/object/sign/${LK888_REFERENCE_BUCKET}/${encodedPath}`, {
+    method: 'POST',
+    headers: {
+      apikey: config.serviceRoleKey,
+      Authorization: `Bearer ${config.serviceRoleKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ expiresIn: 60 * 60 })
+  });
+  const signText = await signResponse.text();
+  let signData = {};
+  try {
+    signData = signText ? JSON.parse(signText) : {};
+  } catch {
+    signData = { raw: signText };
+  }
+  if (!signResponse.ok) {
+    throw new Error(signData?.message || signData?.error || signData?.raw || `参考图临时链接生成失败：HTTP ${signResponse.status}`);
+  }
+  const signedPath = signData?.signedURL || signData?.signedUrl || signData?.url || '';
+  if (!signedPath) throw new Error('参考图临时链接生成失败：Supabase 没有返回 signedURL。');
+  return {
+    path,
+    url: /^https?:\/\//i.test(signedPath) ? signedPath : `${storageUrl}${signedPath.startsWith('/') ? '' : '/'}${signedPath}`
+  };
+}
+
+async function removeLK888ReferenceImages(env, uploaded = []) {
+  const paths = uploaded.map(item => item?.path).filter(Boolean);
+  if (!paths.length) return;
+  const config = getSupabaseStorageConfig(env);
+  if (!config.serviceRoleKey) return;
+  await fetch(`${config.url}/storage/v1/object/${LK888_REFERENCE_BUCKET}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: config.serviceRoleKey,
+      Authorization: `Bearer ${config.serviceRoleKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ prefixes: paths })
+  }).catch(() => {});
+}
+
 export async function postJson(url, payload, headers = {}) {
   const response = await fetch(url, {
     method: 'POST',
@@ -380,28 +478,32 @@ export async function generateWithLK888ImageReference(env, prompt, ratio, refere
       ? [{ image: referenceImages, mimeType: 'image/png' }]
       : [];
   if (images.length === 0) throw new Error('请先添加参考图。');
-  const referenceUrls = images.map(item => {
-    const safeMimeType = String(item.mimeType || '').startsWith('image/') ? item.mimeType : 'image/png';
-    const clean = String(item.image || '').replace(/^data:[^;]+;base64,/, '');
-    return `data:${safeMimeType};base64,${clean}`;
-  });
+  const uploadedReferences = [];
   const promptText = [
     finalImagePrompt(prompt),
     'use the uploaded reference images for subject, composition, product style, color palette, or visual direction while creating a polished commercial poster image'
   ].join(', ');
-  const submitData = await postJson(`${getLK888BaseUrl(env)}/v1/media/generate`, {
-    model: getLK888ImageModel(env),
-    prompt: promptText,
-    images: referenceUrls,
-    params: {
+  try {
+    for (let i = 0; i < images.length; i += 1) {
+      uploadedReferences.push(await uploadLK888ReferenceImage(env, images[i], i));
+    }
+    const referenceUrls = uploadedReferences.map(item => item.url);
+    const submitData = await postJson(`${getLK888BaseUrl(env)}/v1/media/generate`, {
+      model: getLK888ImageModel(env),
       prompt: promptText,
       images: referenceUrls,
-      size: getOpenAIImageSize(ratio)
-    }
-  }, {
-    Authorization: `Bearer ${env.LK888_API_KEY}`
-  });
-  return pollLK888MediaTask(env, submitData);
+      params: {
+        prompt: promptText,
+        images: referenceUrls,
+        size: getOpenAIImageSize(ratio)
+      }
+    }, {
+      Authorization: `Bearer ${env.LK888_API_KEY}`
+    });
+    return await pollLK888MediaTask(env, submitData);
+  } finally {
+    await removeLK888ReferenceImages(env, uploadedReferences);
+  }
 }
 
 function getLK888TaskId(data) {
