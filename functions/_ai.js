@@ -112,12 +112,39 @@ export function parseImageBase64(data) {
   return String(base64).replace(/^data:[^;]+;base64,/, '');
 }
 
+function findImageValue(value, seen = new Set()) {
+  if (!value || typeof value !== 'object') return '';
+  if (seen.has(value)) return '';
+  seen.add(value);
+
+  const direct = value.b64_json || value.image_base64 || value.base64 || value.image || value.url || value.image_url || value.output_url;
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+
+  for (const key of ['images', 'image_urls', 'imageUrls', 'urls', 'result', 'results', 'data', 'output']) {
+    const child = value[key];
+    if (Array.isArray(child)) {
+      for (const item of child) {
+        if (typeof item === 'string' && item.trim()) return item.trim();
+        const found = findImageValue(item, seen);
+        if (found) return found;
+      }
+    } else {
+      const found = findImageValue(child, seen);
+      if (found) return found;
+    }
+  }
+
+  for (const item of Object.values(value)) {
+    const found = findImageValue(item, seen);
+    if (found) return found;
+  }
+  return '';
+}
+
 export async function parseImageResultAsBase64(data) {
-  const item = data?.data?.[0] || data?.output?.[0] || data;
-  const base64 = item?.b64_json || item?.image_base64 || item?.base64 || item?.data;
-  if (base64) return String(base64).replace(/^data:[^;]+;base64,/, '');
-  const url = item?.url || item?.image_url || data?.url || data?.image_url;
-  if (url) return fetchImageUrlAsBase64(url);
+  const image = findImageValue(data);
+  if (/^https?:\/\//i.test(image)) return fetchImageUrlAsBase64(image);
+  if (image) return String(image).replace(/^data:[^;]+;base64,/, '');
   throw new Error('AI 接口没有返回图片数据。');
 }
 
@@ -346,38 +373,94 @@ export async function generateWithLK888ImageReference(env, prompt, ratio, refere
       ? [{ image: referenceImages, mimeType: 'image/png' }]
       : [];
   if (images.length === 0) throw new Error('请先添加参考图。');
-  const form = new FormData();
-  form.append('model', getLK888ImageModel(env));
-  form.append('prompt', [
+  const referenceUrls = images.map(item => {
+    const safeMimeType = String(item.mimeType || '').startsWith('image/') ? item.mimeType : 'image/png';
+    const clean = String(item.image || '').replace(/^data:[^;]+;base64,/, '');
+    return `data:${safeMimeType};base64,${clean}`;
+  });
+  const promptText = [
     finalImagePrompt(prompt),
     'use the uploaded reference images for subject, composition, product style, color palette, or visual direction while creating a polished commercial poster image'
-  ].join(', '));
-  form.append('size', getOpenAIImageSize(ratio));
-  images.forEach((item, index) => {
-    const safeMimeType = String(item.mimeType || '').startsWith('image/') ? item.mimeType : 'image/png';
-    const ext = safeMimeType.includes('jpeg') || safeMimeType.includes('jpg') ? 'jpg' : safeMimeType.includes('webp') ? 'webp' : 'png';
-    form.append('image[]', base64ToBlob(item.image, safeMimeType), `reference-${index + 1}.${ext}`);
+  ].join(', ');
+  const submitData = await postJson(`${getLK888BaseUrl(env)}/v1/media/generate`, {
+    model: getLK888ImageModel(env),
+    prompt: promptText,
+    images: referenceUrls,
+    params: {
+      prompt: promptText,
+      images: referenceUrls,
+      size: getOpenAIImageSize(ratio)
+    }
+  }, {
+    Authorization: `Bearer ${env.LK888_API_KEY}`
   });
+  return pollLK888MediaTask(env, submitData);
+}
 
-  const response = await fetch(`${getLK888BaseUrl(env)}/v1/images/edits`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.LK888_API_KEY}`
-    },
-    body: form
-  });
-  const text = await response.text();
-  let data;
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { raw: text };
+function getLK888TaskId(data) {
+  return data?.task_id || data?.taskId || data?.id || data?.data?.task_id || data?.data?.taskId || data?.data?.id || data?.result?.task_id || data?.result?.taskId;
+}
+
+function getLK888TaskStatus(data) {
+  return String(data?.status || data?.data?.status || data?.result?.status || '').toLowerCase();
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function pollLK888MediaTask(env, submitData) {
+  const immediate = findImageValue(submitData);
+  if (immediate) return parseImageResultAsBase64(submitData);
+
+  const taskId = getLK888TaskId(submitData);
+  if (!taskId) throw new Error('抹尘 AI 没有返回 task_id，无法查询生成结果。');
+
+  const successStatuses = new Set(['success', 'succeeded', 'completed', 'complete', 'done', 'finished']);
+  const failedStatuses = new Set(['failed', 'fail', 'error', 'cancelled', 'canceled']);
+  let lastStatus = '';
+  let lastMessage = '';
+
+  for (let i = 0; i < 90; i += 1) {
+    await sleep(i < 3 ? 1200 : 2000);
+    const data = await fetchLK888TaskStatus(env, taskId);
+    const status = getLK888TaskStatus(data);
+    lastStatus = status || lastStatus;
+    lastMessage = data?.error?.message || data?.message || data?.data?.message || data?.result?.message || lastMessage;
+    if (successStatuses.has(status) || findImageValue(data)) return parseImageResultAsBase64(data);
+    if (failedStatuses.has(status)) throw new Error(lastMessage || `抹尘 AI 生成失败：${status}`);
   }
-  if (!response.ok) {
-    const message = data?.error?.message || data?.message || data?.raw || `HTTP ${response.status}`;
-    throw new Error(message);
+
+  throw new Error(`抹尘 AI 生成超时${lastStatus ? `（当前状态：${lastStatus}）` : ''}，请稍后重试。`);
+}
+
+async function fetchLK888TaskStatus(env, taskId) {
+  const baseUrl = getLK888BaseUrl(env);
+  const urls = [
+    `${baseUrl}/v1/skills/task-status?task_id=${encodeURIComponent(taskId)}`,
+    `${baseUrl}/v1/media/status?task_id=${encodeURIComponent(taskId)}`
+  ];
+  let lastError = null;
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${env.LK888_API_KEY}` }
+      });
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { raw: text };
+      }
+      if (response.ok) return data;
+      lastError = data?.error?.message || data?.message || data?.raw || `HTTP ${response.status}`;
+      if (response.status !== 404) break;
+    } catch (error) {
+      lastError = error.message;
+    }
   }
-  return parseImageResultAsBase64(data);
+  throw new Error(lastError || '查询抹尘 AI 任务状态失败。');
 }
 
 export async function enhancePromptWithOpenAI(env, prompt, ratio) {
