@@ -1,5 +1,5 @@
 import { getBearerToken, getUserFromToken, json, requireCloudflareEnv } from '../_shared.js';
-import { generateWithOpenAI, generateWithOpenAIReference, generateWithVolc, generateWithVolcReference, hasLK888, hasOpenAI, hasVolcImage, requireAI } from '../_ai.js';
+import { generateWithOpenAI, generateWithOpenAIReference, generateWithVolc, generateWithVolcReference, hasLK888, hasOpenAI, hasVolcImage, requireAI, submitLK888ImageReferenceTask } from '../_ai.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -25,6 +25,12 @@ export async function onRequest({ request, env }) {
     }
     if (provider === 'volc' && !hasVolcImage(env)) {
       throw new Error('火山生图未配置：请设置 VOLC_API_KEY + ENDPOINT_ID。');
+    }
+
+    if (provider === 'openai' && hasLK888(env) && referenceImages.length) {
+      const task = await submitLK888ImageReferenceTask(env, body.prompt, body.ratio, referenceImages);
+      if (task.imageBase64) return json({ success: true, provider, imageBase64: task.imageBase64 });
+      return json({ success: true, provider, pending: true, taskId: task.taskId });
     }
 
     const imageBase64 = provider === 'openai'

@@ -4108,6 +4108,22 @@
         }
     }
 
+    async function pollAIImageTask(taskId, provider) {
+        if(!taskId) throw new Error('缺少生图任务编号');
+        const maxAttempts = 90;
+        for(let i = 0; i < maxAttempts; i += 1) {
+            await new Promise(resolve => setTimeout(resolve, i < 3 ? 1800 : 3000));
+            updateAIProgress('模型正在生成画面...', Math.min(88, 34 + Math.round((i / maxAttempts) * 52)));
+            const res = await fetch(`/api/generate-image-status?task_id=${encodeURIComponent(taskId)}`);
+            const data = await res.json().catch(() => ({}));
+            if(!res.ok || !data.success) throw new Error(data.message || `查询失败（HTTP ${res.status}）`);
+            if(!data.pending && data.imageBase64) {
+                return data;
+            }
+        }
+        throw new Error('生成时间较长，请稍后重试。');
+    }
+
     async function generateAIBG() {
         const p = getPromptText(); if(!p) return showToast('请输入描述词或选择关键词标签', true);
         const btn = document.getElementById('ai-submit-btn') || window.event?.target || document.activeElement;
@@ -4130,7 +4146,15 @@
             const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             updateAIProgress('模型正在生成画面...', 70);
             const data = await res.json(); 
-            if(data.success) { addLayer('image', { src: `data:image/png;base64,${data.imageBase64}` }); showToast(data.warning || `✅ ${data.provider || 'AI'} 已生成新图片`); } else { showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true); }
+            if(data.success && data.pending && data.taskId) {
+                updateAIProgress('任务已提交，正在等待结果...', 42);
+                const result = await pollAIImageTask(data.taskId, data.provider || aiProvider);
+                addLayer('image', { src: `data:image/png;base64,${result.imageBase64}` });
+                showToast(`✅ ${result.provider || data.provider || 'AI'} 已生成新图片`);
+            } else if(data.success) {
+                addLayer('image', { src: `data:image/png;base64,${data.imageBase64}` });
+                showToast(data.warning || `✅ ${data.provider || 'AI'} 已生成新图片`);
+            } else { showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true); }
         } catch(e) { showToast('❌ ' + (e.message || '无法连接服务器'), true); } finally { updateAIProgress('正在应用到画布...', 96); stopAIProgress(); if(btn) { btn.innerText = ogText; btn.disabled = false; } }
     }
     

@@ -469,6 +469,12 @@ export async function generateWithOpenAIReference(env, prompt, ratio, referenceI
 }
 
 export async function generateWithLK888ImageReference(env, prompt, ratio, referenceImages = []) {
+  const submitted = await submitLK888ImageReferenceTask(env, prompt, ratio, referenceImages);
+  if (submitted.imageBase64) return submitted.imageBase64;
+  return pollLK888MediaTask(env, { task_id: submitted.taskId });
+}
+
+export async function submitLK888ImageReferenceTask(env, prompt, ratio, referenceImages = []) {
   if (!hasLK888(env)) {
     throw new Error('抹尘 GPT Image 2 参考图生图未配置：请在 Cloudflare Pages 环境变量中设置 LK888_API_KEY。');
   }
@@ -500,9 +506,24 @@ export async function generateWithLK888ImageReference(env, prompt, ratio, refere
     }, {
       Authorization: `Bearer ${env.LK888_API_KEY}`
     });
-    return await pollLK888MediaTask(env, submitData);
-  } finally {
+    assertLK888Accepted(submitData);
+    const immediate = findImageValue(submitData);
+    if (immediate) {
+      await removeLK888ReferenceImages(env, uploadedReferences);
+      return {
+        imageBase64: await parseImageResultAsBase64(submitData)
+      };
+    }
+    const taskId = getLK888TaskId(submitData);
+    if (!taskId) {
+      await removeLK888ReferenceImages(env, uploadedReferences);
+      const shape = getLK888ResponseShape(submitData);
+      throw new Error(`抹尘 AI 没有返回 task_id，无法查询生成结果${shape ? `（返回字段：${shape}）` : ''}。`);
+    }
+    return { taskId };
+  } catch (error) {
     await removeLK888ReferenceImages(env, uploadedReferences);
+    throw error;
   }
 }
 
@@ -618,6 +639,29 @@ export async function pollLK888MediaTask(env, submitData) {
   }
 
   throw new Error(`抹尘 AI 生成超时${lastStatus ? `（当前状态：${lastStatus}）` : ''}，请稍后重试。`);
+}
+
+export async function checkLK888MediaTask(env, taskId) {
+  if (!taskId) throw new Error('缺少抹尘 AI task_id。');
+  const successStatuses = new Set(['success', 'succeeded', 'completed', 'complete', 'done', 'finished']);
+  const failedStatuses = new Set(['failed', 'fail', 'error', 'cancelled', 'canceled']);
+  const data = await fetchLK888TaskStatus(env, taskId);
+  assertLK888Accepted(data);
+  const status = getLK888TaskStatus(data);
+  const message = getLK888Message(data);
+  if (failedStatuses.has(status)) throw new Error(message || `抹尘 AI 生成失败：${status}`);
+  if (successStatuses.has(status) || findImageValue(data)) {
+    return {
+      done: true,
+      status,
+      imageBase64: await parseImageResultAsBase64(data)
+    };
+  }
+  return {
+    done: false,
+    status: status || 'processing',
+    message
+  };
 }
 
 async function fetchLK888TaskStatus(env, taskId) {
