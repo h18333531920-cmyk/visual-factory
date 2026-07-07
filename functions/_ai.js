@@ -119,7 +119,7 @@ function findImageValue(value, seen = new Set()) {
   if (seen.has(value)) return '';
   seen.add(value);
 
-  const direct = value.b64_json || value.image_base64 || value.base64 || value.image || value.url || value.image_url || value.output_url;
+  const direct = value.b64_json || value.image_base64 || value.base64 || value.image || value.url || value.image_url || value.imageUrl || value.output_url || value.outputUrl || value.file_url || value.fileUrl || value.result_url || value.resultUrl || value.content;
   if (typeof direct === 'string' && direct.trim()) return direct.trim();
 
   for (const key of ['images', 'image_urls', 'imageUrls', 'urls', 'result', 'results', 'data', 'output']) {
@@ -622,8 +622,8 @@ export async function pollLK888MediaTask(env, submitData) {
     throw new Error(`抹尘 AI 没有返回 task_id，无法查询生成结果${shape ? `（返回字段：${shape}）` : ''}。`);
   }
 
-  const successStatuses = new Set(['success', 'succeeded', 'completed', 'complete', 'done', 'finished']);
-  const failedStatuses = new Set(['failed', 'fail', 'error', 'cancelled', 'canceled']);
+  const successStatuses = new Set(['success', 'succeeded', 'completed', 'complete', 'done', 'finished', '已完成', '完成', '成功']);
+  const failedStatuses = new Set(['failed', 'fail', 'error', 'cancelled', 'canceled', '失败', '已失败']);
   let lastStatus = '';
   let lastMessage = '';
 
@@ -643,8 +643,8 @@ export async function pollLK888MediaTask(env, submitData) {
 
 export async function checkLK888MediaTask(env, taskId) {
   if (!taskId) throw new Error('缺少抹尘 AI task_id。');
-  const successStatuses = new Set(['success', 'succeeded', 'completed', 'complete', 'done', 'finished']);
-  const failedStatuses = new Set(['failed', 'fail', 'error', 'cancelled', 'canceled']);
+  const successStatuses = new Set(['success', 'succeeded', 'completed', 'complete', 'done', 'finished', '已完成', '完成', '成功']);
+  const failedStatuses = new Set(['failed', 'fail', 'error', 'cancelled', 'canceled', '失败', '已失败']);
   const data = await fetchLK888TaskStatus(env, taskId);
   assertLK888Accepted(data);
   const status = getLK888TaskStatus(data);
