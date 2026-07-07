@@ -145,6 +145,13 @@ export async function parseImageResultAsBase64(data) {
   const image = findImageValue(data);
   if (/^https?:\/\//i.test(image)) return fetchImageUrlAsBase64(image);
   if (image) return String(image).replace(/^data:[^;]+;base64,/, '');
+  const textImage = typeof data?.data === 'string'
+    ? data.data
+    : typeof data?.result === 'string'
+      ? data.result
+      : '';
+  if (/^https?:\/\//i.test(textImage)) return fetchImageUrlAsBase64(textImage);
+  if (textImage) return String(textImage).replace(/^data:[^;]+;base64,/, '');
   throw new Error('AI 接口没有返回图片数据。');
 }
 
@@ -398,7 +405,10 @@ export async function generateWithLK888ImageReference(env, prompt, ratio, refere
 }
 
 function getLK888TaskId(data) {
-  return data?.task_id || data?.taskId || data?.id || data?.data?.task_id || data?.data?.taskId || data?.data?.id || data?.result?.task_id || data?.result?.taskId;
+  if (typeof data?.data === 'string' && data.data.trim()) return data.data.trim();
+  if (typeof data?.result === 'string' && data.result.trim()) return data.result.trim();
+  if (typeof data?.task === 'string' && data.task.trim()) return data.task.trim();
+  return data?.task_id || data?.taskId || data?.id || data?.data?.task_id || data?.data?.taskId || data?.data?.id || data?.result?.task_id || data?.result?.taskId || data?.result?.id;
 }
 
 function getLK888TaskStatus(data) {
