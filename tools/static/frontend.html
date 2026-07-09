@@ -1582,7 +1582,9 @@
     /* ================= 数据持久化 ================= */
     const DB_NAME = 'SuperFactoryDB';
     const GLOBAL_STATE_KEY = 'global';
-    function getGlobalSnapshot() { return { tagColorPresets, arcColorPresets, keywordTags, presetLibrary, tagPresetLibrary, referenceElements }; }
+    const SHARED_ASSETS_API = '/api/static-assets';
+    let sharedAssetSaveTimer = null;
+    function getGlobalSnapshot() { return { tagColorPresets, arcColorPresets, keywordTags, presetLibrary, tagPresetLibrary, referenceElements, logoAssets }; }
     function applyGlobalData(data = {}) {
         if(data.tagColorPresets) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
         if(data.arcColorPresets) arcColorPresets = data.arcColorPresets;
@@ -1590,6 +1592,7 @@
         if(data.presetLibrary) presetLibrary = data.presetLibrary;
         if(data.tagPresetLibrary) tagPresetLibrary = data.tagPresetLibrary;
         if(data.referenceElements) referenceElements = data.referenceElements;
+        if(data.logoAssets) logoAssets = data.logoAssets;
     }
     async function saveGlobalData() {
         const snapshot = getGlobalSnapshot();
@@ -1601,9 +1604,11 @@
                 keywordTags,
                 tagPresetLibrary,
                 referenceElements,
+                logoAssets,
                 presetMeta: presetLibrary.map(p => ({ id: p.id, name: p.name, size: p.size, count: p.elements?.length || 0 }))
             }));
         } catch(e) {}
+        queueSharedAssetSave();
         return dbOk;
     }
     async function loadGlobalData() {
@@ -1619,6 +1624,75 @@
             applyGlobalData(dbData);
         } else if(localData && localData.presetLibrary) {
             await saveGlobalData();
+        }
+    }
+
+    function getAuthHeaders() {
+        const token = localStorage.getItem('vf_access_token') || '';
+        return token ? { Authorization: `Bearer ${token}` } : {};
+    }
+    async function buildSharedAssetPayload() {
+        const fonts = await getAllFromDB('fonts');
+        const logos = Array.isArray(logoAssets) ? logoAssets : await getAllFromDB('logos');
+        return {
+            data: { tagColorPresets, arcColorPresets, keywordTags, presetLibrary, tagPresetLibrary, referenceElements },
+            fonts,
+            logos
+        };
+    }
+    function queueSharedAssetSave(delay = 900) {
+        clearTimeout(sharedAssetSaveTimer);
+        sharedAssetSaveTimer = setTimeout(() => {
+            saveSharedAssetsToCloud().catch(error => console.warn('公共资产同步失败:', error));
+        }, delay);
+    }
+    function hasLocalSharedAssets() {
+        return presetLibrary.length > 0 || tagPresetLibrary.length > 0 || referenceElements.length > 0 || logoAssets.length > 0 || customFonts.length > 0;
+    }
+    async function saveSharedAssetsToCloud() {
+        const payload = await buildSharedAssetPayload();
+        const res = await fetch(SHARED_ASSETS_API, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if(!res.ok || data.success === false) throw new Error(data.message || '公共资产同步失败');
+        return true;
+    }
+    async function loadSharedAssetsFromCloud() {
+        try {
+            const res = await fetch(SHARED_ASSETS_API, { headers: getAuthHeaders() });
+            const payload = await res.json().catch(() => ({}));
+            if(!res.ok || payload.success === false) return false;
+            if(payload.exists === false) {
+                if(hasLocalSharedAssets()) queueSharedAssetSave(300);
+                return false;
+            }
+            applyGlobalData(payload.data || {});
+
+            const fonts = Array.isArray(payload.fonts) ? payload.fonts : [];
+            const logos = Array.isArray(payload.logos) ? payload.logos : [];
+            if(logos.length || payload.exists) logoAssets = logos;
+
+            await saveStateToDB(getGlobalSnapshot());
+            await replaceStoreInDB('logos', logoAssets);
+            await replaceStoreInDB('referenceElements', referenceElements);
+            if(fonts.length) {
+                await replaceStoreInDB('fonts', fonts);
+                customFonts = [];
+                await Promise.all(fonts.map(registerFontAsset));
+            }
+
+            renderSettings();
+            renderPromptTags();
+            renderAssetLibrary();
+            renderProperties();
+            renderCanvas();
+            return true;
+        } catch(error) {
+            console.warn('公共资产读取失败:', error);
+            return false;
         }
     }
 
@@ -1668,35 +1742,43 @@
         } catch(e) { return false; }
     }
     async function loadFontsFromDB() {
-        try { 
+        try {
             const db = await initDB(); const tx = db.transaction('fonts', 'readonly'); const req = tx.objectStore('fonts').getAll();
-            req.onsuccess = e => { 
-                const fonts = e.target.result;
-                if (fonts && fonts.length > 0) { 
-                    let loadedCount = 0; 
-                    fonts.forEach(f => {
-                        registerFontAsset(f).then(() => {
-                            loadedCount++; 
-                            if(loadedCount === fonts.length) { renderSettings(); renderProperties(); showToast(`成功恢复 ${fonts.length} 个持久化字体`); } 
-                        });
-                    }); 
-                }
-            };
+            const fonts = await new Promise(resolve => {
+                req.onsuccess = e => resolve(e.target.result || []);
+                req.onerror = () => resolve([]);
+            });
+            if (fonts && fonts.length > 0) {
+                await Promise.all(fonts.map(registerFontAsset));
+                renderSettings();
+                renderProperties();
+                showToast(`成功恢复 ${fonts.length} 个持久化字体`);
+            }
         } catch(e) {}
     }
     async function loadLogosFromDB() {
         try {
             const db = await initDB(); const tx = db.transaction('logos', 'readonly'); const req = tx.objectStore('logos').getAll();
-            req.onsuccess = e => { logoAssets = e.target.result || []; renderAssetLibrary(); };
+            logoAssets = await new Promise(resolve => {
+                req.onsuccess = e => resolve(e.target.result || []);
+                req.onerror = () => resolve([]);
+            });
+            renderAssetLibrary();
         } catch(e) {}
     }
     async function loadReferenceElementsFromDB() {
         try {
             const db = await initDB(); const tx = db.transaction('referenceElements', 'readonly'); const req = tx.objectStore('referenceElements').getAll();
-            req.onsuccess = e => { const items = e.target.result || []; if(items.length > 0) referenceElements = items; renderAssetLibrary(); };
+            const items = await new Promise(resolve => {
+                req.onsuccess = e => resolve(e.target.result || []);
+                req.onerror = () => resolve([]);
+            });
+            if(items.length > 0) {
+                referenceElements = items;
+                renderAssetLibrary();
+            }
         } catch(e) {}
     }
-
     function cloneData(value) {
         return JSON.parse(JSON.stringify(value));
     }
@@ -2425,12 +2507,14 @@
                 await saveReferenceElementToDB(item);
             }
         }
+        await saveGlobalData();
         renderAssetLibrary();
         showToast(`已保存 ${loaded.length} 个${REFERENCE_ELEMENT_CATEGORIES[referenceElementCategory]}参考元素`);
     }
     function deleteReferenceElement(id) {
         referenceElements = referenceElements.filter(item => item.id !== id);
         deleteReferenceElementFromDB(id);
+        saveGlobalData();
         renderAssetLibrary();
         showToast('已删除参考元素');
     }
@@ -3700,7 +3784,7 @@
         askConfirm('删除这个 Logo 素材？').then(ok => {
             if(!ok) return;
             logoAssets = logoAssets.filter(l => l.id !== id);
-            deleteLogoFromDB(id); renderAssetLibrary(); showToast('已删除 Logo 素材');
+            deleteLogoFromDB(id); saveGlobalData(); renderAssetLibrary(); showToast('已删除 Logo 素材');
         });
     }
 
@@ -4228,7 +4312,7 @@
             reader.onload = ev => {
                 const logo = { id: genId('logo_asset'), name: file.name.replace(/\.[^/.]+$/, ''), src: ev.target.result };
                 logoAssets.push(logo); saveLogoToDB(logo); loaded++;
-                if(loaded === files.length) { currentAssetTab = 'logo'; switchAssetTab('logo'); showToast(`已保存 ${files.length} 个 Logo 素材`); }
+                if(loaded === files.length) { saveGlobalData(); currentAssetTab = 'logo'; switchAssetTab('logo'); showToast(`已保存 ${files.length} 个 Logo 素材`); }
             };
             reader.readAsDataURL(file);
         });
@@ -4482,9 +4566,10 @@
 
     async function bootApp() {
         await loadGlobalData();
-        loadFontsFromDB();
-        loadLogosFromDB();
-        loadReferenceElementsFromDB();
+        await loadFontsFromDB();
+        await loadLogosFromDB();
+        await loadReferenceElementsFromDB();
+        await loadSharedAssetsFromCloud();
         setupCanvasDropImport();
         setupAIReferenceDrop();
         renderCustomArtboardControls();
