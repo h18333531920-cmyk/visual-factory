@@ -47,6 +47,51 @@ function normalizeAssetPayload(payload = {}) {
   };
 }
 
+function mergeById(existingItems = [], incomingItems = []) {
+  const map = new Map();
+  [...existingItems, ...incomingItems].forEach((item, index) => {
+    if (!item) return;
+    const id = item.id || item.name || `item_${index}`;
+    map.set(id, item);
+  });
+  return [...map.values()];
+}
+
+async function readExistingPayload(env, target) {
+  try {
+    const response = await storageFetch(env, target, { method: 'GET' });
+    if (!response.ok) return normalizeAssetPayload({});
+    return normalizeAssetPayload(await response.json());
+  } catch {
+    return normalizeAssetPayload({});
+  }
+}
+
+function mergeAssetPayload(existingPayload, incomingPayload) {
+  const existing = normalizeAssetPayload(existingPayload);
+  const incoming = normalizeAssetPayload(incomingPayload);
+  const incomingData = incoming.data || {};
+  const existingData = existing.data || {};
+
+  return {
+    ...incoming,
+    data: {
+      ...incomingData,
+      presetLibrary: incomingData.presetLibrary.length
+        ? mergeById(existingData.presetLibrary, incomingData.presetLibrary)
+        : existingData.presetLibrary,
+      tagPresetLibrary: incomingData.tagPresetLibrary.length
+        ? mergeById(existingData.tagPresetLibrary, incomingData.tagPresetLibrary)
+        : existingData.tagPresetLibrary,
+      referenceElements: incomingData.referenceElements.length
+        ? mergeById(existingData.referenceElements, incomingData.referenceElements)
+        : existingData.referenceElements
+    },
+    fonts: incoming.fonts.length ? mergeById(existing.fonts, incoming.fonts) : existing.fonts,
+    logos: incoming.logos.length ? mergeById(existing.logos, incoming.logos) : existing.logos
+  };
+}
+
 async function storageFetch(env, target, options = {}) {
   const config = getSupabaseConfig(env);
   if (!config.serviceRoleKey) throw new Error('Missing env: SUPABASE_SERVICE_ROLE_KEY');
@@ -94,7 +139,9 @@ export async function onRequestPut({ request, env }) {
   try {
     await requireAdmin(request, env);
     const target = getStorageTarget(env);
-    const payload = normalizeAssetPayload(await request.json());
+    const existingPayload = await readExistingPayload(env, target);
+    const payload = mergeAssetPayload(existingPayload, await request.json());
+    payload.updatedAt = new Date().toISOString();
     const response = await storageFetch(env, target, {
       method: 'POST',
       headers: {
