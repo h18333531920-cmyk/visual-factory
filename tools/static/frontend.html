@@ -1438,7 +1438,7 @@
                 <button class="asset-tab" data-asset-tab="reference" onclick="switchAssetTab('reference')">参考元素</button>
             </div>
             <div class="asset-list" id="asset-list-ui"></div>
-            <div style="font-size:11px; color:var(--text-sub); line-height:1.5; margin-top:8px;">测试版和正式版资产库按域名隔离。可在正式版导出资产包，再在测试版导入。</div>
+            <div style="font-size:11px; color:var(--text-sub); line-height:1.5; margin-top:8px;">正式版和测试版会读取同一份云端公共资产库。</div>
         </div>
 
             <div class="module-card">
@@ -1594,6 +1594,38 @@
         if(data.referenceElements) referenceElements = data.referenceElements;
         if(data.logoAssets) logoAssets = data.logoAssets;
     }
+    function mergeById(localItems = [], cloudItems = []) {
+        const map = new Map();
+        [...localItems, ...cloudItems].forEach((item, index) => {
+            const id = item?.id || `item_${index}`;
+            map.set(id, item);
+        });
+        return [...map.values()];
+    }
+    function mergeCloudAssetData(data = {}, fonts = [], logos = []) {
+        const hadLocalAssets = hasLocalSharedAssets();
+        const cloudPresetLibrary = Array.isArray(data.presetLibrary) ? data.presetLibrary : [];
+        const cloudTagPresetLibrary = Array.isArray(data.tagPresetLibrary) ? data.tagPresetLibrary : [];
+        const cloudReferenceElements = Array.isArray(data.referenceElements) ? data.referenceElements : [];
+        const cloudLogos = Array.isArray(logos) ? logos : [];
+
+        if(data.tagColorPresets?.length) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
+        if(data.arcColorPresets?.length) arcColorPresets = data.arcColorPresets;
+        if(data.keywordTags?.length) keywordTags = data.keywordTags;
+        presetLibrary = mergeById(presetLibrary, cloudPresetLibrary);
+        tagPresetLibrary = mergeById(tagPresetLibrary, cloudTagPresetLibrary);
+        referenceElements = mergeById(referenceElements, cloudReferenceElements);
+        logoAssets = mergeById(logoAssets, cloudLogos);
+
+        const shouldBackfillCloud = hadLocalAssets && (
+            presetLibrary.length > cloudPresetLibrary.length ||
+            tagPresetLibrary.length > cloudTagPresetLibrary.length ||
+            referenceElements.length > cloudReferenceElements.length ||
+            logoAssets.length > cloudLogos.length ||
+            customFonts.length > fonts.length
+        );
+        return shouldBackfillCloud;
+    }
     async function saveGlobalData() {
         const snapshot = getGlobalSnapshot();
         const dbOk = await saveStateToDB(snapshot);
@@ -1669,11 +1701,9 @@
                 if(hasLocalSharedAssets()) queueSharedAssetSave(300);
                 return false;
             }
-            applyGlobalData(payload.data || {});
-
             const fonts = Array.isArray(payload.fonts) ? payload.fonts : [];
             const logos = Array.isArray(payload.logos) ? payload.logos : [];
-            if(logos.length || payload.exists) logoAssets = logos;
+            const shouldBackfillCloud = mergeCloudAssetData(payload.data || {}, fonts, logos);
 
             await saveStateToDB(getGlobalSnapshot());
             await replaceStoreInDB('logos', logoAssets);
@@ -1689,6 +1719,7 @@
             renderAssetLibrary();
             renderProperties();
             renderCanvas();
+            if(shouldBackfillCloud) queueSharedAssetSave(300);
             return true;
         } catch(error) {
             console.warn('公共资产读取失败:', error);
