@@ -170,10 +170,10 @@
         .reference-filter button { min-width: 0; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: #FFFFFF; color: var(--text-sub); font-size: 11px; font-weight: 850; cursor: pointer; }
         .reference-filter button.active { background: var(--text-main); border-color: var(--text-main); color: #FFFFFF; }
         .reference-filter button:last-child { padding: 0 10px; }
+        .reference-drop-zone { grid-column: 1 / -1; min-height: 72px; border: 1px dashed #cfd3d8; border-radius: 10px; background: #FFFFFF; color: var(--text-sub); display: flex; align-items: center; justify-content: center; text-align: center; padding: 12px; font-size: 12px; font-weight: 820; line-height: 1.45; cursor: pointer; }
+        .reference-drop-zone.drag-over { border-color: var(--text-main); color: var(--text-main); background: #F8FAFC; box-shadow: inset 0 0 0 2px rgba(16,17,20,0.06); }
         .asset-item.reference-element { cursor: grab; }
         .asset-item.reference-element:active { cursor: grabbing; }
-        .asset-thumb.reference-thumb { background-color: #f7f8f6; background-image: linear-gradient(45deg, #e3e5e1 25%, transparent 25%), linear-gradient(-45deg, #e3e5e1 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e3e5e1 75%), linear-gradient(-45deg, transparent 75%, #e3e5e1 75%); background-size: 14px 14px; background-position: 0 0, 0 7px, 7px -7px, -7px 0; }
-        .asset-thumb.reference-bg-thumb { background-image: none; }
         .prompt-tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
         .prompt-tag-chip { border: 1px solid var(--border); background: #FFFFFF; color: var(--text-sub); border-radius: 999px; padding: 7px 11px; cursor: pointer; font-size: 12px; font-weight: 800; transition: 0.2s; }
         .prompt-tag-chip:hover { border-color: var(--primary); color: var(--text-main); }
@@ -1562,14 +1562,6 @@
     let aiProvider = 'openai';
     const AI_REFERENCE_LIMIT = 8;
     const REFERENCE_ELEMENT_CATEGORIES = { food: '食物', background: '背景' };
-    const DEFAULT_REFERENCE_ELEMENTS = [
-        { id: 'default_food_burger', name: '汉堡套餐', category: 'food', mimeType: 'image/svg+xml', src: svgDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 210"><rect width="320" height="210" fill="#f7f8f6"/><ellipse cx="160" cy="132" rx="86" ry="18" fill="#bd6b2e" opacity=".25"/><path d="M75 112c12-38 159-38 171 0H75z" fill="#f6b35f"/><path d="M82 119h156c12 0 14 18 2 22H80c-12-4-10-22 2-22z" fill="#6f3b20"/><path d="M88 107c26-18 118-20 146 0" stroke="#fff4d1" stroke-width="8" stroke-linecap="round"/><path d="M85 139h150c9 0 12 20 0 25H85c-12-5-9-25 0-25z" fill="#f0a33c"/><rect x="34" y="66" width="50" height="82" rx="8" fill="#ffd45d" transform="rotate(-7 59 107)"/><path d="M45 66l8 79M58 62l4 84M72 67l-7 77" stroke="#f7922e" stroke-width="8" stroke-linecap="round"/><rect x="234" y="48" width="42" height="100" rx="13" fill="#6a2d18"/><rect x="230" y="42" width="50" height="18" rx="9" fill="#f7f1e3"/><path d="M238 68h30M240 92h25M238 115h29" stroke="#a9572d" stroke-width="6" stroke-linecap="round"/></svg>`) },
-        { id: 'default_food_fries', name: '薯条', category: 'food', mimeType: 'image/svg+xml', src: svgDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 210"><rect width="320" height="210" fill="#f7f8f6"/><ellipse cx="162" cy="162" rx="92" ry="18" fill="#b56a22" opacity=".18"/><g stroke="#f7b747" stroke-width="14" stroke-linecap="round"><path d="M90 58l16 90"/><path d="M119 45l5 108"/><path d="M148 56l-12 96"/><path d="M174 42l2 112"/><path d="M205 58l-18 94"/></g><path d="M87 101h138l-19 67H106z" fill="#e82e28"/><path d="M102 107h108l-12 43H113z" fill="#ff4a3d"/><path d="M223 129c24-7 45 2 48 18 4 19-18 33-45 27" fill="none" stroke="#c92520" stroke-width="8" stroke-linecap="round"/><ellipse cx="248" cy="150" rx="25" ry="15" fill="#f6f1e8"/><ellipse cx="248" cy="150" rx="15" ry="8" fill="#d82922"/></svg>`) },
-        { id: 'default_food_drink', name: '冰饮', category: 'food', mimeType: 'image/svg+xml', src: svgDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 210"><rect width="320" height="210" fill="#f7f8f6"/><ellipse cx="165" cy="164" rx="58" ry="13" fill="#7d4a2b" opacity=".22"/><path d="M112 48h106l-16 116h-74z" fill="#d4a16d"/><path d="M119 81h91l-11 78h-68z" fill="#b77a3f"/><path d="M117 48h97v24h-96z" fill="#f5efe3"/><circle cx="139" cy="92" r="10" fill="#f6dfc5"/><circle cx="175" cy="85" r="11" fill="#f6dfc5"/><circle cx="194" cy="104" r="9" fill="#f6dfc5"/><path d="M178 37l24-28" stroke="#6b7280" stroke-width="7" stroke-linecap="round"/><path d="M120 70c23 13 62 15 91 2" stroke="#5b2f1e" stroke-width="8" opacity=".45"/></svg>`) },
-        { id: 'default_bg_green', name: '绿色商业背景', category: 'background', mimeType: 'image/svg+xml', src: svgDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 210"><defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#083d2b"/><stop offset="1" stop-color="#16c99a"/></linearGradient></defs><rect width="320" height="210" fill="url(#g)"/><path d="M0 146c72-44 136 30 220-10 47-22 69-51 100-44v118H0z" fill="#19d3a1"/><path d="M0 174c86-42 141 23 226-6 42-14 66-35 94-30v72H0z" fill="#00845d"/></svg>`) },
-        { id: 'default_bg_clean', name: '干净浅色背景', category: 'background', mimeType: 'image/svg+xml', src: svgDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 210"><defs><radialGradient id="r" cx=".55" cy=".35" r=".72"><stop stop-color="#ffffff"/><stop offset=".6" stop-color="#f2f4f0"/><stop offset="1" stop-color="#dfe5dc"/></radialGradient></defs><rect width="320" height="210" fill="url(#r)"/><path d="M26 159c76-12 118-10 190 5 27 6 50 6 78 0" fill="none" stroke="#cdd5ca" stroke-width="12" stroke-linecap="round" opacity=".65"/></svg>`) },
-        { id: 'default_bg_table', name: '木纹桌面', category: 'background', mimeType: 'image/svg+xml', src: svgDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 210"><rect width="320" height="210" fill="#b17445"/><path d="M0 42c42-15 74 16 112 0s70-13 112 0 68 11 96-2M0 98c54-17 95 18 137-2 34-16 78-9 112 1 28 8 47 9 71-1M0 156c62 16 106-17 157 1 48 17 91 8 163-6" fill="none" stroke="#7b4528" stroke-width="7" opacity=".45"/><path d="M0 0v210" stroke="#cf9261" stroke-width="22" opacity=".18"/></svg>`) }
-    ];
     let aiReferenceImages = [];
     let selectedKeywordTagIds = [];
     let presetLibrary = [];
@@ -1707,9 +1699,6 @@
 
     function cloneData(value) {
         return JSON.parse(JSON.stringify(value));
-    }
-    function svgDataUrl(svg) {
-        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     }
     function getFixedArtboardPresets() {
         return ARTBOARD_PRESETS.filter(p => FIXED_ARTBOARD_IDS.includes(p.id));
@@ -3345,13 +3334,6 @@
         if(currentAssetTab === 'reference') return document.getElementById('reference-element-upload').click();
         document.getElementById('logo-upload').click();
     }
-    function getAllReferenceElements() {
-        const customIds = new Set(referenceElements.map(item => item.id));
-        return [
-            ...DEFAULT_REFERENCE_ELEMENTS.filter(item => !customIds.has(item.id)),
-            ...referenceElements
-        ];
-    }
     function switchReferenceCategory(category) {
         referenceElementCategory = category === 'background' ? 'background' : 'food';
         renderAssetLibrary();
@@ -3382,13 +3364,16 @@
                 <button type="button" onclick="document.getElementById('reference-element-upload').click()">+ 上传</button>
             `;
             list.appendChild(controls);
-            const items = getAllReferenceElements().filter(item => item.category === referenceElementCategory);
+            list.appendChild(createReferenceDropZone());
+            const items = referenceElements.filter(item => item.category === referenceElementCategory);
             if(items.length === 0) {
-                list.innerHTML += `<div class="asset-empty">暂无参考元素，点击“上传”添加。</div>`;
+                const empty = document.createElement('div');
+                empty.className = 'asset-empty';
+                empty.textContent = `暂无${REFERENCE_ELEMENT_CATEGORIES[referenceElementCategory]}元素，拖入图片或点击上传添加。`;
+                list.appendChild(empty);
                 return;
             }
             items.forEach(item => {
-                const isDefault = String(item.id || '').startsWith('default_');
                 list.appendChild(createAssetItem({
                     title: item.name,
                     meta: `${REFERENCE_ELEMENT_CATEGORIES[item.category] || '参考'} · 拖到生图参考图`,
@@ -3396,10 +3381,38 @@
                     type: 'reference',
                     img: item.src,
                     onApply: () => addReferenceElementToAI(item),
-                    onDelete: isDefault ? null : () => deleteReferenceElement(item.id)
+                    onDelete: () => deleteReferenceElement(item.id)
                 }));
             });
         }
+    }
+    function createReferenceDropZone() {
+        const zone = document.createElement('button');
+        zone.type = 'button';
+        zone.className = 'reference-drop-zone';
+        zone.innerHTML = `拖拽上传${REFERENCE_ELEMENT_CATEGORIES[referenceElementCategory]}元素<br>或点击选择图片`;
+        zone.onclick = () => document.getElementById('reference-element-upload').click();
+        ['dragenter', 'dragover'].forEach(type => {
+            zone.addEventListener(type, e => {
+                if(!isFileDragEvent(e)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                zone.classList.add('drag-over');
+            });
+        });
+        ['dragleave', 'dragend'].forEach(type => {
+            zone.addEventListener(type, e => {
+                if(type === 'dragleave' && zone.contains(e.relatedTarget)) return;
+                zone.classList.remove('drag-over');
+            });
+        });
+        zone.addEventListener('drop', e => {
+            if(!isFileDragEvent(e)) return;
+            e.preventDefault();
+            zone.classList.remove('drag-over');
+            addReferenceElementFiles(e.dataTransfer.files).catch(err => showToast(err.message || '参考元素保存失败', true));
+        });
+        return zone;
     }
     function createAssetItem({ title, meta, type, asset, img, current = false, onApply, onDelete }) {
         const item = document.createElement('div'); item.className = `asset-item ${current ? 'current' : ''}`;
