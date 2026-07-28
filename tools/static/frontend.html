@@ -224,13 +224,14 @@
         }
 
         body.asset-library-expanded .asset-library-card {
-            min-height: min(74vh, 760px);
+            min-height: 0;
         }
 
         body.asset-library-expanded .asset-library-card .asset-list {
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
-            max-height: min(70vh, 720px);
+            max-height: none;
+            overflow-y: visible;
             padding-right: 8px;
         }
 
