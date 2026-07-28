@@ -176,13 +176,21 @@
         .asset-item.reference-element:active { cursor: grabbing; }
 
         .asset-library-expand-btn {
-            width: 26px;
-            min-width: 26px;
-            height: 26px;
+            width: 32px;
+            min-width: 32px;
+            height: 30px;
             padding: 0;
-            border-radius: 999px;
-            font-size: 15px;
+            border-radius: 9px;
+            background: #F2F4F3;
+            color: var(--text-sub);
+            font-size: 16px;
+            font-weight: 700;
             line-height: 1;
+        }
+
+        .asset-library-expand-btn:hover {
+            background: #E8EBE9;
+            color: var(--text-main);
         }
 
         .asset-library-actions {
@@ -197,6 +205,22 @@
             padding: 0 7px !important;
             font-size: 10px !important;
             white-space: nowrap;
+        }
+
+        .asset-library-footer {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .asset-library-note {
+            flex: 1;
+            min-width: 0;
+            font-size: 11px;
+            color: var(--text-sub);
+            line-height: 1.5;
         }
 
         body.asset-library-expanded .asset-library-card {
@@ -1475,11 +1499,10 @@
         </div>
 
         <div class="pane-content">
-            <div class="module-card">
+            <div class="module-card asset-library-card">
             <div class="card-title">
                 <div class="card-title-wrap">资产库</div>
                 <div class="asset-library-actions">
-                    <button class="btn-icon asset-library-expand-btn" id="asset-library-expand-btn" onclick="toggleAssetLibraryExpanded()" title="上下展开资产库">↕</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="exportAssetBackup()" title="导出当前域名下的版式、标签组、Logo 和字体">导出包</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="document.getElementById('backup-import').click()" title="导入从正式版导出的资产包">导入包</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="saveTemplatePack()">保存套组</button>
@@ -1493,7 +1516,10 @@
                 <button class="asset-tab" data-asset-tab="reference" onclick="switchAssetTab('reference')">参考元素</button>
             </div>
             <div class="asset-list" id="asset-list-ui"></div>
-            <div style="font-size:11px; color:var(--text-sub); line-height:1.5; margin-top:8px;">正式版和测试版会读取同一份云端公共资产库。</div>
+            <div class="asset-library-footer">
+                <div class="asset-library-note">正式版和测试版会读取同一份云端公共资产库。</div>
+                <button class="btn-icon asset-library-expand-btn" id="asset-library-expand-btn" onclick="toggleAssetLibraryExpanded()" title="上下展开资产库" aria-label="上下展开资产库">⌃</button>
+            </div>
         </div>
 
             <div class="module-card">
@@ -3491,8 +3517,9 @@
         document.body.classList.toggle('asset-library-expanded', expanded);
         const button = document.getElementById('asset-library-expand-btn');
         if(button) {
-            button.textContent = '↕';
+            button.textContent = expanded ? '⌄' : '⌃';
             button.title = expanded ? '收起资产库' : '上下展开资产库';
+            button.setAttribute('aria-label', button.title);
         }
         requestAnimationFrame(() => resizeCanvas());
     }
