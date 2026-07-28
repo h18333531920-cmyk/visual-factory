@@ -60,7 +60,7 @@ create table if not exists public.vf_asset_events (
   id uuid primary key default gen_random_uuid(),
   actor_id uuid references auth.users(id) on delete set null default auth.uid(),
   actor_role public.vf_role,
-  event_type text not null check (event_type in ('download_preview', 'download_source', 'use_static', 'use_dynamic')),
+  event_type text not null check (event_type in ('download_preview', 'download_source', 'use_static', 'use_dynamic', 'use_template')),
   source_file_id uuid references public.vf_source_files(id) on delete cascade,
   preview_id uuid references public.vf_asset_previews(id) on delete cascade,
   meta jsonb not null default '{}'::jsonb,

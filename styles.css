@@ -2400,8 +2400,7 @@ select:focus {
 }
 
 .library-control-strip {
-  width: min(1540px, 100%);
-  margin: 0 auto;
+  margin: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
@@ -3163,16 +3162,15 @@ select:focus {
 
 .library-kind-card-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .library-kind-card {
-  min-height: 92px;
-  display: grid;
-  gap: 8px;
-  align-content: center;
-  justify-items: start;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #d5deeb;
   border-radius: var(--vf-ui-radius);
   padding: 18px 20px;
@@ -3255,7 +3253,7 @@ select:focus {
   z-index: 40;
   left: 0;
   right: 0;
-  top: calc(100% + 8px);
+  top: calc(100% + 0px);
   max-height: 220px;
   display: grid;
   gap: 4px;
@@ -3268,7 +3266,7 @@ select:focus {
   opacity: 0;
   pointer-events: none;
   transform: translateY(-4px);
-  transition: opacity 130ms ease, transform 130ms ease;
+  transition: opacity 130ms ease, transform 130ms ease, visibility 0s 50ms;
 }
 
 .upload-tag-picker:hover .upload-tag-menu,
@@ -5283,7 +5281,12 @@ body,
   background: transparent;
 }
 
-#library-upload-modal .library-upload-section,
+#library-upload-modal .library-upload-section {
+  gap: 7px;
+}
+#library-upload-modal .library-upload-section > span {
+  margin-bottom: 8px;
+}
 #library-upload-modal .library-form label,
 #library-upload-modal .upload-tag-picker {
   gap: 7px;
@@ -6985,7 +6988,6 @@ textarea {
 .admin-section,
 .panel,
 .request-hero,
-.library-control-strip,
 .library-inspector,
 .modal,
 .library-modal {
@@ -7038,7 +7040,6 @@ label,
 input,
 select,
 textarea,
-.library-search-pill,
 .library-form input,
 .library-form select,
 .upload-tag-trigger,
@@ -7053,7 +7054,6 @@ textarea,
 input:focus,
 select:focus,
 textarea:focus,
-.library-search-pill:focus-within,
 .upload-tag-trigger:focus {
   border-color: rgba(16, 19, 24, 0.42);
   box-shadow: 0 0 0 4px rgba(16, 19, 24, 0.06);
@@ -7292,8 +7292,6 @@ body .app-shell[data-route="home"] .library-control-strip,
   gap: 14px 18px;
   align-items: center;
   padding: 18px 20px 20px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.94);
 }
 
 .library-kind-tabs {
@@ -8081,4 +8079,51 @@ body .app-shell[data-route="home"] .library-control-strip {
   body .app-shell[data-route="home"] .library-module-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* --- Library page layout override --- */
+body .app-shell[data-route="library"] .library-control-strip {
+  margin-left: 0 !important;
+  margin-inline: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+body .app-shell[data-route="library"] .library-tag-rows {
+  margin-left: 0;
+}
+
+body .app-shell[data-route="library"] .library-control-strip,
+body .app-shell:not([data-route="home"]) .library-control-strip,
+.library-page:not(.library-page-home) .library-control-strip {
+  margin-left: 0 !important;
+  margin-inline: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  width: 100% !important;
+}
+
+/* Override for home page library section too */
+body .app-shell[data-route="home"] .library-control-strip {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 18px 0 !important;
+}
+
+body .app-shell[data-route="library"] .library-control-strip {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Left-align board with control strip on library page */
+body .app-shell[data-route="library"] .library-board {
+  margin-left: 0 !important;
+  margin-inline: 0 !important;
+  width: 100% !important;
 }

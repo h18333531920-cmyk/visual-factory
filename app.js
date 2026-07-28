@@ -112,7 +112,7 @@
   const LIBRARY_RENDER_STEP = 80;
   const SUPABASE_IN_BATCH_SIZE = 200;
   const SIGNED_URL_BATCH_SIZE = 100;
-  const SOURCE_EXTENSIONS = ['psd', 'ai', 'pdf'];
+  const SOURCE_EXTENSIONS = ['psd', 'psb', 'ai', 'pdf', 'zip', 'rar', '7z', 'gz', 'tar'];
   const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
   const PREVIEW_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   const TEMPLATE_EXTENSIONS = ['json'];
@@ -123,34 +123,33 @@
   };
   const LIBRARY_KIND_TABS = [
     { id: 'all', zh: '全部', en: 'All' },
-    { id: 'source', zh: '源文件库', en: 'Source Files' },
+    { id: 'source', zh: '案例库', en: 'Case Library' },
     { id: 'gallery', zh: '图库', en: 'Gallery' },
     { id: 'template', zh: '模板库', en: 'Templates' }
   ];
   const LIBRARY_TAGS = {
     gallery: {
-      tag1: ['未分类', '沙特阿拉伯', '阿联酋', '卡塔尔', '科威特', '巴林', '阿曼'],
-      tag2: ['未分类', '虚拟食物', '商家食物', 'Logo素材', 'kiki素材', '其他素材'],
-      tag3ByTag2: {
-        '虚拟食物': ['未分类', '汉堡', '披萨', '阿拉伯菜', '三明治', '小吃', '健康餐', '烧烤', '甜品', '饮品'],
-        '商家食物': ['未分类', '汉堡', '披萨', '阿拉伯菜', '三明治', '小吃', '健康餐', '烧烤', '甜品', '饮品']
+      tag1: ['商家食物', '虚拟食物', 'LOGO素材', 'KIKI素材', '其他素材'],
+      tag2ByTag1: {
+        '商家食物': ['汉堡', '披萨', '阿拉伯菜', '三明治', '小吃', '健康餐', '烧烤', '甜品', '饮品', '未分类'],
+        '虚拟食物': ['汉堡', '披萨', '阿拉伯菜', '三明治', '小吃', '健康餐', '烧烤', '甜品', '饮品', '未分类'],
+        'LOGO素材': ['keeta logo', '商家logo', '未分类']
       }
     },
     source: {
-      tag1: ['未分类', '沙特阿拉伯', '阿联酋', '卡塔尔', '科威特', '巴林', '阿曼'],
-      tag2: ['未分类', '日常运营', '大促营销', '异业合作', '品牌规范'],
-      tag3: ['未分类', 'C端', 'B端', 'D端', 'M端'],
-      tag4ByTag3: {
-        'C端': ['头图', 'banner', '弹窗', '其他'],
-        'M端': ['OB', 'OOH', '社媒物料', '其他']
+      tag1: ['C端', 'B端', 'D端', 'M端'],
+      tag2ByTag1: {
+        'C端': ['开机海报', '弹窗', '头图', 'banner', '会场', '标签'],
+        'B端': ['海报', '落地页'],
+        'D端': ['骑手服装', '骑手装备'],
+        'M端': ['社媒物料', 'OOH', 'OB']
       }
     },
     template: {
-      tag1: ['未分类', '沙特阿拉伯', '阿联酋', '卡塔尔', '科威特', '巴林', '阿曼'],
-      tag2: ['未分类', '静态模板', '动态模板'],
-      tag3ByTag2: {
-        '静态模板': ['头图', 'banner', '弹窗', '社媒物料', '其他'],
-        '动态模板': ['弹窗', '社媒物料', '其他']
+      tag1: ['资源位模板', '组件'],
+      tag2ByTag1: {
+        '资源位模板': ['开机海报', '弹窗', '头图', 'banner'],
+        '组件': ['标签', '场景']
       }
     }
   };
@@ -186,7 +185,11 @@
       country: 'all',
       activity: 'all',
       category: 'all',
-      favorites: false
+      uploadTag1: 'all',
+      favorites: false,
+      selectedCountries: [],
+      selectedActivities: [],
+      searchHistory: []
     }
   };
 
@@ -737,29 +740,52 @@
           </div>
         </section>
 
-        <section class="library-control-strip">
-          <div class="library-kind-tabs" role="tablist">
+        <section class="library-control-strip" style="margin-left:0!important;margin-inline:0!important;padding-left:0!important;padding-right:0!important;background:transparent!important;border:none!important;border-radius:0!important;width:100%!important;grid-template-columns:1fr auto auto!important">
+          <div class="library-kind-tabs" role="tablist" style="position:relative;">
+            <div class="kind-tab-indicator" style="position:absolute;bottom:0;height:3px;background:#111827;border-radius:999px;transition:left 0.3s ease,width 0.3s ease;pointer-events:none;z-index:1;"></div>
             ${LIBRARY_KIND_TABS.map(tab => `<button type="button" class="${activeKind === tab.id ? 'active' : ''}" data-library-kind="${tab.id}">${escapeHtml(state.lang === 'zh' ? tab.zh : tab.en)}</button>`).join('')}
+            <div class="search-wrap">
+            <label class="library-search-pill" aria-label="${state.lang === 'zh' ? '搜索内容' : 'Search'}" style="margin-left:12px;">
+              <input id="library-search" placeholder="" value="${escapeAttr(state.libraryFilters.query)}">
+              <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg></span>
+            </label>
+            <div id="search-history-dropdown" class="search-history-dropdown" hidden>
+              <div class="search-history-list" id="search-history-list"></div>
+            </div>
+            </div>
           </div>
           <div class="library-upload-area">
             ${canUpload ? `<button class="library-upload-pill" type="button" id="open-upload-modal">${state.lang === 'zh' ? '上传素材 +' : 'Upload +'}</button>` : ''}
           </div>
-          <button class="ghost-btn" type="button" id="library-favorite-filter">${state.libraryFilters.favorites ? t('favoritesOnly') : t('allAssets')}</button>
-          <div id="library-tag-rows" class="library-tag-rows">${renderLibraryTagRows(activeKind)}</div>
-          <label class="library-search-pill" aria-label="${state.lang === 'zh' ? '搜索内容' : 'Search'}">
-            <input id="library-search" placeholder="${state.lang === 'zh' ? '搜索内容' : 'Search content'}" value="${escapeAttr(state.libraryFilters.query)}">
-            <span>⌕</span>
-          </label>
+          <div class="filter-dropdown-wrap">
+            <button class="ghost-btn" type="button" id="library-filter-btn">${state.lang === 'zh' ? '筛选 ▾' : 'Filter ▾'}</button>
+            <div id="library-filter-panel" class="filter-dropdown" hidden>
+              <div class="filter-section" id="filter-country-section">
+                <h4>${state.lang === 'zh' ? '国家' : 'Country'}</h4>
+                <div class="filter-capsules" id="filter-country-options">
+                  <button type="button" class="filter-capsule active" data-value="all">${state.lang === 'zh' ? '全部' : 'All'}</button>
+                </div>
+              </div>
+              <div class="filter-section" id="filter-activity-section">
+                <h4>${state.lang === 'zh' ? '活动类型' : 'Activity'}</h4>
+                <div class="filter-capsules" id="filter-activity-options">
+                  <button type="button" class="filter-capsule active" data-value="all">${state.lang === 'zh' ? '全部' : 'All'}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+                  <div id="library-tag-rows" class="library-tag-rows">${renderLibraryTagRows(activeKind)}</div>
         </section>
 
         <section id="library-status" class="library-status">${state.lang === 'zh' ? '正在读取素材库...' : 'Loading library...'}</section>
-        <section class="library-board">
+        <section class="library-board" style="margin-left:0!important;margin-inline:0!important;padding-left:0!important;width:100%!important">
           <section id="library-grid" class="library-grid"></section>
           <aside id="library-inspector" class="library-inspector"></aside>
         </section>
 
         ${canUpload ? renderUploadModal() : ''}
         ${renderEditModal()}
+        ${renderLibraryDetailModal()}
       </div>
     `;
     wireLibraryShell();
@@ -767,13 +793,11 @@
   }
 
   function renderUploadModal() {
-    const defaultKind = state.libraryFilters.kind === 'source' ? 'source' : 'gallery';
+    const defaultKind = 'source';
     return `
       <div id="library-upload-modal" class="modal-backdrop" hidden>
         <section class="modal library-modal">
           <div class="modal-head">
-            <h3>${state.lang === 'zh' ? '上传素材' : 'Upload Asset'}</h3>
-            <button class="icon-btn" id="close-library-upload" type="button" aria-label="Close">x</button>
           </div>
           <form id="library-upload-form" class="library-form">
             <input type="hidden" name="library_kind" id="library-upload-kind" value="${defaultKind}">
@@ -781,39 +805,65 @@
               <div class="library-upload-section">
                 <span>${state.lang === 'zh' ? '入库位置' : 'Library section'}</span>
                 <div class="library-kind-card-grid" role="radiogroup" aria-label="${state.lang === 'zh' ? '入库位置' : 'Library section'}">
+                  <button type="button" class="library-kind-card ${defaultKind === 'source' ? 'active' : ''}" data-upload-kind-card="source">
+                    <strong>${state.lang === 'zh' ? '案例库' : 'Case Library'}</strong>
+                  </button>
                   <button type="button" class="library-kind-card ${defaultKind === 'gallery' ? 'active' : ''}" data-upload-kind-card="gallery">
                     <strong>${state.lang === 'zh' ? '图库' : 'Gallery'}</strong>
-                    <small>${state.lang === 'zh' ? 'JPG / PNG / WEBP，可多选' : 'JPG / PNG / WEBP, multiple allowed'}</small>
                   </button>
-                  <button type="button" class="library-kind-card ${defaultKind === 'source' ? 'active' : ''}" data-upload-kind-card="source">
-                    <strong>${state.lang === 'zh' ? '源文件库' : 'Source Files'}</strong>
-                    <small>${state.lang === 'zh' ? 'PSD / AI / PDF + 预览图' : 'PSD / AI / PDF + previews'}</small>
+                  <button type="button" class="library-kind-card ${defaultKind === 'template' ? 'active' : ''}" data-upload-kind-card="template">
+                    <strong>${state.lang === 'zh' ? '模板库' : 'Templates'}</strong>
                   </button>
                 </div>
               </div>
               <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" id="library-upload-title" maxlength="120" required></label>
               <div id="library-upload-tag-controls" class="library-upload-tags">${renderUploadTagControls(defaultKind)}</div>
-              <div class="library-form-grid two">
-                <label><span>${t('visibility')}</span><select name="visibility"><option value="all">${t('allVisible')}</option></select></label>
-                <label><span>${state.lang === 'zh' ? '标签' : 'Tags'}</span><input name="tags" placeholder="${state.lang === 'zh' ? '用逗号分隔，可选' : 'Comma separated, optional'}"></label>
+              <div class="library-form-grid two" id="upload-meta-row">
+<div class="upload-tag-picker" data-upload-tag-picker="country" id="upload-country-field">
+                  <span>${state.lang === 'zh' ? '国家' : 'Country'}</span>
+                  <input type="hidden" name="country" value="all" data-upload-tag-input="country">
+                  <button type="button" class="upload-tag-trigger" data-upload-tag-trigger="country">
+                    <strong>${state.lang === 'zh' ? '全部' : 'All'}</strong>
+                  </button>
+                  <div class="upload-tag-menu" role="menu" data-upload-meta-menu="country"></div>
+                </div>
+                <div class="upload-tag-picker" data-upload-tag-picker="activity" id="upload-activity-field">
+                  <span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span>
+                  <input type="hidden" name="activity" value="all" data-upload-tag-input="activity">
+                  <button type="button" class="upload-tag-trigger" data-upload-tag-trigger="activity">
+                    <strong>${state.lang === 'zh' ? '全部' : 'All'}</strong>
+                  </button>
+                  <div class="upload-tag-menu" role="menu" data-upload-meta-menu="activity"></div>
+                </div>
               </div>
+
               <label class="library-drop-zone" data-upload-mode="gallery" data-drop-input="library-gallery-input">
                 <input name="gallery_files" id="library-gallery-input" type="file" accept="image/jpeg,image/png,image/webp" multiple>
                 <span>${state.lang === 'zh' ? '图库图片' : 'Gallery images'}</span>
                 <strong>${state.lang === 'zh' ? '拖拽 JPG / PNG / WEBP 到这里，可多选' : 'Drop JPG / PNG / WEBP here, multiple allowed'}</strong>
                 <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No files selected'}</small>
+                <div class="drop-thumb-strip" data-thumb-strip style="display:none;"></div>
               </label>
-              <label class="library-drop-zone" data-upload-mode="source" data-drop-input="library-source-input">
-                <input name="source_file" id="library-source-input" type="file" accept=".psd,.ai,.pdf,application/pdf">
-                <span>${state.lang === 'zh' ? '源文件' : 'Source file'}</span>
-                <strong>${state.lang === 'zh' ? '拖拽 1 个 PSD / AI / PDF 到这里' : 'Drop one PSD / AI / PDF here'}</strong>
+              <div class="library-form-grid two" data-upload-mode="source">
+                <label class="library-drop-zone" data-drop-input="library-source-input">
+                  <input name="source_file" id="library-source-input" type="file" accept=".psd,.psb,.ai,.pdf,.zip,.rar,.7z,.gz,.tar,application/pdf,application/zip,application/x-rar-compressed,application/x-7z-compressed,application/gzip,application/x-tar">
+                  <span>${state.lang === 'zh' ? '源文件' : 'Source file'}</span>
+                  <strong>${state.lang === 'zh' ? '拖拽 1 个 PSD / PSB / AI / PDF / ZIP 到这里' : 'Drop one PSD / PSB / AI / PDF / ZIP here'}</strong>
+                  <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No file selected'}</small>
+                </label>
+                <label class="library-drop-zone" data-drop-input="library-preview-input">
+                  <input name="preview_files" id="library-preview-input" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+                  <span>${state.lang === 'zh' ? '预览图' : 'Preview images'}</span>
+                  <strong>${state.lang === 'zh' ? '拖拽 1-5 张 JPG / PNG / WEBP 到这里' : 'Drop 1-5 JPG / PNG / WEBP files here'}</strong>
+                  <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No file selected'}</small>
+                  <div class="drop-thumb-strip" data-thumb-strip style="display:none;"></div>
+                </label>
+              </div>
+              <label class="library-drop-zone" data-upload-mode="template" data-drop-input="library-template-input">
+                <input name="template_file" id="library-template-input" type="file" accept=".json">
+                <span>${state.lang === 'zh' ? '模板文件' : 'Template file'}</span>
+                <strong>${state.lang === 'zh' ? '拖拽 JSON 模板到这里' : 'Drop JSON template here'}</strong>
                 <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No file selected'}</small>
-              </label>
-              <label class="library-drop-zone" data-upload-mode="source" data-drop-input="library-preview-input">
-                <input name="preview_files" id="library-preview-input" type="file" accept="image/jpeg,image/png,image/webp" multiple>
-                <span>${state.lang === 'zh' ? '预览图' : 'Preview images'}</span>
-                <strong>${state.lang === 'zh' ? '拖拽 1-5 张 JPG / PNG / WEBP 到这里' : 'Drop 1-5 JPG / PNG / WEBP files here'}</strong>
-                <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No files selected'}</small>
               </label>
             </div>
             <div class="library-upload-footer">
@@ -831,22 +881,28 @@
 
   function renderUploadTagControls(kind) {
     const emptyLabel = state.lang === 'zh' ? '未分类' : 'Unclassified';
-    return uploadLibraryTagRows(kind).map(row => `
+    const rows = uploadLibraryTagRows(kind);
+    return rows.map(row => {
+      const isTag1 = row.key === 'tag1';
+      const items = isTag1 ? row.values : ['all', ...row.values];
+      const defVal = isTag1 && row.values.includes(state.libraryFilters.uploadTag1) ? state.libraryFilters.uploadTag1 : 'all';
+      const defLabel = defVal === 'all' ? emptyLabel : defVal;
+      return `
       <div class="upload-tag-picker" data-upload-tag-picker="${row.key}">
         <span>${escapeHtml(row.label)}</span>
-        <input type="hidden" name="${row.key}" value="all" data-upload-tag-input="${row.key}">
+        <input type="hidden" name="${row.key}" value="${defVal}" data-upload-tag-input="${row.key}">
         <button type="button" class="upload-tag-trigger" data-upload-tag-trigger="${row.key}">
-          <strong>${escapeHtml(emptyLabel)}</strong>
-          <small>${state.lang === 'zh' ? '悬浮选择' : 'Hover to choose'}</small>
+          <strong>${escapeHtml(defLabel)}</strong>
         </button>
         <div class="upload-tag-menu" role="menu">
-          ${['all', ...row.values].map(value => {
+          ${items.map(value => {
             const label = value === 'all' ? emptyLabel : value;
-            return `<button type="button" class="${value === 'all' ? 'active' : ''}" data-upload-tag-option="${row.key}" data-upload-tag-value="${escapeAttr(value)}">${escapeHtml(label)}</button>`;
+            const active = value === defVal;
+            return `<button type="button" class="${active ? 'active' : ''}" data-upload-tag-option="${row.key}" data-upload-tag-value="${escapeAttr(value)}">${escapeHtml(label)}</button>`;
           }).join('')}
         </div>
       </div>
-    `).join('');
+    `}).join('');
   }
 
   function uploadLibraryTagRows(kind) {
@@ -858,6 +914,11 @@
     const rows = [];
     if (config.tag1) rows.push({ key: 'tag1', label: labels.tag1, values: config.tag1 });
     if (config.tag2) rows.push({ key: 'tag2', label: labels.tag2, values: config.tag2 });
+    const tag1 = state.libraryFilters.uploadTag1;
+    if (config.tag2ByTag1) {
+      const vals = (tag1 !== 'all' && config.tag2ByTag1[tag1]) ? config.tag2ByTag1[tag1] : [...new Set(Object.values(config.tag2ByTag1).flat())];
+      rows.push({ key: 'tag2', label: labels.tag2, values: vals });
+    }
     const tag3Values = config.tag3 || Object.values(config.tag3ByTag2 || {}).flat();
     if (tag3Values?.length) rows.push({ key: 'tag3', label: labels.tag3, values: uniqueValues(tag3Values) });
     const tag4Values = Object.values(config.tag4ByTag3 || {}).flat();
@@ -883,7 +944,11 @@
             <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" maxlength="120" required></label>
             <div class="library-form-grid two">
               <label><span>${state.lang === 'zh' ? '所在库' : 'Library section'}</span><input name="kind_label" readonly></label>
-              <label><span>${t('visibility')}</span><select name="visibility"><option value="all">${t('allVisible')}</option></select></label>
+            </div>
+            <div class="library-form-grid">
+              <label><span>${state.lang === 'zh' ? '国家' : 'Country'}</span><select name="country" id="library-edit-country"></select></label>
+              <label><span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span><select name="activity" id="library-edit-activity"></select></label>
+              <label><span>${state.lang === 'zh' ? '品类' : 'Category'}</span><select name="category" id="library-edit-category"></select></label>
             </div>
             <div class="library-form-grid">
               <label><span>${state.lang === 'zh' ? '标签' : 'Tags'}</span><input name="tags" placeholder="${state.lang === 'zh' ? '用逗号分隔' : 'Comma separated'}"></label>
@@ -914,14 +979,19 @@
         state.libraryFilters.tag2 = 'all';
         state.libraryFilters.tag3 = 'all';
         state.libraryFilters.tag4 = 'all';
+        state.libraryFilters.selectedCountries = [];
+        state.libraryFilters.selectedActivities = [];
         state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
         document.querySelectorAll('[data-library-kind]').forEach(item => item.classList.toggle('active', item.dataset.libraryKind === state.libraryFilters.kind));
         document.getElementById('library-tag-rows').innerHTML = renderLibraryTagRows(state.libraryFilters.kind || 'all');
         wireLibraryTagButtons();
         renderLibraryGrid();
+        updateKindTabIndicator();
+        alignTagRows();
       });
     });
     wireLibraryTagButtons();
+    setTimeout(() => { updateKindTabIndicator(); alignTagRows(); }, 50);
     document.getElementById('open-upload-modal')?.addEventListener('click', openLibraryUploadModal);
     document.getElementById('close-library-upload')?.addEventListener('click', closeLibraryUploadModal);
     document.getElementById('cancel-library-upload')?.addEventListener('click', closeLibraryUploadModal);
@@ -929,39 +999,106 @@
     wireLibraryUploadDrops();
     wireLibraryUploadKindCards();
     wireUploadTagPickers();
+    wireUploadTagHover();
     document.querySelectorAll('[data-upload-kind-card]').forEach(button => {
       button.addEventListener('click', () => {
-        const kind = button.dataset.uploadKindCard === 'gallery' ? 'gallery' : 'source';
+        const kind = button.dataset.uploadKindCard;
         const input = document.getElementById('library-upload-kind');
         if (input) input.value = kind;
+        state.libraryFilters.uploadTag1 = kind === 'source' ? 'C端' : 'all';
         document.getElementById('library-upload-tag-controls').innerHTML = renderUploadTagControls(kind);
         updateLibraryUploadMode(kind);
         wireLibraryUploadKindCards();
         wireUploadTagPickers();
+        wireUploadTagHover();
       });
     });
     document.getElementById('close-library-edit')?.addEventListener('click', closeLibraryEditModal);
     document.getElementById('cancel-library-edit')?.addEventListener('click', closeLibraryEditModal);
     document.getElementById('library-edit-form')?.addEventListener('submit', saveLibraryEdit);
-    document.getElementById('library-search')?.addEventListener('input', event => {
-      state.libraryFilters.query = event.target.value.trim();
-      state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
-      renderLibraryGrid();
+    document.getElementById('close-library-detail')?.addEventListener('click', closeLibraryDetailModal);
+    document.getElementById('library-detail-modal')?.addEventListener('click', event => {
+      if (event.target === document.getElementById('library-detail-modal')) closeLibraryDetailModal();
     });
-    document.getElementById('library-hero-search')?.addEventListener('input', event => {
-      state.libraryFilters.query = event.target.value.trim();
-      const search = document.getElementById('library-search');
-      if (search) search.value = state.libraryFilters.query;
-      state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
-      renderLibraryGrid();
+    const searchInput = document.getElementById('library-search');
+    searchInput?.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        state.libraryFilters.query = event.target.value.trim();
+        if (state.libraryFilters.query && !state.libraryFilters.searchHistory.includes(state.libraryFilters.query)) {
+          state.libraryFilters.searchHistory.unshift(state.libraryFilters.query);
+          if (state.libraryFilters.searchHistory.length > 6) state.libraryFilters.searchHistory.pop();
+        }
+        state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
+        renderLibraryGrid();
+      }
     });
-    document.getElementById('library-favorite-filter')?.addEventListener('click', () => {
-      state.libraryFilters.favorites = !state.libraryFilters.favorites;
-      state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
-      const button = document.getElementById('library-favorite-filter');
-      if (button) button.textContent = state.libraryFilters.favorites ? t('favoritesOnly') : t('allAssets');
-      renderLibraryGrid();
+    searchInput?.addEventListener('focus', () => {
+      const pill = searchInput.closest('.library-search-pill');
+      if (pill) {
+        const icon = pill.querySelector('span');
+        if (icon) {
+          icon.style.background = '#111827';
+          const svg = icon.querySelector('svg');
+          if (svg) svg.style.stroke = '#ffffff';
+        }
+      }
+      const history = document.getElementById('search-history-dropdown');
+      const list = document.getElementById('search-history-list');
+      if (history && list && state.libraryFilters.searchHistory.length) {
+        const label = state.lang === 'zh' ? '历史搜索' : 'History';
+        list.innerHTML = '<div class="search-history-label">' + label + '</div><div class="search-history-items">' +
+          state.libraryFilters.searchHistory.map(q => '<button type="button" class="search-history-item">' + escapeHtml(q) + '</button>').join('') +
+          '</div>';
+        list.querySelectorAll('.search-history-item').forEach(btn => {
+          btn.addEventListener('click', () => {
+            state.libraryFilters.query = btn.textContent;
+            if (searchInput) searchInput.value = state.libraryFilters.query;
+            history.hidden = true;
+            state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
+            renderLibraryGrid();
+          });
+        });
+        history.hidden = false;
+      }
     });
+    searchInput?.addEventListener('blur', () => {
+      const pill = searchInput.closest('.library-search-pill');
+      if (pill) {
+        const icon = pill.querySelector('span');
+        if (icon) {
+          icon.style.background = '';
+          const svg = icon.querySelector('svg');
+          if (svg) svg.style.stroke = '';
+        }
+      }
+      setTimeout(() => {
+        const history = document.getElementById('search-history-dropdown');
+        if (history) history.hidden = true;
+      }, 200);
+    });
+    document.getElementById('library-hero-search')?.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        state.libraryFilters.query = event.target.value.trim();
+        const search = document.getElementById('library-search');
+        if (search) search.value = state.libraryFilters.query;
+        state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
+        renderLibraryGrid();
+      }
+    });
+    const filterBtn = document.getElementById('library-filter-btn');
+    const filterPanel = document.getElementById('library-filter-panel');
+    filterBtn?.addEventListener('click', () => {
+      if (!filterPanel) return;
+      filterPanel.hidden = !filterPanel.hidden;
+      if (!filterPanel.hidden) populateFilterOptions();
+    });
+    document.addEventListener('click', event => {
+      const wrap = document.querySelector('.filter-dropdown-wrap');
+      if (filterPanel && wrap && !wrap.contains(event.target) && !filterPanel.hidden) {
+        filterPanel.hidden = true;
+      }
+    });
+
   }
 
   function wireLibraryTagButtons() {
@@ -987,12 +1124,91 @@
     });
   }
 
+      
+  function populateFilterOptions() {
+    const countrySection = document.getElementById('filter-country-section');
+    const actSection = document.getElementById('filter-activity-section');
+    if (countrySection) {
+      countrySection.style.display = state.libraryFilters.kind === 'template' ? 'none' : '';
+    }
+    if (actSection) {
+      actSection.style.display = (state.libraryFilters.kind === 'source' || state.libraryFilters.kind === 'template') ? '' : 'none';
+    }
+    ['country', 'activity'].forEach(type => {
+      const container = document.getElementById('filter-' + type + '-options');
+      if (!container) return;
+      const typeLabel = type === 'country' ? 'Countries' : 'Activities';
+      const selectedAll = !state.libraryFilters['selected' + typeLabel]?.length;
+      let items;
+      if (type === 'activity') {
+        items = [
+          { id: 'daily', name_zh: '日常活动', name_en: 'Daily' },
+          { id: 's-level', name_zh: 'S级活动', name_en: 'S-Level' },
+          { id: 'series', name_zh: '系列活动', name_en: 'Series' }
+        ];
+      } else {
+        items = libraryOptions(type);
+      }
+      let html = '<button type="button" class="filter-capsule' + (selectedAll ? ' active' : '') + '" data-value="all">' + (state.lang === 'zh' ? '全部' : 'All') + '</button>';
+      html += items.map(item => {
+        const sel = state.libraryFilters['selected' + typeLabel]?.includes(item.id);
+        return '<button type="button" class="filter-capsule' + (sel ? ' active' : '') + '" data-value="' + item.id + '">' + escapeHtml(state.lang === 'zh' ? item.name_zh : (item.name_en || item.name_zh)) + '</button>';
+      }).join('');
+      container.innerHTML = html;
+      container.querySelectorAll('.filter-capsule').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (btn.dataset.value === 'all') {
+            container.querySelectorAll('.filter-capsule').forEach(b => b.classList.toggle('active', b === btn));
+          } else {
+            const allBtn = container.querySelector('.filter-capsule[data-value="all"]');
+            if (allBtn) allBtn.classList.remove('active');
+            btn.classList.toggle('active');
+          }
+          const activeButtons = container.querySelectorAll('.filter-capsule.active:not([data-value="all"])');
+          state.libraryFilters['selected' + typeLabel] = Array.from(activeButtons).map(b => b.dataset.value);
+          state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
+          renderLibraryGrid();
+        });
+      });
+    });
+  }
+
+  function updateKindTabIndicator() {
+    const tabs = document.querySelector('.library-kind-tabs');
+    const indicator = tabs?.querySelector('.kind-tab-indicator');
+    const active = tabs?.querySelector('[data-library-kind].active');
+    if (!indicator || !active) {
+      if (indicator) indicator.style.display = 'none';
+      return;
+    }
+    const tabRect = active.getBoundingClientRect();
+    const containerRect = tabs.getBoundingClientRect();
+    indicator.style.display = 'block';
+    indicator.style.left = (tabRect.left - containerRect.left) + 'px';
+    indicator.style.width = tabRect.width + 'px';
+  }
+
+  function alignTagRows() {
+    const tabs = document.querySelector('.library-kind-tabs');
+    const tagRows = document.getElementById('library-tag-rows');
+    if (!tabs || !tagRows) return;
+    const tabRect = tabs.getBoundingClientRect();
+    const tagRect = tagRows.getBoundingClientRect();
+    const diff = Math.round(tabRect.left - tagRect.left);
+    console.log('[align] tabLeft:', tabRect.left, 'tagLeft:', tagRect.left, 'diff:', diff);
+    if (diff !== 0) {
+      tagRows.style.paddingLeft = diff + 'px';
+      console.log('[align] set paddingLeft to', diff);
+    } else {
+      tagRows.style.paddingLeft = '';
+    }
+  }
+
   function renderLibraryTagRows(kind) {
     if (!kind || kind === 'all') return '';
     const rows = libraryTagRows(kind);
     return rows.map(row => `
       <div class="library-tag-row">
-        <span>${escapeHtml(row.label)}</span>
         <div>
           ${['all', ...row.values].map(value => {
             const label = value === 'all' ? (state.lang === 'zh' ? '全部' : 'All') : value;
@@ -1014,8 +1230,10 @@
     if (config.tag1) rows.push({ key: 'tag1', label: labels.tag1, values: config.tag1 });
     if (config.tag2) rows.push({ key: 'tag2', label: labels.tag2, values: config.tag2 });
     if (config.tag3) rows.push({ key: 'tag3', label: labels.tag3, values: config.tag3 });
+    const tag1 = state.libraryFilters.tag1;
     const tag2 = state.libraryFilters.tag2;
     const tag3 = state.libraryFilters.tag3;
+    if (config.tag2ByTag1?.[tag1]) rows.push({ key: 'tag2', label: labels.tag2, values: config.tag2ByTag1[tag1] });
     if (config.tag3ByTag2?.[tag2]) rows.push({ key: 'tag3', label: labels.tag3, values: config.tag3ByTag2[tag2] });
     if (config.tag4ByTag3?.[tag3]) rows.push({ key: 'tag4', label: labels.tag4, values: config.tag4ByTag3[tag3] });
     return rows;
@@ -1043,6 +1261,7 @@
       }
       status.textContent = state.lang === 'zh' ? '正在读取分类和素材...' : 'Loading options and assets...';
       state.libraryDataPromise = (async () => {
+        await seedActivityTypes();
         await loadLibraryOptions();
         await loadLibraryFavorites();
         await loadLibrarySources();
@@ -1070,6 +1289,32 @@
     state.libraryPreviewUrls = {};
     state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
     await loadLibraryData();
+  }
+
+  async function seedActivityTypes() {
+    if (!state.supabase) return;
+    const { data: existing } = await state.supabase
+      .from('vf_library_options')
+      .select('id,name_zh')
+      .eq('option_type', 'activity');
+    const targetMap = { '日常活动': true, 'S级活动': true, '系列活动': true };
+    const hasAll = existing?.filter(o => targetMap[o.name_zh]).length === 3;
+    if (existing?.length === 3 && hasAll) return;
+    const toDelete = existing?.filter(o => !targetMap[o.name_zh]) || [];
+    for (const old of toDelete) {
+      await state.supabase.from('vf_source_files').update({ activity_id: null }).eq('activity_id', old.id);
+    }
+    if (toDelete.length) {
+      await state.supabase.from('vf_library_options').delete().in('id', toDelete.map(o => o.id));
+    }
+    const existingNames = new Set((existing || []).map(o => o.name_zh));
+    const toInsert = [];
+    if (!existingNames.has('日常活动')) toInsert.push({ option_type: 'activity', name_en: 'Daily Activity', name_zh: '日常活动', sort_order: 10 });
+    if (!existingNames.has('S级活动')) toInsert.push({ option_type: 'activity', name_en: 'S-Level', name_zh: 'S级活动', sort_order: 20 });
+    if (!existingNames.has('系列活动')) toInsert.push({ option_type: 'activity', name_en: 'Series', name_zh: '系列活动', sort_order: 30 });
+    for (const item of toInsert) {
+      await state.supabase.from('vf_library_options').insert(item);
+    }
   }
 
   async function loadLibraryOptions() {
@@ -1200,6 +1445,8 @@
         return selectedLibraryTagValues().every(tag => visibleLibraryTags(item.source).includes(tag));
       })
       .filter(item => !state.libraryFilters.favorites || state.libraryFavorites.has(item.preview.id))
+      .filter(item => !state.libraryFilters.selectedCountries || !state.libraryFilters.selectedCountries.length || state.libraryFilters.selectedCountries.includes(item.source.country_id))
+      .filter(item => !state.libraryFilters.selectedActivities || !state.libraryFilters.selectedActivities.length || state.libraryFilters.selectedActivities.includes(item.source.activity_id))
       .filter(item => {
         if (!query) return true;
         const text = [
@@ -1221,18 +1468,12 @@
     const sourceBadge = state.libraryRecoveryLabel
       ? `<span class="library-stat recovery"><small>${state.lang === 'zh' ? '来源' : 'Source'}</small><strong>${escapeHtml(state.libraryRecoveryLabel)}</strong></span>`
       : '';
-    status.innerHTML = `
-      ${sourceBadge}
-      <span class="library-stat"><small>${state.lang === 'zh' ? '当前展示' : 'Showing'}</small><strong>${visibleItems.length}/${state.libraryItems.length}</strong></span>
-      <span class="library-stat"><small>${state.lang === 'zh' ? '图库' : 'Gallery'}</small><strong>${counts.gallery}</strong></span>
-      <span class="library-stat"><small>${state.lang === 'zh' ? '源文件库' : 'Sources'}</small><strong>${counts.source}</strong></span>
-      <span class="library-stat"><small>${state.lang === 'zh' ? '模板库' : 'Templates'}</small><strong>${counts.template}</strong></span>
-    `;
+    status.innerHTML = `${sourceBadge}`;
     if (visibleItems.length === 0) {
       state.librarySelectedPreviewId = '';
       grid.innerHTML = `<div class="empty-card">
         <strong>${state.lang === 'zh' ? '还没有符合条件的素材' : 'No matching assets'}</strong>
-        <span>${state.lang === 'zh' ? '可以先上传图库图片或源文件素材。模板库素材从静态设计师保存进入。' : 'Upload gallery images or source assets first. Templates come from Static Designer.'}</span>
+        <span>${state.lang === 'zh' ? '可以先上传图库图片或案例文件。模板库素材从静态设计师保存进入。' : 'Upload gallery images or case files first. Templates come from Static Designer.'}</span>
       </div>`;
       renderLibraryInspector();
       return;
@@ -1407,7 +1648,7 @@
         <div class="library-thumb-wrap">
           <span class="file-pill">${escapeHtml(ext)}</span>
           <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
-          <div class="library-thumb" style="${thumbStyle}">${item.url ? `<img src="${escapeAttr(item.url)}" alt="${escapeAttr(source.title)}">` : `<span>${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`}</div>
+          <div class="library-thumb" style="${thumbStyle}">${item.url ? `<img src="${escapeAttr(item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img">` : `<span>${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`}</div>
           <div class="library-card-overlay">
             <div>
               <h4>${escapeHtml(source.title)}</h4>
@@ -1443,6 +1684,25 @@
         selectLibraryItem(card.dataset.previewId);
       });
     });
+    // 图片懒加载淡入
+    var lazyImages = document.querySelectorAll('img.lazy-img:not(.observed)');
+    if (lazyImages.length && 'IntersectionObserver' in window) {
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (!entry.isIntersecting) return;
+          var img = entry.target;
+          img.classList.add('observed');
+          observer.unobserve(img);
+          if (img.complete) {
+            img.classList.add('loaded');
+          } else {
+            img.addEventListener('load', function() { img.classList.add('loaded'); });
+            img.addEventListener('error', function() { img.classList.add('loaded'); });
+          }
+        });
+      }, { rootMargin: '200px' });
+      lazyImages.forEach(function(img) { observer.observe(img); });
+    }
   }
 
   function selectLibraryItem(previewId) {
@@ -1451,6 +1711,7 @@
       card.classList.toggle('selected', card.dataset.previewId === state.librarySelectedPreviewId);
     });
     renderLibraryInspector();
+    if (previewId) openLibraryDetailModal(previewId);
   }
 
   function renderLibraryInspector() {
@@ -1491,12 +1752,11 @@
             <h3>${escapeHtml(source.title)}</h3>
             <p>${escapeHtml(source.source_filename)} · ${formatFileSize(source.source_size_bytes)}</p>
           </div>
-          ${primaryActions ? `<div class="inspector-actions">${primaryActions}</div>` : `<div class="inspector-note">${state.lang === 'zh' ? '源文件库用于团队下载与归档，暂不直接带入编辑器。' : 'Source assets are for team download and archive, not direct editor import.'}</div>`}
+          ${primaryActions ? `<div class="inspector-actions">${primaryActions}</div>` : `<div class="inspector-note">${state.lang === 'zh' ? '案例库用于团队下载与归档，暂不直接带入编辑器。' : 'Case assets are for team download and archive, not direct editor import.'}</div>`}
           <dl class="inspector-list">
             <div><dt>${state.lang === 'zh' ? '所在库' : 'Section'}</dt><dd>${escapeHtml(libraryKindLabel(kind))}</dd></div>
             <div><dt>${state.lang === 'zh' ? '标签' : 'Tags'}</dt><dd>${tags.length ? escapeHtml(tags.join(' / ')) : '-'}</dd></div>
             <div><dt>${state.lang === 'zh' ? '文件类型' : 'File type'}</dt><dd>${escapeHtml(sourceFileLabel(source))}</dd></div>
-            <div><dt>${state.lang === 'zh' ? '可见范围' : 'Visibility'}</dt><dd>${visibilityLabel(source.visibility)}</dd></div>
             <div><dt>${state.lang === 'zh' ? '预览尺寸' : 'Preview size'}</dt><dd>${escapeHtml(formatDimensions(preview) || '-')}</dd></div>
             <div><dt>${state.lang === 'zh' ? '更新时间' : 'Updated'}</dt><dd>${formatDate(source.updated_at || source.created_at)}</dd></div>
           </dl>
@@ -1532,22 +1792,115 @@
     if (action === 'delete') return deleteLibrarySource(item.source.id);
   }
 
+  function renderLibraryDetailModal() {
+    return `
+      <div id="library-detail-modal" class="modal-backdrop" hidden>
+        <section class="modal library-modal" style="max-width:680px;padding:24px 28px 20px;">
+          <div class="modal-head" style="margin-bottom:10px;">
+            <h3 id="library-detail-title" style="font-size:18px;">${state.lang === 'zh' ? '素材详情' : 'Asset Details'}</h3>
+            <button class="icon-btn" id="close-library-detail" type="button" style="font-size:20px;line-height:1;">×</button>
+          </div>
+          <div id="library-detail-preview" style="width:100%;aspect-ratio:16/10;display:grid;place-items:center;background:#f4f5f7;border-radius:14px;overflow:hidden;margin-bottom:14px;border:1px solid #e8ebf0;"></div>
+          <div id="library-detail-meta" style="margin-bottom:14px;"></div>
+          <div id="library-detail-actions" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;"></div>
+        </section>
+      </div>
+    `;
+  }
+
+  function openLibraryDetailModal(previewId) {
+    const item = libraryItemByPreviewId(previewId);
+    if (!item) return;
+    const { source, preview } = item;
+    const kind = libraryKindOfSource(source);
+    const canManage = canManageSource(source);
+    const canSource = canDownloadSource();
+    const tags = visibleLibraryTags(source);
+    const previewUrl = item.url || '';
+
+    // Title
+    const titleEl = document.getElementById('library-detail-title');
+    if (titleEl) titleEl.textContent = source.title || (state.lang === 'zh' ? '素材详情' : 'Asset Details');
+
+    // Preview image - clean, no buttons
+    const previewEl = document.getElementById('library-detail-preview');
+    if (previewEl) {
+      previewEl.innerHTML = previewUrl
+        ? `<img src="${escapeAttr(previewUrl)}" alt="${escapeAttr(source.title)}" style="width:100%;height:100%;object-fit:contain;">`
+        : `<span style="color:#94a3b8;font-size:14px;">${state.lang === 'zh' ? '预览生成中' : 'Preview loading...'}</span>`;
+    }
+
+    // Meta info
+    const metaEl = document.getElementById('library-detail-meta');
+    if (metaEl) {
+      metaEl.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;font-size:13px;">
+          <div><span style="color:#667085;">${state.lang === 'zh' ? '类型' : 'Kind'}</span><span style="margin-left:8px;color:#0f172a;font-weight:650;">${escapeHtml(libraryKindLabel(kind))}</span></div>
+          <div><span style="color:#667085;">${state.lang === 'zh' ? '文件' : 'File'}</span><span style="margin-left:8px;color:#0f172a;font-weight:650;">${escapeHtml(sourceFileLabel(source))}</span></div>
+          <div><span style="color:#667085;">${state.lang === 'zh' ? '大小' : 'Size'}</span><span style="margin-left:8px;color:#0f172a;font-weight:650;">${escapeHtml(formatFileSize(source.source_size_bytes))}</span></div>
+          <div><span style="color:#667085;">${state.lang === 'zh' ? '尺寸' : 'Dimensions'}</span><span style="margin-left:8px;color:#0f172a;font-weight:650;">${escapeHtml(formatDimensions(preview) || '-')}</span></div>
+          <div><span style="color:#667085;">${state.lang === 'zh' ? '更新' : 'Updated'}</span><span style="margin-left:8px;color:#0f172a;font-weight:650;">${formatDate(source.updated_at || source.created_at)}</span></div>
+        </div>
+        ${tags.length ? `<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">${tags.map(tag => `<span style="display:inline-block;padding:3px 10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;color:#334155;">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+      `;
+    }
+
+    // Action buttons
+    const actionsEl = document.getElementById('library-detail-actions');
+    if (actionsEl) {
+      const buttons = [];
+      if (kind === 'gallery') {
+        buttons.push(`<button class="primary-btn" type="button" data-action="use-static" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '带入静态 DIY' : 'Use in Static'}</button>`);
+        buttons.push(`<button class="secondary-btn" type="button" data-action="use-dynamic" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '带入动态 DIY' : 'Use in Motion'}</button>`);
+      } else if (kind === 'template') {
+        buttons.push(`<button class="primary-btn" type="button" data-action="use-static" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '打开静态模板' : 'Open Template'}</button>`);
+      }
+      buttons.push(`<button class="ghost-btn" type="button" data-action="download-preview" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${kind === 'gallery' ? (state.lang === 'zh' ? '下载原图' : 'Download') : (state.lang === 'zh' ? '下载预览图' : 'Download Preview')}</button>`);
+      if (canSource && kind !== 'gallery') {
+        buttons.push(`<button class="ghost-btn" type="button" data-action="download-source" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${kind === 'template' ? (state.lang === 'zh' ? '下载模板' : 'Download Template') : (state.lang === 'zh' ? '下载源文件' : 'Download Source')}</button>`);
+      }
+      if (canManage) {
+        buttons.push(`<button class="ghost-btn" type="button" data-action="edit" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '编辑信息' : 'Edit'}</button>`);
+        buttons.push(`<button class="ghost-btn danger" type="button" data-action="delete" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '删除' : 'Delete'}</button>`);
+      }
+      actionsEl.innerHTML = buttons.join('');
+      // Wire action buttons
+      actionsEl.querySelectorAll('button[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const it = libraryItemByPreviewId(btn.dataset.previewId);
+          if (!it) return;
+          handleLibraryCardAction(btn.dataset.action, it);
+        });
+      });
+    }
+
+    document.getElementById('library-detail-modal').hidden = false;
+  }
+
+  function closeLibraryDetailModal() {
+    const modal = document.getElementById('library-detail-modal');
+    if (modal) modal.hidden = true;
+  }
+
   function openLibraryUploadModal() {
     renderLibrarySelects();
     const form = document.getElementById('library-upload-form');
     form.reset();
-    const defaultKind = state.libraryFilters.kind === 'source' ? 'source' : 'gallery';
+    const defaultKind = 'source';
     const kindInput = document.getElementById('library-upload-kind');
     if (kindInput) kindInput.value = defaultKind;
+    state.libraryFilters.uploadTag1 = defaultKind === 'source' ? 'C端' : 'all';
     const tagControls = document.getElementById('library-upload-tag-controls');
     if (tagControls) tagControls.innerHTML = renderUploadTagControls(defaultKind);
     document.getElementById('library-upload-title').value = '';
     document.getElementById('library-upload-message').textContent = '';
     document.getElementById('library-upload-modal').hidden = false;
+    setTimeout(function() { populateUploadMetaPickers(); }, 50);
     document.querySelector('.library-upload-scroll')?.scrollTo({ top: 0, behavior: 'auto' });
     updateLibraryUploadMode(defaultKind);
     wireLibraryUploadKindCards();
     wireUploadTagPickers();
+    wireUploadTagHover();
     document.querySelectorAll('.library-drop-zone').forEach(zone => updateDropZoneSummary(zone, []));
   }
 
@@ -1564,6 +1917,12 @@
       button.classList.toggle('active', button.dataset.uploadKindCard === kind);
       button.setAttribute('aria-checked', button.dataset.uploadKindCard === kind ? 'true' : 'false');
     });
+    const countryField = document.getElementById('upload-country-field');
+    const activityField = document.getElementById('upload-activity-field');
+    if (countryField) countryField.style.display = (kind === 'gallery' || kind === 'source') ? '' : 'none';
+    if (activityField) activityField.style.display = (kind === 'source' || kind === 'template') ? '' : 'none';
+    setTimeout(function() { populateUploadMetaPickers(); }, 50);
+
   }
 
   function wireLibraryUploadKindCards() {
@@ -1583,12 +1942,77 @@
         if (input) input.value = value;
         if (picker) {
           picker.querySelectorAll('[data-upload-tag-option]').forEach(option => option.classList.toggle('active', option === button));
-          const label = value === 'all' ? (state.lang === 'zh' ? '未分类' : 'Unclassified') : value;
+          var label;
+          if (value === 'all') {
+            label = state.lang === 'zh' ? '未分类' : 'Unclassified';
+          } else if (key === 'country' || key === 'activity') {
+            label = button.textContent.trim();
+          } else {
+            label = value;
+          }
           const triggerLabel = picker.querySelector('[data-upload-tag-trigger] strong');
           if (triggerLabel) triggerLabel.textContent = label;
+          picker.classList.remove('menu-open');
+        }
+        if (key === 'tag1') {
+          const newVal = value === 'all' ? 'all' : value;
+          if (newVal !== state.libraryFilters.uploadTag1) {
+            state.libraryFilters.uploadTag1 = newVal;
+            const kind = document.getElementById('library-upload-kind')?.value || 'gallery';
+            document.getElementById('library-upload-tag-controls').innerHTML = renderUploadTagControls(kind);
+            wireUploadTagPickers();
+            wireUploadTagHover();
+          }
         }
       });
     });
+  }
+
+  function wireUploadTagHover() {
+    document.querySelectorAll('#library-upload-modal .upload-tag-picker').forEach(function(picker) {
+      if (picker.dataset.hoverBound === 'true') return;
+      picker.dataset.hoverBound = 'true';
+      var menu = picker.querySelector('.upload-tag-menu');
+      if (!menu) return;
+      var hideTimer = null;
+
+      function showMenu() {
+        clearTimeout(hideTimer);
+        picker.classList.add('menu-open');
+      }
+      function hideMenu() {
+        hideTimer = setTimeout(function() {
+          picker.classList.remove('menu-open');
+        }, 150);
+      }
+      function hideNow() {
+        clearTimeout(hideTimer);
+        picker.classList.remove('menu-open');
+      }
+
+      picker.addEventListener('mouseenter', showMenu);
+      picker.addEventListener('mouseleave', hideMenu);
+      if (menu) {
+        menu.addEventListener('mouseenter', showMenu);
+        menu.addEventListener('mouseleave', hideNow);
+      }
+    });
+  }
+
+  function populateUploadMetaPickers() {
+    ['country', 'activity'].forEach(function(type) {
+      var menu = document.querySelector('[data-upload-meta-menu="' + type + '"]');
+      if (!menu) return;
+      var items = libraryOptions(type);
+      var emptyLabel = state.lang === 'zh' ? '全部' : 'All';
+      var html = '<button type="button" class="active" data-upload-tag-option="' + type + '" data-upload-tag-value="all">' + emptyLabel + '</button>';
+      html += items.map(function(item) {
+        return '<button type="button" data-upload-tag-option="' + type + '" data-upload-tag-value="' + item.id + '">' + escapeHtml(optionName(item)) + '</button>';
+      }).join('');
+      menu.innerHTML = html;
+    });
+    wireUploadTagPickers();
+    wireUploadTagHover();
   }
 
   function wireLibraryUploadDrops() {
@@ -1612,14 +2036,30 @@
         zone.classList.remove('dragging');
         const files = Array.from(event.dataTransfer?.files || []);
         if (!files.length) return;
+        // 根据 input 的 accept 属性过滤文件
+        const accept = (input.getAttribute('accept') || '').toLowerCase();
+        let acceptedFiles = files;
+        if (accept) {
+          const allowedExts = accept.split(',').map(function(s) { return s.trim().replace('.', '').toLowerCase(); });
+          acceptedFiles = files.filter(function(file) {
+            var ext = (file.name.split('.').pop() || '').toLowerCase();
+            var mime = (file.type || '').toLowerCase();
+            return allowedExts.some(function(a) { return ext === a || mime.includes(a) || (a === 'pdf' && mime === 'application/pdf'); });
+          });
+        }
+        if (!acceptedFiles.length) return;
         const dt = new DataTransfer();
-        const maxFiles = input.multiple ? files.length : 1;
-        files.slice(0, maxFiles).forEach(file => dt.items.add(file));
+        // 保留已有的文件（多选 input 追加而非替换）
+        if (input.multiple) {
+          Array.from(input.files || []).forEach(function(f) { dt.items.add(f); });
+        }
+        const maxFiles = input.multiple ? acceptedFiles.length : 1;
+        acceptedFiles.slice(0, maxFiles).forEach(file => dt.items.add(file));
         input.files = dt.files;
         updateDropZoneSummary(zone, input.files);
         const titleInput = document.getElementById('library-upload-title');
         if (titleInput && !titleInput.value.trim() && input.id !== 'library-preview-input') {
-          titleInput.value = stripExtension(files[0].name);
+          titleInput.value = stripExtension(acceptedFiles[0].name);
         }
       });
     });
@@ -1628,13 +2068,58 @@
   function updateDropZoneSummary(zone, fileList) {
     const files = Array.from(fileList || []);
     const summary = zone.querySelector('[data-file-summary]');
-    if (!summary) return;
+    const thumbStrip = zone.querySelector('[data-thumb-strip]');
     if (!files.length) {
-      summary.textContent = state.lang === 'zh' ? '未选择文件' : 'No files selected';
+      if (summary) {
+        summary.style.display = 'none';
+      }
+      if (thumbStrip) { thumbStrip.style.display = 'none'; thumbStrip.innerHTML = ''; }
       return;
     }
-    const names = files.slice(0, 3).map(file => file.name).join(' / ');
-    summary.textContent = files.length > 3 ? `${names} +${files.length - 3}` : names;
+    const isImage = files.some(function(f) { return (f.type || '').startsWith('image/'); });
+    if (isImage && thumbStrip) {
+      if (summary) summary.style.display = 'none';
+      thumbStrip.style.display = '';
+      thumbStrip.innerHTML = files.map(function(file, i) {
+        var url = URL.createObjectURL(file);
+        return '<div class="drop-thumb">' +
+          '<img src="' + url + '" alt="">' +
+          '<button type="button" class="drop-thumb-del" data-file-index="' + i + '" data-drop-input="' + zone.dataset.dropInput + '">&times;</button>' +
+          '<small>' + escapeHtml(file.name) + '</small>' +
+          '</div>';
+      }).join('');
+      thumbStrip.querySelectorAll('.drop-thumb-del').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          e.preventDefault();
+          removeDropFile(btn.dataset.dropInput, parseInt(btn.dataset.fileIndex));
+        });
+      });
+    } else if (summary) {
+      summary.style.display = '';
+      if (thumbStrip) thumbStrip.style.display = 'none';
+      var names = files.slice(0, 3).map(function(f) { return f.name; }).join(' / ');
+      var text = files.length > 3 ? names + ' +' + (files.length - 3) : names;
+      summary.innerHTML = '<span>' + escapeHtml(text) + '</span>' +
+        ' <button type="button" class="drop-file-clear" data-drop-input="' + zone.dataset.dropInput + '" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:0;border-radius:999px;background:rgba(0,0,0,0.45);color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0;vertical-align:middle;">&times;</button>';
+      summary.querySelector('.drop-file-clear').addEventListener('click', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        removeDropFile(this.dataset.dropInput, 0);
+      });
+    }
+  }
+
+  function removeDropFile(inputId, index) {
+    var input = document.getElementById(inputId);
+    if (!input) return;
+    var files = Array.from(input.files || []);
+    files.splice(index, 1);
+    var dt = new DataTransfer();
+    files.forEach(function(f) { dt.items.add(f); });
+    input.files = dt.files;
+    var zone = document.querySelector('[data-drop-input="' + inputId + '"]');
+    if (zone) updateDropZoneSummary(zone, input.files);
   }
 
   async function uploadLibraryAsset(event) {
@@ -1647,37 +2132,56 @@
       submitButton.textContent = state.lang === 'zh' ? '上传中...' : 'Uploading...';
     }
     const message = document.getElementById('library-upload-message');
-    setMessage(message, state.lang === 'zh' ? '正在上传，请不要关闭页面...' : 'Uploading, please keep this page open...');
+    function setUploadProgress(pct) {
+      message.innerHTML = '<div class="upload-progress-row"><div class="upload-progress-bar-wrap"><div class="upload-progress-bar-fill" style="width:' + pct + '%"></div></div><span class="upload-progress-text">' + pct + '%</span></div>';
+    }
+    setUploadProgress(0);
     const uploadedPaths = [];
     let sourceInserted = false;
     let sourceId = '';
     try {
       const formData = new FormData(form);
-      const libraryKind = formData.get('library_kind') === 'gallery' ? 'gallery' : 'source';
+      const libraryKind = formData.get('library_kind') || 'gallery';
       if (libraryKind === 'gallery') {
-        await uploadGalleryAssets(formData);
+        await uploadGalleryAssets(formData, setUploadProgress);
+        setUploadProgress(100);
         setMessage(message, state.lang === 'zh' ? '图库素材已上传。' : 'Gallery assets uploaded.', false, true);
         setTimeout(closeLibraryUploadModal, 600);
         state.libraryFilters.kind = 'gallery';
         await reloadLibraryData();
         return;
       }
+      if (libraryKind === 'template') {
+        setUploadProgress(20);
+        await uploadTemplateAsset(formData);
+        setUploadProgress(100);
+        setMessage(message, state.lang === 'zh' ? '模板已上传。' : 'Template uploaded.', false, true);
+        setTimeout(closeLibraryUploadModal, 600);
+        state.libraryFilters.kind = 'template';
+        await reloadLibraryData();
+        return;
+      }
       const sourceFile = formData.get('source_file');
       const previewFiles = Array.from(formData.getAll('preview_files')).filter(file => file && file.size > 0);
       validateLibraryUpload(sourceFile, previewFiles);
+      setUploadProgress(10);
       sourceId = crypto.randomUUID();
       const userId = state.session.user.id;
       const sourcePath = `${userId}/sources/${sourceId}/${safeStorageName(sourceFile.name)}`;
       const sourceUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, sourceFile, { upsert: false, contentType: sourceFile.type || 'application/octet-stream' });
       if (sourceUpload.error) throw sourceUpload.error;
+      setUploadProgress(30);
       uploadedPaths.push(sourcePath);
       const title = formData.get('title').trim() || stripExtension(sourceFile.name);
+      const countryId = formData.get('country');
+      const activityId = formData.get('activity');
+      const categoryId = formData.get('category');
       const sourceRow = {
         id: sourceId,
         title,
-        country_id: null,
-        activity_id: null,
-        category_id: null,
+        country_id: (countryId && countryId !== 'all') ? countryId : null,
+        activity_id: (activityId && activityId !== 'all') ? activityId : null,
+        category_id: (categoryId && categoryId !== 'all') ? categoryId : null,
         tags: libraryTagsForForm(formData, 'source'),
         visibility: formData.get('visibility') || 'all',
         source_path: sourcePath,
@@ -1689,8 +2193,11 @@
       };
       const sourceInsert = await state.supabase.from('vf_source_files').insert([sourceRow]);
       if (sourceInsert.error) throw sourceInsert.error;
+      setUploadProgress(45);
       sourceInserted = true;
       const previewRows = [];
+      const previewBasePct = 45;
+      const previewPctEach = previewFiles.length ? Math.floor(50 / previewFiles.length) : 0;
       for (let index = 0; index < previewFiles.length; index += 1) {
         const file = previewFiles[index];
         const previewId = crypto.randomUUID();
@@ -1710,9 +2217,12 @@
           height: dimensions.height,
           sort_order: (index + 1) * 10
         });
+        setUploadProgress(previewBasePct + previewPctEach * (index + 1));
       }
+      setUploadProgress(95);
       const previewInsert = await state.supabase.from('vf_asset_previews').insert(previewRows);
       if (previewInsert.error) throw previewInsert.error;
+      setUploadProgress(100);
       setMessage(message, state.lang === 'zh' ? '上传成功，已入库。' : 'Uploaded.', false, true);
       setTimeout(closeLibraryUploadModal, 600);
       await reloadLibraryData();
@@ -1727,15 +2237,18 @@
     }
   }
 
-  async function uploadGalleryAssets(formData) {
+  async function uploadGalleryAssets(formData, onProgress) {
     const files = Array.from(formData.getAll('gallery_files')).filter(file => file && file.size > 0);
     validateGalleryUpload(files);
     const userId = state.session.user.id;
     const baseTitle = formData.get('title').trim();
     const uploadedPaths = [];
     const insertedSourceIds = [];
+    const pctEach = files.length ? Math.floor(90 / files.length) : 90;
     try {
+      let fileIndex = 0;
       for (const file of files) {
+        if (onProgress) onProgress(pctEach * fileIndex);
         const sourceId = crypto.randomUUID();
         const sourcePath = `${userId}/sources/${sourceId}/${safeStorageName(file.name)}`;
         const sourceUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, file, { upsert: false, contentType: file.type });
@@ -1743,12 +2256,15 @@
         uploadedPaths.push(sourcePath);
         const dimensions = await readImageDimensions(file);
         const title = files.length === 1 ? (baseTitle || stripExtension(file.name)) : `${baseTitle || stripExtension(file.name)} · ${stripExtension(file.name)}`;
+        const countryId = formData.get('country');
+        const activityId = formData.get('activity');
+        const categoryId = formData.get('category');
         const sourceRow = {
           id: sourceId,
           title,
-          country_id: null,
-          activity_id: null,
-          category_id: null,
+          country_id: (countryId && countryId !== 'all') ? countryId : null,
+          activity_id: (activityId && activityId !== 'all') ? activityId : null,
+          category_id: (categoryId && categoryId !== 'all') ? categoryId : null,
           tags: libraryTagsForForm(formData, 'gallery'),
           visibility: formData.get('visibility') || 'all',
           source_path: sourcePath,
@@ -1773,7 +2289,10 @@
           sort_order: 10
         }]);
         if (previewInsert.error) throw previewInsert.error;
+        fileIndex++;
+        if (onProgress) onProgress(pctEach * fileIndex);
       }
+      if (onProgress) onProgress(95);
     } catch (error) {
       await cleanupGalleryUpload(insertedSourceIds, uploadedPaths);
       throw error;
@@ -1805,7 +2324,7 @@
 
   function validateLibraryUpload(sourceFile, previewFiles) {
     if (!sourceFile || !sourceFile.size) throw new Error(state.lang === 'zh' ? '请选择源文件。' : 'Choose a source file.');
-    if (!SOURCE_EXTENSIONS.includes(fileExt(sourceFile.name))) throw new Error(state.lang === 'zh' ? '源文件仅支持 PSD / AI / PDF。' : 'Source must be PSD / AI / PDF.');
+    if (!SOURCE_EXTENSIONS.includes(fileExt(sourceFile.name))) throw new Error(state.lang === 'zh' ? '源文件仅支持 PSD / PSB / AI / PDF / 压缩包。' : 'Source must be PSD / PSB / AI / PDF / archive.');
     if (previewFiles.length === 0) throw new Error(state.lang === 'zh' ? '至少上传一张预览图。' : 'Upload at least one preview image.');
     if (previewFiles.length > 5) throw new Error(state.lang === 'zh' ? '一个源文件最多绑定 5 张预览图。' : 'A source file can have at most 5 previews.');
     previewFiles.forEach(file => {
@@ -1854,9 +2373,9 @@
       const kind = source ? libraryKindOfSource(source) : (form.get('library_kind') || 'source');
       const update = {
         title: form.get('title').trim(),
-        country_id: null,
-        activity_id: null,
-        category_id: null,
+        country_id: form.get('country') || null,
+        activity_id: form.get('activity') || null,
+        category_id: form.get('category') || null,
         visibility: form.get('visibility') || 'all',
         tags: normalizeLibraryTags(kind, parseTags(form.get('tags')))
       };
@@ -1936,7 +2455,7 @@
   async function useLibraryAsset(item, tool) {
     const kind = libraryKindOfSource(item.source);
     if (kind === 'source') {
-      alert(state.lang === 'zh' ? '源文件库素材用于下载归档，暂不直接带入编辑器。' : 'Source library assets are for download/archive and cannot be imported directly yet.');
+      alert(state.lang === 'zh' ? '案例库素材用于下载归档，暂不直接带入编辑器。' : 'Case library assets are for download/archive and cannot be imported directly yet.');
       return;
     }
     if (kind === 'template') {
@@ -1978,7 +2497,7 @@
       await waitForToolImporter();
       const result = await state.activeFrame.contentWindow.VF_IMPORT_PROJECT(snapshot);
       if (!result?.success) throw new Error(result?.message || (state.lang === 'zh' ? '模板打开失败。' : 'Failed to open template.'));
-      await logAssetEvent('use_template', item);
+      await logAssetEvent('use_static', item);
     } catch (error) {
       alert(error.message);
     }
@@ -2049,13 +2568,35 @@
     }, { gallery: 0, source: 0, template: 0 });
   }
 
-  function libraryTagsForForm(formData, kind) {
+  
+  async function uploadTemplateAsset(formData) {
+    const templateFile = formData.get('template_file');
+    if (!templateFile || !templateFile.size) throw new Error(state.lang === 'zh' ? '请选择模板文件。' : 'Choose a template file.');
+    const title = formData.get('title').trim() || stripExtension(templateFile.name);
+    const sourceId = crypto.randomUUID();
+    const userId = state.session.user.id;
+    const sourcePath = `${userId}/templates/${sourceId}/${safeStorageName(templateFile.name)}`;
+    const upload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, templateFile, { upsert: false, contentType: templateFile.type || 'application/json' });
+    if (upload.error) throw upload.error;
+    const tags = libraryTagsForForm(formData, 'template');
+    tags.push('vf:kind:template');
+    const { error } = await state.supabase.from('vf_source_files').insert([{
+      id: sourceId, title, tags,
+      source_path: sourcePath, source_filename: templateFile.name, source_mime_type: templateFile.type || 'application/json',
+      source_size_bytes: templateFile.size, source_ext: 'json', uploaded_by: userId,
+      visibility: formData.get('visibility') || 'all'
+    }]);
+    if (error) throw error;
+  }
+
+function libraryTagsForForm(formData, kind) {
     const tags = [];
     ['tag1', 'tag2', 'tag3', 'tag4'].forEach(key => {
-      const value = String(formData.get(key) || '').trim();
-      if (value && value !== 'all') tags.push(value);
+      const raw = String(formData.get(key) || '').trim();
+      if (raw && raw !== 'all') {
+        raw.split(',').forEach(v => { const t = v.trim(); if (t) tags.push(t); });
+      }
     });
-    tags.push(...parseTags(formData.get('tags')));
     return normalizeLibraryTags(kind, tags);
   }
 

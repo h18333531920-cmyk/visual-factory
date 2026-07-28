@@ -4,10 +4,471 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GCC Design</title>
-  <script src="./tools/vendor/supabase-js.js?v=20260629-discount-tag4"></script>
-  <link rel="stylesheet" href="./styles.css?v=20260629-discount-tag4">
-  <script src="./config.js?v=20260629-discount-tag4"></script>
-  <script src="./app.js?v=20260629-discount-tag4" defer></script>
+  <script src="./tools/vendor/supabase-js.js?v=20260709-pickers"></script>
+  <link rel="stylesheet" href="./styles.css?v=20260709-pickers">
+  <style>
+    .library-control-strip {
+      margin-left: 0 !important;
+      margin-inline: 0 !important;
+      background: transparent !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      width: 100% !important;
+      row-gap: 0px !important;
+      align-items: start !important;
+    }
+    .content {
+      overflow-x: hidden !important;
+    }
+    ::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+    * {
+      scrollbar-width: none !important;
+    }
+    .library-page {
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+    .library-page {
+      min-height: calc(100vh - 120px) !important;
+      align-content: start !important;
+      gap: 0px !important;
+    }
+    #library-status {
+      display: none !important;
+    }
+    .filter-dropdown-wrap {
+      position: relative;
+    }
+    .filter-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 320px;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.5);
+      border-radius: 16px;
+      box-shadow: 0 12px 50px rgba(0,0,0,0.12);
+      padding: 18px;
+      z-index: 100;
+    }
+    .filter-section {
+      margin-bottom: 16px;
+    }
+    .filter-section h4 {
+      margin: 0 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .filter-capsules {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+.filter-capsule {
+      border: 1px solid #d1d5db;
+      border-radius: 999px;
+      background: #ffffff;
+      color: #374151;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 14px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      min-height: 28px;
+    }
+    .filter-capsule:hover {
+      border-color: #9ca3af;
+    }
+    .filter-capsule.active {
+      background: #111827;
+      color: #ffffff;
+      border-color: #111827;
+    }
+
+    .search-wrap {
+      position: relative;
+      display: inline-flex;
+    }
+    .search-history-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 12px;
+      min-width: 200px;
+      background: #ffffff;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+      padding: 12px;
+      z-index: 100;
+    }
+    .search-history-label {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .search-history-items {
+      display: flex !important;
+      flex-wrap: wrap;
+      gap: 20px !important;
+    }
+    .search-history-item {
+      border: 0 !important;
+      background: #f0f1f3 !important;
+      color: #6b7280 !important;
+      font-size: 12px !important;
+      padding: 3px 10px !important;
+      border-radius: 999px !important;
+      cursor: pointer !important;
+      white-space: nowrap !important;
+      line-height: 1.4 !important;
+      min-height: 0 !important;
+      height: auto !important;
+    }
+    .search-history-item:hover {
+      background: #e2e4e8 !important;
+      color: #374151 !important;
+    }
+    #library-upload-modal .modal {
+      padding: 14px 16px 16px !important;
+    }
+    /* 上传弹窗毛玻璃效果 */
+    #library-upload-modal .library-modal {
+      background: rgba(255, 255, 255, 0.72) !important;
+      backdrop-filter: blur(24px) !important;
+      -webkit-backdrop-filter: blur(24px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.55) !important;
+      box-shadow: 0 32px 96px rgba(16, 17, 20, 0.18) !important;
+      overflow: visible !important;
+      max-height: none !important;
+    }
+    #library-upload-modal .modal-head {
+      display: none !important;
+    }
+    #library-upload-modal .library-upload-section {
+      gap: 0 !important;
+    }
+    #library-upload-modal .library-upload-section > span {
+      margin-bottom: 6px !important;
+      display: block !important;
+    }
+    /* 入库类型卡片 Hover 效果 */
+    #library-upload-modal .library-kind-card {
+      transition: all 0.2s ease !important;
+    }
+    #library-upload-modal .library-kind-card:hover:not(.active) {
+      background: #f1f5f9 !important;
+      transform: translateY(-1px) !important;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06) !important;
+    }
+    #library-upload-modal .library-kind-card.active:hover {
+      transform: translateY(-1px) !important;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18) !important;
+    }
+    .library-kind-tabs {
+      gap: 28px !important;
+      flex-wrap: nowrap !important;
+    }
+    body .library-search-pill,
+    body .app-shell[data-route="home"] .library-search-pill {
+      max-width: 200px !important;
+      flex-shrink: 0 !important;
+      background: #e2e8f0 !important;
+      border: none !important;
+      border-radius: 4px !important;
+      box-shadow: none !important;
+      min-height: 20px !important;
+      height: 20px !important;
+      padding: 0 4px 0 6px !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 0px !important;
+      grid-column: auto !important;
+      grid-row: auto !important;
+      width: auto !important;
+    }
+    body .library-search-pill input,
+    body .app-shell[data-route="home"] .library-search-pill input {
+      border: 0 !important;
+      outline: none !important;
+      box-shadow: none !important;
+      background: transparent !important;
+      padding: 0 !important;
+      font-size: 12px !important;
+      color: #6b7280 !important;
+      min-height: 0 !important;
+      height: auto !important;
+      width: 100% !important;
+    }
+    body .library-search-pill span,
+    body .app-shell[data-route="home"] .library-search-pill span {
+      font-size: 14px !important;
+      line-height: 1 !important;
+      color: #a0aec0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 20px !important;
+      height: 20px !important;
+      border-radius: 3px !important;
+      transition: all 0.15s ease !important;
+      text-align: center !important;
+      flex-shrink: 0 !important;
+    }
+        #library-tag-rows {
+      margin: 0 !important;
+      padding: 0 !important;
+      grid-column: 1 !important;
+      row-gap: 0px !important;
+    }
+    .library-tag-row > div {
+      gap: 20px !important;
+      flex-wrap: nowrap !important;
+    }
+.library-kind-tabs button {
+      padding: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      min-height: 36px;
+      color: #9ca3af !important;
+      font-size: 15px;
+      font-weight: 720;
+      transition: color 0.15s ease;
+    }
+    .library-kind-tabs button:hover {
+      color: #4b5563 !important;
+    }
+    .library-kind-tabs button.active {
+      color: #111827 !important;
+      font-weight: 860 !important;
+      background: transparent !important;
+    }
+    .library-kind-tabs button.active::after {
+      display: none !important;
+    }
+    #library-tag-rows .library-tag-row {
+      gap: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      flex-wrap: nowrap !important;
+    }
+    /* Tag row buttons */
+    .library-tag-row button {
+      padding: 0 !important;
+      color: #9ca3af !important;
+      transition: color 0.15s ease;
+    }
+    .library-tag-row button:hover {
+      color: #4b5563 !important;
+    }
+    .library-tag-row button.active {
+      color: #111827 !important;
+      background: transparent !important;
+    }
+    body .app-shell[data-route="home"] .library-tag-row button.active {
+      color: #111827 !important;
+      background: transparent !important;
+    }
+    /* Home page override */
+        .library-board {
+      min-height: 400px !important;
+    }
+    body .app-shell[data-route="home"] .library-kind-tabs button {
+      border-radius: 0 !important;
+    }
+    /* 上传弹窗禁用滚动 */
+    #library-upload-form {
+      display: block !important;
+      flex: none !important;
+      overflow: visible !important;
+      min-height: 0 !important;
+    }
+    .library-upload-scroll {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 18px !important;
+      flex: none !important;
+      overflow: visible !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      padding: 18px 24px 16px !important;
+      scrollbar-width: none !important;
+    }
+    .library-upload-scroll::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+    .upload-tag-menu {
+      scrollbar-width: none !important;
+    }
+    .upload-tag-menu::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+    /* 拖拽缩略图预览 */
+    .drop-thumb-strip {
+      display: flex !important;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .drop-thumb {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #d9e0ec;
+      flex-shrink: 0;
+    }
+    .drop-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .drop-thumb small {
+      display: none;
+    }
+    .drop-thumb-del {
+      position: absolute;
+      top: -1px;
+      right: -1px;
+      width: 18px;
+      height: 18px;
+      border: 0;
+      border-radius: 0 6px 0 6px;
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .drop-thumb-del:hover {
+      background: rgba(0,0,0,0.8);
+    }
+    /* 拖拽区格式提示文案颜色减淡 */
+    #library-upload-modal .library-drop-zone strong {
+      color: #a0aec0 !important;
+    }
+    /* 拖拽区固定统一高度 */
+    #library-upload-modal .library-drop-zone {
+      height: 120px !important;
+      min-height: 120px !important;
+      max-height: 120px !important;
+      overflow: hidden !important;
+    }
+    /* 上传进度条 */
+    .upload-progress-row {
+      display: flex !important;
+      align-items: center;
+      gap: 12px;
+    }
+    .upload-progress-bar-wrap {
+      flex: 1 1 auto;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .upload-progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #3b82f6, #6366f1);
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+    .upload-progress-text {
+      flex: 0 0 auto;
+      font-size: 13px;
+      font-weight: 700;
+      color: #6366f1;
+      min-width: 36px;
+      text-align: right;
+    }
+    /* 图库卡片 Hover 缩放 */
+    .library-card {
+      transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+    }
+    .library-card:hover {
+      transform: scale(1.02) !important;
+      box-shadow: 0 20px 48px rgba(16, 24, 40, 0.14) !important;
+      z-index: 2 !important;
+    }
+    /* 图片懒加载 */
+    .library-thumb img.lazy-img {
+      opacity: 1;
+    }
+    /* 卡片常态只显示图片，hover 才显示信息 */
+    .library-card-overlay {
+      opacity: 0 !important;
+      transition: opacity 0.25s ease !important;
+    }
+    .library-card:hover .library-card-overlay {
+      opacity: 1 !important;
+    }
+    /* 底部按钮区去掉白色底 + 按钮胶囊化 */
+    #library-upload-modal .library-upload-footer {
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+    #library-upload-modal .library-upload-footer .modal-actions {
+      justify-content: center !important;
+    }
+    #library-upload-modal .library-upload-footer .modal-actions .primary-btn,
+    #library-upload-modal .library-upload-footer .modal-actions .ghost-btn {
+      min-height: 48px !important;
+      padding-inline: 36px !important;
+      border-radius: 999px !important;
+      font-size: 16px !important;
+      font-weight: 700 !important;
+      transition: all 0.2s ease !important;
+    }
+    #library-upload-modal .library-upload-footer .modal-actions .primary-btn:hover {
+      background: #1e293b !important;
+      transform: translateY(-1px) !important;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.18) !important;
+    }
+    #library-upload-modal .library-upload-footer .modal-actions .ghost-btn:hover {
+      background: #ef4444 !important;
+      color: #fff !important;
+      transform: translateY(-1px) !important;
+    }
+    /* 下拉菜单 JS 控制显隐，覆盖纯 CSS hover */
+    #library-upload-modal .upload-tag-menu {
+      opacity: 0 !important;
+      pointer-events: none !important;
+      transform: translateY(-4px) !important;
+      transition: opacity 150ms ease, transform 150ms ease !important;
+    }
+    #library-upload-modal .upload-tag-picker.menu-open .upload-tag-menu {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      transform: translateY(0) !important;
+    }
+  </style>
+  <script src="./config.js?v=20260709-pickers"></script>
+  <script src="./app.js?v=20260709-pickers" defer></script>
 </head>
 <body>
   <main id="login-view" class="login-view">
