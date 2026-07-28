@@ -176,27 +176,36 @@
         .asset-item.reference-element:active { cursor: grabbing; }
 
         .asset-library-expand-btn {
-            min-width: 44px;
-            padding: 4px 8px;
-            font-size: 11px;
+            width: 26px;
+            min-width: 26px;
+            height: 26px;
+            padding: 0;
+            border-radius: 999px;
+            font-size: 15px;
+            line-height: 1;
         }
 
-        body.asset-library-expanded .editor-layout {
-            gap: 20px;
+        .asset-library-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
 
-        body.asset-library-expanded .right-pane {
-            width: min(700px, 48vw);
-            flex: 0 0 min(700px, 48vw);
+        .asset-library-actions .btn-icon {
+            min-width: 0;
+            height: 26px;
+            padding: 0 7px !important;
+            font-size: 10px !important;
+            white-space: nowrap;
         }
 
         body.asset-library-expanded .asset-library-card {
-            min-height: min(78vh, 820px);
+            min-height: min(74vh, 760px);
         }
 
         body.asset-library-expanded .asset-library-card .asset-list {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 14px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
             max-height: min(70vh, 720px);
             padding-right: 8px;
         }
@@ -211,17 +220,6 @@
 
         body.asset-library-expanded .asset-library-card .asset-meta {
             font-size: 12px;
-        }
-
-        @media (max-width: 1180px) {
-            body.asset-library-expanded .right-pane {
-                width: 100%;
-                flex-basis: auto;
-            }
-
-            body.asset-library-expanded .asset-library-card .asset-list {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
         }
 
         @media (max-width: 760px) {
@@ -1480,8 +1478,8 @@
             <div class="module-card">
             <div class="card-title">
                 <div class="card-title-wrap">资产库</div>
-                <div style="display:flex; gap:6px;">
-                    <button class="btn-icon asset-library-expand-btn" id="asset-library-expand-btn" onclick="toggleAssetLibraryExpanded()" title="放大资产库展示区域">展开</button>
+                <div class="asset-library-actions">
+                    <button class="btn-icon asset-library-expand-btn" id="asset-library-expand-btn" onclick="toggleAssetLibraryExpanded()" title="上下展开资产库">↕</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="exportAssetBackup()" title="导出当前域名下的版式、标签组、Logo 和字体">导出包</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="document.getElementById('backup-import').click()" title="导入从正式版导出的资产包">导入包</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="saveTemplatePack()">保存套组</button>
@@ -3493,8 +3491,8 @@
         document.body.classList.toggle('asset-library-expanded', expanded);
         const button = document.getElementById('asset-library-expand-btn');
         if(button) {
-            button.textContent = expanded ? '收起' : '展开';
-            button.title = expanded ? '恢复标准资产库尺寸' : '放大资产库展示区域';
+            button.textContent = '↕';
+            button.title = expanded ? '收起资产库' : '上下展开资产库';
         }
         requestAnimationFrame(() => resizeCanvas());
     }
