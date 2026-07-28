@@ -174,6 +174,62 @@
         .reference-drop-zone.drag-over { border-color: var(--text-main); color: var(--text-main); background: #F8FAFC; box-shadow: inset 0 0 0 2px rgba(16,17,20,0.06); }
         .asset-item.reference-element { cursor: grab; }
         .asset-item.reference-element:active { cursor: grabbing; }
+
+        .asset-library-expand-btn {
+            min-width: 44px;
+            padding: 4px 8px;
+            font-size: 11px;
+        }
+
+        body.asset-library-expanded .editor-layout {
+            gap: 20px;
+        }
+
+        body.asset-library-expanded .right-pane {
+            width: min(700px, 48vw);
+            flex: 0 0 min(700px, 48vw);
+        }
+
+        body.asset-library-expanded .asset-library-card {
+            min-height: min(78vh, 820px);
+        }
+
+        body.asset-library-expanded .asset-library-card .asset-list {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+            max-height: min(70vh, 720px);
+            padding-right: 8px;
+        }
+
+        body.asset-library-expanded .asset-library-card .asset-thumb {
+            aspect-ratio: 1.48;
+        }
+
+        body.asset-library-expanded .asset-library-card .asset-name {
+            font-size: 13px;
+        }
+
+        body.asset-library-expanded .asset-library-card .asset-meta {
+            font-size: 12px;
+        }
+
+        @media (max-width: 1180px) {
+            body.asset-library-expanded .right-pane {
+                width: 100%;
+                flex-basis: auto;
+            }
+
+            body.asset-library-expanded .asset-library-card .asset-list {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 760px) {
+            body.asset-library-expanded .asset-library-card .asset-list {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
         .prompt-tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
         .prompt-tag-chip { border: 1px solid var(--border); background: #FFFFFF; color: var(--text-sub); border-radius: 999px; padding: 7px 11px; cursor: pointer; font-size: 12px; font-weight: 800; transition: 0.2s; }
         .prompt-tag-chip:hover { border-color: var(--primary); color: var(--text-main); }
@@ -1425,6 +1481,7 @@
             <div class="card-title">
                 <div class="card-title-wrap">资产库</div>
                 <div style="display:flex; gap:6px;">
+                    <button class="btn-icon asset-library-expand-btn" id="asset-library-expand-btn" onclick="toggleAssetLibraryExpanded()" title="放大资产库展示区域">展开</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="exportAssetBackup()" title="导出当前域名下的版式、标签组、Logo 和字体">导出包</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="document.getElementById('backup-import').click()" title="导入从正式版导出的资产包">导入包</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="saveTemplatePack()">保存套组</button>
@@ -3430,6 +3487,16 @@
         currentAssetTab = tab;
         document.querySelectorAll('.asset-tab').forEach(b => b.classList.toggle('active', b.dataset.assetTab === tab));
         renderAssetLibrary();
+    }
+    function toggleAssetLibraryExpanded() {
+        const expanded = !document.body.classList.contains('asset-library-expanded');
+        document.body.classList.toggle('asset-library-expanded', expanded);
+        const button = document.getElementById('asset-library-expand-btn');
+        if(button) {
+            button.textContent = expanded ? '收起' : '展开';
+            button.title = expanded ? '恢复标准资产库尺寸' : '放大资产库展示区域';
+        }
+        requestAnimationFrame(() => resizeCanvas());
     }
     function toggleAddMenu(e) { e.stopPropagation(); document.getElementById('add-menu')?.classList.toggle('open'); }
     function closeAddMenu() { document.getElementById('add-menu')?.classList.remove('open'); }
