@@ -112,6 +112,42 @@
         .layer-item.active { border-color: var(--text-main); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .layer-item.locked { opacity: 0.6; }
         .layer-item.dragging { opacity: 0.45; border-style: dashed; }
+
+        .layer-drop-zone {
+            min-height: 46px;
+            margin-bottom: 12px;
+            border: 1px dashed var(--border);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.72);
+            color: var(--text-sub);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 780;
+            cursor: pointer;
+            transition: 0.18s ease;
+        }
+        .layer-drop-zone:hover,
+        .layer-module-card.layer-file-drag-over .layer-drop-zone {
+            border-color: var(--text-main);
+            background: #FFFFFF;
+            color: var(--text-main);
+            box-shadow: inset 0 0 0 2px rgba(16,17,20,0.05);
+        }
+        .layer-drop-icon {
+            width: 22px;
+            height: 22px;
+            border: 1px solid currentColor;
+            border-radius: 7px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 500;
+            line-height: 1;
+        }
         
         .layer-actions { display: flex; gap: 8px; align-items: center;}
         .l-btn { background: transparent; border: none; cursor: pointer; font-size: 14px; opacity: 0.6; transition: 0.2s; padding: 0;}
@@ -1532,7 +1568,7 @@
             </div>
         </div>
 
-            <div class="module-card">
+            <div class="module-card layer-module-card" id="layer-module-card">
                 <div class="card-title">
                     <div class="card-title-wrap">图层</div>
                     <div class="add-menu-wrap">
@@ -1545,6 +1581,10 @@
                             <button onclick="addLayer('discountTag'); closeAddMenu();">折扣标签</button>
                         </div>
                     </div>
+                </div>
+                <div class="layer-drop-zone" id="layer-drop-zone" role="button" tabindex="0" title="拖入图片到图层，图片会完整显示">
+                    <span class="layer-drop-icon">+</span>
+                    <span>拖入图片到图层，自动完整显示</span>
                 </div>
                 <div class="layer-list" id="layer-list-ui"></div>
             </div>
@@ -4423,6 +4463,40 @@
             handleDroppedImageFiles(e.dataTransfer.files);
         });
     }
+    function setupLayerDropImport() {
+        const card = document.getElementById('layer-module-card');
+        const zone = document.getElementById('layer-drop-zone');
+        if(!card || !zone) return;
+        const clearDragState = () => card.classList.remove('layer-file-drag-over');
+        ['dragenter', 'dragover'].forEach(type => {
+            card.addEventListener(type, e => {
+                if(!isFileDragEvent(e)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                card.classList.add('layer-file-drag-over');
+            });
+        });
+        ['dragleave', 'dragend'].forEach(type => {
+            card.addEventListener(type, e => {
+                if(type === 'dragleave' && card.contains(e.relatedTarget)) return;
+                clearDragState();
+            });
+        });
+        card.addEventListener('drop', e => {
+            if(!isFileDragEvent(e)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            clearDragState();
+            handleDroppedImageFiles(e.dataTransfer.files);
+        });
+        zone.addEventListener('click', () => document.getElementById('bg-upload')?.click());
+        zone.addEventListener('keydown', e => {
+            if(e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                document.getElementById('bg-upload')?.click();
+            }
+        });
+    }
     document.getElementById('bg-upload').addEventListener('change', e => { 
         const file = e.target.files[0]; if(!file) return;
         importImageFile(file).then(ok => {
@@ -4704,6 +4778,7 @@
         await loadReferenceElementsFromDB();
         await loadSharedAssetsFromCloud();
         setupCanvasDropImport();
+        setupLayerDropImport();
         setupAIReferenceDrop();
         renderCustomArtboardControls();
         syncRatioNav();
