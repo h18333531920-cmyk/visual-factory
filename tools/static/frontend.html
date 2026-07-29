@@ -148,6 +148,29 @@
             font-weight: 500;
             line-height: 1;
         }
+
+        .layer-card-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: auto;
+        }
+
+        .layer-canvas-fit-btn {
+            width: 28px;
+            min-width: 28px;
+            height: 28px;
+            padding: 0;
+            border-radius: 9px;
+            color: var(--text-sub);
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .layer-canvas-fit-btn:hover {
+            color: var(--text-main);
+            background: #F2F4F3;
+        }
         
         .layer-actions { display: flex; gap: 8px; align-items: center;}
         .l-btn { background: transparent; border: none; cursor: pointer; font-size: 14px; opacity: 0.6; transition: 0.2s; padding: 0;}
@@ -1571,14 +1594,17 @@
             <div class="module-card layer-module-card" id="layer-module-card">
                 <div class="card-title">
                     <div class="card-title-wrap">图层</div>
-                    <div class="add-menu-wrap">
-                        <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="toggleAddMenu(event)">+ 添加</button>
-                        <div class="add-menu" id="add-menu">
-                            <button onclick="document.getElementById('bg-upload').click(); closeAddMenu();">图片图层</button>
-                            <button onclick="document.getElementById('logo-upload').click(); closeAddMenu();">上传Logo</button>
-                            <button onclick="addLayer('arc'); closeAddMenu();">圆弧</button>
-                            <button onclick="addLayer('tag'); closeAddMenu();">标签</button>
-                            <button onclick="addLayer('discountTag'); closeAddMenu();">折扣标签</button>
+                    <div class="layer-card-actions">
+                        <button class="btn-icon layer-canvas-fit-btn" id="layer-canvas-fit-btn" type="button" onclick="fitCanvasToSelectedImage()" title="按选中图片原始尺寸适配画布" aria-label="按选中图片原始尺寸适配画布" hidden>⤢</button>
+                        <div class="add-menu-wrap">
+                            <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="toggleAddMenu(event)">+ 添加</button>
+                            <div class="add-menu" id="add-menu">
+                                <button onclick="document.getElementById('bg-upload').click(); closeAddMenu();">图片图层</button>
+                                <button onclick="document.getElementById('logo-upload').click(); closeAddMenu();">上传Logo</button>
+                                <button onclick="addLayer('arc'); closeAddMenu();">圆弧</button>
+                                <button onclick="addLayer('tag'); closeAddMenu();">标签</button>
+                                <button onclick="addLayer('discountTag'); closeAddMenu();">折扣标签</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2445,6 +2471,105 @@
         const img = await loadImageElement(src);
         const frame = getImageFrameForMode(img.naturalWidth || img.width, img.naturalHeight || img.height, 'contain');
         addLayer('image', { src, ...frame, originalW: img.naturalWidth || img.width, originalH: img.naturalHeight || img.height });
+    }
+    function syncLayerCanvasFitButton() {
+        const button = document.getElementById('layer-canvas-fit-btn');
+        if(!button) return;
+        const selected = activeLayerIds.length === 1 ? layers.find(layer => layer.id === activeLayerIds[0]) : null;
+        const visible = selected?.type === 'image';
+        button.hidden = !visible;
+        if(visible) {
+            const width = Number(selected.originalW) || 0;
+            const height = Number(selected.originalH) || 0;
+            button.title = width && height ? `按图片原始尺寸 ${width}×${height} 适配画布` : '按选中图片原始尺寸适配画布';
+            button.setAttribute('aria-label', button.title);
+        }
+    }
+    function adaptLayersForCanvasSize(sourceLayers, sourceSize, targetSize, selectedId) {
+        const sx = targetSize.w / Math.max(1, sourceSize.w);
+        const sy = targetSize.h / Math.max(1, sourceSize.h);
+        const uniform = Math.min(sx, sy);
+        return cloneData(sourceLayers || []).map(layer => {
+            const next = cloneData(layer);
+            next.x = (Number(next.x) || sourceSize.w / 2) * sx;
+            next.y = (Number(next.y) || sourceSize.h / 2) * sy;
+            if(next.id === selectedId && next.type === 'image') {
+                next.x = targetSize.w / 2;
+                next.y = targetSize.h / 2;
+                next.baseW = targetSize.w;
+                next.baseH = targetSize.h;
+                next.scale = 1;
+                next.fitMode = 'contain';
+            } else if(next.type === 'solid' || next.role === 'extended-background') {
+                next.x = targetSize.w / 2;
+                next.y = targetSize.h / 2;
+                next.baseW = targetSize.w;
+                next.baseH = targetSize.h;
+                next.scale = 1;
+            } else if(next.type === 'image') {
+                next.baseW = Math.max(1, Math.round((Number(next.baseW) || sourceSize.w) * sx));
+                next.baseH = Math.max(1, Math.round((Number(next.baseH) || sourceSize.h) * sy));
+            } else if(next.type === 'logo') {
+                next.baseW = Math.max(1, Math.round((Number(next.baseW) || 260) * uniform));
+                next.baseH = Math.max(1, Math.round((Number(next.baseH) || 160) * uniform));
+            } else {
+                next.scale = (Number(next.scale) || 1) * uniform;
+            }
+            return next;
+        });
+    }
+    async function fitCanvasToSelectedImage() {
+        if(activeLayerIds.length !== 1) return showToast('请先选中一张图片图层', true);
+        const selected = layers.find(layer => layer.id === activeLayerIds[0]);
+        if(!selected || selected.type !== 'image') return showToast('请先选中一张图片图层', true);
+        const button = document.getElementById('layer-canvas-fit-btn');
+        if(button) button.disabled = true;
+        try {
+            let imageW = Number(selected.originalW);
+            let imageH = Number(selected.originalH);
+            if(!imageW || !imageH) {
+                const img = await loadImageElement(selected.src);
+                imageW = img.naturalWidth || img.width;
+                imageH = img.naturalHeight || img.height;
+                selected.originalW = imageW;
+                selected.originalH = imageH;
+            }
+            const targetSize = {
+                w: Math.max(64, Math.min(6000, Math.round(imageW))),
+                h: Math.max(64, Math.min(6000, Math.round(imageH)))
+            };
+            const sourceSize = SIZES[currentRatio];
+            if(!sourceSize) return showToast('当前画布尺寸读取失败', true);
+            const label = nextArtboardLabel(`图片 ${targetSize.w}×${targetSize.h}`);
+            saveCurrentArtboardState();
+            if(isCustomArtboardId()) {
+                updateCustomArtboardSize(currentArtboardId, { label, w: targetSize.w, h: targetSize.h });
+                const currentSelected = layers.find(layer => layer.id === selected.id);
+                if(currentSelected) {
+                    currentSelected.x = targetSize.w / 2;
+                    currentSelected.y = targetSize.h / 2;
+                    currentSelected.baseW = targetSize.w;
+                    currentSelected.baseH = targetSize.h;
+                    currentSelected.scale = 1;
+                    currentSelected.fitMode = 'contain';
+                }
+                saveCurrentArtboardState();
+                renderCanvas(); renderLayersList(); renderProperties();
+            } else {
+                if(!canCreateCustomArtboard()) return;
+                const newId = createCustomArtboardPreset({ label, w: targetSize.w, h: targetSize.h }, false);
+                if(!newId) return;
+                artboards[newId].layers = adaptLayersForCanvasSize(layers, sourceSize, targetSize, selected.id);
+                switchArtboard(newId);
+            }
+            saveHistory();
+            showToast(`已按图片原始尺寸适配画布：${targetSize.w}×${targetSize.h}`);
+        } catch(e) {
+            showToast('图片尺寸读取失败，无法适配画布', true);
+        } finally {
+            if(button) button.disabled = false;
+            syncLayerCanvasFitButton();
+        }
     }
     async function applyImageFitMode(mode) {
         if(activeLayerIds.length !== 1) return;
@@ -3419,6 +3544,7 @@
             li.innerHTML = `<div style="display:flex; align-items:center; min-width:0;"><span class="drag-handle">⋮⋮</span><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${icon}</span></div><div class="layer-actions"><button class="l-btn" onclick="toggleLock('${l.id}')">${l.locked ? '🔒' : '🔓'}</button><button class="l-btn" style="color:var(--danger);" onclick="deleteLayer('${l.id}')">✖</button></div>`;
             listUI.appendChild(li);
         });
+        syncLayerCanvasFitButton();
     }
 
     function reorderLayerByDrop(fromId, toId) {
@@ -3473,6 +3599,7 @@
 
     function renderProperties() {
         const area = document.getElementById('prop-edit-area'); 
+        syncLayerCanvasFitButton();
         if(activeLayerIds.length === 0) { area.innerHTML = `<div style="text-align: center; color: var(--text-sub); font-size: 13px; padding: 20px 0;">请在上方或画板中选择图层</div>`; return; }
         if(activeLayerIds.length > 1) {
             const types = activeLayerIds.map(id => layers.find(l => l.id === id)?.type); const allTags = types.every(t => ['tag', 'discountTag'].includes(t)); const allArcs = types.every(t => t === 'arc');
