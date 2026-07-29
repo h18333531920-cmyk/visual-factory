@@ -115,6 +115,7 @@
   const SOURCE_EXTENSIONS = ['psd', 'psb', 'ai', 'pdf', 'zip', 'rar', '7z', 'gz', 'tar'];
   const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
   const PREVIEW_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  const MAX_IMAGE_SIZE_BYTES = 30 * 1024 * 1024; // 30MB
   const TEMPLATE_EXTENSIONS = ['json'];
   const LIBRARY_KIND_MARKERS = {
     gallery: 'vf:kind:gallery',
@@ -131,8 +132,8 @@
     gallery: {
       tag1: ['商家食物', '虚拟食物', 'LOGO素材', 'KIKI素材', '其他素材'],
       tag2ByTag1: {
-        '商家食物': ['汉堡', '披萨', '阿拉伯菜', '三明治', '小吃', '健康餐', '烧烤', '甜品', '饮品', '未分类'],
-        '虚拟食物': ['汉堡', '披萨', '阿拉伯菜', '三明治', '小吃', '健康餐', '烧烤', '甜品', '饮品', '未分类'],
+        '商家食物': ['汉堡', '披萨', '阿拉伯菜', '三明治', '小吃', '健康餐', '烧烤', '甜品', '饮品', '炸物', '未分类'],
+        '虚拟食物': ['汉堡', '披萨', '阿拉伯菜', '三明治', '小吃', '健康餐', '烧烤', '甜品', '饮品', '炸物', '未分类'],
         'LOGO素材': ['keeta logo', '商家logo', '未分类']
       }
     },
@@ -186,6 +187,11 @@
       activity: 'all',
       category: 'all',
       uploadTag1: 'all',
+      uploadTag2: 'all',
+      uploadTag3: 'all',
+      uploadTag4: 'all',
+      uploadCountry: 'all',
+      uploadActivity: 'all',
       favorites: false,
       selectedCountries: [],
       selectedActivities: [],
@@ -242,6 +248,53 @@
     window.addEventListener('hashchange', () => {
       navigate((location.hash || '#home').slice(1));
     });
+    // 全局拖拽上传：从桌面拖图片到页面任意位置，自动弹出上传弹窗
+    var dropOverlay = document.createElement('div');
+    dropOverlay.id = 'global-drop-overlay';
+    dropOverlay.innerHTML = '<div class="global-drop-inner"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"><path d="M12 3v14"/><path d="M5 10l7-7 7 7"/><path d="M4 17h16v4H4z"/></svg><strong>' + (state.lang === 'zh' ? '释放以添加入库' : 'Drop to upload') + '</strong><span>' + (state.lang === 'zh' ? '支持 JPG / PNG / WEBP，大图自动压缩' : 'JPG / PNG / WEBP, auto-compress large images') + '</span></div>';
+    dropOverlay.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-items:center;justify-content:center;flex-direction:column;pointer-events:none;';
+    document.body.appendChild(dropOverlay);
+    var dragCounter = 0;
+    window.addEventListener('dragover', function(event) {
+      event.preventDefault();
+    }, { capture: true });
+    window.addEventListener('dragenter', function(event) {
+      event.preventDefault();
+      dragCounter++;
+      var files = Array.from(event.dataTransfer.files || []);
+      var hasImage = files.some(function(f) { return (f.type || '').startsWith('image/'); });
+      if (hasImage || !event.dataTransfer.types || event.dataTransfer.types.indexOf('Files') !== -1) {
+        dropOverlay.style.display = 'flex';
+      }
+    }, { capture: true });
+    document.addEventListener('dragleave', function(event) {
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        dropOverlay.style.display = 'none';
+      }
+    });
+    window.addEventListener('drop', function(event) {
+      event.preventDefault();
+      dragCounter = 0;
+      dropOverlay.style.display = 'none';
+      var uploadModal = document.getElementById('library-upload-modal');
+      if (uploadModal && !uploadModal.hidden) return;
+      var el = event.target;
+      if (el && el.closest && el.closest('.library-drop-zone')) return;
+      var files = Array.from(event.dataTransfer.files || []);
+      if (!files.length) return;
+      var imageFiles = files.filter(function(f) { return (f.type || '').startsWith('image/'); });
+      if (!imageFiles.length) return;
+      if (state.route !== 'library') {
+        navigate('library');
+        setTimeout(function() {
+          openLibraryUploadModal({ files: imageFiles });
+        }, 500);
+      } else {
+        openLibraryUploadModal({ files: imageFiles });
+      }
+    }, { capture: true });
   }
 
   function toolFrameCache() {
@@ -816,7 +869,7 @@
                   </button>
                 </div>
               </div>
-              <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" id="library-upload-title" maxlength="120" required></label>
+              <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" id="library-upload-title" maxlength="120" placeholder="${state.lang === 'zh' ? '选填，不填则不显示名称' : 'Optional'}"></label>
               <div id="library-upload-tag-controls" class="library-upload-tags">${renderUploadTagControls(defaultKind)}</div>
               <div class="library-form-grid two" id="upload-meta-row">
 <div class="upload-tag-picker" data-upload-tag-picker="country" id="upload-country-field">
@@ -885,7 +938,9 @@
     return rows.map(row => {
       const isTag1 = row.key === 'tag1';
       const items = isTag1 ? row.values : ['all', ...row.values];
-      const defVal = isTag1 && row.values.includes(state.libraryFilters.uploadTag1) ? state.libraryFilters.uploadTag1 : 'all';
+      var defVal = 'all';
+      var candidate = state.libraryFilters['upload' + row.key.charAt(0).toUpperCase() + row.key.slice(1)];
+      if (candidate && row.values.includes(candidate)) defVal = candidate;
       const defLabel = defVal === 'all' ? emptyLabel : defVal;
       return `
       <div class="upload-tag-picker" data-upload-tag-picker="${row.key}">
@@ -941,7 +996,7 @@
           <form id="library-edit-form" class="library-form">
             <input type="hidden" name="id">
             <input type="hidden" name="library_kind">
-            <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" maxlength="120" required></label>
+            <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" maxlength="120"></label>
             <div class="library-form-grid two">
               <label><span>${state.lang === 'zh' ? '所在库' : 'Library section'}</span><input name="kind_label" readonly></label>
             </div>
@@ -993,6 +1048,7 @@
     wireLibraryTagButtons();
     setTimeout(() => { updateKindTabIndicator(); alignTagRows(); }, 50);
     document.getElementById('open-upload-modal')?.addEventListener('click', openLibraryUploadModal);
+    document.getElementById('delete-all-btn')?.addEventListener('click', deleteAllLibraryData);
     document.getElementById('close-library-upload')?.addEventListener('click', closeLibraryUploadModal);
     document.getElementById('cancel-library-upload')?.addEventListener('click', closeLibraryUploadModal);
     document.getElementById('library-upload-form')?.addEventListener('submit', uploadLibraryAsset);
@@ -1006,6 +1062,11 @@
         const input = document.getElementById('library-upload-kind');
         if (input) input.value = kind;
         state.libraryFilters.uploadTag1 = kind === 'source' ? 'C端' : 'all';
+        state.libraryFilters.uploadTag2 = 'all';
+        state.libraryFilters.uploadTag3 = 'all';
+        state.libraryFilters.uploadTag4 = 'all';
+        state.libraryFilters.uploadCountry = 'all';
+        state.libraryFilters.uploadActivity = 'all';
         document.getElementById('library-upload-tag-controls').innerHTML = renderUploadTagControls(kind);
         updateLibraryUploadMode(kind);
         wireLibraryUploadKindCards();
@@ -1029,7 +1090,7 @@
           if (state.libraryFilters.searchHistory.length > 6) state.libraryFilters.searchHistory.pop();
         }
         state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
-        renderLibraryGrid();
+        filterLibraryCardsInPlace();
       }
     });
     searchInput?.addEventListener('focus', () => {
@@ -1082,7 +1143,7 @@
         const search = document.getElementById('library-search');
         if (search) search.value = state.libraryFilters.query;
         state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
-        renderLibraryGrid();
+        filterLibraryCardsInPlace();
       }
     });
     const filterBtn = document.getElementById('library-filter-btn');
@@ -1117,11 +1178,98 @@
         }
         if (key === 'tag3') state.libraryFilters.tag4 = 'all';
         state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
-        renderLibraryGrid();
+        filterLibraryCardsInPlace();
         document.getElementById('library-tag-rows').innerHTML = renderLibraryTagRows(state.libraryFilters.kind || 'all');
         wireLibraryTagButtons();
       });
     });
+  }
+
+  function filterLibraryCardsInPlace() {
+    var grid = document.getElementById('library-grid');
+    if (!grid || !state.libraryItems) { renderLibraryGrid(); return; }
+    var sourcesById = new Map(state.librarySources.map(function(s) { return [s.id, s]; }));
+    var query = state.libraryFilters.query.toLowerCase();
+    var kind = state.libraryFilters.kind || 'all';
+    // 重新过滤
+    state.libraryItems = state.libraryPreviews.map(function(preview) {
+      var s = sourcesById.get(preview.source_file_id);
+      var url = state.libraryPreviewUrls[preview.preview_path] || '';
+      var tp = (s && s.source_path) ? s.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
+      return { preview: preview, source: s, url: url, thumbUrl: state.libraryPreviewUrls[tp] || '' };
+    }).filter(function(item) {
+      if (!item.source) return false;
+      var itemKind = libraryKindOfSource(item.source);
+      if (kind !== 'all' && kind !== itemKind) return false;
+      if (query && !libraryItemMatchesQuery(item, query)) return false;
+      var tags = visibleLibraryTags(item.source);
+      if (state.libraryFilters.tag1 !== 'all' && !tags.includes(state.libraryFilters.tag1)) return false;
+      if (state.libraryFilters.tag2 !== 'all' && !tags.includes(state.libraryFilters.tag2)) return false;
+      if (state.libraryFilters.tag3 !== 'all' && !tags.includes(state.libraryFilters.tag3)) return false;
+      if (state.libraryFilters.tag4 !== 'all' && !tags.includes(state.libraryFilters.tag4)) return false;
+      if (state.libraryFilters.selectedCountries && state.libraryFilters.selectedCountries.length && !state.libraryFilters.selectedCountries.includes(item.source.country_id)) return false;
+      if (state.libraryFilters.selectedActivities && state.libraryFilters.selectedActivities.length && !state.libraryFilters.selectedActivities.includes(item.source.activity_id)) return false;
+      return true;
+    });
+    var visibleItems = state.libraryItems.slice(0, state.libraryVisibleLimit);
+    var existingCards = grid.querySelectorAll('.library-card');
+    var existingIds = new Set();
+    existingCards.forEach(function(c) { existingIds.add(c.dataset.previewId); });
+    var missingCount = 0;
+    visibleItems.forEach(function(item) {
+      if (!existingIds.has(item.preview.id)) missingCount++;
+    });
+    // 缺少太多卡片或完全没有卡片时，全量重建更可靠
+    if (missingCount > visibleItems.length / 2 || (visibleItems.length > 0 && existingCards.length === 0)) {
+      renderLibraryGrid();
+      return;
+    }
+    // 控制卡片显隐
+    var visibleIds = new Set(visibleItems.map(function(item) { return item.preview.id; }));
+    var loadMore = document.getElementById('library-load-more');
+    existingCards.forEach(function(card) {
+      card.style.display = visibleIds.has(card.dataset.previewId) ? '' : 'none';
+    });
+    // 创建缺失的卡片
+    if (missingCount > 0) {
+      visibleItems.forEach(function(item) {
+        if (!existingIds.has(item.preview.id)) {
+          var html = renderLibraryCard(item);
+          var temp = document.createElement('div');
+          temp.innerHTML = html.trim();
+          var newCard = temp.firstChild;
+          if (loadMore && loadMore.parentNode === grid) {
+            grid.insertBefore(newCard, loadMore);
+          } else {
+            grid.appendChild(newCard);
+          }
+        }
+      });
+      wireLibraryCards();
+    }
+    // 更新加载更多按钮
+    var hasMore = state.libraryVisibleLimit < state.libraryItems.length;
+    if (loadMore) {
+      if (hasMore) {
+        var remaining = Math.min(LIBRARY_RENDER_STEP, state.libraryItems.length - state.libraryVisibleLimit);
+        loadMore.textContent = state.lang === 'zh' ? '加载更多 ' + remaining + ' 个' : 'Load ' + remaining + ' more';
+        loadMore.style.display = '';
+      } else {
+        loadMore.style.display = 'none';
+      }
+    }
+    // 刷新已显示卡片的图片 URL
+    updateLibraryCardImages(visibleItems);
+    void signVisibleLibraryUrls(visibleItems);
+  }
+
+  function libraryItemMatchesQuery(item, query) {
+    if (!query) return true;
+    var text = [item.source.title, item.source.source_filename || ''].join(' ').toLowerCase();
+    // 也检查标签
+    var tags = visibleLibraryTags(item.source);
+    text += ' ' + tags.join(' ').toLowerCase();
+    return text.includes(query);
   }
 
       
@@ -1167,7 +1315,7 @@
           const activeButtons = container.querySelectorAll('.filter-capsule.active:not([data-value="all"])');
           state.libraryFilters['selected' + typeLabel] = Array.from(activeButtons).map(b => b.dataset.value);
           state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
-          renderLibraryGrid();
+          filterLibraryCardsInPlace();
         });
       });
     });
@@ -1398,13 +1546,59 @@
 
   async function signVisibleLibraryUrls(items) {
     if (state.localPreview || !state.supabase) return;
-    const paths = items.map(item => item.preview.preview_path).filter(path => path && !state.libraryPreviewUrls[path]);
+    var paths = [];
+    items.forEach(function(item) {
+      var p = item.preview.preview_path;
+      if (p && !state.libraryPreviewUrls[p]) paths.push(p);
+      var src = (state.librarySources || []).find(function(s) { return s.id === item.preview.source_file_id; });
+      if (src && src.source_path) {
+        var thumbPath = src.source_path.replace(/\/[^/]+$/, '/_thumb.jpg');
+        if (thumbPath && !state.libraryPreviewUrls[thumbPath]) paths.push(thumbPath);
+      }
+    });
     if (!paths.length) return;
     try {
       await signLibraryPreviewUrls(paths);
-      if (document.getElementById('library-grid')) renderLibraryGrid();
+      // 不重建整个 grid，只更新已有卡片的图片 src
+      updateLibraryCardImages(items);
     } catch (error) {
       console.warn('Preview signing failed:', error);
+    }
+  }
+
+  function updateLibraryCardImages(items) {
+    var grid = document.getElementById('library-grid');
+    if (!grid) return;
+    var thumbCount = 0;
+    items.forEach(function(item) {
+      var card = grid.querySelector('.library-card[data-preview-id="' + item.preview.id + '"]');
+      if (!card) return;
+      var img = card.querySelector('.library-thumb img');
+      if (!img) return;
+      var fullUrl = state.libraryPreviewUrls[item.preview.preview_path] || '';
+      var src = (state.librarySources || []).find(function(s) { return s.id === item.preview.source_file_id; });
+      var thumbPath = (src && src.source_path) ? src.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
+      var thumbUrl = state.libraryPreviewUrls[thumbPath] || '';
+      var newUrl = thumbUrl || fullUrl;
+      if (newUrl && img.src !== newUrl) {
+        img.classList.remove('loaded');
+        var thumb = img.closest('.library-thumb');
+        if (thumb) thumb.classList.remove('img-loaded');
+        img.onload = function() { this.classList.add('loaded'); var t = this.closest('.library-thumb'); if (t) t.classList.add('img-loaded'); };
+        img.onerror = function() { this.classList.add('loaded'); var t = this.closest('.library-thumb'); if (t) t.classList.add('img-loaded'); if (fullUrl && this.src !== fullUrl) { this.onerror = null; this.src = fullUrl; } };
+        img.src = newUrl;
+        if (thumbUrl && fullUrl) thumbCount++;
+      }
+    });
+    console.log('[缩略图] ' + thumbCount + ' 张缩略图, ' + (items.length - thumbCount) + ' 张原图（无缩略图文件）');
+    // 同步更新 state.libraryItems 里的 url，供详情弹窗等使用
+    if (state.libraryItems) {
+      state.libraryItems.forEach(function(libItem) {
+        libItem.url = state.libraryPreviewUrls[libItem.preview.preview_path] || libItem.url;
+        var s = (state.librarySources || []).find(function(s) { return s.id === libItem.preview.source_file_id; });
+        var tp = (s && s.source_path) ? s.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
+        libItem.thumbUrl = state.libraryPreviewUrls[tp] || libItem.thumbUrl;
+      });
     }
   }
 
@@ -1435,7 +1629,13 @@
     const sourcesById = new Map(state.librarySources.map(source => [source.id, source]));
     const query = state.libraryFilters.query.toLowerCase();
     const filteredItems = state.libraryPreviews
-      .map(preview => ({ preview, source: sourcesById.get(preview.source_file_id), url: state.libraryPreviewUrls[preview.preview_path] || '' }))
+      .map(function(preview) {
+        var src = sourcesById.get(preview.source_file_id);
+        var url = state.libraryPreviewUrls[preview.preview_path] || '';
+        var thumbPath = (src && src.source_path) ? src.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
+        var thumbUrl = state.libraryPreviewUrls[thumbPath] || '';
+        return { preview: preview, source: src, url: url, thumbUrl: thumbUrl };
+      })
       .filter(item => item.source)
       .filter(item => {
         const kind = libraryKindOfSource(item.source);
@@ -1462,7 +1662,23 @@
         return text.includes(query);
       });
     state.libraryItems = filteredItems;
-    const visibleItems = state.libraryItems.slice(0, state.libraryVisibleLimit);
+    var visibleItems = state.libraryItems.slice(0, state.libraryVisibleLimit);
+    // 按宽高比交替排列，每4张一组，保持新图优先
+    var GROUP = 4;
+    var balanced = [];
+    for (var g = 0; g < visibleItems.length; g += GROUP) {
+      var group = visibleItems.slice(g, g + GROUP).map(function(item, idx) {
+        var pw = item.preview.width, ph = item.preview.height;
+        return { item: item, ratio: (pw && ph) ? pw / ph : 1 };
+      });
+      group.sort(function(a, b) { return a.ratio - b.ratio; });
+      var l = 0, r = group.length - 1;
+      while (l <= r) {
+        balanced.push(group[r--].item);
+        if (l <= r) balanced.push(group[l++].item);
+      }
+    }
+    visibleItems = balanced;
     const hasMore = visibleItems.length < state.libraryItems.length;
     const counts = countLibraryKinds();
     const sourceBadge = state.libraryRecoveryLabel
@@ -1479,7 +1695,7 @@
       return;
     }
     if (!visibleItems.some(item => item.preview.id === state.librarySelectedPreviewId)) {
-      state.librarySelectedPreviewId = visibleItems[0].preview.id;
+      state.librarySelectedPreviewId = '';
     }
     grid.innerHTML = `
       ${visibleItems.map(renderLibraryCard).join('')}
@@ -1646,9 +1862,11 @@
     return `
       <article class="library-card ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
         <div class="library-thumb-wrap">
-          <span class="file-pill">${escapeHtml(ext)}</span>
-          <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
-          <div class="library-thumb" style="${thumbStyle}">${item.url ? `<img src="${escapeAttr(item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img">` : `<span>${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`}</div>
+          <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded')" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
+          <div class="library-card-icons">
+            <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
+            <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}">↓</button>
+          </div>
           <div class="library-card-overlay">
             <div>
               <h4>${escapeHtml(source.title)}</h4>
@@ -1800,7 +2018,7 @@
             <h3 id="library-detail-title" style="font-size:18px;">${state.lang === 'zh' ? '素材详情' : 'Asset Details'}</h3>
             <button class="icon-btn" id="close-library-detail" type="button" style="font-size:20px;line-height:1;">×</button>
           </div>
-          <div id="library-detail-preview" style="width:100%;aspect-ratio:16/10;display:grid;place-items:center;background:#f4f5f7;border-radius:14px;overflow:hidden;margin-bottom:14px;border:1px solid #e8ebf0;"></div>
+          <div id="library-detail-preview" style="width:100%;aspect-ratio:16/10;max-height:55vh;overflow:auto;background:#f4f5f7;border-radius:14px;margin-bottom:14px;border:1px solid #e8ebf0;"></div>
           <div id="library-detail-meta" style="margin-bottom:14px;"></div>
           <div id="library-detail-actions" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;"></div>
         </section>
@@ -1826,8 +2044,16 @@
     const previewEl = document.getElementById('library-detail-preview');
     if (previewEl) {
       previewEl.innerHTML = previewUrl
-        ? `<img src="${escapeAttr(previewUrl)}" alt="${escapeAttr(source.title)}" style="width:100%;height:100%;object-fit:contain;">`
+        ? `<img src="${escapeAttr(previewUrl)}" alt="${escapeAttr(source.title)}" style="width:100%;height:auto;display:block;">`
         : `<span style="color:#94a3b8;font-size:14px;">${state.lang === 'zh' ? '预览生成中' : 'Preview loading...'}</span>`;
+		      previewEl.scrollTop = 0;
+		      previewEl.onwheel = function(e) {
+		        var atTop = previewEl.scrollTop <= 0;
+		        var atBottom = previewEl.scrollTop + previewEl.clientHeight >= previewEl.scrollHeight - 1;
+		        if ((atTop && e.deltaY < 0) || (atBottom && e.deltaY > 0)) {
+		          e.preventDefault();
+		        }
+		      };
     }
 
     // Meta info
@@ -1875,33 +2101,91 @@
     }
 
     document.getElementById('library-detail-modal').hidden = false;
+    document.body.style.overflow = 'hidden';
   }
 
   function closeLibraryDetailModal() {
     const modal = document.getElementById('library-detail-modal');
     if (modal) modal.hidden = true;
+    document.body.style.overflow = '';
   }
 
-  function openLibraryUploadModal() {
+  function populateDropZoneWithFiles(kind, files) {
+    var inputId;
+    if (kind === 'gallery') {
+      inputId = 'library-gallery-input';
+    } else if (kind === 'source') {
+      inputId = 'library-preview-input';
+    } else {
+      return; // template 不支持拖入图片
+    }
+    var input = document.getElementById(inputId);
+    if (!input) return;
+    var dt = new DataTransfer();
+    var imageFiles = files.filter(function(f) { return (f.type || '').startsWith('image/'); });
+    imageFiles.forEach(function(f) { dt.items.add(f); });
+    input.files = dt.files;
+    var zone = document.querySelector('[data-drop-input="' + inputId + '"]');
+    if (zone) updateDropZoneSummary(zone, input.files);
+    // 自动填名称
+    var titleInput = document.getElementById('library-upload-title');
+    if (titleInput && !titleInput.value.trim() && imageFiles.length) {
+      titleInput.value = stripExtension(imageFiles[0].name);
+    }
+  }
+
+  function openLibraryUploadModal(opts) {
+    opts = opts || {};
     renderLibrarySelects();
     const form = document.getElementById('library-upload-form');
+    if (!form) return;
     form.reset();
-    const defaultKind = 'source';
+    // 确定入库类型：优先用传入的 kind，其次当前页面筛选的 kind，最后默认 gallery
+    var defaultKind = opts.kind;
+    if (!defaultKind) {
+      var currentKind = state.libraryFilters.kind;
+      defaultKind = (currentKind && currentKind !== 'all') ? currentKind : 'gallery';
+    }
     const kindInput = document.getElementById('library-upload-kind');
     if (kindInput) kindInput.value = defaultKind;
-    state.libraryFilters.uploadTag1 = defaultKind === 'source' ? 'C端' : 'all';
+    // 确定各层级 tag：优先用传入的，其次当前页面筛选的
+    var pageTag1 = state.libraryFilters.tag1;
+    var fallbackTag1 = (pageTag1 && pageTag1 !== 'all') ? pageTag1 : (defaultKind === 'source' ? 'C端' : 'all');
+    state.libraryFilters.uploadTag1 = opts.tag1 || fallbackTag1;
+    state.libraryFilters.uploadTag2 = opts.tag2 || ((state.libraryFilters.tag2 && state.libraryFilters.tag2 !== 'all') ? state.libraryFilters.tag2 : 'all');
+    state.libraryFilters.uploadTag3 = opts.tag3 || ((state.libraryFilters.tag3 && state.libraryFilters.tag3 !== 'all') ? state.libraryFilters.tag3 : 'all');
+    state.libraryFilters.uploadTag4 = opts.tag4 || ((state.libraryFilters.tag4 && state.libraryFilters.tag4 !== 'all') ? state.libraryFilters.tag4 : 'all');
+    // 确定国家/活动：优先用传入的，其次用右上角筛选面板已选中的（单选取第一个）
+    var pageCountries = state.libraryFilters.selectedCountries || [];
+    var pageActivities = state.libraryFilters.selectedActivities || [];
+    state.libraryFilters.uploadCountry = opts.country || (pageCountries.length === 1 ? pageCountries[0] : 'all');
+    state.libraryFilters.uploadActivity = opts.activity || (pageActivities.length === 1 ? pageActivities[0] : 'all');
     const tagControls = document.getElementById('library-upload-tag-controls');
     if (tagControls) tagControls.innerHTML = renderUploadTagControls(defaultKind);
-    document.getElementById('library-upload-title').value = '';
+    document.getElementById('library-upload-title').value = opts.title || '';
     document.getElementById('library-upload-message').textContent = '';
     document.getElementById('library-upload-modal').hidden = false;
     setTimeout(function() { populateUploadMetaPickers(); }, 50);
+    setTimeout(function() { prefillUploadMetaSelections(); }, 120);
     document.querySelector('.library-upload-scroll')?.scrollTo({ top: 0, behavior: 'auto' });
     updateLibraryUploadMode(defaultKind);
     wireLibraryUploadKindCards();
     wireUploadTagPickers();
     wireUploadTagHover();
     document.querySelectorAll('.library-drop-zone').forEach(zone => updateDropZoneSummary(zone, []));
+    // 如有拖入的文件，填入对应的 drop zone
+    if (opts.files && opts.files.length) {
+      populateDropZoneWithFiles(defaultKind, opts.files);
+    }
+  }
+
+  function prefillUploadMetaSelections() {
+    ['country', 'activity'].forEach(function(type) {
+      var val = state.libraryFilters['upload' + type.charAt(0).toUpperCase() + type.slice(1)];
+      if (!val || val === 'all') return;
+      var btn = document.querySelector('[data-upload-tag-option="' + type + '"][data-upload-tag-value="' + val + '"]');
+      if (btn) btn.click();
+    });
   }
 
   function closeLibraryUploadModal() {
@@ -2015,11 +2299,18 @@
     wireUploadTagHover();
   }
 
+  function filterOversizedFiles(input) {
+    // 不再拦截大文件，上传时自动压缩
+  }
+
   function wireLibraryUploadDrops() {
     document.querySelectorAll('.library-drop-zone').forEach(zone => {
       const input = document.getElementById(zone.dataset.dropInput);
       if (!input) return;
-      input.addEventListener('change', () => updateDropZoneSummary(zone, input.files));
+      input.addEventListener('change', () => {
+        filterOversizedFiles(input);
+        updateDropZoneSummary(zone, input.files);
+      });
       zone.addEventListener('dragenter', event => {
         event.preventDefault();
         zone.classList.add('dragging');
@@ -2172,7 +2463,7 @@
       if (sourceUpload.error) throw sourceUpload.error;
       setUploadProgress(30);
       uploadedPaths.push(sourcePath);
-      const title = formData.get('title').trim() || stripExtension(sourceFile.name);
+      const title = formData.get('title').trim();
       const countryId = formData.get('country');
       const activityId = formData.get('activity');
       const categoryId = formData.get('category');
@@ -2237,11 +2528,68 @@
     }
   }
 
+  function generateThumbnail(file, maxWidth) {
+    maxWidth = maxWidth || 400;
+    return new Promise(function(resolve, reject) {
+      if (!file.type.startsWith('image/')) return resolve(null);
+      var img = new Image();
+      var url = URL.createObjectURL(file);
+      img.onload = function() {
+        URL.revokeObjectURL(url);
+        var ratio = Math.min(1, maxWidth / img.width);
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(function(blob) {
+          // 如果压缩后反而更大就放弃
+          resolve(blob && blob.size < file.size ? blob : null);
+        }, 'image/jpeg', 0.7);
+      };
+      img.onerror = function() {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      img.src = url;
+    });
+  }
+
+  function compressImageIfNeeded(file, maxSize) {
+    maxSize = maxSize || 10 * 1024 * 1024; // 默认 10MB
+    if (!file.type.startsWith('image/') || file.size <= maxSize) return Promise.resolve(file);
+    return new Promise(function(resolve) {
+      var img = new Image();
+      var url = URL.createObjectURL(file);
+      img.onload = function() {
+        URL.revokeObjectURL(url);
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        // 逐级降低质量直到满足大小
+        function tryQuality(q) {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob(function(blob) {
+            if (!blob || blob.size <= maxSize || q <= 0.3) {
+              resolve(blob && blob.size < file.size ? blob : file);
+            } else {
+              tryQuality(q - 0.1);
+            }
+          }, 'image/jpeg', q);
+        }
+        tryQuality(0.85);
+      };
+      img.onerror = function() { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  }
+
   async function uploadGalleryAssets(formData, onProgress) {
     const files = Array.from(formData.getAll('gallery_files')).filter(file => file && file.size > 0);
     validateGalleryUpload(files);
     const userId = state.session.user.id;
-    const baseTitle = formData.get('title').trim();
+    var baseTitle = formData.get('title').trim();
     const uploadedPaths = [];
     const insertedSourceIds = [];
     const pctEach = files.length ? Math.floor(90 / files.length) : 90;
@@ -2249,13 +2597,18 @@
       let fileIndex = 0;
       for (const file of files) {
         if (onProgress) onProgress(pctEach * fileIndex);
+        // 压缩超大图片
+        var uploadFile = file;
+        if (file.size > 10 * 1024 * 1024) {
+          uploadFile = await compressImageIfNeeded(file, 10 * 1024 * 1024);
+        }
         const sourceId = crypto.randomUUID();
         const sourcePath = `${userId}/sources/${sourceId}/${safeStorageName(file.name)}`;
-        const sourceUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, file, { upsert: false, contentType: file.type });
+        const sourceUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, uploadFile, { upsert: false, contentType: uploadFile.type || file.type });
         if (sourceUpload.error) throw sourceUpload.error;
         uploadedPaths.push(sourcePath);
-        const dimensions = await readImageDimensions(file);
-        const title = files.length === 1 ? (baseTitle || stripExtension(file.name)) : `${baseTitle || stripExtension(file.name)} · ${stripExtension(file.name)}`;
+        const dimensions = await readImageDimensions(uploadFile);
+        var title = files.length === 1 ? baseTitle : (baseTitle ? baseTitle + ' · ' + stripExtension(file.name) : '');
         const countryId = formData.get('country');
         const activityId = formData.get('activity');
         const categoryId = formData.get('category');
@@ -2269,21 +2622,32 @@
           visibility: formData.get('visibility') || 'all',
           source_path: sourcePath,
           source_filename: file.name,
-          source_mime_type: file.type || '',
-          source_size_bytes: file.size,
+          source_mime_type: uploadFile.type || file.type || '',
+          source_size_bytes: uploadFile.size,
           source_ext: fileExt(file.name),
           uploaded_by: userId
         };
         const sourceInsert = await state.supabase.from('vf_source_files').insert([sourceRow]);
         if (sourceInsert.error) throw sourceInsert.error;
         insertedSourceIds.push(sourceId);
+        // 生成缩略图并上传
+        var thumbPath = null;
+        try {
+          var thumbBlob = await generateThumbnail(uploadFile, 400);
+          if (thumbBlob) {
+            thumbPath = `${userId}/sources/${sourceId}/_thumb.jpg`;
+            var thumbUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(thumbPath, thumbBlob, { upsert: true, contentType: 'image/jpeg' });
+            if (thumbUpload.error) { console.warn('Thumbnail upload failed:', thumbUpload.error); thumbPath = null; }
+            else { uploadedPaths.push(thumbPath); }
+          }
+        } catch (e) { console.warn('Thumbnail generation failed:', e); }
         const previewInsert = await state.supabase.from('vf_asset_previews').insert([{
           id: crypto.randomUUID(),
           source_file_id: sourceId,
           preview_path: sourcePath,
           preview_filename: file.name,
-          preview_mime_type: file.type,
-          preview_size_bytes: file.size,
+          preview_mime_type: uploadFile.type || file.type,
+          preview_size_bytes: uploadFile.size,
           width: dimensions.width,
           height: dimensions.height,
           sort_order: 10
@@ -2342,16 +2706,21 @@
   }
 
   function openLibraryEditModal(sourceId) {
+    closeLibraryDetailModal();
     const source = state.librarySources.find(item => item.id === sourceId);
     if (!source) return;
     renderLibrarySelects();
     const form = document.getElementById('library-edit-form');
+    if (!form) return;
     const kind = libraryKindOfSource(source);
     form.elements.id.value = source.id;
     form.elements.library_kind.value = kind;
     form.elements.kind_label.value = libraryKindLabel(kind);
     form.elements.title.value = source.title || '';
-    form.elements.visibility.value = source.visibility || 'all';
+    if (form.elements.visibility) form.elements.visibility.value = source.visibility || 'all';
+    if (form.elements.country) form.elements.country.value = source.country_id || '';
+    if (form.elements.activity) form.elements.activity.value = source.activity_id || '';
+    if (form.elements.category) form.elements.category.value = source.category_id || '';
     form.elements.tags.value = visibleLibraryTags(source).join(', ');
     document.getElementById('library-edit-message').textContent = '';
     document.getElementById('library-edit-modal').hidden = false;
@@ -2388,6 +2757,68 @@
       setMessage(message, error.message, true);
     }
   }
+
+  async function deleteAllLibraryData() {
+    if (!state.supabase || !state.session) {
+      alert(state.lang === 'zh' ? '请先登录。' : 'Please log in first.');
+      return;
+    }
+    var totalSources = state.librarySources.length;
+    var totalPreviews = state.libraryPreviews.length;
+    if (totalSources === 0) {
+      alert(state.lang === 'zh' ? '没有可删除的数据。' : 'No data to delete.');
+      return;
+    }
+    var ok = window.confirm(state.lang === 'zh'
+      ? '确定删除全部 ' + totalSources + ' 个素材及其 ' + totalPreviews + ' 张预览图吗？\n\n此操作不可撤销！'
+      : 'Delete all ' + totalSources + ' sources and ' + totalPreviews + ' previews?\n\nThis cannot be undone!');
+    if (!ok) return;
+    alert('共 ' + totalSources + ' 个素材，开始删除...');
+    try {
+      // 按外键依赖顺序：收藏 → 预览 → 源文件 → 存储文件
+      var uId = state.session.user.id;
+      var step = '';
+      // 1. 收藏
+      step = '收藏';
+      var fRes = await state.supabase.from('vf_asset_favorites').delete().eq('user_id', uId).select();
+      if (fRes.error) throw new Error(step + ': ' + fRes.error.message);
+      alert(step + ' 已删 ' + (fRes.data || []).length + ' 条');
+      // 2. 预览
+      step = '预览';
+      var pvIds = state.libraryPreviews.map(function(p) { return p.id; });
+      var pRes = await state.supabase.from('vf_asset_previews').delete().in('id', pvIds).select();
+      if (pRes.error) throw new Error(step + ': ' + pRes.error.message);
+      alert(step + ' 已删 ' + (pRes.data || []).length + '/' + pvIds.length + ' 条');
+      // 3. 源文件
+      step = '源文件';
+      var srcIds = state.librarySources.map(function(s) { return s.id; });
+      var sRes = await state.supabase.from('vf_source_files').delete().in('id', srcIds).select();
+      if (sRes.error) throw new Error(step + ': ' + sRes.error.message);
+      alert(step + ' 已删 ' + (sRes.data || []).length + '/' + srcIds.length + ' 条');
+      // 4. 存储文件
+      step = '存储';
+      var filePaths = [];
+      state.librarySources.forEach(function(s) {
+        if (s.source_path) filePaths.push(s.source_path);
+        if (s.source_path) filePaths.push(s.source_path.replace(/\/[^/]+$/, '/_thumb.jpg'));
+      });
+      var unique = Array.from(new Set(filePaths.filter(Boolean)));
+      if (unique.length) {
+        var rRes = await state.supabase.storage.from(LIBRARY_BUCKET).remove(unique);
+        if (rRes.error) alert(step + ' 警告: ' + rRes.error.message);
+        else alert(step + ' 已请求删除 ' + unique.length + ' 个文件');
+      }
+      alert('完成！刷新页面看看。');
+      state.libraryDataLoaded = false;
+      state.libraryPreviewUrls = {};
+      state.librarySources = [];
+      state.libraryPreviews = [];
+      window.location.reload();
+    } catch (error) {
+      alert('删除失败 [' + (step || '?') + ']: ' + (error.message || error));
+    }
+  }
+  window.deleteAllLibraryData = deleteAllLibraryData;
 
   async function deleteLibrarySource(sourceId) {
     const source = state.librarySources.find(item => item.id === sourceId);
@@ -2572,7 +3003,7 @@
   async function uploadTemplateAsset(formData) {
     const templateFile = formData.get('template_file');
     if (!templateFile || !templateFile.size) throw new Error(state.lang === 'zh' ? '请选择模板文件。' : 'Choose a template file.');
-    const title = formData.get('title').trim() || stripExtension(templateFile.name);
+    const title = formData.get('title').trim();
     const sourceId = crypto.randomUUID();
     const userId = state.session.user.id;
     const sourcePath = `${userId}/templates/${sourceId}/${safeStorageName(templateFile.name)}`;
@@ -3335,7 +3766,7 @@ function libraryTagsForForm(formData, kind) {
 
   function previewAspectStyle(preview) {
     if (!preview?.width || !preview?.height) return '';
-    const ratio = Math.min(1.7, Math.max(0.72, preview.width / preview.height));
+    const ratio = preview.width / preview.height;
     return `aspect-ratio: ${ratio.toFixed(3)};`;
   }
 
@@ -3382,4 +3813,5 @@ function libraryTagsForForm(formData, kind) {
   function escapeAttr(value) {
     return escapeHtml(value).replace(/`/g, '&#96;');
   }
+
 })();

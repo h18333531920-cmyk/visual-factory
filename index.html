@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GCC Design</title>
-  <script src="./tools/vendor/supabase-js.js?v=20260709-pickers"></script>
-  <link rel="stylesheet" href="./styles.css?v=20260709-pickers">
+  <script src="./tools/vendor/supabase-js.js?v=20260729-shimmer"></script>
+  <link rel="stylesheet" href="./styles.css?v=20260729-shimmer">
   <style>
     .library-control-strip {
       margin-left: 0 !important;
@@ -406,26 +406,72 @@
       min-width: 36px;
       text-align: right;
     }
-    /* 图库卡片 Hover 缩放 */
+    /* 图库卡片 Hover */
     .library-card {
-      transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+      transition: transform 0.25s ease, box-shadow 0.25s ease !important;
     }
     .library-card:hover {
-      transform: scale(1.02) !important;
-      box-shadow: 0 20px 48px rgba(16, 24, 40, 0.14) !important;
+      transform: scale(1.03) !important;
+      box-shadow: 0 16px 40px rgba(16, 24, 40, 0.12) !important;
       z-index: 2 !important;
     }
     /* 图片懒加载 */
     .library-thumb img.lazy-img {
       opacity: 1;
     }
-    /* 卡片常态只显示图片，hover 才显示信息 */
-    .library-card-overlay {
-      opacity: 0 !important;
-      transition: opacity 0.25s ease !important;
+    /* 卡片右下角图标栏 */
+    .library-card-icons {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      z-index: 3;
+      display: flex;
+      gap: 6px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
     }
-    .library-card:hover .library-card-overlay {
+    .library-card:hover .library-card-icons {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .library-card-icons button {
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(0,0,0,0.25);
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      line-height: 1;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: background 0.15s ease;
+    }
+    .library-card-icons button:hover {
+      background: rgba(0,0,0,0.4);
+    }
+    .favorite-btn.active {
+      color: #fbbf24;
+    }
+    /* 覆盖旧的文件标签和收藏按钮样式 */
+    .file-pill { display: none !important; }
+    .favorite-btn {
+      position: static !important;
+      top: auto !important;
+      right: auto !important;
+      left: auto !important;
+      bottom: auto !important;
       opacity: 1 !important;
+    }
+    /* 隐藏卡片底部信息，保持画面干净 */
+    .library-card .library-card-overlay {
+      display: none !important;
     }
     /* 底部按钮区去掉白色底 + 按钮胶囊化 */
     #library-upload-modal .library-upload-footer {
@@ -466,9 +512,67 @@
       pointer-events: auto !important;
       transform: translateY(0) !important;
     }
+    /* 全局拖拽 overlay */
+    .global-drop-inner {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 12px !important;
+      color: #ffffff !important;
+      text-align: center !important;
+      pointer-events: none !important;
+    }
+    .global-drop-inner svg {
+      opacity: 0.7;
+    }
+    .global-drop-inner strong {
+      font-size: 22px !important;
+      font-weight: 700 !important;
+      letter-spacing: -0.3px;
+    }
+    .global-drop-inner span {
+      font-size: 13px !important;
+      opacity: 0.55;
+      font-weight: 500;
+    }
+    /* 图片加载 shimmer 骨架屏 */
+    .library-thumb {
+      background: #e8ecf1 !important;
+      position: relative !important;
+    }
+    .library-thumb::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+      animation: shimmer-slide 1.5s ease-in-out infinite;
+      z-index: 0;
+      pointer-events: none;
+    }
+    @keyframes shimmer-slide {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .library-thumb img {
+      position: relative;
+      z-index: 1;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      color: transparent !important;
+    }
+    .library-thumb img.loaded {
+      opacity: 1;
+    }
+    .library-thumb img.loaded + .library-card-icons {
+      /* 不用管 */
+    }
+    /* 图片加载完成后隐藏 shimmer */
+    .library-thumb.img-loaded::after {
+      opacity: 0;
+    }
   </style>
-  <script src="./config.js?v=20260709-pickers"></script>
-  <script src="./app.js?v=20260709-pickers" defer></script>
+  <script src="./config.js?v=20260729-shimmer"></script>
+  <script src="./app.js?v=20260729-shimmer" defer></script>
 </head>
 <body>
   <main id="login-view" class="login-view">

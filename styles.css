@@ -705,12 +705,12 @@ select:focus {
 
 .inspiration-card.tall img {
   aspect-ratio: 4 / 5;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .inspiration-card.wide img {
   aspect-ratio: 16 / 9;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .inspiration-card span {
@@ -1350,7 +1350,7 @@ select:focus {
   width: 100%;
   height: 100%;
   aspect-ratio: auto;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .inspiration-overlay {
@@ -1780,10 +1780,8 @@ select:focus {
 }
 
 .library-thumb {
-  aspect-ratio: 16 / 11;
+  display: block;
   background: linear-gradient(180deg, #f8fafc, #eef2f7);
-  display: grid;
-  place-items: center;
   border-bottom: 1px solid var(--border);
   overflow: hidden;
   color: var(--muted);
@@ -1792,8 +1790,7 @@ select:focus {
 
 .library-thumb img {
   width: 100%;
-  height: 100%;
-  object-fit: contain;
+  height: auto;
   display: block;
 }
 
@@ -2561,12 +2558,10 @@ select:focus {
 
 .library-thumb {
   aspect-ratio: auto;
-  min-height: 180px;
-  max-height: 440px;
 }
 
 .library-thumb img {
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .library-card-body {
@@ -2734,14 +2729,12 @@ select:focus {
 }
 
 .library-thumb {
-  min-height: 220px;
-  max-height: none;
   border-bottom: 0;
   background: #edf1f7;
 }
 
 .library-thumb img {
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .library-card-overlay {
@@ -3093,7 +3086,6 @@ select:focus {
 }
 
 .library-thumb {
-  min-height: 260px;
   background: #d9d9d9;
 }
 
@@ -3714,7 +3706,6 @@ textarea:focus {
 }
 
 .library-thumb {
-  min-height: 270px;
   background: #d8dadd;
 }
 
@@ -4392,14 +4383,12 @@ textarea:focus {
 }
 
 .library-thumb {
-  min-height: 268px;
-  max-height: none;
   border-bottom: 0;
   background: #d9dad8;
 }
 
 .library-thumb img {
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .file-pill {
@@ -5055,7 +5044,6 @@ body,
 }
 
 .library-thumb {
-  min-height: 330px;
   background: #d6d7d4;
 }
 
@@ -5064,17 +5052,20 @@ body,
   font-weight: 840;
 }
 
-.file-pill,
+.file-pill {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
 .favorite-btn {
   opacity: 0;
   transition: opacity 140ms ease, transform 140ms ease;
 }
 
 .library-card:hover .file-pill,
-.library-card:hover .favorite-btn,
-.library-card.selected .file-pill,
-.library-card.selected .favorite-btn {
+.library-card:hover .favorite-btn {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .library-card-overlay {
@@ -5574,7 +5565,7 @@ body .home-demo-artboard img {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 body .home-demo-artboard span {
@@ -6047,7 +6038,7 @@ body .home26-art img {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 body .home26-art b {
