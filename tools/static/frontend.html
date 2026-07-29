@@ -65,6 +65,9 @@
         
         .layer-tag-wrapper { position: absolute; cursor: grab; display: inline-block; transform-origin: center center; pointer-events: auto;}
         .layer-tag-wrapper:active { cursor: grabbing; }
+        .layer-text-wrapper { position: absolute; cursor: grab; transform-origin: center center; pointer-events: auto; }
+        .layer-text-wrapper:active { cursor: grabbing; }
+        .layer-text-content { white-space: pre-wrap; overflow-wrap: anywhere; }
         
         .is-active-layer { outline: 3px dashed var(--primary); outline-offset: 4px; }
         
@@ -1477,7 +1480,8 @@
         </div>
         <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
             <div class="card-title"><div class="card-title-wrap">字体库管理</div></div>
-            <button class="btn btn-outline" onclick="document.getElementById('font-upload').click()">Aa 导入本地字体文件</button>
+            <button class="btn btn-outline" onclick="document.getElementById('font-upload').click()">Aa 上传字体</button>
+            <div style="margin-top:8px; font-size:12px; color:var(--text-sub);">支持 TTF、OTF、WOFF、WOFF2；上传后可在文本和标签中直接选择。</div>
             <div id="custom-font-list" style="margin-top: 12px; font-size: 12px; color: var(--text-sub); display:flex; gap:12px; flex-wrap:wrap;"></div>
         </div>
         <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
@@ -1600,6 +1604,7 @@
                             <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="toggleAddMenu(event)">+ 添加</button>
                             <div class="add-menu" id="add-menu">
                                 <button onclick="document.getElementById('bg-upload').click(); closeAddMenu();">图片图层</button>
+                                <button onclick="addLayer('text'); closeAddMenu();">文本</button>
                                 <button onclick="document.getElementById('logo-upload').click(); closeAddMenu();">上传Logo</button>
                                 <button onclick="addLayer('arc'); closeAddMenu();">圆弧</button>
                                 <button onclick="addLayer('tag'); closeAddMenu();">标签</button>
@@ -2439,7 +2444,8 @@
     function formatPropValue(p, v) {
         if(p === 'scale') return v + 'x';
         if(p.includes('rotation')) return v + '°';
-        if(p.includes('Thickness') || p === 'letterSpacing' || p === 'tagPaddingX' || p === 'tagPaddingY' || p === 'tagTextOffsetY' || p === 'mainFontSize' || p === 'topFontSize' || p === 'bottomFontSize' || p === 'sideFontSize' || p === 'sideGap' || p === 'sideLineGap') return v + 'px';
+        if(p.includes('Thickness') || p === 'letterSpacing' || p === 'tagPaddingX' || p === 'tagPaddingY' || p === 'tagTextOffsetY' || p === 'mainFontSize' || p === 'topFontSize' || p === 'bottomFontSize' || p === 'sideFontSize' || p === 'sideGap' || p === 'sideLineGap' || p === 'fontSize' || p === 'maxWidth') return v + 'px';
+        if(p === 'lineHeight') return Number(v).toFixed(2);
         if(p === 'shadowOpacity') return Math.round(normalizeAlpha(v) * 100) + '%';
         return v;
     }
@@ -2933,6 +2939,7 @@
     function getLayerIcon(l) {
         if(l.type === 'solid') return '■ 色块';
         if(l.type === 'arc') return '⭕ 圆弧';
+        if(l.type === 'text') return 'T 文本';
         if(l.type === 'logo') return '🔖 Logo';
         if(l.type === 'image') return '🖼️ 图像';
         if(l.type === 'discountTag') return '🏷️ 折扣标签';
@@ -3399,6 +3406,7 @@
         } else {
             newL.zIndex = maxZ + 1; 
             if(type === 'arc') Object.assign(newL, { rIn: 400, wIn: 40, wOut: 120, cIn: '#00D06C', cOut: '#111827' });
+            else if(type === 'text') Object.assign(newL, { x: Math.round(w * 0.3), y: Math.round(h * 0.32), rotation: 0, text: '主标题\n文字', font: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 88, lineHeight: 0.95, letterSpacing: 0, maxWidth: 620, textAlign: 'left', textCol: '#111827' });
             else if(type === 'tag') Object.assign(newL, { rotation: -3, shadowThickness: 12, shadowOpacity: 1, letterSpacing: 0, tagPaddingX: 36, tagTextOffsetY: 0, text: 'NEW TAG', font: '-apple-system, sans-serif', bgCol: '#00D06C', textCol: '#FFFFFF', shadowCol: '#111827' });
             else if(type === 'discountTag') Object.assign(newL, { rotation: -5, shadowThickness: 12, shadowOpacity: 0.45, letterSpacing: -3, tagPaddingX: 34, tagPaddingY: 15, tagTextOffsetY: 0, mainText: '60', topText: '%', bottomText: 'off', mainFontSize: 96, topFontSize: 52, bottomFontSize: 42, sideGap: 8, sideLineGap: -2, font: 'Arial Black, sans-serif', bgCol: '#050505', textCol: '#7CFF00', shadowCol: '#111827' });
         }
@@ -3437,6 +3445,19 @@
             wrapper.style.transform = `translate(-50%, -50%) scale(${l.scale})`;
             const rIn = parseInt(l.rIn); const wIn = parseInt(l.wIn); const wOut = parseInt(l.wOut); const total = rIn + (wIn/2) + wOut; const size = total*2+4;
             wrapper.innerHTML = `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}"><circle cx="${total+2}" cy="${total+2}" r="${rIn}" fill="none" stroke="${l.cIn}" stroke-width="${wIn}" style="pointer-events:stroke; cursor:grab;"></circle><circle cx="${total+2}" cy="${total+2}" r="${rIn+wIn/2+wOut/2}" fill="none" stroke="${l.cOut}" stroke-width="${wOut}" style="pointer-events:stroke; cursor:grab;"></circle></svg>`;
+        }
+        else if(l.type === 'text') {
+            wrapper.className = 'layer-text-wrapper layer-base';
+            wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation || 0}deg) scale(${l.scale || 1})`;
+            wrapper.style.width = `${Number(l.maxWidth) || 620}px`;
+            wrapper.style.fontFamily = l.font || 'Arial Black, sans-serif';
+            wrapper.style.fontWeight = Number(l.fontWeight) || 900;
+            wrapper.style.fontSize = `${Number(l.fontSize) || 88}px`;
+            wrapper.style.lineHeight = Number(l.lineHeight) || 0.95;
+            wrapper.style.letterSpacing = `${Number(l.letterSpacing) || 0}px`;
+            wrapper.style.color = l.textCol || '#FFFFFF';
+            wrapper.style.textAlign = l.textAlign || 'left';
+            wrapper.innerHTML = `<div class="layer-text-content">${escapeHtml(l.text || '').replace(/\n/g, '<br>')}</div>`;
         }
         else if(l.type === 'tag') {
             wrapper.className = 'layer-tag-wrapper layer-base';
@@ -3492,7 +3513,7 @@
     function renderCanvas() {
         const container = document.getElementById('dynamic-layers'); container.innerHTML = '';
         const hintEl = document.getElementById('empty-hint');
-        hintEl.style.display = layers.some(l => l.type === 'image' || l.type === 'logo') ? 'none' : 'flex';
+        hintEl.style.display = layers.length > 0 ? 'none' : 'flex';
         layers.sort((a,b) => a.zIndex - b.zIndex).forEach(l => {
             container.appendChild(createLayerElement(l, { active: activeLayerIds.includes(l.id), interactive: true }));
         });
@@ -3621,6 +3642,13 @@
         }
         else if(l.type === 'solid') {
             area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">延展背景色块</div><label class="label">颜色</label><input type="text" class="input-text" value="${escapeHtml(l.color || '#00875f')}" oninput="updateProp('color', this.value)" onchange="saveHistory()"><div style="font-size:12px; color:var(--text-sub); line-height:1.6;">用于开屏和 Banner 的品牌色背景，可按项目需要微调。</div>`;
+        }
+        else if(l.type === 'text') {
+            const textAlign = l.textAlign || 'left';
+            const textColor = l.textCol || '#FFFFFF';
+            const fontWeight = Number(l.fontWeight) || 900;
+            const selectedFontOptions = fontOptions.replace(`value="${l.font}"`, `value="${l.font}" selected`).replace(`value='${l.font}'`, `value='${l.font}' selected`);
+            area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">文本属性调整</div><label class="label">主标题文案</label><textarea class="input-text" style="min-height:82px; resize:vertical; line-height:1.45;" oninput="updateProp('text', this.value)" onchange="saveHistory()">${escapeHtml(l.text || '')}</textarea><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${selectedFontOptions}</select><div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;"><div><label class="label">字体粗细</label><select class="input-select" onchange="updateProp('fontWeight', parseInt(this.value)); saveHistory();"><option value="500" ${fontWeight === 500 ? 'selected' : ''}>中等</option><option value="700" ${fontWeight === 700 ? 'selected' : ''}>加粗</option><option value="800" ${fontWeight === 800 ? 'selected' : ''}>特粗</option><option value="900" ${fontWeight === 900 ? 'selected' : ''}>黑体</option></select></div><div><label class="label">文字颜色</label><input type="color" value="${escapeHtml(textColor)}" style="width:100%; height:38px; padding:2px; border:1px solid var(--border); border-radius:8px; background:#FFF; cursor:pointer;" oninput="updateProp('textCol', this.value)" onchange="saveHistory()"></div></div><label class="label">对齐方式</label><div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px;"><button class="btn ${textAlign === 'left' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="updateProp('textAlign','left'); saveHistory(); renderProperties();">左对齐</button><button class="btn ${textAlign === 'center' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="updateProp('textAlign','center'); saveHistory(); renderProperties();">居中</button><button class="btn ${textAlign === 'right' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="updateProp('textAlign','right'); saveHistory(); renderProperties();">右对齐</button></div><div class="slider-row"><span class="s-label">字号</span><input type="range" min="24" max="240" step="1" value="${l.fontSize ?? 88}" oninput="updateProp('fontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-fontSize">${l.fontSize ?? 88}px</span></div><div class="slider-row"><span class="s-label">行距</span><input type="range" min="0.7" max="1.8" step="0.05" value="${l.lineHeight ?? 0.95}" oninput="updateProp('lineHeight', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-lineHeight">${Number(l.lineHeight ?? 0.95).toFixed(2)}</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">文字宽度</span><input type="range" min="120" max="1200" step="10" value="${l.maxWidth ?? 620}" oninput="updateProp('maxWidth', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-maxWidth">${l.maxWidth ?? 620}px</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.2" max="3" step="0.05" value="${l.scale ?? 1}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale ?? 1}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation ?? 0}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation ?? 0}°</span></div><button class="btn btn-outline" style="width:100%; margin-top:4px;" type="button" onclick="centerLayer()">居中画板</button>`;
         }
         else if(l.type === 'tag') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="applyTagColor('${p.bg}', '${p.text}', '${p.shadow}', ${alpha})" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;"></div>`; });
@@ -4099,6 +4127,17 @@
             const textLen = Math.max(4, String(l.text || '').length);
             const w = (textLen * 28 + 116) * scale;
             const h = 78 * scale;
+            return { x1: l.x - w / 2, y1: l.y - h / 2, x2: l.x + w / 2, y2: l.y + h / 2, w, h, cx: l.x, cy: l.y, area: w * h };
+        }
+        if(l.type === 'text') {
+            const lines = String(l.text || '').split('\n');
+            const fontSize = Number(l.fontSize) || 88;
+            const lineHeight = Number(l.lineHeight) || 0.95;
+            const letterSpacing = Number(l.letterSpacing) || 0;
+            const maxLineChars = Math.max(1, ...lines.map(line => line.length));
+            const rawW = maxLineChars * (fontSize * 0.64 + letterSpacing);
+            const w = Math.min(Number(l.maxWidth) || 620, Math.max(fontSize, rawW)) * scale;
+            const h = Math.max(fontSize, lines.length * fontSize * lineHeight) * scale;
             return { x1: l.x - w / 2, y1: l.y - h / 2, x2: l.x + w / 2, y2: l.y + h / 2, w, h, cx: l.x, cy: l.y, area: w * h };
         }
         if(l.type === 'discountTag') {
@@ -4684,7 +4723,7 @@
                 const fontValue = cssFontFamily(fontName);
                 const fontData = { name: name, value: fontValue, data: fontDataUrl, id: fontName, fileName: file.name }; 
                 customFonts.push(fontData); saveFontToDB(fontData); 
-                if(activeLayerIds.length === 1) { const l = layers.find(x => x.id === activeLayerIds[0]); if(l && ['tag', 'discountTag'].includes(l.type)) { l.font = fontValue; renderCanvas(); } } 
+                if(activeLayerIds.length === 1) { const l = layers.find(x => x.id === activeLayerIds[0]); if(l && ['text', 'tag', 'discountTag'].includes(l.type)) { l.font = fontValue; renderCanvas(); } }
                 renderProperties(); renderSettings(); showToast(`字体 [${name}] 安装且持久化成功`); saveHistory(); 
             }).catch(() => showToast('字体解析失败，请确保格式正确', true)); 
         }; 
