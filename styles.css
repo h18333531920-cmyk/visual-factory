@@ -219,11 +219,18 @@ select:focus {
 .app-shell {
   height: 100%;
   display: grid;
-  grid-template-columns: 80px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  padding-left: 80px;
   background: var(--bg);
 }
 
 .sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 80px;
+  z-index: 100;
   background: rgba(255, 255, 255, 0.76);
   backdrop-filter: blur(18px);
   border-right: 1px solid var(--border);

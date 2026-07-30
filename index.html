@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GCC Design</title>
-  <script src="./tools/vendor/supabase-js.js?v=20260729-shimmer"></script>
-  <link rel="stylesheet" href="./styles.css?v=20260729-shimmer">
+  <script src="./tools/vendor/supabase-js.js?v=20260730-imgfix"></script>
+  <link rel="stylesheet" href="./styles.css?v=20260730-imgfix">
   <style>
     .library-control-strip {
       margin-left: 0 !important;
@@ -501,16 +501,39 @@
       transform: translateY(-1px) !important;
     }
     /* 下拉菜单 JS 控制显隐，覆盖纯 CSS hover */
-    #library-upload-modal .upload-tag-menu {
+    #library-upload-modal .upload-tag-menu,
+    #library-edit-modal .upload-tag-menu,
+    #batch-edit-modal .upload-tag-menu {
       opacity: 0 !important;
       pointer-events: none !important;
       transform: translateY(-4px) !important;
       transition: opacity 150ms ease, transform 150ms ease !important;
     }
-    #library-upload-modal .upload-tag-picker.menu-open .upload-tag-menu {
+    #library-upload-modal .upload-tag-picker.menu-open .upload-tag-menu,
+    #library-edit-modal .upload-tag-picker.menu-open .upload-tag-menu,
+    #batch-edit-modal .upload-tag-picker.menu-open .upload-tag-menu {
       opacity: 1 !important;
       pointer-events: auto !important;
       transform: translateY(0) !important;
+    }
+    /* 圆形关闭按钮 */
+    .modal-close-circle {
+      width: 32px !important;
+      height: 32px !important;
+      border-radius: 50% !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background: #f1f3f6 !important;
+      border: none !important;
+      cursor: pointer !important;
+      color: #667085 !important;
+      padding: 0 !important;
+      transition: background 0.15s ease, color 0.15s ease !important;
+    }
+    .modal-close-circle:hover {
+      background: #dce0e8 !important;
+      color: #0f172a !important;
     }
     /* 全局拖拽 overlay */
     .global-drop-inner {
@@ -570,9 +593,224 @@
     .library-thumb.img-loaded::after {
       opacity: 0;
     }
+    /* 右键菜单 */
+    #context-menu {
+      position: fixed;
+      z-index: 10000;
+      min-width: 170px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.04);
+      padding: 6px;
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.92);
+      transition: opacity 120ms ease, transform 120ms ease;
+    }
+    #context-menu.show {
+      opacity: 1;
+      pointer-events: auto;
+      transform: scale(1);
+    }
+    #context-menu button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 9px 14px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #1e293b;
+      cursor: pointer;
+      text-align: left;
+      white-space: nowrap;
+      transition: background 0.10s ease;
+    }
+    #context-menu button:hover {
+      background: #f1f5f9;
+    }
+    #context-menu button.danger {
+      color: #ef4444;
+    }
+    #context-menu button.danger:hover {
+      background: #fef2f2;
+    }
+    #context-menu .ctx-divider {
+      height: 1px;
+      background: #e2e8f0;
+      margin: 4px 8px;
+    }
+    #context-menu .ctx-icon {
+      width: 15px;
+      height: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    #context-menu .ctx-icon svg {
+      display: block;
+    }
+    #context-menu button.danger .ctx-icon svg {
+      stroke: #ef4444;
+    }
+    /* 多选模式 */
+    .library-card .multi-check {
+      display: none;
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 5;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      background: rgba(0,0,0,0.25);
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    }
+    .multi-select-active .library-card .multi-check {
+      display: block;
+    }
+    .library-card .multi-check::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 6px;
+      width: 6px;
+      height: 10px;
+      border: solid #fff;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+      opacity: 0;
+    }
+    .library-card.multi-selected .multi-check {
+      background: #2563eb;
+      border-color: #2563eb;
+    }
+    .library-card.multi-selected .multi-check::after {
+      opacity: 1;
+    }
+    .multi-select-active .library-card {
+      cursor: pointer;
+    }
+    .multi-select-active .library-card:hover {
+      outline: 2px solid #93b5f8;
+      outline-offset: -2px;
+      border-radius: 14px;
+    }
+    .multi-select-active .library-card.multi-selected {
+      outline: 2px solid #2563eb;
+      outline-offset: -2px;
+      border-radius: 14px;
+    }
+    /* 多选底部操作条 */
+    #multi-select-bar {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      background: #0f172a;
+      color: #fff;
+      border-radius: 14px;
+      padding: 10px 18px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+      align-items: center;
+      gap: 14px;
+      font-size: 13px;
+    }
+    .multi-select-active #multi-select-bar {
+      display: flex;
+    }
+    /* 侧边栏固定不滚动 */
+    .sidebar {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      bottom: 0 !important;
+      width: 80px !important;
+      z-index: 100 !important;
+    }
+    .app-shell {
+      padding-left: 80px !important;
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+    /* 底部微弱渐变遮罩 */
+    /* 标签计数 */
+    .library-tag-row button small {
+      color: #94a3b8;
+      font-weight: 400;
+      margin-left: 2px;
+    }
+    .library-tag-row button.active small {
+      color: inherit;
+      opacity: 0.65;
+    }
+    .multi-select-active::after {
+      content: '';
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 120px;
+      z-index: 9998;
+      pointer-events: none;
+      background: linear-gradient(to top, rgba(0,0,0,0.30), transparent);
+    }
+    #multi-select-bar .bar-count {
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    #multi-select-bar button {
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: none;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 550;
+      transition: background 0.12s ease;
+      white-space: nowrap;
+    }
+    #multi-select-bar .bar-delete {
+      background: #ef4444;
+      color: #fff;
+    }
+    #multi-select-bar .bar-delete:hover {
+      background: #dc2626;
+    }
+    #multi-select-bar .bar-edit {
+      background: #3b82f6;
+      color: #fff;
+    }
+    #multi-select-bar .bar-edit:hover {
+      background: #2563eb;
+    }
+    #multi-select-bar .bar-download {
+      background: #fff;
+      color: #0f172a;
+    }
+    #multi-select-bar .bar-download:hover {
+      background: #e2e8f0;
+    }
+    #multi-select-bar .bar-cancel {
+      background: transparent;
+      color: #94a3b8;
+      border: 1px solid #475569;
+    }
+    #multi-select-bar .bar-cancel:hover {
+      background: #1e293b;
+      color: #fff;
+    }
   </style>
-  <script src="./config.js?v=20260729-shimmer"></script>
-  <script src="./app.js?v=20260729-shimmer" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="./config.js?v=20260730-imgfix"></script>
+  <script src="./app.js?v=20260730-imgfix" defer></script>
 </head>
 <body>
   <main id="login-view" class="login-view">

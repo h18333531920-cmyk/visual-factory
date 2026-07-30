@@ -175,6 +175,8 @@
     libraryDataPromise: null,
     libraryRecoveryLabel: '',
     libraryVisibleLimit: LIBRARY_RENDER_STEP,
+    libraryMultiSelect: false,
+    librarySelectedIds: new Set(),
     recentProjects: [],
     libraryFilters: {
       query: '',
@@ -825,6 +827,12 @@
                   <button type="button" class="filter-capsule active" data-value="all">${state.lang === 'zh' ? '全部' : 'All'}</button>
                 </div>
               </div>
+              <div class="filter-section">
+                <h4>${state.lang === 'zh' ? '收藏' : 'Favorites'}</h4>
+                <div class="filter-capsules">
+                  <button type="button" id="filter-favorites-btn" class="filter-capsule${state.libraryFilters.favorites ? ' active' : ''}" data-value="toggle">${state.libraryFilters.favorites ? '★' : '☆'} ${state.lang === 'zh' ? '仅收藏' : 'Favorites only'}</button>
+                </div>
+              </div>
             </div>
           </div>
                   <div id="library-tag-rows" class="library-tag-rows">${renderLibraryTagRows(activeKind)}</div>
@@ -838,7 +846,16 @@
 
         ${canUpload ? renderUploadModal() : ''}
         ${renderEditModal()}
+        ${renderBatchEditModal()}
         ${renderLibraryDetailModal()}
+        <div id="context-menu" role="menu" aria-label="${state.lang === 'zh' ? '操作菜单' : 'Context menu'}"></div>
+        <div id="multi-select-bar">
+          <span class="bar-count">${state.lang === 'zh' ? '已选 0 项' : '0 selected'}</span>
+          <button class="bar-edit" data-bar-action="edit">${state.lang === 'zh' ? '批量编辑' : 'Batch edit'}</button>
+          <button class="bar-download" data-bar-action="download">${state.lang === 'zh' ? '批量下载' : 'Download'}</button>
+          <button class="bar-delete" data-bar-action="delete">${state.lang === 'zh' ? '批量删除' : 'Delete'}</button>
+          <button class="bar-cancel" data-bar-action="cancel">${state.lang === 'zh' ? '取消' : 'Cancel'}</button>
+        </div>
       </div>
     `;
     wireLibraryShell();
@@ -988,29 +1005,94 @@
   function renderEditModal() {
     return `
       <div id="library-edit-modal" class="modal-backdrop" hidden>
-        <section class="modal library-modal">
+        <section class="modal library-modal" style="max-width:520px;">
           <div class="modal-head">
             <h3>${state.lang === 'zh' ? '编辑素材信息' : 'Edit Asset'}</h3>
-            <button class="icon-btn" id="close-library-edit" type="button" aria-label="Close">x</button>
+            <button class="icon-btn modal-close-circle" id="close-library-edit" type="button" aria-label="Close">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
+            </button>
           </div>
           <form id="library-edit-form" class="library-form">
             <input type="hidden" name="id">
-            <input type="hidden" name="library_kind">
-            <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" maxlength="120"></label>
-            <div class="library-form-grid two">
-              <label><span>${state.lang === 'zh' ? '所在库' : 'Library section'}</span><input name="kind_label" readonly></label>
-            </div>
-            <div class="library-form-grid">
-              <label><span>${state.lang === 'zh' ? '国家' : 'Country'}</span><select name="country" id="library-edit-country"></select></label>
-              <label><span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span><select name="activity" id="library-edit-activity"></select></label>
-              <label><span>${state.lang === 'zh' ? '品类' : 'Category'}</span><select name="category" id="library-edit-category"></select></label>
-            </div>
-            <div class="library-form-grid">
-              <label><span>${state.lang === 'zh' ? '标签' : 'Tags'}</span><input name="tags" placeholder="${state.lang === 'zh' ? '用逗号分隔' : 'Comma separated'}"></label>
+            <input type="hidden" name="library_kind" id="library-edit-kind">
+            <div class="library-upload-scroll">
+              <label><span>${state.lang === 'zh' ? '素材名称' : 'Asset title'}</span><input name="title" maxlength="120"></label>
+              <div class="upload-tag-picker" data-upload-tag-picker="kind" id="edit-kind-field">
+                <span>${state.lang === 'zh' ? '所在库' : 'Library section'}</span>
+                <input type="hidden" name="kind_value" id="library-edit-kind-value" value="">
+                <button type="button" class="upload-tag-trigger" data-upload-tag-trigger="kind">
+                  <strong>${state.lang === 'zh' ? '案例库' : 'Case Library'}</strong>
+                </button>
+                <div class="upload-tag-menu" role="menu" id="edit-kind-menu"></div>
+              </div>
+              <div id="library-edit-tag-controls" class="library-upload-tags"></div>
+              <div class="library-form-grid two" id="edit-meta-row">
+                <div class="upload-tag-picker" data-upload-tag-picker="country" id="edit-country-field">
+                  <span>${state.lang === 'zh' ? '国家' : 'Country'}</span>
+                  <input type="hidden" name="country" value="all" data-upload-tag-input="country">
+                  <button type="button" class="upload-tag-trigger" data-upload-tag-trigger="country">
+                    <strong>${state.lang === 'zh' ? '全部' : 'All'}</strong>
+                  </button>
+                  <div class="upload-tag-menu" role="menu" data-upload-meta-menu="country"></div>
+                </div>
+                <div class="upload-tag-picker" data-upload-tag-picker="activity" id="edit-activity-field">
+                  <span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span>
+                  <input type="hidden" name="activity" value="all" data-upload-tag-input="activity">
+                  <button type="button" class="upload-tag-trigger" data-upload-tag-trigger="activity">
+                    <strong>${state.lang === 'zh' ? '全部' : 'All'}</strong>
+                  </button>
+                  <div class="upload-tag-menu" role="menu" data-upload-meta-menu="activity"></div>
+                </div>
+              </div>
             </div>
             <div id="library-edit-message" class="message"></div>
             <div class="modal-actions">
               <button class="ghost-btn" id="cancel-library-edit" type="button">${t('cancel')}</button>
+              <button class="primary-btn" type="submit">${t('save')}</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    `;
+  }
+
+  function renderBatchEditModal() {
+    return `
+      <div id="batch-edit-modal" class="modal-backdrop" hidden>
+        <section class="modal library-modal" style="max-width:520px;">
+          <div class="modal-head">
+            <h3>${state.lang === 'zh' ? '批量编辑' : 'Batch edit'}</h3>
+            <button class="icon-btn modal-close-circle" id="close-batch-edit" type="button" aria-label="Close">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
+            </button>
+          </div>
+          <form id="batch-edit-form" class="library-form">
+            <div class="library-upload-scroll">
+              <p style="margin:0 0 12px;font-size:13px;color:#667085;" id="batch-edit-count"></p>
+              <label><span>${state.lang === 'zh' ? '素材名称前缀' : 'Title prefix'}</span><input name="title_prefix" maxlength="120" placeholder="${state.lang === 'zh' ? '选填，统一替换名称' : 'Optional, replace all titles'}"></label>
+              <div class="library-form-grid two">
+                <div class="upload-tag-picker" data-upload-tag-picker="country" id="batch-country-field">
+                  <span>${state.lang === 'zh' ? '国家' : 'Country'}</span>
+                  <input type="hidden" name="country" value="keep" data-upload-tag-input="country">
+                  <button type="button" class="upload-tag-trigger" data-upload-tag-trigger="country">
+                    <strong>${state.lang === 'zh' ? '保持不变' : 'Keep'}</strong>
+                  </button>
+                  <div class="upload-tag-menu" role="menu" data-upload-meta-menu="country"></div>
+                </div>
+                <div class="upload-tag-picker" data-upload-tag-picker="activity" id="batch-activity-field">
+                  <span>${state.lang === 'zh' ? '活动类型' : 'Activity'}</span>
+                  <input type="hidden" name="activity" value="keep" data-upload-tag-input="activity">
+                  <button type="button" class="upload-tag-trigger" data-upload-tag-trigger="activity">
+                    <strong>${state.lang === 'zh' ? '保持不变' : 'Keep'}</strong>
+                  </button>
+                  <div class="upload-tag-menu" role="menu" data-upload-meta-menu="activity"></div>
+                </div>
+              </div>
+              <div id="batch-edit-tag-controls" class="library-upload-tags"></div>
+            </div>
+            <div id="batch-edit-message" class="message"></div>
+            <div class="modal-actions">
+              <button class="ghost-btn" id="cancel-batch-edit" type="button">${t('cancel')}</button>
               <button class="primary-btn" type="submit">${t('save')}</button>
             </div>
           </form>
@@ -1153,10 +1235,53 @@
       filterPanel.hidden = !filterPanel.hidden;
       if (!filterPanel.hidden) populateFilterOptions();
     });
+    // 收藏筛选
+    document.getElementById('filter-favorites-btn')?.addEventListener('click', function() {
+      state.libraryFilters.favorites = !state.libraryFilters.favorites;
+      this.classList.toggle('active', state.libraryFilters.favorites);
+      this.innerHTML = (state.libraryFilters.favorites ? '★' : '☆') + ' ' + (state.lang === 'zh' ? '仅收藏' : 'Favorites only');
+      state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
+      filterLibraryCardsInPlace();
+    });
     document.addEventListener('click', event => {
       const wrap = document.querySelector('.filter-dropdown-wrap');
       if (filterPanel && wrap && !wrap.contains(event.target) && !filterPanel.hidden) {
         filterPanel.hidden = true;
+      }
+    });
+    // 多选操作条按钮
+    document.querySelectorAll('#multi-select-bar [data-bar-action]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var action = btn.dataset.barAction;
+        if (action === 'cancel') exitMultiSelect();
+        if (action === 'delete') batchDeleteSelected();
+        if (action === 'download') batchDownloadSelected();
+        if (action === 'edit') openBatchEditModal();
+      });
+    });
+    // 批量编辑弹窗事件
+    document.getElementById('close-batch-edit')?.addEventListener('click', closeBatchEditModal);
+    document.getElementById('cancel-batch-edit')?.addEventListener('click', closeBatchEditModal);
+    document.getElementById('batch-edit-form')?.addEventListener('submit', saveBatchEdit);
+    // Esc 退出多选模式
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && state.libraryMultiSelect) {
+        exitMultiSelect();
+      }
+    });
+    // 全局点击关闭右键菜单（点击菜单外部时）
+    document.addEventListener('click', function(e) {
+      var menu = document.getElementById('context-menu');
+      if (menu && menu.classList.contains('show') && !menu.contains(e.target)) {
+        hideContextMenu();
+      }
+    });
+    document.addEventListener('contextmenu', function(e) {
+      // 卡片右键有自己的处理，不要在这里关掉
+      if (e.target.closest('.library-card')) return;
+      var menu = document.getElementById('context-menu');
+      if (menu && menu.classList.contains('show')) {
+        hideContextMenu();
       }
     });
 
@@ -1209,6 +1334,7 @@
       if (state.libraryFilters.tag4 !== 'all' && !tags.includes(state.libraryFilters.tag4)) return false;
       if (state.libraryFilters.selectedCountries && state.libraryFilters.selectedCountries.length && !state.libraryFilters.selectedCountries.includes(item.source.country_id)) return false;
       if (state.libraryFilters.selectedActivities && state.libraryFilters.selectedActivities.length && !state.libraryFilters.selectedActivities.includes(item.source.activity_id)) return false;
+      if (state.libraryFilters.favorites && !state.libraryFavorites.has(item.preview.id)) return false;
       return true;
     });
     var visibleItems = state.libraryItems.slice(0, state.libraryVisibleLimit);
@@ -1354,18 +1480,56 @@
 
   function renderLibraryTagRows(kind) {
     if (!kind || kind === 'all') return '';
-    const rows = libraryTagRows(kind);
-    return rows.map(row => `
-      <div class="library-tag-row">
-        <div>
-          ${['all', ...row.values].map(value => {
-            const label = value === 'all' ? (state.lang === 'zh' ? '全部' : 'All') : value;
-            const active = (state.libraryFilters[row.key] || 'all') === value;
-            return `<button type="button" class="${active ? 'active' : ''}" data-library-tag-key="${row.key}" data-library-tag-value="${escapeAttr(value)}">${escapeHtml(label)}</button>`;
-          }).join('')}
+    var rows = libraryTagRows(kind);
+    return rows.map(function(row, rowIdx) {
+      // 计算父级已选标签（用于 tag2/tag3/tag4 计数过滤）
+      var parentFilters = {};
+      for (var pi = 0; pi < rowIdx; pi++) {
+        var pkey = rows[pi].key;
+        var pval = state.libraryFilters[pkey];
+        if (pval && pval !== 'all') parentFilters[pkey] = pval;
+      }
+      return `
+        <div class="library-tag-row">
+          <div>
+            ${['all', ...row.values].map(value => {
+              const label = value === 'all' ? (state.lang === 'zh' ? '全部' : 'All') : value;
+              const active = (state.libraryFilters[row.key] || 'all') === value;
+              // 判断是否最后一级：看 config 里有没有更深层的 tag
+              var config = LIBRARY_TAGS[kind] || {};
+              var hasDeeper = false;
+              if (row.key === 'tag1') hasDeeper = !!(config.tag2 || config.tag2ByTag1);
+              else if (row.key === 'tag2') hasDeeper = !!(config.tag3 || config.tag3ByTag2);
+              else if (row.key === 'tag3') hasDeeper = !!(config.tag4 || config.tag4ByTag3);
+              const isLastRow = !hasDeeper;
+              const count = isLastRow ? (value === 'all' ? countKindSources(kind, parentFilters) : countTagOccurrences(kind, value, parentFilters)) : null;
+              return `<button type="button" class="${active ? 'active' : ''}" data-library-tag-key="${row.key}" data-library-tag-value="${escapeAttr(value)}">${escapeHtml(label)}${count !== null ? '<small> · ' + count + '</small>' : ''}</button>`;
+            }).join('')}
+          </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
+  }
+
+  function countKindSources(kind, parentFilters) {
+    return state.librarySources.filter(function(source) {
+      if (libraryKindOfSource(source) !== kind) return false;
+      var tags = visibleLibraryTags(source);
+      return Object.keys(parentFilters).every(function(k) {
+        return !parentFilters[k] || parentFilters[k] === 'all' || tags.includes(parentFilters[k]);
+      });
+    }).length;
+  }
+
+  function countTagOccurrences(kind, tagValue, parentFilters) {
+    return state.librarySources.filter(function(source) {
+      if (libraryKindOfSource(source) !== kind) return false;
+      var tags = visibleLibraryTags(source);
+      if (!tags.includes(tagValue)) return false;
+      return Object.keys(parentFilters).every(function(k) {
+        return !parentFilters[k] || parentFilters[k] === 'all' || tags.includes(parentFilters[k]);
+      });
+    }).length;
   }
 
   function libraryTagRows(kind) {
@@ -1556,14 +1720,15 @@
         if (thumbPath && !state.libraryPreviewUrls[thumbPath]) paths.push(thumbPath);
       }
     });
-    if (!paths.length) return;
-    try {
-      await signLibraryPreviewUrls(paths);
-      // 不重建整个 grid，只更新已有卡片的图片 src
-      updateLibraryCardImages(items);
-    } catch (error) {
-      console.warn('Preview signing failed:', error);
+    if (paths.length) {
+      try {
+        await signLibraryPreviewUrls(paths);
+      } catch (error) {
+        console.warn('Preview signing failed:', error);
+      }
     }
+    // 不管有没有新签名，都更新 DOM 里的图片 src，防止并发清缓存导致图片空白
+    updateLibraryCardImages(items);
   }
 
   function updateLibraryCardImages(items) {
@@ -1613,8 +1778,8 @@
       select.innerHTML = `<option value="all">${state.lang === 'zh' ? '全部' : 'All'}</option>${libraryOptions(type).map(option => `<option value="${option.id}">${escapeHtml(optionName(option))}</option>`).join('')}`;
       select.value = state.libraryFilters[type] || 'all';
     });
-    ['upload', 'edit'].forEach(prefix => {
-      ['country', 'activity', 'category'].forEach(type => {
+    ['upload'].forEach(prefix => {
+      ['country', 'activity'].forEach(type => {
         const select = document.getElementById(`library-${prefix}-${type}`);
         if (!select) return;
         select.innerHTML = libraryOptions(type).map(option => `<option value="${option.id}">${escapeHtml(optionName(option))}</option>`).join('');
@@ -1697,10 +1862,27 @@
     if (!visibleItems.some(item => item.preview.id === state.librarySelectedPreviewId)) {
       state.librarySelectedPreviewId = '';
     }
+    // 重建前保存已加载的 img 节点，避免所有图片重新解码闪烁
+    var oldImgs = {};
+    grid.querySelectorAll('.library-card .library-thumb img').forEach(function(img) {
+      var card = img.closest('.library-card');
+      var pid = card ? card.dataset.previewId : null;
+      if (pid && img.src && img.src.indexOf('data:') !== 0 && img.complete && img.naturalWidth > 0) {
+        oldImgs[pid] = img;
+      }
+    });
     grid.innerHTML = `
       ${visibleItems.map(renderLibraryCard).join('')}
       ${hasMore ? `<button class="library-load-more" id="library-load-more" type="button">${state.lang === 'zh' ? `加载更多 ${Math.min(LIBRARY_RENDER_STEP, state.libraryItems.length - visibleItems.length)} 个` : `Load ${Math.min(LIBRARY_RENDER_STEP, state.libraryItems.length - visibleItems.length)} more`}</button>` : ''}
     `;
+    // 把旧 img 节点插回新 DOM，保持已解码像素
+    Object.keys(oldImgs).forEach(function(pid) {
+      var newImg = grid.querySelector('.library-card[data-preview-id="' + pid + '"] .library-thumb img');
+      var oldImg = oldImgs[pid];
+      if (newImg && oldImg && newImg.parentNode) {
+        newImg.parentNode.replaceChild(oldImg, newImg);
+      }
+    });
     wireLibraryCards();
     document.getElementById('library-load-more')?.addEventListener('click', () => {
       state.libraryVisibleLimit += LIBRARY_RENDER_STEP;
@@ -1862,6 +2044,7 @@
     return `
       <article class="library-card ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
         <div class="library-thumb-wrap">
+          <div class="multi-check"></div>
           <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded')" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
           <div class="library-card-icons">
             <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
@@ -1887,6 +2070,18 @@
   function wireLibraryCards() {
     document.querySelectorAll('.library-card').forEach(card => {
       card.addEventListener('click', event => {
+        // 多选模式下：点击卡片=勾选切换，点击按钮照常
+        if (state.libraryMultiSelect) {
+          if (event.target.closest('button[data-action]')) {
+            const btn = event.target.closest('button[data-action]');
+            const item = libraryItemByPreviewId(card.dataset.previewId);
+            if (!item) return;
+            handleLibraryCardAction(btn.dataset.action, item);
+            return;
+          }
+          toggleMultiCard(card.dataset.previewId);
+          return;
+        }
         const button = event.target.closest('button[data-action]');
         if (!button) {
           selectLibraryItem(card.dataset.previewId);
@@ -1896,9 +2091,19 @@
         if (!item) return;
         handleLibraryCardAction(button.dataset.action, item);
       });
+      card.addEventListener('contextmenu', event => {
+        event.preventDefault();
+        const item = libraryItemByPreviewId(card.dataset.previewId);
+        if (!item) return;
+        showContextMenu(event, item);
+      });
       card.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
+        if (state.libraryMultiSelect) {
+          toggleMultiCard(card.dataset.previewId);
+          return;
+        }
         selectLibraryItem(card.dataset.previewId);
       });
     });
@@ -1922,6 +2127,257 @@
       lazyImages.forEach(function(img) { observer.observe(img); });
     }
   }
+
+  /* ── 右键菜单 ── */
+  function showContextMenu(event, item) {
+    var menu = document.getElementById('context-menu');
+    if (!menu) return;
+    var source = item.source, preview = item.preview;
+    var kind = libraryKindOfSource(source);
+    var canManage = canManageSource(source);
+    var lang = state.lang;
+    var items = [];
+    items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="4.5"/><circle cx="7" cy="7" r="2"/><line x1="10.5" y1="10.5" x2="15" y2="15"/></svg>', label: lang === 'zh' ? '查看详情' : 'View details', action: 'detail' });
+    items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 11.5V14h2.5L13 5.5 10.5 3 2 11.5z"/></svg>', label: lang === 'zh' ? '编辑信息' : 'Edit', action: 'edit' });
+    items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="2" x2="8" y2="13"/><polyline points="4 9 8 13 12 9"/><line x1="3" y1="15" x2="13" y2="15"/></svg>', label: kind === 'gallery' ? (lang === 'zh' ? '下载原图' : 'Download image') : (lang === 'zh' ? '下载预览图' : 'Download preview'), action: 'download-preview' });
+    if (kind !== 'gallery' && canDownloadSource()) {
+      items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="2" x2="8" y2="13"/><polyline points="4 9 8 13 12 9"/><line x1="3" y1="15" x2="13" y2="15"/></svg>', label: kind === 'template' ? (lang === 'zh' ? '下载模板' : 'Download template') : (lang === 'zh' ? '下载源文件' : 'Download source'), action: 'download-source' });
+    }
+    if (kind === 'gallery') {
+      items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="14" height="14" rx="2"/><line x1="5" y1="5" x2="11" y2="11"/><line x1="11" y1="5" x2="5" y2="11"/></svg>', label: lang === 'zh' ? '静态 DIY' : 'Static DIY', action: 'use-static' });
+      items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 1 14 8 3 15 3 1"/></svg>', label: lang === 'zh' ? '动态 DIY' : 'Dynamic DIY', action: 'use-dynamic' });
+    }
+    if (kind === 'template') {
+      items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="14" height="14" rx="2"/><line x1="5" y1="5" x2="11" y2="11"/><line x1="11" y1="5" x2="5" y2="11"/></svg>', label: lang === 'zh' ? '打开静态模板' : 'Open static template', action: 'use-static' });
+    }
+    items.push({ divider: true });
+    if (canManage) {
+      items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 4 14 4"/><path d="M5 4V2.5a1 1 0 011-1h4a1 1 0 011 1V4"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>', label: lang === 'zh' ? '删除' : 'Delete', action: 'delete', danger: true });
+    }
+    items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="14" height="14" rx="3"/><polyline points="4.5 8 7 10.5 11.5 5.5"/></svg>', label: lang === 'zh' ? '多选模式' : 'Multi-select', action: 'multi-select' });
+
+    var html = '';
+    items.forEach(function(it) {
+      if (it.divider) { html += '<div class="ctx-divider"></div>'; return; }
+      html += '<button type="button" class="' + (it.danger ? 'danger' : '') + '" data-ctx-action="' + it.action + '"><span class="ctx-icon">' + it.icon + '</span>' + escapeHtml(it.label) + '</button>';
+    });
+    menu.innerHTML = html;
+
+    // 绑定菜单点击
+    menu.querySelectorAll('[data-ctx-action]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var action = btn.dataset.ctxAction;
+        hideContextMenu();
+        if (action === 'detail') { openLibraryDetailModal(preview.id); return; }
+        if (action === 'multi-select') { enterMultiSelect(); return; }
+        handleLibraryCardAction(action, item);
+      });
+    });
+
+    // 定位菜单（防止溢出屏幕边缘）
+    var x = event.clientX;
+    var y = event.clientY;
+    menu.classList.add('show');
+    requestAnimationFrame(function() {
+      var w = menu.offsetWidth;
+      var h = menu.offsetHeight;
+      if (x + w > window.innerWidth - 8) x = window.innerWidth - w - 8;
+      if (y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+      menu.style.left = x + 'px';
+      menu.style.top = y + 'px';
+    });
+  }
+
+  function hideContextMenu() {
+    var menu = document.getElementById('context-menu');
+    if (menu) menu.classList.remove('show');
+  }
+
+  /* ── 多选模式 ── */
+  function enterMultiSelect() {
+    state.libraryMultiSelect = true;
+    state.librarySelectedIds.clear();
+    document.getElementById('library-grid').classList.add('multi-select-active');
+    updateMultiSelectBar();
+  }
+
+  function exitMultiSelect() {
+    state.libraryMultiSelect = false;
+    state.librarySelectedIds.clear();
+    document.getElementById('library-grid').classList.remove('multi-select-active');
+    document.querySelectorAll('.library-card.multi-selected').forEach(function(c) { c.classList.remove('multi-selected'); });
+    var bar = document.getElementById('multi-select-bar');
+    if (bar) bar.style.display = 'none';
+  }
+
+  function toggleMultiCard(previewId) {
+    if (state.librarySelectedIds.has(previewId)) {
+      state.librarySelectedIds.delete(previewId);
+    } else {
+      state.librarySelectedIds.add(previewId);
+    }
+    var card = document.querySelector('.library-card[data-preview-id="' + previewId + '"]');
+    if (card) card.classList.toggle('multi-selected', state.librarySelectedIds.has(previewId));
+    updateMultiSelectBar();
+  }
+
+  function updateMultiSelectBar() {
+    var bar = document.getElementById('multi-select-bar');
+    if (!bar) return;
+    var count = state.librarySelectedIds.size;
+    var countEl = bar.querySelector('.bar-count');
+    if (countEl) countEl.textContent = (state.lang === 'zh' ? '已选 ' : '') + count + (state.lang === 'zh' ? ' 项' : ' selected');
+    bar.style.display = state.libraryMultiSelect ? 'flex' : 'none';
+  }
+
+  async function batchDeleteSelected() {
+    var ids = Array.from(state.librarySelectedIds);
+    if (!ids.length) return;
+    if (!confirm((state.lang === 'zh' ? '确定删除已选的 ' : 'Delete ') + ids.length + (state.lang === 'zh' ? ' 项素材？此操作不可恢复。' : ' items? This cannot be undone.'))) return;
+    var sourceIds = [];
+    ids.forEach(function(pid) {
+      var item = libraryItemByPreviewId(pid);
+      if (item) sourceIds.push(item.source.id);
+    });
+    try {
+      var { error } = await state.supabase.from('vf_source_files').delete().in('id', sourceIds);
+      if (error) throw error;
+    } catch(e) {
+      alert(e.message);
+    }
+    exitMultiSelect();
+    await reloadLibraryData();
+  }
+
+  async function batchDownloadSelected() {
+    var ids = Array.from(state.librarySelectedIds);
+    if (!ids.length) return;
+    showDownloadToast((state.lang === 'zh' ? '正在打包 ' : 'Packing ') + ids.length + (state.lang === 'zh' ? ' 张图片...' : ' images...'));
+    // 并行拉取所有图片
+    var tasks = ids.map(function(pid, i) {
+      var item = libraryItemByPreviewId(pid);
+      if (!item) return Promise.resolve(null);
+      var filename = item.preview.preview_filename || ('image_' + (i + 1) + '.jpg');
+      if (item.url) {
+        return fetch(item.url).then(function(r) {
+          if (!r.ok) throw new Error('bad');
+          return r.blob().then(function(b) { return { name: filename, blob: b }; });
+        }).catch(function() {
+          return state.supabase.storage.from(LIBRARY_BUCKET).download(item.preview.preview_path).then(function(r) {
+            return r.data ? { name: filename, blob: r.data } : null;
+          });
+        });
+      }
+      return state.supabase.storage.from(LIBRARY_BUCKET).download(item.preview.preview_path).then(function(r) {
+        return r.data ? { name: filename, blob: r.data } : null;
+      });
+    });
+    var results = await Promise.all(tasks);
+    var zip = new JSZip();
+    results.forEach(function(r) {
+      if (r) zip.file(r.name, r.blob);
+    });
+    var zipBlob = await zip.generateAsync({ type: 'blob' });
+    triggerBlobDownload(zipBlob, 'batch-download-' + ids.length + '.zip');
+  }
+
+  /* ── 批量编辑 ── */
+  function openBatchEditModal() {
+    var ids = Array.from(state.librarySelectedIds);
+    if (!ids.length) return;
+    document.getElementById('batch-edit-modal').hidden = false;
+    var countEl = document.getElementById('batch-edit-count');
+    if (countEl) countEl.textContent = (state.lang === 'zh' ? '将修改已选的 ' : 'Will update ') + ids.length + (state.lang === 'zh' ? ' 项素材。未改的字段保持原值。' : ' items. Unchanged fields stay as-is.');
+    // 判断选中项的 kind 来决定显示/隐藏国家活动
+    var kinds = new Set();
+    ids.forEach(function(pid) {
+      var item = libraryItemByPreviewId(pid);
+      if (item) kinds.add(libraryKindOfSource(item.source));
+    });
+    var showCountry = kinds.has('gallery') || kinds.has('source');
+    var showActivity = kinds.has('source') || kinds.has('template');
+    var countryField = document.getElementById('batch-country-field');
+    var activityField = document.getElementById('batch-activity-field');
+    if (countryField) countryField.style.display = showCountry ? '' : 'none';
+    if (activityField) activityField.style.display = showActivity ? '' : 'none';
+    // 填充 picker 菜单（带"保持不变"选项）
+    populateBatchMetaPickers();
+    // 渲染 tag controls（以最常见 kind 为准）
+    var primaryKind = kinds.has('source') ? 'source' : (kinds.has('gallery') ? 'gallery' : 'template');
+    ['uploadTag1','uploadTag2','uploadTag3','uploadTag4'].forEach(function(key) { state.libraryFilters[key] = 'all'; });
+    document.getElementById('batch-edit-tag-controls').innerHTML = renderUploadTagControls(primaryKind);
+    wireEditTagPickers();
+    wireEditTagHover();
+    document.getElementById('batch-edit-message').textContent = '';
+  }
+
+  function closeBatchEditModal() {
+    document.getElementById('batch-edit-modal').hidden = true;
+  }
+
+  function populateBatchMetaPickers() {
+    ['country', 'activity'].forEach(function(type) {
+      var menu = document.querySelector('#batch-edit-modal [data-upload-meta-menu="' + type + '"]');
+      if (!menu) return;
+      var keepLabel = state.lang === 'zh' ? '保持不变' : 'Keep';
+      var html = '<button type="button" class="active" data-upload-tag-option="' + type + '" data-upload-tag-value="keep">' + keepLabel + '</button>';
+      html += '<button type="button" data-upload-tag-option="' + type + '" data-upload-tag-value="all">' + (state.lang === 'zh' ? '清空' : 'Clear') + '</button>';
+      var items = libraryOptions(type);
+      html += items.map(function(item) {
+        return '<button type="button" data-upload-tag-option="' + type + '" data-upload-tag-value="' + item.id + '">' + escapeHtml(optionName(item)) + '</button>';
+      }).join('');
+      menu.innerHTML = html;
+    });
+    wireEditTagPickers();
+    wireEditTagHover();
+  }
+
+  async function saveBatchEdit(event) {
+    event.preventDefault();
+    var message = document.getElementById('batch-edit-message');
+    setMessage(message, state.lang === 'zh' ? '正在保存...' : 'Saving...');
+    try {
+      var form = new FormData(event.currentTarget);
+      var ids = Array.from(state.librarySelectedIds);
+      var titlePrefix = form.get('title_prefix').trim();
+      var rawCountry = form.get('country');
+      var rawActivity = form.get('activity');
+      // 确定 primary kind 给 libraryTagsForForm 用
+      var kinds = new Set();
+      ids.forEach(function(pid) {
+        var item = libraryItemByPreviewId(pid);
+        if (item) kinds.add(libraryKindOfSource(item.source));
+      });
+      var primaryKind = kinds.has('source') ? 'source' : (kinds.has('gallery') ? 'gallery' : 'template');
+      var tags = libraryTagsForForm(form, primaryKind);
+      var hasTagChange = tags.some(function(t) { return t !== 'all' && t !== 'keep'; });
+      var sourceIds = [];
+      ids.forEach(function(pid) {
+        var item = libraryItemByPreviewId(pid);
+        if (item) sourceIds.push(item.source.id);
+      });
+      // 分批更新
+      for (var i = 0; i < sourceIds.length; i += 50) {
+        var batch = sourceIds.slice(i, i + 50);
+        var update = {};
+        if (titlePrefix) update.title = titlePrefix;
+        if (rawCountry && rawCountry !== 'keep') update.country_id = rawCountry === 'all' ? null : rawCountry;
+        if (rawActivity && rawActivity !== 'keep') update.activity_id = rawActivity === 'all' ? null : rawActivity;
+        if (hasTagChange) update.tags = tags;
+        if (Object.keys(update).length > 0) {
+          var { error } = await state.supabase.from('vf_source_files').update(update).in('id', batch);
+          if (error) throw error;
+        }
+      }
+      setMessage(message, state.lang === 'zh' ? '已保存。' : 'Saved.', false, true);
+      setTimeout(closeBatchEditModal, 500);
+      exitMultiSelect();
+      await reloadLibraryData();
+    } catch(e) {
+      setMessage(message, e.message, true);
+    }
+  }
+
 
   function selectLibraryItem(previewId) {
     state.librarySelectedPreviewId = previewId || '';
@@ -1951,8 +2407,8 @@
     const canSource = canDownloadSource();
     const tags = visibleLibraryTags(source);
     const primaryActions = [
-      kind === 'gallery' ? `<button class="primary-btn" type="button" data-preview-id="${preview.id}" data-action="use-static">${state.lang === 'zh' ? '带入静态 DIY' : 'Use in Static'}</button>` : '',
-      kind === 'gallery' ? `<button class="secondary-btn" type="button" data-preview-id="${preview.id}" data-action="use-dynamic">${state.lang === 'zh' ? '带入动态 DIY' : 'Use in Motion'}</button>` : '',
+      kind === 'gallery' ? `<button class="primary-btn" type="button" data-preview-id="${preview.id}" data-action="use-static">${state.lang === 'zh' ? '静态 DIY' : 'Static DIY'}</button>` : '',
+      kind === 'gallery' ? `<button class="secondary-btn" type="button" data-preview-id="${preview.id}" data-action="use-dynamic">${state.lang === 'zh' ? '动态 DIY' : 'Dynamic DIY'}</button>` : '',
       kind === 'template' ? `<button class="primary-btn" type="button" data-preview-id="${preview.id}" data-action="use-static">${state.lang === 'zh' ? '打开静态模板' : 'Open Static Template'}</button>` : ''
     ].filter(Boolean).join('');
     const previewLabel = kind === 'gallery'
@@ -2016,7 +2472,7 @@
         <section class="modal library-modal" style="max-width:680px;padding:24px 28px 20px;">
           <div class="modal-head" style="margin-bottom:10px;">
             <h3 id="library-detail-title" style="font-size:18px;">${state.lang === 'zh' ? '素材详情' : 'Asset Details'}</h3>
-            <button class="icon-btn" id="close-library-detail" type="button" style="font-size:20px;line-height:1;">×</button>
+            <button class="icon-btn modal-close-circle" id="close-library-detail" type="button" aria-label="Close"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>
           </div>
           <div id="library-detail-preview" style="width:100%;aspect-ratio:16/10;max-height:55vh;overflow:auto;background:#f4f5f7;border-radius:14px;margin-bottom:14px;border:1px solid #e8ebf0;"></div>
           <div id="library-detail-meta" style="margin-bottom:14px;"></div>
@@ -2076,8 +2532,8 @@
     if (actionsEl) {
       const buttons = [];
       if (kind === 'gallery') {
-        buttons.push(`<button class="primary-btn" type="button" data-action="use-static" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '带入静态 DIY' : 'Use in Static'}</button>`);
-        buttons.push(`<button class="secondary-btn" type="button" data-action="use-dynamic" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '带入动态 DIY' : 'Use in Motion'}</button>`);
+        buttons.push(`<button class="primary-btn" type="button" data-action="use-static" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '静态 DIY' : 'Static DIY'}</button>`);
+        buttons.push(`<button class="secondary-btn" type="button" data-action="use-dynamic" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '动态 DIY' : 'Dynamic DIY'}</button>`);
       } else if (kind === 'template') {
         buttons.push(`<button class="primary-btn" type="button" data-action="use-static" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '打开静态模板' : 'Open Template'}</button>`);
       }
@@ -2215,14 +2671,14 @@
   }
 
   function wireUploadTagPickers() {
-    document.querySelectorAll('[data-upload-tag-option]').forEach(button => {
+    document.querySelectorAll('#library-upload-modal [data-upload-tag-option]').forEach(button => {
       if (button.dataset.bound === 'true') return;
       button.dataset.bound = 'true';
       button.addEventListener('click', () => {
         const key = button.dataset.uploadTagOption;
         const value = button.dataset.uploadTagValue || 'all';
         const picker = button.closest('[data-upload-tag-picker]');
-        const input = document.querySelector(`[data-upload-tag-input="${key}"]`);
+        const input = document.querySelector(`#library-upload-modal [data-upload-tag-input="${key}"]`);
         if (input) input.value = value;
         if (picker) {
           picker.querySelectorAll('[data-upload-tag-option]').forEach(option => option.classList.toggle('active', option === button));
@@ -2285,7 +2741,7 @@
 
   function populateUploadMetaPickers() {
     ['country', 'activity'].forEach(function(type) {
-      var menu = document.querySelector('[data-upload-meta-menu="' + type + '"]');
+      var menu = document.querySelector('#library-upload-modal [data-upload-meta-menu="' + type + '"]');
       if (!menu) return;
       var items = libraryOptions(type);
       var emptyLabel = state.lang === 'zh' ? '全部' : 'All';
@@ -2297,6 +2753,116 @@
     });
     wireUploadTagPickers();
     wireUploadTagHover();
+  }
+
+  function populateEditMetaPickers() {
+    ['country', 'activity'].forEach(function(type) {
+      var menu = document.querySelector('#library-edit-modal [data-upload-meta-menu="' + type + '"]');
+      if (!menu) return;
+      var items = libraryOptions(type);
+      var emptyLabel = state.lang === 'zh' ? '全部' : 'All';
+      var html = '<button type="button" class="active" data-upload-tag-option="' + type + '" data-upload-tag-value="all">' + emptyLabel + '</button>';
+      html += items.map(function(item) {
+        return '<button type="button" data-upload-tag-option="' + type + '" data-upload-tag-value="' + item.id + '">' + escapeHtml(optionName(item)) + '</button>';
+      }).join('');
+      menu.innerHTML = html;
+    });
+    wireEditTagPickers();
+    wireEditTagHover();
+  }
+
+  function populateEditKindPicker(currentKind) {
+    currentKind = currentKind || 'source';
+    var menu = document.getElementById('edit-kind-menu');
+    if (!menu) return;
+    var kinds = [
+      { id: 'source', zh: '案例库', en: 'Case Library' },
+      { id: 'gallery', zh: '图库', en: 'Gallery' },
+      { id: 'template', zh: '模板库', en: 'Templates' }
+    ];
+    var html = '';
+    kinds.forEach(function(k) {
+      var label = state.lang === 'zh' ? k.zh : k.en;
+      var active = k.id === currentKind ? ' active' : '';
+      html += '<button type="button" class="' + active + '" data-edit-kind-option="' + k.id + '">' + label + '</button>';
+    });
+    menu.innerHTML = html;
+    // 更新 trigger 显示
+    var found = kinds.find(function(k) { return k.id === currentKind; });
+    var label = found ? (state.lang === 'zh' ? found.zh : found.en) : currentKind;
+    var triggerLabel = document.querySelector('#edit-kind-field [data-upload-tag-trigger] strong');
+    if (triggerLabel) triggerLabel.textContent = label;
+    // 绑定 kind 选项点击
+    menu.querySelectorAll('[data-edit-kind-option]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var newKind = btn.dataset.editKindOption;
+        // 更新 hidden input
+        document.getElementById('library-edit-kind').value = newKind;
+        document.getElementById('library-edit-kind-value').value = newKind;
+        // 更新 trigger 显示
+        var kf = [{ id: 'source', zh: '案例库', en: 'Case Library' }, { id: 'gallery', zh: '图库', en: 'Gallery' }, { id: 'template', zh: '模板库', en: 'Templates' }].find(function(k) { return k.id === newKind; });
+        var lbl = kf ? (state.lang === 'zh' ? kf.zh : kf.en) : newKind;
+        var tl = document.querySelector('#edit-kind-field [data-upload-tag-trigger] strong');
+        if (tl) tl.textContent = lbl;
+        // 更新菜单选中态
+        menu.querySelectorAll('[data-edit-kind-option]').forEach(function(b) { b.classList.toggle('active', b === btn); });
+        // 关闭菜单
+        document.getElementById('edit-kind-field').classList.remove('menu-open');
+        // 重置 tag 值并重新渲染 tag controls
+        ['uploadTag1','uploadTag2','uploadTag3','uploadTag4'].forEach(function(key) { state.libraryFilters[key] = 'all'; });
+        document.getElementById('library-edit-tag-controls').innerHTML = renderUploadTagControls(newKind);
+        wireUploadTagPickers();
+        wireUploadTagHover();
+        // 根据 kind 显示/隐藏国家和活动
+        var cf = document.getElementById('edit-country-field');
+        var af = document.getElementById('edit-activity-field');
+        if (cf) cf.style.display = (newKind === 'gallery' || newKind === 'source') ? '' : 'none';
+        if (af) af.style.display = (newKind === 'source' || newKind === 'template') ? '' : 'none';
+      });
+    });
+  }
+
+  function wireEditTagPickers(scope) {
+    scope = scope || ':is(#library-edit-modal, #batch-edit-modal)';
+    document.querySelectorAll(scope + ' [data-upload-tag-option]').forEach(function(button) {
+      if (button.dataset.editBound === 'true') return;
+      button.dataset.editBound = 'true';
+      button.addEventListener('click', function() {
+        var key = button.dataset.uploadTagOption;
+        var value = button.dataset.uploadTagValue || 'all';
+        var picker = button.closest('[data-upload-tag-picker]');
+        var input = picker.querySelector('[data-upload-tag-input="' + key + '"]');
+        if (input) input.value = value;
+        if (picker) {
+          picker.querySelectorAll('[data-upload-tag-option]').forEach(function(option) { option.classList.toggle('active', option === button); });
+          var label = value === 'all' ? (state.lang === 'zh' ? '全部' : 'All') : button.textContent.trim();
+          var triggerLabel = picker.querySelector('[data-upload-tag-trigger] strong');
+          if (triggerLabel) triggerLabel.textContent = label;
+          picker.classList.remove('menu-open');
+        }
+      });
+    });
+  }
+
+  function wireEditTagHover(scope) {
+    scope = scope || ':is(#library-edit-modal, #batch-edit-modal)';
+    document.querySelectorAll(scope + ' .upload-tag-picker').forEach(function(picker) {
+      if (picker.dataset.editHoverBound === 'true') return;
+      picker.dataset.editHoverBound = 'true';
+      var menu = picker.querySelector('.upload-tag-menu');
+      if (!menu) return;
+      var hideTimer = null;
+      function showMenu() { clearTimeout(hideTimer); picker.classList.add('menu-open'); }
+      function hideMenu() { hideTimer = setTimeout(function() { picker.classList.remove('menu-open'); }, 350); }
+      function hideNow() { clearTimeout(hideTimer); picker.classList.remove('menu-open'); }
+      function toggleMenu() { clearTimeout(hideTimer); picker.classList.toggle('menu-open'); }
+      picker.addEventListener('mouseenter', showMenu);
+      picker.addEventListener('mouseleave', hideMenu);
+      if (menu) { menu.addEventListener('mouseenter', showMenu); menu.addEventListener('mouseleave', hideNow); }
+      // 点击触发器也可以开关菜单（兜底）
+      var trigger = picker.querySelector('[data-upload-tag-trigger]');
+      if (trigger) { trigger.addEventListener('click', function(e) { e.stopPropagation(); toggleMenu(); }); }
+    });
   }
 
   function filterOversizedFiles(input) {
@@ -2709,21 +3275,59 @@
     closeLibraryDetailModal();
     const source = state.librarySources.find(item => item.id === sourceId);
     if (!source) return;
-    renderLibrarySelects();
+    const kind = libraryKindOfSource(source);
+    // 先显示弹窗才能 query DOM
+    document.getElementById('library-edit-modal').hidden = false;
     const form = document.getElementById('library-edit-form');
     if (!form) return;
-    const kind = libraryKindOfSource(source);
     form.elements.id.value = source.id;
     form.elements.library_kind.value = kind;
-    form.elements.kind_label.value = libraryKindLabel(kind);
+    document.getElementById('library-edit-kind-value').value = kind;
     form.elements.title.value = source.title || '';
-    if (form.elements.visibility) form.elements.visibility.value = source.visibility || 'all';
-    if (form.elements.country) form.elements.country.value = source.country_id || '';
-    if (form.elements.activity) form.elements.activity.value = source.activity_id || '';
-    if (form.elements.category) form.elements.category.value = source.category_id || '';
-    form.elements.tags.value = visibleLibraryTags(source).join(', ');
+    // 根据 kind 显示/隐藏国家和活动
+    var countryField = document.getElementById('edit-country-field');
+    var activityField = document.getElementById('edit-activity-field');
+    if (countryField) countryField.style.display = (kind === 'gallery' || kind === 'source') ? '' : 'none';
+    if (activityField) activityField.style.display = (kind === 'source' || kind === 'template') ? '' : 'none';
+    // 填充所在库 picker 并选中当前值
+    populateEditKindPicker(kind);
+    // 预设 tag 值到 state，渲染 tag pickers
+    var tags = visibleLibraryTags(source);
+    var tagMap = {};
+    tags.forEach(function(t) { tagMap[t] = true; });
+    var tagKeys = ['tag1','tag2','tag3','tag4'];
+    var config = LIBRARY_TAGS[kind] || {};
+    tagKeys.forEach(function(key) {
+      var vals = config[key];
+      // tag2 可能以 tag2ByTag1 形式存在
+      if (!vals && key === 'tag2' && config.tag2ByTag1) {
+        vals = [...new Set(Object.values(config.tag2ByTag1).flat())];
+      }
+      if (vals && Array.isArray(vals)) {
+        var found = vals.find(function(v) { return tagMap[v]; });
+        state.libraryFilters['upload' + key.charAt(0).toUpperCase() + key.slice(1)] = found || 'all';
+      } else {
+        state.libraryFilters['upload' + key.charAt(0).toUpperCase() + key.slice(1)] = 'all';
+      }
+    });
+    document.getElementById('library-edit-tag-controls').innerHTML = renderUploadTagControls(kind);
+    // 填充 country/activity picker 菜单
+    populateEditMetaPickers();
+    // 绑定编辑弹窗自己的 picker 事件（包括 tag controls 新生成的按钮）
+    wireEditTagPickers();
+    wireEditTagHover();
+    // 预设 country/activity 选中值
+    setTimeout(function() {
+      if (source.country_id) {
+        var cbtn = document.querySelector('#library-edit-modal [data-upload-tag-option="country"][data-upload-tag-value="' + source.country_id + '"]');
+        if (cbtn) cbtn.click();
+      }
+      if (source.activity_id) {
+        var abtn = document.querySelector('#library-edit-modal [data-upload-tag-option="activity"][data-upload-tag-value="' + source.activity_id + '"]');
+        if (abtn) abtn.click();
+      }
+    }, 80);
     document.getElementById('library-edit-message').textContent = '';
-    document.getElementById('library-edit-modal').hidden = false;
   }
 
   function closeLibraryEditModal() {
@@ -2739,14 +3343,17 @@
       const form = new FormData(event.currentTarget);
       const id = form.get('id');
       const source = state.librarySources.find(item => item.id === id);
-      const kind = source ? libraryKindOfSource(source) : (form.get('library_kind') || 'source');
+      const oldKind = source ? libraryKindOfSource(source) : 'source';
+      const newKind = form.get('library_kind') || oldKind;
+      // 从 picker hidden inputs 读取 tag 值
+      const tags = libraryTagsForForm(form, newKind);
+      var rawCountry = form.get('country');
+      var rawActivity = form.get('activity');
       const update = {
         title: form.get('title').trim(),
-        country_id: form.get('country') || null,
-        activity_id: form.get('activity') || null,
-        category_id: form.get('category') || null,
-        visibility: form.get('visibility') || 'all',
-        tags: normalizeLibraryTags(kind, parseTags(form.get('tags')))
+        country_id: (rawCountry && rawCountry !== 'all') ? rawCountry : null,
+        activity_id: (rawActivity && rawActivity !== 'all') ? rawActivity : null,
+        tags: tags
       };
       const { error } = await state.supabase.from('vf_source_files').update(update).eq('id', id);
       if (error) throw error;
@@ -2845,13 +3452,14 @@
   }
 
   async function toggleLibraryFavorite(item) {
-    const payload = { user_id: state.session.user.id, preview_id: item.preview.id };
-    if (state.libraryFavorites.has(item.preview.id)) {
-      const { error } = await state.supabase.from('vf_asset_favorites').delete().eq('preview_id', item.preview.id);
-      if (error) alert(error.message);
+    const uid = state.session.user.id;
+    const pid = item.preview.id;
+    if (state.libraryFavorites.has(pid)) {
+      const { error } = await state.supabase.from('vf_asset_favorites').delete().eq('user_id', uid).eq('preview_id', pid);
+      if (error) { alert(error.message); return; }
     } else {
-      const { error } = await state.supabase.from('vf_asset_favorites').insert([payload]);
-      if (error) alert(error.message);
+      const { error } = await state.supabase.from('vf_asset_favorites').upsert([{ user_id: uid, preview_id: pid }], { onConflict: 'user_id,preview_id' });
+      if (error) { alert(error.message); return; }
     }
     await loadLibraryFavorites();
     renderLibraryGrid();
@@ -2859,28 +3467,52 @@
 
   async function downloadLibraryFile(item, kind) {
     if (kind === 'source' && !canDownloadSource()) return;
+    var filename = kind === 'source' ? item.source.source_filename : item.preview.preview_filename || 'preview.svg';
+    // 即时反馈：轻 toast
+    showDownloadToast(filename);
     if (state.localPreview) {
-      const recoveredUrl = kind === 'source'
-        ? item.source.source_public_url
-        : item.url;
+      var recoveredUrl = kind === 'source' ? item.source.source_public_url : item.url;
       if (!recoveredUrl) {
         alert(state.lang === 'zh' ? '这个恢复记录缺少对应文件，暂时不能下载。' : 'This recovered record is missing its file.');
         return;
       }
-      const response = await fetch(new URL(recoveredUrl, location.href).toString());
-      const blob = await response.blob();
-      triggerBlobDownload(blob, kind === 'source' ? item.source.source_filename : item.preview.preview_filename || 'preview.svg');
+      var blob = await fetch(new URL(recoveredUrl, location.href).toString()).then(function(r) { return r.blob(); });
+      triggerBlobDownload(blob, filename);
       return;
     }
-    const path = kind === 'source' ? item.source.source_path : item.preview.preview_path;
-    const filename = kind === 'source' ? item.source.source_filename : item.preview.preview_filename;
-    const { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).download(path);
-    if (error) {
-      alert(error.message);
-      return;
+    // 优先走已缓存的签名 URL（预览图直接秒下）
+    if (kind !== 'source' && item.url) {
+      try {
+        var directBlob = await fetch(item.url).then(function(r) {
+          if (!r.ok) throw new Error('expired');
+          return r.blob();
+        });
+        triggerBlobDownload(directBlob, filename);
+        await logAssetEvent('download_preview', item);
+        return;
+      } catch(e) { /* 签名过期，走 Supabase SDK 兜底 */ }
     }
+    // Supabase SDK 兜底
+    var path = kind === 'source' ? item.source.source_path : item.preview.preview_path;
+    var { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).download(path);
+    if (error) { alert(error.message); return; }
     triggerBlobDownload(data, filename);
     await logAssetEvent(kind === 'source' ? 'download_source' : 'download_preview', item);
+  }
+
+  function showDownloadToast(filename) {
+    var toast = document.getElementById('download-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'download-toast';
+      toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:99999;background:#0f172a;color:#fff;padding:8px 18px;border-radius:10px;font-size:13px;pointer-events:none;opacity:0;transition:opacity 0.2s ease;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = (state.lang === 'zh' ? '下载中: ' : 'Downloading: ') + filename;
+    toast.style.opacity = '1';
+    toast.style.transition = 'none';
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(function() { toast.style.transition = 'opacity 0.4s ease'; toast.style.opacity = '0'; }, 2000);
   }
 
   async function useLibraryAsset(item, tool) {
