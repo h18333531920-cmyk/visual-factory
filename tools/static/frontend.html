@@ -1579,7 +1579,7 @@
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="exportAssetBackup()" title="导出当前域名下的版式、标签组、Logo 和字体">导出包</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="document.getElementById('backup-import').click()" title="导入从正式版导出的资产包">导入包</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="saveTemplatePack()">保存套组</button>
-                    <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="saveActiveAsset()">保存当前</button>
+                    <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="saveActiveAsset()" id="save-active-asset-btn">保存当前</button>
                 </div>
             </div>
             <div class="asset-tabs">
@@ -3715,7 +3715,15 @@
     function switchAssetTab(tab) {
         currentAssetTab = tab;
         document.querySelectorAll('.asset-tab').forEach(b => b.classList.toggle('active', b.dataset.assetTab === tab));
+        refreshSaveActiveAssetButton();
         renderAssetLibrary();
+    }
+    function refreshSaveActiveAssetButton() {
+        const btn = document.getElementById('save-active-asset-btn');
+        if(!btn) return;
+        const isReferenceTab = currentAssetTab === 'reference';
+        btn.hidden = isReferenceTab;
+        btn.textContent = currentAssetTab === 'logo' ? '上传 Logo' : '保存当前';
     }
     function toggleAssetLibraryExpanded() {
         const expanded = !document.body.classList.contains('asset-library-expanded');
