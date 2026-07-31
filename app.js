@@ -4226,7 +4226,6 @@ function libraryTagsForForm(formData, kind) {
         </style>\
         <div>\
           <div class="ana-panel-header">\
-            <h2 class="ana-panel-title">' + (zh ? '操作统计面板' : 'Analytics Dashboard') + '</h2>\
             <div class="ana-filter-group" id="ana-range-btns">\
               <button class="ana-filter-btn" data-range="1">' + (zh ? '今日' : 'Today') + '</button>\
               <button class="ana-filter-btn active" data-range="7">' + (zh ? '近7天' : '7 Days') + '</button>\
@@ -4254,13 +4253,13 @@ function libraryTagsForForm(formData, kind) {
             <div class="ana-scroll" style="max-height:420px;"><table class="ana-table"><thead><tr><th style="width:60px;">#</th><th>' + (zh ? '素材' : 'Asset') + '</th><th style="width:90px;">' + (zh ? '下载' : 'DL') + '</th><th style="width:90px;">' + (zh ? '查看' : 'Views') + '</th><th style="width:90px;">' + (zh ? '使用' : 'Uses') + '</th></tr></thead><tbody id="ana-top10-body"><tr><td colspan="5" class="ana-empty">' + (zh ? '暂无数据' : 'No data yet') + '</td></tr></tbody></table></div>\
           </div>\
           <div class="ana-activity-card"><div class="ana-table-header"><span class="ana-table-title">' + (zh ? '最近操作动态' : 'Recent Activity') + '</span></div><div class="ana-activity-list" id="ana-activity-list"><div class="ana-empty">' + (zh ? '暂无操作记录' : 'No activity yet') + '</div></div></div>\
-          <div class="ana-controls"><div class="ana-controls-left"><div class="ana-toggle active" id="ana-toggle-admin"><div class="ana-toggle-sw"></div><span class="ana-toggle-label">' + (zh ? '排除管理员操作' : 'Exclude Admin Ops') + '</span></div></div><button class="ana-btn-clear" id="ana-btn-clear">' + (zh ? '清除我的测试数据' : 'Clear My Test Data') + '</button></div>\
+          <div class="ana-controls"><div class="ana-controls-left"><div class="ana-toggle" id="ana-toggle-admin"><div class="ana-toggle-sw"></div><span class="ana-toggle-label">' + (zh ? '排除管理员操作' : 'Exclude Admin Ops') + '</span></div></div><button class="ana-btn-clear" id="ana-btn-clear">' + (zh ? '清除我的测试数据' : 'Clear My Test Data') + '</button></div>\
         </div>\
       </div>';
 
     // ===== 状态 =====
     var currentRange = 7;
-    var excludeAdmin = true;
+    var excludeAdmin = false;
     var fetchedData = null;
     var charts = {};
     var top10Cat = 'all';
