@@ -4075,7 +4075,7 @@ function libraryTagsForForm(formData, kind) {
           .order('created_at', { ascending: false })
           .limit(5000),
         state.supabase.from('vf_source_files')
-          .select('id,title,source_filename,source_ext,tags,source_path,created_at')
+          .select('id,title,source_filename,source_ext,tags,source_path,country_id,activity_id,created_at')
           .order('created_at', { ascending: true })
       ]);
 
@@ -4483,6 +4483,10 @@ function libraryTagsForForm(formData, kind) {
     async function renderTop10Table() {
       var tbody = document.getElementById('ana-top10-body');
       if (!tbody) return;
+      // 确保 library options 已加载（用于显示国家/活动标签）
+      if (!state.libraryOptions || !state.libraryOptions.length) {
+        try { await loadLibraryOptions(); } catch(e) { /* 静默 */ }
+      }
       var data = fetchedData;
       var events = (data && data.events) ? data.events : [];
       var effectiveEvents = excludeAdmin ? events.filter(function(e) { return e.actor_role !== 'admin'; }) : events;
@@ -4524,6 +4528,10 @@ function libraryTagsForForm(formData, kind) {
         var tags = src.tags || [];
         var kindMarkers = ['vf:kind:gallery', 'vf:kind:template', 'vf:kind:source'];
         var displayTags = tags.filter(function(t) { return kindMarkers.indexOf(t) === -1; });
+        var countryName = optionNameById(src.country_id);
+        var activityName = optionNameById(src.activity_id);
+        if (countryName && countryName !== '-') displayTags.push(countryName);
+        if (activityName && activityName !== '-') displayTags.push(activityName);
         list.push({
           id: sid, title: src.title || '', filename: src.source_filename || '',
           kind: kind, sourcePath: src.source_path || '',
