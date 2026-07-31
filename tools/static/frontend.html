@@ -170,6 +170,17 @@
             line-height: 1;
         }
 
+        .layer-clear-btn {
+            min-height: 28px;
+            padding: 0 8px;
+            color: var(--text-sub);
+            font-size: 11px;
+        }
+
+        .layer-clear-btn:hover {
+            color: var(--danger);
+        }
+
         .layer-canvas-fit-btn:hover {
             color: var(--text-main);
             background: #F2F4F3;
@@ -1600,6 +1611,7 @@
                     <div class="card-title-wrap">图层</div>
                     <div class="layer-card-actions">
                         <button class="btn-icon layer-canvas-fit-btn" id="layer-canvas-fit-btn" type="button" onclick="fitCanvasToSelectedImage()" title="按选中图片原始尺寸适配画布" aria-label="按选中图片原始尺寸适配画布" hidden>⤢</button>
+                        <button class="btn-icon layer-clear-btn" type="button" onclick="clearCurrentArtboardLayers()" title="清空当前画板的全部图层" aria-label="清空当前画板的全部图层">清空</button>
                         <div class="add-menu-wrap">
                             <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="toggleAddMenu(event)">+ 添加</button>
                             <div class="add-menu" id="add-menu">
@@ -3584,6 +3596,17 @@
 
     function deleteLayer(id) { preservePaneScroll(() => { layers = layers.filter(l => l.id !== id); activeLayerIds = activeLayerIds.filter(x => x !== id); renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); }); }
     function deleteSelectedLayers() { preservePaneScroll(() => { const ids = new Set(activeLayerIds); layers = layers.filter(l => !ids.has(l.id)); activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); showToast('已删除选中图层'); }); }
+    async function clearCurrentArtboardLayers() {
+        if(layers.length === 0) return showToast('当前画板没有可清空的图层', true);
+        const layerCount = layers.length;
+        if(!await askConfirm(`清空当前画板的 ${layerCount} 个图层？可通过撤回恢复。`)) return;
+        preservePaneScroll(() => {
+            layers = [];
+            activeLayerIds = [];
+            renderCanvas(); renderLayersList(); renderProperties(); saveHistory();
+            showToast('已清空当前画板图层');
+        });
+    }
     function toggleLock(id) { preservePaneScroll(() => { const l = layers.find(x => x.id === id); if(l) l.locked = !l.locked; renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); }); }
 
     window.updateProp = function(p, v) {
