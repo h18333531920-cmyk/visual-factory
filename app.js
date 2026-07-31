@@ -20,6 +20,7 @@
       dynamicDiy: 'DIY 动态',
       requestFlow: '提需流程',
       admin: '团队管理',
+      analytics: '数据看板',
       checkItem: '检查项',
       checkResult: '结果',
       checkDetail: '说明',
@@ -64,6 +65,7 @@
       dynamicDiy: 'Dynamic DIY',
       requestFlow: 'Request Flow',
       admin: 'Team',
+      analytics: 'Analytics',
       checkItem: 'Check',
       checkResult: 'Result',
       checkDetail: 'Detail',
@@ -101,7 +103,8 @@
     { id: 'static', icon: 'static', title: 'staticDiy' },
     { id: 'dynamic', icon: 'dynamic', title: 'dynamicDiy' },
     { id: 'request', icon: 'request', title: 'requestFlow', hidden: true },
-    { id: 'admin', icon: 'admin', title: 'admin', adminOnly: true }
+    { id: 'admin', icon: 'admin', title: 'admin', adminOnly: true },
+    { id: 'analytics', icon: 'analytics', title: 'analytics', adminOnly: true }
   ];
 
   const config = window.VF_CONFIG || {};
@@ -350,6 +353,7 @@
     }
     await loadProfile();
     showApp();
+    void logAssetEvent('login');
   }
 
   async function handleLogin(event) {
@@ -377,6 +381,7 @@
       syncAccessToken();
       await loadProfile();
       showApp();
+      void logAssetEvent('login');
     } catch (error) {
       if (isSupabaseNetworkError(error)) {
         await emergencyLogin(email, password, error.message);
@@ -561,6 +566,7 @@
     if (state.route === 'dynamic') renderTool('dynamic');
     if (state.route === 'request') renderRequestFlow();
     if (state.route === 'admin') renderAdmin();
+    if (state.route === 'analytics') renderAnalyticsPage();
   }
 
   function navIcon(icon) {
@@ -570,7 +576,8 @@
       static: '<svg viewBox="0 0 24 24"><rect x="4" y="4.8" width="16" height="14.4" rx="3"/><path d="M8 8.2h5.5M8 11h8"/><path d="M8 15.5h3.6l1.8-2 1.8 2H18"/></svg>',
       dynamic: '<svg viewBox="0 0 24 24"><rect x="4.4" y="5" width="15.2" height="14" rx="3"/><path d="M10 9v6l5.2-3L10 9z"/><path d="M7.5 3.8h9"/></svg>',
       request: '<svg viewBox="0 0 24 24"><path d="M5 5.5h14v10H8.5L5 19V5.5Z"/><path d="M8.5 9h7M8.5 12h4.5"/></svg>',
-      admin: '<svg viewBox="0 0 24 24"><path d="M12 13.4a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M5.5 20c.9-3.2 3.1-4.8 6.5-4.8s5.6 1.6 6.5 4.8"/></svg>'
+      admin: '<svg viewBox="0 0 24 24"><path d="M12 13.4a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M5.5 20c.9-3.2 3.1-4.8 6.5-4.8s5.6 1.6 6.5 4.8"/></svg>',
+      analytics: '<svg viewBox="0 0 24 24"><rect x="3" y="13" width="4" height="7" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="16" rx="1"/></svg>'
     };
     return icons[icon] || '';
   }
@@ -772,6 +779,13 @@
     parkActiveToolFrame();
     const canUpload = canUploadAssets();
     const activeKind = state.libraryFilters.kind || 'all';
+    var kindCounts = { source: 0, gallery: 0, template: 0 };
+    if (state.librarySources) {
+      for (var i = 0; i < state.librarySources.length; i++) {
+        var k = libraryKindOfSource(state.librarySources[i]);
+        if (k === 'source' || k === 'gallery' || k === 'template') kindCounts[k]++;
+      }
+    }
     els.content.innerHTML = `
       <div class="library-page ${homeMode ? 'library-page-home' : ''}">
         <section class="library-hero">
@@ -798,7 +812,7 @@
         <section class="library-control-strip" style="margin-left:0!important;margin-inline:0!important;padding-left:0!important;padding-right:0!important;background:transparent!important;border:none!important;border-radius:0!important;width:100%!important;grid-template-columns:1fr auto auto!important">
           <div class="library-kind-tabs" role="tablist" style="position:relative;">
             <div class="kind-tab-indicator" style="position:absolute;bottom:0;height:3px;background:#111827;border-radius:999px;transition:left 0.3s ease,width 0.3s ease;pointer-events:none;z-index:1;"></div>
-            ${LIBRARY_KIND_TABS.map(tab => `<button type="button" class="${activeKind === tab.id ? 'active' : ''}" data-library-kind="${tab.id}">${escapeHtml(state.lang === 'zh' ? tab.zh : tab.en)}</button>`).join('')}
+            ${LIBRARY_KIND_TABS.map(tab => `<button type="button" class="${activeKind === tab.id ? 'active' : ''}" data-library-kind="${tab.id}">${escapeHtml(state.lang === 'zh' ? tab.zh : tab.en)}<small> · ${kindCounts[tab.id] || 0}</small></button>`).join('')}
             <div class="search-wrap">
             <label class="library-search-pill" aria-label="${state.lang === 'zh' ? '搜索内容' : 'Search'}" style="margin-left:12px;">
               <input id="library-search" placeholder="" value="${escapeAttr(state.libraryFilters.query)}">
@@ -860,6 +874,36 @@
     `;
     wireLibraryShell();
     await loadLibraryData();
+    refreshKindTabCounts();
+    if (state.libraryScrollToSource) {
+      var targetId = state.libraryScrollToSource;
+      state.libraryScrollToSource = null;
+      var item = state.libraryItems.find(function(li) { return li.source.id === targetId; });
+      if (item) {
+        selectLibraryItem(item.preview.id);
+        var card = document.querySelector('.library-card[data-preview-id="' + item.preview.id + '"]');
+        if (card) {
+          setTimeout(function() { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 200);
+        }
+      }
+    }
+  }
+
+  function refreshKindTabCounts() {
+    var counts = { source: 0, gallery: 0, template: 0 };
+    if (state.librarySources) {
+      for (var i = 0; i < state.librarySources.length; i++) {
+        var k = libraryKindOfSource(state.librarySources[i]);
+        if (counts[k] !== undefined) counts[k]++;
+      }
+    }
+    document.querySelectorAll('[data-library-kind]').forEach(function(btn) {
+      var kind = btn.dataset.libraryKind;
+      if (kind !== 'all' && counts[kind] !== undefined) {
+        var label = btn.textContent.replace(/ · .*$/, '');
+        btn.innerHTML = label + '<small> · ' + counts[kind] + '</small>';
+      }
+    });
   }
 
   function renderUploadModal() {
@@ -1413,16 +1457,7 @@
       if (!container) return;
       const typeLabel = type === 'country' ? 'Countries' : 'Activities';
       const selectedAll = !state.libraryFilters['selected' + typeLabel]?.length;
-      let items;
-      if (type === 'activity') {
-        items = [
-          { id: 'daily', name_zh: '日常活动', name_en: 'Daily' },
-          { id: 's-level', name_zh: 'S级活动', name_en: 'S-Level' },
-          { id: 'series', name_zh: '系列活动', name_en: 'Series' }
-        ];
-      } else {
-        items = libraryOptions(type);
-      }
+      const items = libraryOptions(type);
       let html = '<button type="button" class="filter-capsule' + (selectedAll ? ' active' : '') + '" data-value="all">' + (state.lang === 'zh' ? '全部' : 'All') + '</button>';
       html += items.map(item => {
         const sel = state.libraryFilters['selected' + typeLabel]?.includes(item.id);
@@ -1495,15 +1530,8 @@
             ${['all', ...row.values].map(value => {
               const label = value === 'all' ? (state.lang === 'zh' ? '全部' : 'All') : value;
               const active = (state.libraryFilters[row.key] || 'all') === value;
-              // 判断是否最后一级：看 config 里有没有更深层的 tag
-              var config = LIBRARY_TAGS[kind] || {};
-              var hasDeeper = false;
-              if (row.key === 'tag1') hasDeeper = !!(config.tag2 || config.tag2ByTag1);
-              else if (row.key === 'tag2') hasDeeper = !!(config.tag3 || config.tag3ByTag2);
-              else if (row.key === 'tag3') hasDeeper = !!(config.tag4 || config.tag4ByTag3);
-              const isLastRow = !hasDeeper;
-              const count = isLastRow ? (value === 'all' ? countKindSources(kind, parentFilters) : countTagOccurrences(kind, value, parentFilters)) : null;
-              return `<button type="button" class="${active ? 'active' : ''}" data-library-tag-key="${row.key}" data-library-tag-value="${escapeAttr(value)}">${escapeHtml(label)}${count !== null ? '<small> · ' + count + '</small>' : ''}</button>`;
+              const count = value === 'all' ? countKindSources(kind, parentFilters) : countTagOccurrences(kind, value, parentFilters);
+              return `<button type="button" class="${active ? 'active' : ''}" data-library-tag-key="${row.key}" data-library-tag-value="${escapeAttr(value)}">${escapeHtml(label)}<small> · ${count}</small></button>`;
             }).join('')}
           </div>
         </div>
@@ -2247,6 +2275,10 @@
     }
     exitMultiSelect();
     await reloadLibraryData();
+    ids.forEach(function(pid) {
+      var item = libraryItemByPreviewId(pid);
+      if (item) void logAssetEvent('batch_delete', item);
+    });
   }
 
   async function batchDownloadSelected() {
@@ -2279,6 +2311,10 @@
     });
     var zipBlob = await zip.generateAsync({ type: 'blob' });
     triggerBlobDownload(zipBlob, 'batch-download-' + ids.length + '.zip');
+    ids.forEach(function(pid) {
+      var item = libraryItemByPreviewId(pid);
+      if (item) void logAssetEvent('batch_download', item);
+    });
   }
 
   /* ── 批量编辑 ── */
@@ -2373,6 +2409,10 @@
       setTimeout(closeBatchEditModal, 500);
       exitMultiSelect();
       await reloadLibraryData();
+      ids.forEach(function(pid) {
+        var item = libraryItemByPreviewId(pid);
+        if (item) void logAssetEvent('batch_edit', item);
+      });
     } catch(e) {
       setMessage(message, e.message, true);
     }
@@ -2485,6 +2525,7 @@
   function openLibraryDetailModal(previewId) {
     const item = libraryItemByPreviewId(previewId);
     if (!item) return;
+    void logAssetEvent('view', item);
     const { source, preview } = item;
     const kind = libraryKindOfSource(source);
     const canManage = canManageSource(source);
@@ -2637,7 +2678,8 @@
 
   function prefillUploadMetaSelections() {
     ['country', 'activity'].forEach(function(type) {
-      var val = state.libraryFilters['upload' + type.charAt(0).toUpperCase() + type.slice(1)];
+      var key = 'upload' + type.charAt(0).toUpperCase() + type.slice(1);
+      var val = state.libraryFilters[key];
       if (!val || val === 'all') return;
       var btn = document.querySelector('[data-upload-tag-option="' + type + '"][data-upload-tag-value="' + val + '"]');
       if (btn) btn.click();
@@ -2743,13 +2785,29 @@
     ['country', 'activity'].forEach(function(type) {
       var menu = document.querySelector('#library-upload-modal [data-upload-meta-menu="' + type + '"]');
       if (!menu) return;
+      var key = 'upload' + type.charAt(0).toUpperCase() + type.slice(1);
+      var selectedVal = state.libraryFilters[key] || 'all';
       var items = libraryOptions(type);
       var emptyLabel = state.lang === 'zh' ? '全部' : 'All';
-      var html = '<button type="button" class="active" data-upload-tag-option="' + type + '" data-upload-tag-value="all">' + emptyLabel + '</button>';
+      var allActive = selectedVal === 'all';
+      var html = '<button type="button" class="' + (allActive ? 'active' : '') + '" data-upload-tag-option="' + type + '" data-upload-tag-value="all">' + emptyLabel + '</button>';
       html += items.map(function(item) {
-        return '<button type="button" data-upload-tag-option="' + type + '" data-upload-tag-value="' + item.id + '">' + escapeHtml(optionName(item)) + '</button>';
+        var isActive = selectedVal === item.id;
+        return '<button type="button" class="' + (isActive ? 'active' : '') + '" data-upload-tag-option="' + type + '" data-upload-tag-value="' + item.id + '">' + escapeHtml(optionName(item)) + '</button>';
       }).join('');
       menu.innerHTML = html;
+      // 同步更新隐藏 input 和触发按钮的文字
+      var input = document.querySelector('#library-upload-modal [data-upload-tag-input="' + type + '"]');
+      if (input) input.value = selectedVal;
+      var triggerLabel = document.querySelector('#library-upload-modal [data-upload-tag-trigger="' + type + '"] strong');
+      if (triggerLabel) {
+        if (selectedVal === 'all') {
+          triggerLabel.textContent = state.lang === 'zh' ? '全部' : 'All';
+        } else {
+          var selItem = items.find(function(it) { return it.id === selectedVal; });
+          triggerLabel.textContent = selItem ? optionName(selItem) : selectedVal;
+        }
+      }
     });
     wireUploadTagPickers();
     wireUploadTagHover();
@@ -3082,6 +3140,10 @@
       setUploadProgress(100);
       setMessage(message, state.lang === 'zh' ? '上传成功，已入库。' : 'Uploaded.', false, true);
       setTimeout(closeLibraryUploadModal, 600);
+      // 埋点：为每个预览图记录上传事件
+      previewRows.forEach(function(pr) {
+        void logAssetEvent('upload', { source: sourceRow, preview: { id: pr.id, preview_filename: pr.preview_filename, preview_path: pr.preview_path } });
+      });
       await reloadLibraryData();
     } catch (error) {
       await cleanupFailedLibraryUpload(sourceId, sourceInserted, uploadedPaths);
@@ -3207,8 +3269,9 @@
             else { uploadedPaths.push(thumbPath); }
           }
         } catch (e) { console.warn('Thumbnail generation failed:', e); }
+        var previewId = crypto.randomUUID();
         const previewInsert = await state.supabase.from('vf_asset_previews').insert([{
-          id: crypto.randomUUID(),
+          id: previewId,
           source_file_id: sourceId,
           preview_path: sourcePath,
           preview_filename: file.name,
@@ -3219,6 +3282,7 @@
           sort_order: 10
         }]);
         if (previewInsert.error) throw previewInsert.error;
+        void logAssetEvent('upload', { source: sourceRow, preview: { id: previewId, preview_filename: file.name, preview_path: sourcePath } });
         fileIndex++;
         if (onProgress) onProgress(pctEach * fileIndex);
       }
@@ -3360,6 +3424,8 @@
       setMessage(message, state.lang === 'zh' ? '已保存。' : 'Saved.', false, true);
       setTimeout(closeLibraryEditModal, 500);
       await reloadLibraryData();
+      var editItem = state.libraryItems.find(function(li) { return li.source.id === id; });
+      if (editItem) void logAssetEvent('edit', editItem);
     } catch (error) {
       setMessage(message, error.message, true);
     }
@@ -3449,6 +3515,7 @@
       return;
     }
     await reloadLibraryData();
+    void logAssetEvent('delete', item);
   }
 
   async function toggleLibraryFavorite(item) {
@@ -3460,6 +3527,7 @@
     } else {
       const { error } = await state.supabase.from('vf_asset_favorites').upsert([{ user_id: uid, preview_id: pid }], { onConflict: 'user_id,preview_id' });
       if (error) { alert(error.message); return; }
+      void logAssetEvent('favorite', item);
     }
     await loadLibraryFavorites();
     renderLibraryGrid();
@@ -3572,20 +3640,26 @@
     return JSON.parse(await data.text());
   }
 
-  async function logAssetEvent(eventType, item) {
+  async function logAssetEvent(eventType, item, extraMeta) {
     if (state.localPreview || !state.supabase) return;
     try {
-      await state.supabase.from('vf_asset_events').insert([{
+      var row = {
         actor_id: state.session.user.id,
         actor_role: currentRole(),
         event_type: eventType,
-        source_file_id: item.source.id,
-        preview_id: item.preview.id,
-        meta: {
-          title: item.source.title,
-          filename: eventType === 'download_source' ? item.source.source_filename : item.preview.preview_filename
-        }
-      }]);
+        meta: {}
+      };
+      if (item && item.source) {
+        row.source_file_id = item.source.id;
+        row.preview_id = item.preview ? item.preview.id : null;
+        row.meta.title = item.source.title;
+        row.meta.filename = eventType === 'download_source'
+          ? item.source.source_filename
+          : (item.preview ? item.preview.preview_filename : (item.source.source_filename || ''));
+      }
+      if (extraMeta) Object.assign(row.meta, extraMeta);
+      var insertResult = await state.supabase.from('vf_asset_events').insert([row]);
+      if (insertResult.error) console.warn('Event insert error:', insertResult.error.message);
     } catch (error) {
       console.warn('Asset event log failed:', error);
     }
@@ -3650,6 +3724,7 @@
       visibility: formData.get('visibility') || 'all'
     }]);
     if (error) throw error;
+    void logAssetEvent('upload', { source: { id: sourceId, title: title, source_filename: templateFile.name } });
   }
 
 function libraryTagsForForm(formData, kind) {
@@ -3981,6 +4056,657 @@ function libraryTagsForForm(formData, kind) {
         <td>${project.snapshot_meta?.exportError ? escapeHtml(project.snapshot_meta.exportError) : 'OK'}</td>
       </tr>
     `).join('');
+  }
+
+  // ── 数据看板：数据查询辅助 ──
+  async function fetchAnalyticsData(rangeDays) {
+    if (!state.supabase) return null;
+    var startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+    startDate.setDate(startDate.getDate() - rangeDays + 1);
+    var startISO = startDate.toISOString();
+
+    try {
+      // 并行查询：事件数据 + 源文件数据
+      var [eventsRes, sourcesRes] = await Promise.all([
+        state.supabase.from('vf_asset_events')
+          .select('id,actor_id,actor_role,event_type,source_file_id,preview_id,meta,created_at')
+          .gte('created_at', startISO)
+          .order('created_at', { ascending: false })
+          .limit(5000),
+        state.supabase.from('vf_source_files')
+          .select('id,title,source_filename,source_ext,tags,source_path,country_id,activity_id,created_at')
+          .order('created_at', { ascending: true })
+      ]);
+
+      var events = eventsRes.data || [];
+      var sources = sourcesRes.data || [];
+      if (eventsRes.error) console.warn('Analytics events query error:', eventsRes.error);
+      if (sourcesRes.error) console.warn('Analytics sources query error:', sourcesRes.error);
+
+      // 通过 tags 判断素材类型（复用 libraryKindOfSource 逻辑）
+      function sourceKind(s) {
+        var tags = s.tags || [];
+        if (tags.indexOf('vf:kind:gallery') !== -1) return 'gallery';
+        if (tags.indexOf('vf:kind:template') !== -1) return 'template';
+        if (tags.indexOf('vf:kind:source') !== -1) return 'source';
+        var ext = (s.source_ext || '').toLowerCase();
+        var imgExts = ['jpg','jpeg','png','gif','webp','bmp','svg','tiff','psd','ai','eps','heic','heif'];
+        if (imgExts.indexOf(ext) !== -1) return 'gallery';
+        if (ext === 'json') return 'template';
+        return 'source';
+      }
+
+      // 计算素材累计增长（按日期 + 类型）
+      var sourceCountByDate = {};
+      var sourceTypes = { source: 0, gallery: 0, template: 0 };
+      sources.forEach(function(s) {
+        var kind = sourceKind(s);
+        if (!sourceCountByDate[kind]) sourceCountByDate[kind] = {};
+        var d = s.created_at ? s.created_at.split('T')[0] : '';
+        if (d) {
+          sourceCountByDate[kind][d] = (sourceCountByDate[kind][d] || 0) + 1;
+          sourceCountByDate.all = sourceCountByDate.all || {};
+          sourceCountByDate.all[d] = (sourceCountByDate.all[d] || 0) + 1;
+        }
+        sourceTypes[kind] = (sourceTypes[kind] || 0) + 1;
+      });
+
+      // 按日期排序并计算累计值
+      var allDates = Object.keys(sourceCountByDate.all || {}).sort();
+      var assetGrowth = { labels: allDates, total: [], source: [], gallery: [], template: [] };
+      var cumTotal = 0, cumSource = 0, cumGallery = 0, cumTemplate = 0;
+      // 计算起始值（range 之外的累计）
+      var rangeStartStr = startDate.toISOString().split('T')[0];
+      allDates.forEach(function(d) {
+        cumTotal += (sourceCountByDate.all && sourceCountByDate.all[d]) || 0;
+        cumSource += (sourceCountByDate.source && sourceCountByDate.source[d]) || 0;
+        cumGallery += (sourceCountByDate.gallery && sourceCountByDate.gallery[d]) || 0;
+        cumTemplate += (sourceCountByDate.template && sourceCountByDate.template[d]) || 0;
+        if (d >= rangeStartStr) {
+          assetGrowth.total.push(cumTotal);
+          assetGrowth.source.push(cumSource);
+          assetGrowth.gallery.push(cumGallery);
+          assetGrowth.template.push(cumTemplate);
+        }
+      });
+      // labels 也只保留 range 内的
+      assetGrowth.labels = allDates.filter(function(d) { return d >= rangeStartStr; });
+
+      return { events: events, sources: sources, assetGrowth: assetGrowth, sourceTypes: sourceTypes, startISO: startISO };
+    } catch (e) {
+      console.warn('Analytics data fetch failed:', e);
+      return null;
+    }
+  }
+
+  // ── 数据看板：页面渲染 ──
+  async function renderAnalyticsPage() {
+    parkActiveToolFrame();
+    var zh = state.lang === 'zh';
+
+    // ===== HTML + Scoped CSS =====
+    els.content.innerHTML = '\
+      <div class="panel-page" id="analytics-page">\
+        <style>\
+          #analytics-page { --ana-primary: #0d9488; --ana-primary-light: #ccfbf1; --ana-bg-card: #ffffff; --ana-text: #1e293b; --ana-muted: #64748b; --ana-label: #94a3b8; --ana-border: #e2e8f0; --ana-shadow: 0 4px 20px rgba(0,0,0,0.04); --ana-radius: 20px; --ana-radius-sm: 12px; }\
+          #analytics-page { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: transparent; color: var(--ana-text); }\
+          #analytics-page .ana-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }\
+          #analytics-page .ana-panel-title { font-size: 22px; font-weight: 700; color: var(--ana-text); }\
+          #analytics-page .ana-filter-group { display: flex; gap: 6px; background: #e8eaed; padding: 3px; border-radius: 100px; }\
+          #analytics-page .ana-filter-btn { padding: 7px 18px; border: none; border-radius: 100px; font-size: 13px; font-weight: 500; color: var(--ana-muted); background: transparent; cursor: pointer; transition: all 0.2s; font-family: inherit; }\
+          #analytics-page .ana-filter-btn:hover { color: var(--ana-text); }\
+          #analytics-page .ana-filter-btn.active { background: #fff; color: var(--ana-text); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }\
+          #analytics-page .ana-card-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 22px; }\
+          #analytics-page .ana-card { background: var(--ana-bg-card); border-radius: var(--ana-radius); padding: 22px 24px; box-shadow: var(--ana-shadow); border: 1px solid var(--ana-border); }\
+          #analytics-page .ana-card-icon { width: 40px; height: 40px; border-radius: var(--ana-radius-sm); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }\
+          #analytics-page .ana-card-icon.teal { background: var(--ana-primary-light); color: var(--ana-primary); }\
+          #analytics-page .ana-card-icon.blue { background: #dbeafe; color: #2563eb; }\
+          #analytics-page .ana-card-icon.violet { background: #ede9fe; color: #7c3aed; }\
+          #analytics-page .ana-card-icon.rose { background: #ffe4e6; color: #e11d48; }\
+          #analytics-page .ana-card-icon svg { width: 20px; height: 20px; }\
+          #analytics-page .ana-card-value { font-size: 30px; font-weight: 700; color: var(--ana-text); line-height: 1.2; margin-bottom: 4px; }\
+          #analytics-page .ana-card-label { font-size: 13px; color: var(--ana-muted); font-weight: 500; }\
+          #analytics-page .ana-charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px; }\
+          #analytics-page .ana-chart-card { background: var(--ana-bg-card); border-radius: var(--ana-radius); padding: 22px 24px; box-shadow: var(--ana-shadow); border: 1px solid var(--ana-border); }\
+          #analytics-page .ana-chart-card.full { margin-bottom: 22px; }\
+          #analytics-page .ana-chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }\
+          #analytics-page .ana-chart-title { font-size: 15px; font-weight: 600; color: var(--ana-text); }\
+          #analytics-page .ana-chart-sub { font-size: 18px; font-weight: 700; color: var(--ana-text); }\
+          #analytics-page .ana-chart-sub-label { font-size: 12px; color: var(--ana-muted); margin-left: 4px; }\
+          #analytics-page .ana-chart-sub-sep { font-size: 14px; color: var(--ana-border); margin: 0 8px; }\
+          #analytics-page .ana-chart-wrap { position: relative; height: 250px; }\
+          #analytics-page .ana-chart-wrap-sm { position: relative; height: 200px; }\
+          #analytics-page .ana-table-card { background: var(--ana-bg-card); border-radius: var(--ana-radius); padding: 22px 24px; box-shadow: var(--ana-shadow); border: 1px solid var(--ana-border); margin-bottom: 22px; }\
+          #analytics-page .ana-table-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }\
+          #analytics-page .ana-table-title { font-size: 15px; font-weight: 600; }\
+          #analytics-page .ana-cat-tabs { display: flex; gap: 3px; background: #f1f5f9; padding: 3px; border-radius: 100px; }\
+          #analytics-page .ana-cat-tab { padding: 5px 14px; border: none; border-radius: 100px; font-size: 12px; font-weight: 500; color: var(--ana-muted); background: transparent; cursor: pointer; font-family: inherit; }\
+          #analytics-page .ana-cat-tab.active { background: #fff; color: var(--ana-text); font-weight: 600; }\
+          #analytics-page .ana-table { width: 100%; border-collapse: collapse; }\
+          #analytics-page .ana-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--ana-label); text-transform: uppercase; padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }\
+          #analytics-page .ana-table td { padding: 12px; font-size: 13px; border-bottom: 1px solid #f8fafc; vertical-align: middle; }\
+          #analytics-page .ana-table tr:last-child td { border-bottom: none; }\
+          #analytics-page .ana-rank { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 8px; font-size: 12px; font-weight: 700; background: #f1f5f9; color: var(--ana-muted); }\
+          #analytics-page .ana-rank.top { background: var(--ana-primary-light); color: var(--ana-primary); }\
+          #analytics-page .ana-thumb-cell { display: flex; align-items: center; gap: 10px; }\
+          #analytics-page .ana-thumb-img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; background: #f1f5f9; }\
+          #analytics-page .ana-thumb-name { font-size: 13px; font-weight: 500; }\
+          #analytics-page .ana-thumb-file { font-size: 11px; color: var(--ana-muted); }\
+          #analytics-page .ana-stat { font-size: 13px; font-weight: 600; color: var(--ana-text); }\
+          #analytics-page .ana-view-more { text-align: center; padding: 10px 0 2px; }\
+          #analytics-page .ana-view-btn { background: transparent; border: none; color: var(--ana-primary); font-size: 13px; font-weight: 500; cursor: pointer; padding: 4px 14px; border-radius: 8px; font-family: inherit; }\
+          #analytics-page .ana-view-btn:hover { background: rgba(13,148,136,0.06); }\
+          #analytics-page .ana-activity-card { background: var(--ana-bg-card); border-radius: var(--ana-radius); padding: 22px 24px; box-shadow: var(--ana-shadow); border: 1px solid var(--ana-border); margin-bottom: 22px; }\
+          #analytics-page .ana-activity-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: scroll; padding-right: 4px; }\
+          #analytics-page .ana-activity-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; background: #f8fafc; }\
+          #analytics-page .ana-activity-avatar { width: 32px; height: 32px; border-radius: 50%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; }\
+          #analytics-page .ana-activity-body { flex: 1; min-width: 0; }\
+          #analytics-page .ana-activity-text { font-size: 13px; line-height: 1.4; }\
+          #analytics-page .ana-activity-text .u { font-weight: 600; }\
+          #analytics-page .ana-activity-text .a { font-weight: 500; }\
+          #analytics-page .ana-activity-text .m { font-weight: 500; color: var(--ana-primary); }\
+          #analytics-page .ana-activity-time { font-size: 11px; color: var(--ana-muted); white-space: nowrap; flex-shrink: 0; }\
+          #analytics-page .ana-controls { display: flex; align-items: center; justify-content: space-between; background: var(--ana-bg-card); border-radius: var(--ana-radius); padding: 16px 24px; box-shadow: var(--ana-shadow); border: 1px solid var(--ana-border); }\
+          #analytics-page .ana-controls-left { display: flex; align-items: center; gap: 14px; }\
+          #analytics-page .ana-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }\
+          #analytics-page .ana-toggle-sw { width: 38px; height: 20px; background: var(--ana-border); border-radius: 10px; position: relative; transition: background 0.25s; }\
+          #analytics-page .ana-toggle-sw::after { content: ""; position: absolute; width: 16px; height: 16px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: transform 0.25s; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }\
+          #analytics-page .ana-toggle.active .ana-toggle-sw { background: var(--ana-primary); }\
+          #analytics-page .ana-toggle.active .ana-toggle-sw::after { transform: translateX(18px); }\
+          #analytics-page .ana-toggle-label { font-size: 13px; font-weight: 500; }\
+          #analytics-page .ana-btn-clear { font-size: 12px; font-weight: 500; color: #ef4444; background: transparent; border: none; cursor: pointer; padding: 5px 10px; border-radius: 6px; font-family: inherit; }\
+          #analytics-page .ana-btn-clear:hover { background: #fef2f2; }\
+          #analytics-page .ana-empty { padding: 40px 0; text-align: center; color: var(--ana-muted); font-size: 14px; }\
+          #analytics-page .ana-scroll { overflow-y: scroll; }\
+          @media (max-width: 980px) {\
+            #analytics-page .ana-card-grid { grid-template-columns: 1fr; }\
+            #analytics-page .ana-charts-row { grid-template-columns: 1fr; }\
+          }\
+        </style>\
+        <div>\
+          <div class="ana-panel-header">\
+            <h2 class="ana-panel-title">' + (zh ? '操作统计面板' : 'Analytics Dashboard') + '</h2>\
+            <div class="ana-filter-group" id="ana-range-btns">\
+              <button class="ana-filter-btn" data-range="1">' + (zh ? '今日' : 'Today') + '</button>\
+              <button class="ana-filter-btn active" data-range="7">' + (zh ? '近7天' : '7 Days') + '</button>\
+              <button class="ana-filter-btn" data-range="30">' + (zh ? '近30天' : '30 Days') + '</button>\
+              <button class="ana-filter-btn" data-range="90">' + (zh ? '本季度' : 'Quarter') + '</button>\
+            </div>\
+          </div>\
+          <div class="ana-card-grid">\
+            <div class="ana-card"><div class="ana-card-icon teal"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z"/></svg></div><div class="ana-card-value" id="ana-total-ops">-</div><div class="ana-card-label">' + (zh ? '总操作次数' : 'Total Ops') + '</div></div>\
+            <div class="ana-card"><div class="ana-card-icon blue"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg></div><div class="ana-card-value" id="ana-active-users">-</div><div class="ana-card-label">' + (zh ? '活跃用户数' : 'Active Users') + '</div></div>\
+            <div class="ana-card"><div class="ana-card-icon violet"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg></div><div class="ana-card-value" id="ana-upload-count">-</div><div class="ana-card-label">' + (zh ? '上传次数' : 'Uploads') + '</div></div>\
+            <div class="ana-card"><div class="ana-card-icon rose"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg></div><div class="ana-card-value" id="ana-download-count">-</div><div class="ana-card-label">' + (zh ? '下载次数' : 'Downloads') + '</div></div>\
+          </div>\
+          <div class="ana-charts-row">\
+            <div class="ana-chart-card"><div class="ana-chart-header"><span class="ana-chart-title">' + (zh ? '事件类型分布' : 'Event Distribution') + '</span></div><div class="ana-chart-wrap" style="height:280px;"><canvas id="ana-doughnut"></canvas></div></div>\
+            <div class="ana-chart-card"><div class="ana-chart-header"><span class="ana-chart-title">' + (zh ? '上传 vs 下载趋势' : 'Upload vs Download') + '</span></div><div class="ana-chart-wrap"><canvas id="ana-upload-download"></canvas></div></div>\
+          </div>\
+          <div class="ana-chart-card full"><div class="ana-chart-header"><span class="ana-chart-title">' + (zh ? '用户活跃度趋势' : 'User Activity Trend') + '</span><span><span class="ana-chart-sub" id="ana-today-active">-</span><span class="ana-chart-sub-label">' + (zh ? '今日活跃' : 'today active') + '</span></span></div><div class="ana-chart-wrap-sm"><canvas id="ana-line"></canvas></div></div>\
+          <div class="ana-charts-row">\
+            <div class="ana-chart-card full"><div class="ana-chart-header"><span class="ana-chart-title">' + (zh ? '素材总量趋势' : 'Asset Growth') + '</span><span><span class="ana-chart-sub">' + (zh ? '总量' : 'Total') + ' </span><span class="ana-chart-sub" id="ana-asset-total">-</span><span class="ana-chart-sub-sep"> | </span><span class="ana-chart-sub">' + (zh ? '案例库' : 'Case') + ' </span><span class="ana-chart-sub" id="ana-asset-source" style="color:#3b82f6">-</span><span class="ana-chart-sub-sep"> | </span><span class="ana-chart-sub">' + (zh ? '图库' : 'Gallery') + ' </span><span class="ana-chart-sub" id="ana-asset-gallery" style="color:#f59e0b">-</span><span class="ana-chart-sub-sep"> | </span><span class="ana-chart-sub">' + (zh ? '模版库' : 'Template') + ' </span><span class="ana-chart-sub" id="ana-asset-template" style="color:#8b5cf6">-</span></span></div><div class="ana-chart-wrap-sm"><canvas id="ana-asset-growth"></canvas></div></div>\
+            <div class="ana-chart-card full"><div class="ana-chart-header"><span class="ana-chart-title">' + (zh ? '操作时段分布' : 'Peak Hours') + '</span><span><span class="ana-chart-sub" id="ana-peak-hour">-</span><span class="ana-chart-sub-label">' + (zh ? '峰值时段' : 'peak') + '</span></span></div><div class="ana-chart-wrap-sm"><canvas id="ana-peak-hours"></canvas></div></div>\
+          </div>\
+          <div class="ana-table-card">\
+            <div class="ana-table-header"><span class="ana-table-title">' + (zh ? '热门素材 Top 10' : 'Hot Content Top 10') + '</span><div class="ana-cat-tabs" id="ana-cat-tabs"><button class="ana-cat-tab active" data-cat="all">' + (zh ? '全部' : 'All') + '</button><button class="ana-cat-tab" data-cat="source">' + (zh ? '案例库' : 'Case') + '</button><button class="ana-cat-tab" data-cat="gallery">' + (zh ? '图库' : 'Gallery') + '</button><button class="ana-cat-tab" data-cat="template">' + (zh ? '模版库' : 'Template') + '</button></div></div>\
+            <div class="ana-scroll" style="max-height:420px;"><table class="ana-table"><thead><tr><th style="width:60px;">#</th><th>' + (zh ? '素材' : 'Asset') + '</th><th style="width:90px;">' + (zh ? '下载' : 'DL') + '</th><th style="width:90px;">' + (zh ? '查看' : 'Views') + '</th><th style="width:90px;">' + (zh ? '使用' : 'Uses') + '</th></tr></thead><tbody id="ana-top10-body"><tr><td colspan="5" class="ana-empty">' + (zh ? '暂无数据' : 'No data yet') + '</td></tr></tbody></table></div>\
+          </div>\
+          <div class="ana-activity-card"><div class="ana-table-header"><span class="ana-table-title">' + (zh ? '最近操作动态' : 'Recent Activity') + '</span></div><div class="ana-activity-list" id="ana-activity-list"><div class="ana-empty">' + (zh ? '暂无操作记录' : 'No activity yet') + '</div></div></div>\
+          <div class="ana-controls"><div class="ana-controls-left"><div class="ana-toggle active" id="ana-toggle-admin"><div class="ana-toggle-sw"></div><span class="ana-toggle-label">' + (zh ? '排除管理员操作' : 'Exclude Admin Ops') + '</span></div></div><button class="ana-btn-clear" id="ana-btn-clear">' + (zh ? '清除我的测试数据' : 'Clear My Test Data') + '</button></div>\
+        </div>\
+      </div>';
+
+    // ===== 状态 =====
+    var currentRange = 7;
+    var excludeAdmin = true;
+    var fetchedData = null;
+    var charts = {};
+    var top10Cat = 'all';
+    // ===== 图表颜色 =====
+    var CHART_COLORS = ['#0d9488','#3b82f6','#f59e0b','#8b5cf6','#ef4444','#10b981','#06b6d4','#64748b','#ec4899','#84cc16'];
+
+    // ===== 事件类型归类 =====
+    function eventCategory(et) {
+      if (et === 'upload') return 'upload';
+      if (et === 'view') return 'view';
+      if (et === 'favorite') return 'favorite';
+      if (et === 'edit' || et === 'batch_edit') return 'edit';
+      if (et === 'delete' || et === 'batch_delete') return 'delete';
+      if (et === 'login') return 'login';
+      if (et === 'batch_download' || et === 'download_preview' || et === 'download_source') return 'download';
+      if (et === 'use_static' || et === 'use_dynamic' || et === 'use_template') return 'diy';
+      return 'other';
+    }
+
+    var CAT_LABELS_ZH = { upload: '上传素材', download: '下载素材', favorite: '收藏', diy: '使用DIY' };
+    var CAT_LABELS_EN = { upload: 'Upload', download: 'Download', favorite: 'Favorite', diy: 'DIY Use' };
+    var CAT_ORDER = ['upload','download','favorite','diy'];
+
+    // ===== 销毁旧图表 =====
+    function destroyCharts() {
+      Object.values(charts).forEach(function(c) { try { c.destroy(); } catch(e) {} });
+      charts = {};
+    }
+
+    // ===== 生成日期标签 =====
+    function dateLabels(days) {
+      var labels = [];
+      var d = new Date();
+      for (var i = days - 1; i >= 0; i--) {
+        var dt = new Date(d);
+        dt.setDate(dt.getDate() - i);
+        labels.push((dt.getMonth() + 1) + '/' + dt.getDate());
+      }
+      return labels;
+    }
+
+    // ===== 相对时间 =====
+    function relativeTime(iso) {
+      if (!iso) return '';
+      var diff = (Date.now() - new Date(iso).getTime()) / 1000;
+      if (diff < 60) return zh ? '刚刚' : 'just now';
+      if (diff < 3600) return Math.floor(diff / 60) + (zh ? '分钟前' : 'm ago');
+      if (diff < 86400) return Math.floor(diff / 3600) + (zh ? '小时前' : 'h ago');
+      return Math.floor(diff / 86400) + (zh ? '天前' : 'd ago');
+    }
+
+    // ===== 渲染全部内容 =====
+    async function renderAll() {
+      fetchedData = await fetchAnalyticsData(currentRange);
+      var data = fetchedData;
+      var events = (data && data.events) ? data.events : [];
+      var effectiveEvents = excludeAdmin ? events.filter(function(e) { return e.actor_role !== 'admin'; }) : events;
+      var todayStr = new Date().toISOString().split('T')[0];
+
+      // --- KPI 卡片 ---
+      var uniqueUsers = new Set(effectiveEvents.map(function(e) { return e.actor_id; }));
+      var uploadCount = 0, downloadCount = 0;
+      effectiveEvents.forEach(function(e) {
+        if (eventCategory(e.event_type) === 'upload') uploadCount++;
+        if (eventCategory(e.event_type) === 'download') downloadCount++;
+      });
+      document.getElementById('ana-total-ops').textContent = effectiveEvents.length;
+      document.getElementById('ana-active-users').textContent = uniqueUsers.size;
+      document.getElementById('ana-upload-count').textContent = uploadCount;
+      document.getElementById('ana-download-count').textContent = downloadCount;
+      document.getElementById('ana-today-active').textContent = effectiveEvents.length ? new Set(effectiveEvents.filter(function(e) { return (e.created_at || '').split('T')[0] === todayStr; }).map(function(e) { return e.actor_id; })).size : '0';
+      var st = (data && data.sourceTypes) ? data.sourceTypes : { source: 0, gallery: 0, template: 0 };
+      document.getElementById('ana-asset-total').textContent = (st.source + st.gallery + st.template) || '0';
+      document.getElementById('ana-asset-source').textContent = st.source || '0';
+      document.getElementById('ana-asset-gallery').textContent = st.gallery || '0';
+      document.getElementById('ana-asset-template').textContent = st.template || '0';
+
+      // --- 环形图：事件类型分布 ---
+      var catCounts = {};
+      effectiveEvents.forEach(function(e) {
+        var cat = eventCategory(e.event_type);
+        catCounts[cat] = (catCounts[cat] || 0) + 1;
+      });
+      var catLabels = CAT_ORDER.filter(function(c) { return catCounts[c]; });
+      var catValues = catLabels.map(function(c) { return catCounts[c]; });
+      var catDisplayLabels = catLabels.map(function(c) { return zh ? CAT_LABELS_ZH[c] : CAT_LABELS_EN[c]; });
+      var totalCat = catValues.reduce(function(a, b) { return a + b; }, 0);
+
+      if (charts.doughnut) charts.doughnut.destroy();
+      var dCtx = document.getElementById('ana-doughnut');
+      if (dCtx) {
+        charts.doughnut = new Chart(dCtx.getContext('2d'), {
+          type: 'doughnut',
+          data: { labels: catDisplayLabels, datasets: [{ data: catValues, backgroundColor: CHART_COLORS.slice(0, catValues.length), borderWidth: 0, hoverOffset: 8 }] },
+          options: {
+            responsive: true, maintainAspectRatio: false, cutout: '68%',
+            layout: { padding: { bottom: 10 } },
+            plugins: {
+              legend: { position: 'right', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 14, font: { size: 11 }, color: '#64748b' } },
+              tooltip: { callbacks: { label: function(ctx) { var pct = ((ctx.raw / totalCat) * 100).toFixed(1); return ' ' + ctx.label + ': ' + ctx.raw + ' (' + pct + '%)'; } } }
+            }
+          },
+          plugins: [{
+            id: 'centerText', afterDraw: function(chart) {
+              var meta = chart.getDatasetMeta(0); if (!meta.data.length) return;
+              var ctx = chart.ctx, c = meta.data[0], x = c.x, y = c.y;
+              ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+              ctx.font = "bold 24px -apple-system, sans-serif"; ctx.fillStyle = '#1e293b'; ctx.fillText(totalCat, x, y - 6);
+              ctx.font = "11px -apple-system, sans-serif"; ctx.fillStyle = '#64748b'; ctx.fillText(zh ? '总操作' : 'Total', x, y + 14);
+              ctx.restore();
+            }
+          }]
+        });
+      }
+
+      // --- 每日趋势数据 ---
+      var labels = dateLabels(currentRange);
+      var dailyUploads = new Array(currentRange).fill(0);
+      var dailyDownloads = new Array(currentRange).fill(0);
+      var dailyUsers = new Array(currentRange).fill(0);
+      var dailyUserSets = new Array(currentRange).fill(null).map(function() { return new Set(); });
+      var todayActive = 0;
+
+      var d = new Date();
+      var rangeStartDate = new Date(d);
+      rangeStartDate.setHours(0,0,0,0);
+      rangeStartDate.setDate(rangeStartDate.getDate() - currentRange + 1);
+
+      effectiveEvents.forEach(function(e) {
+        var ed = e.created_at ? e.created_at.split('T')[0] : '';
+        if (!ed) return;
+        var idx = Math.floor((new Date(ed).getTime() - rangeStartDate.getTime()) / 86400000);
+        if (idx < 0 || idx >= currentRange) return;
+        var cat = eventCategory(e.event_type);
+        if (cat === 'upload') dailyUploads[idx]++;
+        if (cat === 'download') dailyDownloads[idx]++;
+        if (dailyUserSets[idx]) dailyUserSets[idx].add(e.actor_id);
+        if (ed === todayStr) todayActive++;
+      });
+      var dailyUserCounts = dailyUserSets.map(function(s) { return s ? s.size : 0; });
+
+      // --- 上传 vs 下载趋势 ---
+      if (charts.uploadDownload) charts.uploadDownload.destroy();
+      var udCtx = document.getElementById('ana-upload-download');
+      if (udCtx) {
+        charts.uploadDownload = new Chart(udCtx.getContext('2d'), {
+          type: 'line', data: { labels: labels, datasets: [
+            { label: zh ? '上传' : 'Uploads', data: dailyUploads, borderColor: '#0d9488', backgroundColor: 'rgba(13,148,136,0.08)', fill: true, tension: 0, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#0d9488' },
+            { label: zh ? '下载' : 'Downloads', data: dailyDownloads, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true, tension: 0, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#3b82f6' }
+          ]},
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 }, color: '#64748b' } } },
+            scales: { x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#94a3b8' } }, y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 }, color: '#94a3b8' } } }
+          }
+        });
+      }
+
+      // --- 用户活跃度趋势 ---
+      if (charts.line) charts.line.destroy();
+      var lCtx = document.getElementById('ana-line');
+      if (lCtx) {
+        charts.line = new Chart(lCtx.getContext('2d'), {
+          type: 'line', data: { labels: labels, datasets: [{ data: dailyUserCounts, borderColor: '#0d9488', backgroundColor: 'rgba(13,148,136,0.1)', fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: '#0d9488' }] },
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#94a3b8' } }, y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { stepSize: 1, font: { size: 11 }, color: '#94a3b8' } } }
+          }
+        });
+      }
+
+      // --- 素材总量趋势 ---
+      if (charts.assetGrowth) charts.assetGrowth.destroy();
+      var agCtx = document.getElementById('ana-asset-growth');
+      if (agCtx && data && data.assetGrowth && data.assetGrowth.labels.length) {
+        var ag = data.assetGrowth;
+        charts.assetGrowth = new Chart(agCtx.getContext('2d'), {
+          type: 'line', data: { labels: ag.labels, datasets: [
+            { label: zh ? '案例库' : 'Case', data: ag.source, borderColor: '#3b82f6', borderDash: [5,3], fill: false, tension: 0, borderWidth: 2, pointRadius: 2 },
+            { label: zh ? '图库' : 'Gallery', data: ag.gallery, borderColor: '#f59e0b', borderDash: [5,3], fill: false, tension: 0, borderWidth: 2, pointRadius: 2 },
+            { label: zh ? '模版库' : 'Template', data: ag.template, borderColor: '#8b5cf6', borderDash: [5,3], fill: false, tension: 0, borderWidth: 2, pointRadius: 2 },
+            { label: zh ? '总量' : 'Total', data: ag.total, borderColor: '#0d9488', fill: false, tension: 0, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: '#0d9488' }
+          ]},
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 12, padding: 18, font: { size: 11 }, color: '#64748b' } } },
+            scales: { x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#94a3b8' } }, y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 }, color: '#94a3b8' } } }
+          }
+        });
+      }
+
+      // --- 操作时段分布 ---
+      var hourCounts = new Array(8).fill(0);
+      var hourLabels = ['0-3', '3-6', '6-9', '9-12', '12-15', '15-18', '18-21', '21-24'];
+      effectiveEvents.forEach(function(e) {
+        var h = e.created_at ? new Date(e.created_at).getHours() : -1;
+        if (h >= 0) { var slot = Math.floor(h / 3); if (slot < 8) hourCounts[slot]++; }
+      });
+      var maxHourIdx = hourCounts.indexOf(Math.max.apply(null, hourCounts));
+      document.getElementById('ana-peak-hour').textContent = hourLabels[maxHourIdx] + (zh ? '时' : '');
+
+      if (charts.peakHours) charts.peakHours.destroy();
+      var phCtx = document.getElementById('ana-peak-hours');
+      if (phCtx) {
+        charts.peakHours = new Chart(phCtx.getContext('2d'), {
+          type: 'bar', data: { labels: hourLabels, datasets: [{ data: hourCounts, backgroundColor: 'rgba(13,148,136,0.25)', borderColor: '#0d9488', borderWidth: 1, borderRadius: 6 }] },
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#94a3b8' } }, y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 }, color: '#94a3b8' } } }
+          }
+        });
+      }
+
+      // --- Top 10 表格（异步：需要签名缩略图）---
+      await renderTop10Table();
+
+      // --- 最近操作动态 ---
+      renderActivityFeed();
+    }
+
+    // ===== 热门素材 Top 10 =====
+    async function renderTop10Table() {
+      var tbody = document.getElementById('ana-top10-body');
+      if (!tbody) return;
+      // 确保 library options 已加载（用于显示国家/活动标签）
+      if (!state.libraryOptions || !state.libraryOptions.length) {
+        try { await loadLibraryOptions(); } catch(e) { /* 静默 */ }
+      }
+      var data = fetchedData;
+      var events = (data && data.events) ? data.events : [];
+      var effectiveEvents = excludeAdmin ? events.filter(function(e) { return e.actor_role !== 'admin'; }) : events;
+
+      // 按素材聚合
+      var assetMap = {};
+      effectiveEvents.forEach(function(e) {
+        var sid = e.source_file_id;
+        if (!sid) return;
+        if (!assetMap[sid]) assetMap[sid] = { downloads: 0, views: 0, uses: 0 };
+        var cat = eventCategory(e.event_type);
+        if (cat === 'download') assetMap[sid].downloads++;
+        if (cat === 'view') assetMap[sid].views++;
+        if (cat === 'diy') assetMap[sid].uses++;
+      });
+
+      // 关联源文件信息
+      var sources = data && data.sources ? data.sources : [];
+      var sourceMap = {};
+      sources.forEach(function(s) { sourceMap[s.id] = s; });
+
+      // 素材类型判断
+      function itemKind(src) {
+        var tags = src.tags || [];
+        if (tags.indexOf('vf:kind:gallery') !== -1) return 'gallery';
+        if (tags.indexOf('vf:kind:template') !== -1) return 'template';
+        if (tags.indexOf('vf:kind:source') !== -1) return 'source';
+        var ext = (src.source_ext || '').toLowerCase();
+        var imgExts = ['jpg','jpeg','png','gif','webp','bmp','svg','tiff','psd','ai','eps','heic','heif'];
+        if (imgExts.indexOf(ext) !== -1) return 'gallery';
+        if (ext === 'json') return 'template';
+        return 'source';
+      }
+
+      var list = [];
+      Object.keys(assetMap).forEach(function(sid) {
+        var src = sourceMap[sid] || {};
+        var kind = itemKind(src);
+        var tags = src.tags || [];
+        var kindMarkers = ['vf:kind:gallery', 'vf:kind:template', 'vf:kind:source'];
+        var displayTags = tags.filter(function(t) { return kindMarkers.indexOf(t) === -1; });
+        var countryName = optionNameById(src.country_id);
+        var activityName = optionNameById(src.activity_id);
+        if (countryName && countryName !== '-') displayTags.push(countryName);
+        if (activityName && activityName !== '-') displayTags.push(activityName);
+        list.push({
+          id: sid, title: src.title || '', filename: src.source_filename || '',
+          kind: kind, sourcePath: src.source_path || '',
+          downloads: assetMap[sid].downloads, views: assetMap[sid].views, uses: assetMap[sid].uses,
+          score: assetMap[sid].downloads + assetMap[sid].uses,
+          tags: displayTags
+        });
+      });
+
+      var filtered = top10Cat === 'all' ? list : list.filter(function(item) { return item.kind === top10Cat; });
+      filtered.sort(function(a, b) { return b.score - a.score; });
+
+      // 签名缩略图 URL
+      var thumbUrls = {};
+      if (state.supabase && filtered.length) {
+        var thumbPaths = [];
+        filtered.forEach(function(item) {
+          if (item.sourcePath) {
+            var tp = item.sourcePath.replace(/\/[^/]+$/, '/_thumb.jpg');
+            thumbPaths.push(tp);
+          }
+        });
+        if (thumbPaths.length) {
+          try {
+            var signed = await state.supabase.storage.from(LIBRARY_BUCKET).createSignedUrls(thumbPaths, 3600);
+            if (signed.data) {
+              signed.data.forEach(function(su) {
+                if (su.path) thumbUrls[su.path] = su.signedUrl;
+              });
+            }
+          } catch(e) { console.warn('Thumb signing failed:', e); }
+        }
+      }
+
+      if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="ana-empty">' + (zh ? '暂无数据' : 'No data yet') + '</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(function(item, i) {
+        var rankCls = i < 3 ? 'ana-rank top' : 'ana-rank';
+        var name = item.title || ('<span style="color:#94a3b8">' + (item.filename || '?') + '</span>');
+        var tp = item.sourcePath ? item.sourcePath.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
+        var signedUrl = thumbUrls[tp] || '';
+        var thumbHtml = signedUrl
+          ? '<img class="ana-thumb-img" src="' + signedUrl + '" alt="" loading="lazy">'
+          : '<div class="ana-thumb-img" style="background:#e2e8f0;"></div>';
+        var subText = item.tags.length ? item.tags.join(' · ') : '';
+        return '<tr style="cursor:pointer" data-source-id="' + item.id + '">' +
+          '<td><span class="' + rankCls + '">' + (i + 1) + '</span></td>' +
+          '<td><div class="ana-thumb-cell">' + thumbHtml + '<div><div class="ana-thumb-name">' + name + '</div>' + (subText ? '<div class="ana-thumb-file">' + subText + '</div>' : '') + '</div></div></td>' +
+          '<td><span class="ana-stat">' + item.downloads + '</span></td>' +
+          '<td><span class="ana-stat">' + item.views + '</span></td>' +
+          '<td><span class="ana-stat">' + item.uses + '</span></td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    // ===== 最近操作动态 =====
+    function renderActivityFeed() {
+      var list = document.getElementById('ana-activity-list');
+      if (!list) return;
+      var data = fetchedData;
+      var events = (data && data.events) ? data.events : [];
+      var effectiveEvents = excludeAdmin ? events.filter(function(e) { return e.actor_role !== 'admin'; }) : events;
+
+      var recent = effectiveEvents.slice(0, 100);
+      if (!recent.length) {
+        list.innerHTML = '<div class="ana-empty">' + (zh ? '暂无操作记录' : 'No activity yet') + '</div>';
+        return;
+      }
+
+      var sources = data && data.sources ? data.sources : [];
+      var sourceMap = {};
+      sources.forEach(function(s) { sourceMap[s.id] = s; });
+
+      var actionLabels = {
+        upload: zh ? '上传了' : 'uploaded',
+        download_preview: zh ? '下载了' : 'downloaded', download_source: zh ? '下载了' : 'downloaded', batch_download: zh ? '批量下载了' : 'batch-downloaded',
+        view: zh ? '查看了' : 'viewed',
+        favorite: zh ? '收藏了' : 'favorited',
+        edit: zh ? '编辑了' : 'edited', batch_edit: zh ? '批量编辑了' : 'batch-edited',
+        delete: zh ? '删除了' : 'deleted', batch_delete: zh ? '批量删除了' : 'batch-deleted',
+        use_static: zh ? '使用了' : 'used', use_dynamic: zh ? '使用了' : 'used', use_template: zh ? '使用了' : 'used',
+        login: zh ? '登录了' : 'logged in'
+      };
+      var actionColors = { upload: '#10b981', download_preview: '#3b82f6', download_source: '#3b82f6', batch_download: '#3b82f6', view: '#8b5cf6', favorite: '#f59e0b', edit: '#06b6d4', batch_edit: '#06b6d4', delete: '#ef4444', batch_delete: '#ef4444', use_static: '#0d9488', use_dynamic: '#0d9488', use_template: '#0d9488', login: '#64748b' };
+
+      list.innerHTML = recent.map(function(e) {
+        var src = (e.source_file_id && sourceMap[e.source_file_id]) ? sourceMap[e.source_file_id] : null;
+        var assetName = src ? (src.title || src.source_filename || '?') : '';
+        var action = actionLabels[e.event_type] || e.event_type;
+        var color = actionColors[e.event_type] || '#64748b';
+        var initial = (e.actor_id || '?').charAt(0).toUpperCase();
+        return '<div class="ana-activity-item">' +
+          '<div class="ana-activity-avatar">' + initial + '</div>' +
+          '<div class="ana-activity-body"><div class="ana-activity-text"><span class="u">' + initial + '</span> <span class="a" style="color:' + color + '">' + action + '</span>' + (assetName ? ' <span class="m">' + assetName + '</span>' : '') + '</div></div>' +
+          '<div class="ana-activity-time">' + relativeTime(e.created_at) + '</div>' +
+          '</div>';
+      }).join('');
+    }
+
+    // ===== 事件绑定 =====
+    function bindEvents() {
+      // 时间范围切换
+      document.querySelectorAll('#ana-range-btns .ana-filter-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('#ana-range-btns .ana-filter-btn').forEach(function(b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          currentRange = parseInt(btn.dataset.range) || 7;
+          destroyCharts();
+          renderAll();
+        });
+      });
+
+      // 管理员开关
+      var toggle = document.getElementById('ana-toggle-admin');
+      if (toggle) {
+        toggle.addEventListener('click', function() {
+          toggle.classList.toggle('active');
+          excludeAdmin = toggle.classList.contains('active');
+          destroyCharts();
+          renderAll();
+        });
+      }
+
+      // 热门素材分类 tab
+      document.querySelectorAll('#ana-cat-tabs .ana-cat-tab').forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          document.querySelectorAll('#ana-cat-tabs .ana-cat-tab').forEach(function(t) { t.classList.remove('active'); });
+          tab.classList.add('active');
+          top10Cat = tab.dataset.cat || 'all';
+          renderTop10Table();
+        });
+      });
+
+      // 热门素材点击跳转
+      var top10Body = document.getElementById('ana-top10-body');
+      if (top10Body) {
+        top10Body.addEventListener('click', function(e) {
+          var row = e.target.closest('tr[data-source-id]');
+          if (!row) return;
+          state.libraryScrollToSource = row.dataset.sourceId;
+          navigate('library');
+        });
+      }
+
+      // 清除测试数据
+      var clearBtn = document.getElementById('ana-btn-clear');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', async function() {
+          if (!confirm(zh ? '确定删除当前时间范围内你的所有操作记录？此操作不可恢复。' : 'Delete all your event records in this date range? This cannot be undone.')) return;
+          if (!state.supabase) return;
+          var startDate = new Date();
+          startDate.setHours(0,0,0,0);
+          startDate.setDate(startDate.getDate() - currentRange + 1);
+          try {
+            var { error } = await state.supabase.from('vf_asset_events')
+              .delete()
+              .eq('actor_id', state.session.user.id)
+              .gte('created_at', startDate.toISOString());
+            if (error) throw error;
+            destroyCharts();
+            await renderAll();
+          } catch(e) {
+            alert(e.message || 'Clear failed');
+          }
+        });
+      }
+    }
+
+    // ===== 初始化 =====
+    destroyCharts();
+    await renderAll();
+    bindEvents();
   }
 
   async function renderAdmin() {
