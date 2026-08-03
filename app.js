@@ -787,13 +787,7 @@
     parkActiveToolFrame();
     const canUpload = canUploadAssets();
     const activeKind = state.libraryFilters.kind || 'all';
-    var kindCounts = { source: 0, gallery: 0, template: 0 };
-    if (state.librarySources) {
-      for (var i = 0; i < state.librarySources.length; i++) {
-        var k = libraryKindOfSource(state.librarySources[i]);
-        if (k === 'source' || k === 'gallery' || k === 'template') kindCounts[k]++;
-      }
-    }
+    var kindCounts = countLibraryKinds();
     els.content.innerHTML = `
       <div class="library-page ${homeMode ? 'library-page-home' : ''}">
         <section class="library-hero">
@@ -898,13 +892,7 @@
   }
 
   function refreshKindTabCounts() {
-    var counts = { source: 0, gallery: 0, template: 0 };
-    if (state.librarySources) {
-      for (var i = 0; i < state.librarySources.length; i++) {
-        var k = libraryKindOfSource(state.librarySources[i]);
-        if (counts[k] !== undefined) counts[k]++;
-      }
-    }
+    var counts = countLibraryKinds();
     document.querySelectorAll('[data-library-kind]').forEach(function(btn) {
       var kind = btn.dataset.libraryKind;
       if (kind !== 'all' && counts[kind] !== undefined) {
@@ -1365,30 +1353,8 @@
   function filterLibraryCardsInPlace() {
     var grid = document.getElementById('library-grid');
     if (!grid || !state.libraryItems) { renderLibraryGrid(); return; }
-    var sourcesById = new Map(state.librarySources.map(function(s) { return [s.id, s]; }));
-    var query = state.libraryFilters.query.toLowerCase();
-    var kind = state.libraryFilters.kind || 'all';
-    // 重新过滤
-    state.libraryItems = state.libraryPreviews.map(function(preview) {
-      var s = sourcesById.get(preview.source_file_id);
-      var url = preview.staticUrl || state.libraryPreviewUrls[preview.preview_path] || '';
-      var tp = (s && s.source_path) ? s.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
-      return { preview: preview, source: s, url: url, thumbUrl: state.libraryPreviewUrls[tp] || '' };
-    }).filter(function(item) {
-      if (!item.source) return false;
-      var itemKind = libraryKindOfSource(item.source);
-      if (kind !== 'all' && kind !== itemKind) return false;
-      if (query && !libraryItemMatchesQuery(item, query)) return false;
-      var tags = visibleLibraryTags(item.source);
-      if (state.libraryFilters.tag1 !== 'all' && !tags.includes(state.libraryFilters.tag1)) return false;
-      if (state.libraryFilters.tag2 !== 'all' && !tags.includes(state.libraryFilters.tag2)) return false;
-      if (state.libraryFilters.tag3 !== 'all' && !tags.includes(state.libraryFilters.tag3)) return false;
-      if (state.libraryFilters.tag4 !== 'all' && !tags.includes(state.libraryFilters.tag4)) return false;
-      if (state.libraryFilters.selectedCountries && state.libraryFilters.selectedCountries.length && !state.libraryFilters.selectedCountries.includes(item.source.country_id)) return false;
-      if (state.libraryFilters.selectedActivities && state.libraryFilters.selectedActivities.length && !state.libraryFilters.selectedActivities.includes(item.source.activity_id)) return false;
-      if (state.libraryFilters.favorites && !state.libraryFavorites.has(item.preview.id)) return false;
-      return true;
-    });
+    // 只使用可预览、已去重的素材，避免旧 JSON 空卡混在模板库里。
+    state.libraryItems = getLibraryDisplayItems().filter(libraryItemMatchesActiveFilters);
     var visibleItems = state.libraryItems.slice(0, state.libraryVisibleLimit);
     var existingCards = grid.querySelectorAll('.library-card');
     var existingIds = new Set();
@@ -1551,9 +1517,9 @@
   }
 
   function countKindSources(kind, parentFilters) {
-    return state.librarySources.filter(function(source) {
-      if (libraryKindOfSource(source) !== kind) return false;
-      var tags = visibleLibraryTags(source);
+    return getLibraryDisplayItems().filter(function(item) {
+      if (libraryKindOfSource(item.source) !== kind) return false;
+      var tags = visibleLibraryTags(item.source);
       return Object.keys(parentFilters).every(function(k) {
         return !parentFilters[k] || parentFilters[k] === 'all' || tags.includes(parentFilters[k]);
       });
@@ -1561,9 +1527,9 @@
   }
 
   function countTagOccurrences(kind, tagValue, parentFilters) {
-    return state.librarySources.filter(function(source) {
-      if (libraryKindOfSource(source) !== kind) return false;
-      var tags = visibleLibraryTags(source);
+    return getLibraryDisplayItems().filter(function(item) {
+      if (libraryKindOfSource(item.source) !== kind) return false;
+      var tags = visibleLibraryTags(item.source);
       if (!tags.includes(tagValue)) return false;
       return Object.keys(parentFilters).every(function(k) {
         return !parentFilters[k] || parentFilters[k] === 'all' || tags.includes(parentFilters[k]);
@@ -1592,6 +1558,90 @@
 
   function isSharedStaticSource(source) {
     return Boolean(source?.staticShared && source?.staticPayload);
+  }
+
+  function normalizeLibraryDisplayText(value) {
+    return String(value || '')
+      .trim()
+      .toLocaleLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[\-_]+/g, ' ');
+  }
+
+  function libraryComponentTags(source) {
+    const rawTags = (source?.tags || []).map(tag => String(tag || '').trim()).filter(Boolean);
+    const rawText = rawTags.concat([source?.title, source?.source_filename]).join(' ').toLocaleLowerCase();
+    const hasTemplateMarker = rawTags.includes('模板');
+    return rawTags.includes('组件') || (!hasTemplateMarker && /(?:标签(?:组|组合)?|背景|品牌圆弧|logo|kiki|其他素材)/i.test(rawText));
+  }
+
+  function isUsableLibraryPreviewItem(item) {
+    if (!item?.source || !item?.preview) return false;
+    if (isSharedStaticSource(item.source)) return isUsableStaticImageUrl(item.preview.staticUrl);
+    // 早期 JSON 记录没有任何预览路径，会在主模板库里显示为空白文件卡。
+    return Boolean(String(item.preview.preview_path || '').trim());
+  }
+
+  function libraryDisplayKey(item) {
+    const kind = libraryKindOfSource(item.source);
+    if (kind !== 'template') return `preview:${item.preview.id}`;
+    const tags = visibleLibraryTags(item.source);
+    const family = tags.includes('组件') ? 'component' : 'template';
+    const category = tags.find(tag => ['社媒物料', 'C端物料', '标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材'].includes(tag)) || '';
+    const title = normalizeLibraryDisplayText(item.source.title || item.preview.preview_filename || item.source.source_filename);
+    return title ? `template:${family}:${category}:${title}` : `preview:${item.preview.id}`;
+  }
+
+  function libraryDisplayPriority(item) {
+    // 静态工具同步的资产已经有实际图像验证，同名时优先使用它，避免旧记录覆盖正常卡片。
+    return isSharedStaticSource(item.source) ? 2 : 1;
+  }
+
+  function libraryDisplayTimestamp(item) {
+    const value = item?.source?.updated_at || item?.source?.created_at || item?.preview?.created_at || 0;
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  function getLibraryDisplayItems() {
+    const sourcesById = new Map((state.librarySources || []).map(source => [source.id, source]));
+    const unique = new Map();
+    (state.libraryPreviews || []).forEach(function(preview) {
+      const source = sourcesById.get(preview.source_file_id);
+      const thumbPath = source?.source_path ? source.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
+      const item = {
+        preview,
+        source,
+        url: preview.staticUrl || state.libraryPreviewUrls[preview.preview_path] || '',
+        thumbUrl: state.libraryPreviewUrls[thumbPath] || ''
+      };
+      if (!isUsableLibraryPreviewItem(item)) return;
+      const key = libraryDisplayKey(item);
+      const previous = unique.get(key);
+      if (!previous
+        || libraryDisplayPriority(item) > libraryDisplayPriority(previous)
+        || (libraryDisplayPriority(item) === libraryDisplayPriority(previous) && libraryDisplayTimestamp(item) >= libraryDisplayTimestamp(previous))) {
+        unique.set(key, item);
+      }
+    });
+    return Array.from(unique.values());
+  }
+
+  function libraryItemMatchesActiveFilters(item) {
+    const kind = state.libraryFilters.kind || 'all';
+    const query = String(state.libraryFilters.query || '').toLowerCase();
+    const itemKind = libraryKindOfSource(item.source);
+    if (kind !== 'all' && kind !== itemKind) return false;
+    if (query && !libraryItemMatchesQuery(item, query)) return false;
+    const tags = visibleLibraryTags(item.source);
+    if (state.libraryFilters.tag1 !== 'all' && !tags.includes(state.libraryFilters.tag1)) return false;
+    if (state.libraryFilters.tag2 !== 'all' && !tags.includes(state.libraryFilters.tag2)) return false;
+    if (state.libraryFilters.tag3 !== 'all' && !tags.includes(state.libraryFilters.tag3)) return false;
+    if (state.libraryFilters.tag4 !== 'all' && !tags.includes(state.libraryFilters.tag4)) return false;
+    if (state.libraryFilters.selectedCountries && state.libraryFilters.selectedCountries.length && !state.libraryFilters.selectedCountries.includes(item.source.country_id)) return false;
+    if (state.libraryFilters.selectedActivities && state.libraryFilters.selectedActivities.length && !state.libraryFilters.selectedActivities.includes(item.source.activity_id)) return false;
+    if (state.libraryFilters.favorites && !state.libraryFavorites.has(item.preview.id)) return false;
+    return true;
   }
 
   function isUsableStaticImageUrl(value) {
@@ -1757,17 +1807,34 @@
     });
     const paths = [...firstPreviewBySource.values()].map(item => item.preview_path).filter(Boolean);
     await signLibraryPreviewUrls(paths);
-    return (sources || []).map(source => {
+    const items = (sources || []).map(source => {
       const preview = firstPreviewBySource.get(source.id);
-      const tags = visibleLibraryTags(source);
+      const thumbPath = source?.source_path ? source.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
       return {
-        id: source.id,
-        title: source.title,
+        source,
+        preview,
+        url: preview ? (state.libraryPreviewUrls[preview.preview_path] || '') : '',
+        thumbUrl: state.libraryPreviewUrls[thumbPath] || ''
+      };
+    }).filter(function(item) {
+      return isUsableLibraryPreviewItem(item) && visibleLibraryTags(item.source).includes('模板');
+    });
+    const uniqueItems = new Map();
+    items.forEach(function(item) {
+      const key = libraryDisplayKey(item);
+      const previous = uniqueItems.get(key);
+      if (!previous || libraryDisplayTimestamp(item) >= libraryDisplayTimestamp(previous)) uniqueItems.set(key, item);
+    });
+    return Array.from(uniqueItems.values()).map(item => {
+      const tags = visibleLibraryTags(item.source);
+      return {
+        id: item.source.id,
+        title: item.source.title,
         category: tags.includes('社媒物料') ? '社媒物料' : (tags.includes('C端物料') ? 'C端物料' : ''),
-        previewUrl: preview ? (state.libraryPreviewUrls[preview.preview_path] || '') : '',
-        width: preview?.width || 1200,
-        height: preview?.height || 800,
-        updatedAt: source.updated_at || source.created_at
+        previewUrl: item.url,
+        width: item.preview?.width || 1200,
+        height: item.preview?.height || 800,
+        updatedAt: item.source.updated_at || item.source.created_at
       };
     });
   }
@@ -2070,41 +2137,7 @@
     const status = document.getElementById('library-status');
     const grid = document.getElementById('library-grid');
     if (!grid || !status) return;
-    const sourcesById = new Map(state.librarySources.map(source => [source.id, source]));
-    const query = state.libraryFilters.query.toLowerCase();
-    const filteredItems = state.libraryPreviews
-      .map(function(preview) {
-        var src = sourcesById.get(preview.source_file_id);
-        var url = preview.staticUrl || state.libraryPreviewUrls[preview.preview_path] || '';
-        var thumbPath = (src && src.source_path) ? src.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
-        var thumbUrl = state.libraryPreviewUrls[thumbPath] || '';
-        return { preview: preview, source: src, url: url, thumbUrl: thumbUrl };
-      })
-      .filter(item => item.source)
-      .filter(item => {
-        const kind = libraryKindOfSource(item.source);
-        return state.libraryFilters.kind === 'all' || state.libraryFilters.kind === kind;
-      })
-      .filter(item => {
-        return selectedLibraryTagValues().every(tag => visibleLibraryTags(item.source).includes(tag));
-      })
-      .filter(item => !state.libraryFilters.favorites || state.libraryFavorites.has(item.preview.id))
-      .filter(item => !state.libraryFilters.selectedCountries || !state.libraryFilters.selectedCountries.length || state.libraryFilters.selectedCountries.includes(item.source.country_id))
-      .filter(item => !state.libraryFilters.selectedActivities || !state.libraryFilters.selectedActivities.length || state.libraryFilters.selectedActivities.includes(item.source.activity_id))
-      .filter(item => {
-        if (!query) return true;
-        const text = [
-          item.source.title,
-          item.source.source_filename,
-          item.preview.preview_filename,
-          libraryKindLabel(libraryKindOfSource(item.source)),
-          optionNameById(item.source.country_id),
-          optionNameById(item.source.activity_id),
-          optionNameById(item.source.category_id),
-          ...visibleLibraryTags(item.source)
-        ].join(' ').toLowerCase();
-        return text.includes(query);
-      });
+    const filteredItems = getLibraryDisplayItems().filter(libraryItemMatchesActiveFilters);
     state.libraryItems = filteredItems;
     var visibleItems = state.libraryItems.slice(0, state.libraryVisibleLimit);
     // 按宽高比交替排列，每4张一组，保持新图优先
@@ -3978,7 +4011,7 @@
       .filter(tag => tag !== '资源位模板')
       .filter(Boolean);
     if (libraryKindOfSource(source) !== 'template') return [...new Set(tags)];
-    const isComponent = tags.includes('组件');
+    const isComponent = libraryComponentTags(source);
     const topLevel = isComponent ? '组件' : '模板';
     return [...new Set([topLevel, ...tags])];
   }
@@ -3990,8 +4023,8 @@
   }
 
   function countLibraryKinds() {
-    return state.librarySources.reduce((counts, source) => {
-      const kind = libraryKindOfSource(source);
+    return getLibraryDisplayItems().reduce((counts, item) => {
+      const kind = libraryKindOfSource(item.source);
       counts[kind] = (counts[kind] || 0) + 1;
       return counts;
     }, { gallery: 0, source: 0, template: 0 });

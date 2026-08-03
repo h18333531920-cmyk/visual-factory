@@ -1517,6 +1517,14 @@
             box-shadow: 0 1px 2px rgba(16, 19, 24, 0.18);
         }
 
+        .asset-library-card .asset-tab small,
+        .asset-library-card .asset-taxonomy-filter small {
+            color: inherit;
+            font-size: 10px;
+            font-weight: 700;
+            opacity: 0.66;
+        }
+
         .asset-library-card .asset-taxonomy-filter {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3890,7 +3898,59 @@
         if(!mount) return;
         const categories = ASSET_LIBRARY_TAXONOMY[currentAssetTab] || [];
         mount.dataset.mode = currentAssetTab;
-        mount.innerHTML = categories.map(category => `<button type="button" class="${currentAssetCategory === category ? 'active' : ''}" onclick="switchAssetCategory('${category}')">${category}</button>`).join('');
+        refreshAssetTabCounts();
+        mount.innerHTML = categories.map(category => {
+            const count = getAssetLibraryCount(currentAssetTab, category);
+            return `<button type="button" class="${currentAssetCategory === category ? 'active' : ''}" onclick="switchAssetCategory('${category}')"><span>${category}</span><small> · ${count}</small></button>`;
+        }).join('');
+    }
+
+    function normalizeAssetLibraryText(value) {
+        return String(value || '').trim().toLocaleLowerCase().replace(/\s+/g, ' ').replace(/[\-_]+/g, ' ');
+    }
+    function templateLibraryKey(item) {
+        const title = normalizeAssetLibraryText(item?.title || item?.name);
+        const category = item?.category || item?.libraryCategory || '';
+        return title ? `template:${category}:${title}` : `template:${item?.id || Math.random()}`;
+    }
+    function getVisibleTemplateLibraryItems(category = '全部') {
+        const items = [
+            ...cloudTemplateAssets
+                .filter(item => isUsableTemplatePreviewUrl(item?.previewUrl))
+                .map(item => ({ source: 'cloud', item, title: item.title, category: item.category || '', previewUrl: item.previewUrl, updatedAt: item.updatedAt || '' })),
+            ...presetLibrary
+                .map(item => ({ source: 'local', item, title: item.name, category: assetTemplateCategory(item), previewUrl: templatePreviewUrl(item), updatedAt: item.updatedAt || item.createdAt || '' }))
+                .filter(entry => Boolean(entry.previewUrl))
+        ];
+        const unique = new Map();
+        items.forEach(entry => {
+            const key = templateLibraryKey({ id: entry.item.id, title: entry.title, category: entry.category });
+            const previous = unique.get(key);
+            const previousTime = new Date(previous?.updatedAt || 0).getTime() || 0;
+            const entryTime = new Date(entry.updatedAt || 0).getTime() || 0;
+            if(!previous || entryTime >= previousTime) unique.set(key, entry);
+        });
+        return Array.from(unique.values()).filter(entry => matchesAssetCategory(category, entry.category));
+    }
+    function getVisibleComponentLibraryItems(category = '全部') {
+        const entries = [];
+        tagPresetLibrary.forEach(item => entries.push({ category: '标签', item }));
+        arcColorPresets.forEach(item => entries.push({ category: '品牌圆弧', item }));
+        logoAssets.filter(item => isUsableTemplatePreviewUrl(item?.src)).forEach(item => entries.push({ category: assetComponentCategoryForLogo(item), item }));
+        referenceElements.filter(item => isUsableTemplatePreviewUrl(item?.src)).forEach(item => entries.push({ category: assetComponentCategoryForReference(item), item }));
+        return entries.filter(entry => matchesAssetCategory(category, entry.category));
+    }
+    function getAssetLibraryCount(tab, category = '全部') {
+        return tab === 'component'
+            ? getVisibleComponentLibraryItems(category).length
+            : getVisibleTemplateLibraryItems(category).length;
+    }
+    function refreshAssetTabCounts() {
+        document.querySelectorAll('.asset-tab').forEach(button => {
+            const tab = button.dataset.assetTab === 'component' ? 'component' : 'template';
+            const label = tab === 'component' ? '组件' : '模板';
+            button.innerHTML = `<span>${label}</span><small> · ${getAssetLibraryCount(tab)}</small>`;
+        });
     }
     function refreshSaveActiveAssetButton() {
         const btn = document.getElementById('save-active-asset-btn');
@@ -3982,14 +4042,10 @@
         list.innerHTML = '';
         renderAssetTaxonomyFilter();
         if(currentAssetTab === 'template') {
-            const localItems = presetLibrary
-                .filter(item => matchesAssetCategory(currentAssetCategory, assetTemplateCategory(item)))
-                .filter(item => Boolean(templatePreviewUrl(item)));
-            const cloudItems = cloudTemplateAssets
-                .filter(item => matchesAssetCategory(currentAssetCategory, item.category || ''))
-                .filter(item => isUsableTemplatePreviewUrl(item.previewUrl));
-            if(localItems.length === 0 && cloudItems.length === 0) { list.innerHTML = `<div class="asset-empty">暂无可预览模板。点击“保存套组”可保存三画板模板。</div>`; return; }
-            cloudItems.forEach(item => {
+            const templateItems = getVisibleTemplateLibraryItems(currentAssetCategory);
+            if(templateItems.length === 0) { list.innerHTML = `<div class="asset-empty">暂无可预览模板。点击“保存套组”可保存三画板模板。</div>`; return; }
+            templateItems.filter(entry => entry.source === 'cloud').forEach(entry => {
+                const item = entry.item;
                 list.appendChild(createAssetItem({
                     title: item.title,
                     meta: `云端模板${item.category ? ` · ${item.category}` : ''}`,
@@ -3999,7 +4055,8 @@
                     onApply: () => openCloudTemplateFromParent(item.id)
                 }));
             });
-            localItems.forEach(p => {
+            templateItems.filter(entry => entry.source === 'local').forEach(entry => {
+                const p = entry.item;
                 const isPack = p.kind === 'pack';
                 const meta = isPack ? `三画板套组 · ${getFixedArtboardPresets().map(item => p.artboards?.[item.id]?.layers?.length || 0).join('/')} 图层` : `${p.size} · ${p.elements?.length || 0} 图层`;
                 list.appendChild(createAssetItem({ title: p.name, meta, asset: p, type: isPack ? 'pack' : 'layout', current: isPack && p.id === activeTemplatePackId, onApply: () => applyLayoutPreset(p.id), onDelete: () => deleteLayoutPreset(p.id) }));
