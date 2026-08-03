@@ -106,15 +106,22 @@ async function storageFetch(env, target, options = {}) {
   });
 }
 
-export async function onRequestGet({ env }) {
+function assetRevision(response) {
+  return response.headers.get('etag') || response.headers.get('last-modified') || '';
+}
+
+export async function onRequestGet({ request, env }) {
   try {
     const target = getStorageTarget(env);
-    const response = await storageFetch(env, target, { method: 'GET' });
-    const text = await response.text();
+    const metadataOnly = new URL(request.url).searchParams.get('meta') === '1';
+    const response = await storageFetch(env, target, { method: metadataOnly ? 'HEAD' : 'GET' });
     if (response.status === 404 || response.status === 400) {
-      return json({ success: true, exists: false, ...normalizeAssetPayload({}) });
+      return json(metadataOnly
+        ? { success: true, exists: false, revision: '' }
+        : { success: true, exists: false, ...normalizeAssetPayload({}) });
     }
     if (!response.ok) {
+      const text = await response.text();
       let data = {};
       try {
         data = text ? JSON.parse(text) : {};
@@ -123,6 +130,10 @@ export async function onRequestGet({ env }) {
       }
       return json({ success: false, message: data?.message || data?.error || data?.raw || `Storage ${response.status}` }, 500);
     }
+    if (metadataOnly) {
+      return json({ success: true, exists: true, revision: assetRevision(response) });
+    }
+    const text = await response.text();
     let payload = {};
     try {
       payload = text ? JSON.parse(text) : {};

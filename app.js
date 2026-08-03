@@ -180,6 +180,7 @@
     libraryDataLoaded: false,
     libraryDataPromise: null,
     sharedStaticPollTimer: null,
+    sharedStaticRevision: '',
     libraryRecoveryLabel: '',
     libraryVisibleLimit: LIBRARY_RENDER_STEP,
     libraryMultiSelect: false,
@@ -1668,16 +1669,34 @@
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload.success === false || payload.exists === false) {
         rebuildLibraryWithSharedStatic([]);
+        state.sharedStaticRevision = '';
         return;
       }
       rebuildLibraryWithSharedStatic(makeSharedStaticLibraryRecords(payload));
+      await updateSharedStaticRevision();
     } catch (error) {
       console.warn('Shared static asset bridge unavailable:', error);
       rebuildLibraryWithSharedStatic([]);
     }
   }
 
-  async function refreshSharedStaticLibraryItems() {
+  async function updateSharedStaticRevision() {
+    try {
+      const response = await fetch(`${SHARED_STATIC_ASSETS_API}?meta=1`, { cache: 'no-store' });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && payload.success !== false) state.sharedStaticRevision = payload.revision || '';
+      return state.sharedStaticRevision;
+    } catch (_error) {
+      return state.sharedStaticRevision;
+    }
+  }
+
+  async function refreshSharedStaticLibraryItems(options = {}) {
+    if (!options.force) {
+      const previousRevision = state.sharedStaticRevision;
+      const nextRevision = await updateSharedStaticRevision();
+      if (nextRevision && previousRevision && nextRevision === previousRevision) return false;
+    }
     await loadSharedStaticLibraryItems();
     if (state.route !== 'library') return;
     const tagRows = document.getElementById('library-tag-rows');
@@ -1686,6 +1705,7 @@
       wireLibraryTagButtons();
     }
     renderLibraryGrid();
+    return true;
   }
 
   function startSharedStaticLibraryPolling() {
@@ -1763,7 +1783,7 @@
     if (event.origin !== location.origin || !event.data) return;
     const data = event.data;
     if (data.type === 'vf:shared-static-assets-updated') {
-      await refreshSharedStaticLibraryItems();
+      await refreshSharedStaticLibraryItems({ force: true });
       return;
     }
     if (data.type === 'vf:request-cloud-template-list') {

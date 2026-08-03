@@ -1765,6 +1765,7 @@
     const SHARED_ASSETS_API = '/api/static-assets';
     let sharedAssetSaveTimer = null;
     let sharedAssetRefreshTimer = null;
+    let sharedAssetRevision = '';
     function getGlobalSnapshot() { return { tagColorPresets, arcColorPresets, keywordTags, presetLibrary, tagPresetLibrary, referenceElements, logoAssets }; }
     function applyGlobalData(data = {}) {
         if(data.tagColorPresets) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
@@ -1871,6 +1872,7 @@
         });
         const data = await res.json().catch(() => ({}));
         if(!res.ok || data.success === false) throw new Error(data.message || '公共资产同步失败');
+        sharedAssetRevision = '';
         if(window.parent && window.parent !== window) {
             window.parent.postMessage({ type: 'vf:shared-static-assets-updated', updatedAt: data.updatedAt || new Date().toISOString() }, location.origin);
         }
@@ -1882,6 +1884,7 @@
             const payload = await res.json().catch(() => ({}));
             if(!res.ok || payload.success === false) return false;
             if(payload.exists === false) {
+                sharedAssetRevision = '';
                 if(hasLocalSharedAssets()) queueSharedAssetSave(300);
                 return false;
             }
@@ -1903,12 +1906,33 @@
             renderAssetLibrary();
             renderProperties();
             renderCanvas();
+            await updateSharedAssetRevision();
             if(shouldBackfillCloud) queueSharedAssetSave(300);
             return true;
         } catch(error) {
             console.warn('公共资产读取失败:', error);
             return false;
         }
+    }
+    async function updateSharedAssetRevision() {
+        try {
+            const res = await fetch(`${SHARED_ASSETS_API}?meta=1`, { headers: getAuthHeaders(), cache: 'no-store' });
+            const payload = await res.json().catch(() => ({}));
+            if(res.ok && payload.success !== false) sharedAssetRevision = payload.revision || '';
+            return sharedAssetRevision;
+        } catch(error) {
+            return sharedAssetRevision;
+        }
+    }
+    async function refreshSharedAssetsIfChanged() {
+        const previousRevision = sharedAssetRevision;
+        const nextRevision = await updateSharedAssetRevision();
+        if(nextRevision && previousRevision && nextRevision === previousRevision) return false;
+        if(nextRevision && !previousRevision) {
+            sharedAssetRevision = nextRevision;
+            return false;
+        }
+        return loadSharedAssetsFromCloud();
     }
 
     function initDB() { return new Promise((resolve, reject) => { const req = indexedDB.open(DB_NAME, 4); req.onupgradeneeded = e => { const db = e.target.result; if(!db.objectStoreNames.contains('fonts')) { db.createObjectStore('fonts', { keyPath: 'name' }); } if(!db.objectStoreNames.contains('logos')) { db.createObjectStore('logos', { keyPath: 'id' }); } if(!db.objectStoreNames.contains('referenceElements')) { db.createObjectStore('referenceElements', { keyPath: 'id' }); } if(!db.objectStoreNames.contains('state')) { db.createObjectStore('state', { keyPath: 'key' }); }}; req.onsuccess = e => resolve(e.target.result); req.onerror = e => reject(e.target.error); }); }
@@ -5102,7 +5126,7 @@
         requestCloudTemplateAssets();
         if(!sharedAssetRefreshTimer) {
             sharedAssetRefreshTimer = window.setInterval(() => {
-                loadSharedAssetsFromCloud();
+                refreshSharedAssetsIfChanged();
                 requestCloudTemplateAssets();
             }, 15000);
         }
