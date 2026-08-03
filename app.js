@@ -109,7 +109,8 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260731-clear-layers-v1';
+  const TOOL_UI_VERSION = '20260803-unified-cloud-library-v1';
+  const SHARED_STATIC_ASSETS_API = '/api/static-assets';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -150,10 +151,10 @@
       }
     },
     template: {
-      tag1: ['资源位模板', '组件'],
+      tag1: ['模板', '组件'],
       tag2ByTag1: {
-        '资源位模板': ['开机海报', '弹窗', '头图', 'banner'],
-        '组件': ['标签', '场景']
+        '模板': ['社媒物料', 'C端物料'],
+        '组件': ['标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材']
       }
     }
   };
@@ -168,6 +169,8 @@
     activeFrame: null,
     toolFrames: {},
     libraryOptions: [],
+    libraryDatabaseSources: [],
+    libraryDatabasePreviews: [],
     librarySources: [],
     libraryPreviews: [],
     libraryItems: [],
@@ -176,6 +179,7 @@
     librarySelectedPreviewId: '',
     libraryDataLoaded: false,
     libraryDataPromise: null,
+    sharedStaticPollTimer: null,
     libraryRecoveryLabel: '',
     libraryVisibleLimit: LIBRARY_RENDER_STEP,
     libraryMultiSelect: false,
@@ -252,6 +256,9 @@
     });
     window.addEventListener('hashchange', () => {
       navigate((location.hash || '#home').slice(1));
+    });
+    window.addEventListener('message', event => {
+      void handleSharedLibraryMessage(event);
     });
     // 全局拖拽上传：从桌面拖图片到页面任意位置，自动弹出上传弹窗
     var dropOverlay = document.createElement('div');
@@ -1156,7 +1163,7 @@
     document.querySelectorAll('[data-library-kind]').forEach(button => {
       button.addEventListener('click', () => {
         state.libraryFilters.kind = button.dataset.libraryKind || 'all';
-        state.libraryFilters.tag1 = 'all';
+        state.libraryFilters.tag1 = state.libraryFilters.kind === 'template' ? '模板' : 'all';
         state.libraryFilters.tag2 = 'all';
         state.libraryFilters.tag3 = 'all';
         state.libraryFilters.tag4 = 'all';
@@ -1363,7 +1370,7 @@
     // 重新过滤
     state.libraryItems = state.libraryPreviews.map(function(preview) {
       var s = sourcesById.get(preview.source_file_id);
-      var url = state.libraryPreviewUrls[preview.preview_path] || '';
+      var url = preview.staticUrl || state.libraryPreviewUrls[preview.preview_path] || '';
       var tp = (s && s.source_path) ? s.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
       return { preview: preview, source: s, url: url, thumbUrl: state.libraryPreviewUrls[tp] || '' };
     }).filter(function(item) {
@@ -1524,10 +1531,13 @@
         var pval = state.libraryFilters[pkey];
         if (pval && pval !== 'all') parentFilters[pkey] = pval;
       }
+      const values = kind === 'template' && row.key === 'tag1'
+        ? row.values
+        : ['all', ...row.values];
       return `
         <div class="library-tag-row">
           <div>
-            ${['all', ...row.values].map(value => {
+            ${values.map(value => {
               const label = value === 'all' ? (state.lang === 'zh' ? '全部' : 'All') : value;
               const active = (state.libraryFilters[row.key] || 'all') === value;
               const count = value === 'all' ? countKindSources(kind, parentFilters) : countTagOccurrences(kind, value, parentFilters);
@@ -1579,6 +1589,202 @@
     return rows;
   }
 
+  function isSharedStaticSource(source) {
+    return Boolean(source?.staticShared && source?.staticPayload);
+  }
+
+  function sharedStaticPreview(title, accent = '#16a34a') {
+    const label = escapeHtml(String(title || '云端素材').slice(0, 32));
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><rect width="1200" height="800" fill="#f8fafc"/><rect x="72" y="72" width="1056" height="656" rx="36" fill="#fff" stroke="#e2e8f0" stroke-width="4"/><rect x="132" y="140" width="250" height="42" rx="21" fill="${accent}" opacity=".16"/><rect x="132" y="246" width="620" height="68" rx="20" fill="#0f172a" opacity=".92"/><rect x="132" y="346" width="440" height="34" rx="17" fill="#e2e8f0"/><circle cx="940" cy="334" r="112" fill="${accent}" opacity=".9"/><path d="M780 574c112-132 228-132 348 0v88H780z" fill="${accent}" opacity=".22"/><text x="132" y="292" font-family="Arial, sans-serif" font-size="46" font-weight="700" fill="#fff">${label}</text><text x="132" y="630" font-family="Arial, sans-serif" font-size="30" fill="#64748b">GCC Design shared cloud library</text></svg>`;
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  }
+
+  function staticComponentCategoryForReference(item) {
+    return item?.libraryCategory === '背景' || item?.category === 'background' ? '背景' : '其他素材';
+  }
+
+  function staticComponentCategoryForLogo(item) {
+    if (item?.libraryCategory === 'KIKI') return 'KIKI';
+    return /kiki/i.test(String(item?.name || '')) ? 'KIKI' : 'LOGO';
+  }
+
+  function makeSharedStaticLibraryRecords(payload = {}) {
+    const data = payload.data || {};
+    const now = payload.updatedAt || new Date().toISOString();
+    const records = [];
+    const add = (group, item, category, type, imageUrl, width = 1200, height = 800) => {
+      if (!item?.id) return;
+      const sourceId = `shared-static:${group}:${item.id}`;
+      const title = item.name || item.title || '未命名素材';
+      const source = {
+        id: sourceId,
+        title,
+        tags: ['vf:kind:template', group, category].filter(Boolean),
+        visibility: 'all',
+        source_path: '',
+        source_filename: `${title}.json`,
+        source_ext: 'json',
+        source_size_bytes: 0,
+        created_at: item.createdAt || now,
+        updated_at: item.updatedAt || item.createdAt || now,
+        staticShared: true,
+        staticPayload: { type, asset: item }
+      };
+      const preview = {
+        id: `${sourceId}:preview`,
+        source_file_id: sourceId,
+        preview_path: '',
+        preview_filename: `${title}-preview.png`,
+        width,
+        height,
+        sort_order: 10,
+        created_at: source.created_at,
+        staticUrl: imageUrl || sharedStaticPreview(title, group === '模板' ? '#0ea5e9' : '#7c3aed')
+      };
+      records.push({ source, preview });
+    };
+
+    (Array.isArray(data.presetLibrary) ? data.presetLibrary : []).forEach(item => {
+      const category = ['社媒物料', 'C端物料'].includes(item.libraryCategory) ? item.libraryCategory : '';
+      add('模板', item, category, 'layout');
+    });
+    (Array.isArray(data.tagPresetLibrary) ? data.tagPresetLibrary : []).forEach(item => add('组件', item, '标签', 'tag'));
+    (Array.isArray(data.arcColorPresets) ? data.arcColorPresets : []).forEach(item => add('组件', item, '品牌圆弧', 'arc'));
+    (Array.isArray(payload.logos) ? payload.logos : []).forEach(item => add('组件', item, staticComponentCategoryForLogo(item), 'logo', item.src));
+    (Array.isArray(data.referenceElements) ? data.referenceElements : []).forEach(item => add('组件', item, staticComponentCategoryForReference(item), 'reference', item.src));
+    return records;
+  }
+
+  function rebuildLibraryWithSharedStatic(records = []) {
+    const sources = [...(state.libraryDatabaseSources || []), ...records.map(item => item.source)];
+    const previews = [...(state.libraryDatabasePreviews || []), ...records.map(item => item.preview)];
+    state.librarySources = sources;
+    state.libraryPreviews = previews;
+  }
+
+  async function loadSharedStaticLibraryItems() {
+    try {
+      const response = await fetch(SHARED_STATIC_ASSETS_API, { cache: 'no-store' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.success === false || payload.exists === false) {
+        rebuildLibraryWithSharedStatic([]);
+        return;
+      }
+      rebuildLibraryWithSharedStatic(makeSharedStaticLibraryRecords(payload));
+    } catch (error) {
+      console.warn('Shared static asset bridge unavailable:', error);
+      rebuildLibraryWithSharedStatic([]);
+    }
+  }
+
+  async function refreshSharedStaticLibraryItems() {
+    await loadSharedStaticLibraryItems();
+    if (state.route !== 'library') return;
+    const tagRows = document.getElementById('library-tag-rows');
+    if (tagRows) {
+      tagRows.innerHTML = renderLibraryTagRows(state.libraryFilters.kind || 'all');
+      wireLibraryTagButtons();
+    }
+    renderLibraryGrid();
+  }
+
+  function startSharedStaticLibraryPolling() {
+    if (state.sharedStaticPollTimer) return;
+    state.sharedStaticPollTimer = window.setInterval(() => {
+      if (state.route === 'library' && state.libraryDataLoaded) void refreshSharedStaticLibraryItems();
+    }, 15000);
+  }
+
+  async function listCloudStaticTemplatesForEditor() {
+    if (!state.supabase) return [];
+    const { data: sources, error } = await state.supabase
+      .from('vf_source_files')
+      .select('id,title,tags,source_path,source_filename,source_ext,created_at,updated_at')
+      .contains('tags', [LIBRARY_KIND_MARKERS.template])
+      .order('updated_at', { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    const ids = (sources || []).map(item => item.id);
+    if (!ids.length) return [];
+    const { data: previews, error: previewError } = await state.supabase
+      .from('vf_asset_previews')
+      .select('id,source_file_id,preview_path,preview_filename,width,height,sort_order')
+      .in('source_file_id', ids)
+      .order('sort_order', { ascending: true });
+    if (previewError) throw previewError;
+    const firstPreviewBySource = new Map();
+    (previews || []).forEach(preview => {
+      if (!firstPreviewBySource.has(preview.source_file_id)) firstPreviewBySource.set(preview.source_file_id, preview);
+    });
+    const paths = [...firstPreviewBySource.values()].map(item => item.preview_path).filter(Boolean);
+    await signLibraryPreviewUrls(paths);
+    return (sources || []).map(source => {
+      const preview = firstPreviewBySource.get(source.id);
+      const tags = visibleLibraryTags(source);
+      return {
+        id: source.id,
+        title: source.title,
+        category: tags.includes('社媒物料') ? '社媒物料' : (tags.includes('C端物料') ? 'C端物料' : ''),
+        previewUrl: preview ? (state.libraryPreviewUrls[preview.preview_path] || '') : '',
+        width: preview?.width || 1200,
+        height: preview?.height || 800,
+        updatedAt: source.updated_at || source.created_at
+      };
+    });
+  }
+
+  async function openCloudTemplateInStaticEditor(sourceId) {
+    if (!state.supabase) throw new Error(state.lang === 'zh' ? '云端模板需要登录后使用。' : 'Cloud templates require sign-in.');
+    const { data: source, error } = await state.supabase
+      .from('vf_source_files')
+      .select('id,title,tags,source_path,source_filename,source_ext')
+      .eq('id', sourceId)
+      .single();
+    if (error) throw error;
+    if (libraryKindOfSource(source) !== 'template') throw new Error(state.lang === 'zh' ? '这不是静态模板。' : 'This is not a Static template.');
+    const item = { source, preview: { id: '', source_file_id: source.id } };
+    const snapshot = await loadLibraryTemplateSnapshot(item);
+    validateProjectSnapshot(snapshot, 'static');
+    await waitForToolImporter();
+    const result = await state.activeFrame.contentWindow.VF_IMPORT_PROJECT(snapshot);
+    if (!result?.success) throw new Error(result?.message || (state.lang === 'zh' ? '模板打开失败。' : 'Failed to open template.'));
+  }
+
+  function notifyStaticTemplateLibraryChanged() {
+    try {
+      const frame = state.toolFrames.static || state.activeFrame;
+      frame?.contentWindow?.postMessage({ type: 'vf:cloud-template-library-updated' }, location.origin);
+    } catch (error) {
+      console.warn('Static template library notification failed:', error);
+    }
+  }
+
+  async function handleSharedLibraryMessage(event) {
+    if (event.origin !== location.origin || !event.data) return;
+    const data = event.data;
+    if (data.type === 'vf:shared-static-assets-updated') {
+      await refreshSharedStaticLibraryItems();
+      return;
+    }
+    if (data.type === 'vf:request-cloud-template-list') {
+      try {
+        const items = await listCloudStaticTemplatesForEditor();
+        event.source?.postMessage({ type: 'vf:cloud-template-list', requestId: data.requestId, items }, location.origin);
+      } catch (error) {
+        event.source?.postMessage({ type: 'vf:cloud-template-list', requestId: data.requestId, items: [], error: error.message }, location.origin);
+      }
+      return;
+    }
+    if (data.type === 'vf:open-cloud-template') {
+      try {
+        await openCloudTemplateInStaticEditor(data.sourceId);
+        event.source?.postMessage({ type: 'vf:open-cloud-template-result', requestId: data.requestId, success: true }, location.origin);
+      } catch (error) {
+        event.source?.postMessage({ type: 'vf:open-cloud-template-result', requestId: data.requestId, success: false, message: error.message }, location.origin);
+      }
+    }
+  }
+
   async function loadLibraryData() {
     const status = document.getElementById('library-status');
     if (!state.localPreview && state.libraryDataLoaded) {
@@ -1606,6 +1812,8 @@
         await loadLibraryFavorites();
         await loadLibrarySources();
         await loadLibraryPreviews();
+        await loadSharedStaticLibraryItems();
+        startSharedStaticLibraryPolling();
         state.libraryDataLoaded = true;
       })();
       await state.libraryDataPromise;
@@ -1693,16 +1901,19 @@
       sources.push(...batch);
       if (batch.length < LIBRARY_SOURCE_PAGE_SIZE) break;
     }
+    state.libraryDatabaseSources = sources;
     state.librarySources = sources;
   }
 
   async function loadLibraryPreviews() {
-    if (state.librarySources.length === 0) {
+    const databaseSources = state.libraryDatabaseSources || state.librarySources;
+    if (databaseSources.length === 0) {
+      state.libraryDatabasePreviews = [];
       state.libraryPreviews = [];
       state.libraryItems = [];
       return;
     }
-    const ids = state.librarySources.map(item => item.id);
+    const ids = databaseSources.map(item => item.id);
     const previews = [];
     for (const idBatch of chunkArray(ids, SUPABASE_IN_BATCH_SIZE)) {
       const { data, error } = await state.supabase
@@ -1713,14 +1924,15 @@
       if (error) throw error;
       previews.push(...(data || []));
     }
-    const sourceOrder = new Map(state.librarySources.map((source, index) => [source.id, index]));
-    state.libraryPreviews = previews.sort((a, b) => {
+    const sourceOrder = new Map(databaseSources.map((source, index) => [source.id, index]));
+    state.libraryDatabasePreviews = previews.sort((a, b) => {
       const sourceDiff = (sourceOrder.get(a.source_file_id) ?? 999999) - (sourceOrder.get(b.source_file_id) ?? 999999);
       if (sourceDiff) return sourceDiff;
       const sortDiff = (a.sort_order || 0) - (b.sort_order || 0);
       if (sortDiff) return sortDiff;
       return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     });
+    state.libraryPreviews = [...state.libraryDatabasePreviews];
   }
 
   async function signLibraryPreviewUrls(paths) {
@@ -1768,7 +1980,7 @@
       if (!card) return;
       var img = card.querySelector('.library-thumb img');
       if (!img) return;
-      var fullUrl = state.libraryPreviewUrls[item.preview.preview_path] || '';
+      var fullUrl = item.preview.staticUrl || state.libraryPreviewUrls[item.preview.preview_path] || '';
       var src = (state.librarySources || []).find(function(s) { return s.id === item.preview.source_file_id; });
       var thumbPath = (src && src.source_path) ? src.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
       var thumbUrl = state.libraryPreviewUrls[thumbPath] || '';
@@ -1787,7 +1999,7 @@
     // 同步更新 state.libraryItems 里的 url，供详情弹窗等使用
     if (state.libraryItems) {
       state.libraryItems.forEach(function(libItem) {
-        libItem.url = state.libraryPreviewUrls[libItem.preview.preview_path] || libItem.url;
+        libItem.url = libItem.preview.staticUrl || state.libraryPreviewUrls[libItem.preview.preview_path] || libItem.url;
         var s = (state.librarySources || []).find(function(s) { return s.id === libItem.preview.source_file_id; });
         var tp = (s && s.source_path) ? s.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
         libItem.thumbUrl = state.libraryPreviewUrls[tp] || libItem.thumbUrl;
@@ -1824,7 +2036,7 @@
     const filteredItems = state.libraryPreviews
       .map(function(preview) {
         var src = sourcesById.get(preview.source_file_id);
-        var url = state.libraryPreviewUrls[preview.preview_path] || '';
+        var url = preview.staticUrl || state.libraryPreviewUrls[preview.preview_path] || '';
         var thumbPath = (src && src.source_path) ? src.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
         var thumbUrl = state.libraryPreviewUrls[thumbPath] || '';
         return { preview: preview, source: src, url: url, thumbUrl: thumbUrl };
@@ -2051,7 +2263,8 @@
     const source = item.source;
     const preview = item.preview;
     const kind = libraryKindOfSource(source);
-    const favorite = state.libraryFavorites.has(preview.id);
+    const sharedStatic = isSharedStaticSource(source);
+    const favorite = !sharedStatic && state.libraryFavorites.has(preview.id);
     const canManage = canManageSource(source);
     const canSource = canDownloadSource();
     const tags = visibleLibraryTags(source).slice(0, 4);
@@ -2067,7 +2280,7 @@
     const quickUse = kind === 'gallery'
       ? `<button type="button" data-action="use-static">${state.lang === 'zh' ? '静态' : 'Static'}</button><button type="button" data-action="use-dynamic">${state.lang === 'zh' ? '动态' : 'Motion'}</button>`
       : kind === 'template'
-        ? `<button type="button" data-action="use-static">${state.lang === 'zh' ? '打开' : 'Open'}</button>`
+        ? `<button type="button" data-action="use-static">${state.lang === 'zh' ? (sharedStatic ? '添加' : '打开') : (sharedStatic ? 'Use' : 'Open')}</button>`
         : '';
     return `
       <article class="library-card ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
@@ -2075,8 +2288,8 @@
           <div class="multi-check"></div>
           <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded')" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
           <div class="library-card-icons">
-            <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
-            <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}">↓</button>
+            ${sharedStatic ? '' : `<button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>`}
+            ${sharedStatic ? '' : `<button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}">↓</button>`}
           </div>
           <div class="library-card-overlay">
             <div>
@@ -2085,8 +2298,8 @@
             </div>
             <div class="library-card-actions">
               ${quickUse}
-              <button type="button" data-action="download-preview">${previewLabel}</button>
-              ${canSource && kind !== 'gallery' ? `<button type="button" data-action="download-source">${sourceLabel}</button>` : ''}
+              ${sharedStatic ? '' : `<button type="button" data-action="download-preview">${previewLabel}</button>`}
+              ${!sharedStatic && canSource && kind !== 'gallery' ? `<button type="button" data-action="download-source">${sourceLabel}</button>` : ''}
               ${canManage ? `<button type="button" data-action="edit">${state.lang === 'zh' ? '编辑' : 'Edit'}</button><button class="danger" type="button" data-action="delete">${state.lang === 'zh' ? '删除' : 'Delete'}</button>` : ''}
             </div>
           </div>
@@ -2163,12 +2376,13 @@
     var source = item.source, preview = item.preview;
     var kind = libraryKindOfSource(source);
     var canManage = canManageSource(source);
+    var sharedStatic = isSharedStaticSource(source);
     var lang = state.lang;
     var items = [];
     items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="4.5"/><circle cx="7" cy="7" r="2"/><line x1="10.5" y1="10.5" x2="15" y2="15"/></svg>', label: lang === 'zh' ? '查看详情' : 'View details', action: 'detail' });
-    items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 11.5V14h2.5L13 5.5 10.5 3 2 11.5z"/></svg>', label: lang === 'zh' ? '编辑信息' : 'Edit', action: 'edit' });
-    items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="2" x2="8" y2="13"/><polyline points="4 9 8 13 12 9"/><line x1="3" y1="15" x2="13" y2="15"/></svg>', label: kind === 'gallery' ? (lang === 'zh' ? '下载原图' : 'Download image') : (lang === 'zh' ? '下载预览图' : 'Download preview'), action: 'download-preview' });
-    if (kind !== 'gallery' && canDownloadSource()) {
+    if (canManage) items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 11.5V14h2.5L13 5.5 10.5 3 2 11.5z"/></svg>', label: lang === 'zh' ? '编辑信息' : 'Edit', action: 'edit' });
+    if (!sharedStatic) items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="2" x2="8" y2="13"/><polyline points="4 9 8 13 12 9"/><line x1="3" y1="15" x2="13" y2="15"/></svg>', label: kind === 'gallery' ? (lang === 'zh' ? '下载原图' : 'Download image') : (lang === 'zh' ? '下载预览图' : 'Download preview'), action: 'download-preview' });
+    if (!sharedStatic && kind !== 'gallery' && canDownloadSource()) {
       items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="2" x2="8" y2="13"/><polyline points="4 9 8 13 12 9"/><line x1="3" y1="15" x2="13" y2="15"/></svg>', label: kind === 'template' ? (lang === 'zh' ? '下载模板' : 'Download template') : (lang === 'zh' ? '下载源文件' : 'Download source'), action: 'download-source' });
     }
     if (kind === 'gallery') {
@@ -2239,6 +2453,11 @@
   }
 
   function toggleMultiCard(previewId) {
+    const item = libraryItemByPreviewId(previewId);
+    if (isSharedStaticSource(item?.source)) {
+      alert(state.lang === 'zh' ? '共享组件在静态编辑器中管理，不能加入主素材库的批量操作。' : 'Shared components are managed in the Static editor and cannot be batch edited here.');
+      return;
+    }
     if (state.librarySelectedIds.has(previewId)) {
       state.librarySelectedIds.delete(previewId);
     } else {
@@ -2443,6 +2662,7 @@
     }
     const { source, preview } = item;
     const kind = libraryKindOfSource(source);
+    const sharedStatic = isSharedStaticSource(source);
     const canManage = canManageSource(source);
     const canSource = canDownloadSource();
     const tags = visibleLibraryTags(source);
@@ -2476,8 +2696,8 @@
           </dl>
           ${tags.length ? `<div class="inspector-tags">${tags.map(tag => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
           <div class="inspector-secondary-actions">
-            <button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="download-preview">${previewLabel}</button>
-            ${canSource && kind !== 'gallery' ? `<button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="download-source">${sourceLabel}</button>` : ''}
+            ${sharedStatic ? '' : `<button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="download-preview">${previewLabel}</button>`}
+            ${!sharedStatic && canSource && kind !== 'gallery' ? `<button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="download-source">${sourceLabel}</button>` : ''}
             ${canManage ? `<button class="ghost-btn" type="button" data-preview-id="${preview.id}" data-action="edit">${state.lang === 'zh' ? '编辑信息' : 'Edit details'}</button><button class="ghost-btn danger" type="button" data-preview-id="${preview.id}" data-action="delete">${state.lang === 'zh' ? '删除整组' : 'Delete source'}</button>` : ''}
           </div>
         </div>
@@ -2528,6 +2748,7 @@
     void logAssetEvent('view', item);
     const { source, preview } = item;
     const kind = libraryKindOfSource(source);
+    const sharedStatic = isSharedStaticSource(source);
     const canManage = canManageSource(source);
     const canSource = canDownloadSource();
     const tags = visibleLibraryTags(source);
@@ -2576,10 +2797,10 @@
         buttons.push(`<button class="primary-btn" type="button" data-action="use-static" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '静态 DIY' : 'Static DIY'}</button>`);
         buttons.push(`<button class="secondary-btn" type="button" data-action="use-dynamic" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '动态 DIY' : 'Dynamic DIY'}</button>`);
       } else if (kind === 'template') {
-        buttons.push(`<button class="primary-btn" type="button" data-action="use-static" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? '打开静态模板' : 'Open Template'}</button>`);
+        buttons.push(`<button class="primary-btn" type="button" data-action="use-static" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${state.lang === 'zh' ? (sharedStatic ? '添加到静态编辑器' : '打开静态模板') : (sharedStatic ? 'Use in Static' : 'Open Template')}</button>`);
       }
-      buttons.push(`<button class="ghost-btn" type="button" data-action="download-preview" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${kind === 'gallery' ? (state.lang === 'zh' ? '下载原图' : 'Download') : (state.lang === 'zh' ? '下载预览图' : 'Download Preview')}</button>`);
-      if (canSource && kind !== 'gallery') {
+      if (!sharedStatic) buttons.push(`<button class="ghost-btn" type="button" data-action="download-preview" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${kind === 'gallery' ? (state.lang === 'zh' ? '下载原图' : 'Download') : (state.lang === 'zh' ? '下载预览图' : 'Download Preview')}</button>`);
+      if (!sharedStatic && canSource && kind !== 'gallery') {
         buttons.push(`<button class="ghost-btn" type="button" data-action="download-source" data-preview-id="${preview.id}" style="min-height:36px;border-radius:8px;padding:6px 16px;font-size:13px;">${kind === 'template' ? (state.lang === 'zh' ? '下载模板' : 'Download Template') : (state.lang === 'zh' ? '下载源文件' : 'Download Source')}</button>`);
       }
       if (canManage) {
@@ -3436,8 +3657,10 @@
       alert(state.lang === 'zh' ? '请先登录。' : 'Please log in first.');
       return;
     }
-    var totalSources = state.librarySources.length;
-    var totalPreviews = state.libraryPreviews.length;
+    var databaseSources = state.libraryDatabaseSources || state.librarySources;
+    var databasePreviews = state.libraryDatabasePreviews || state.libraryPreviews;
+    var totalSources = databaseSources.length;
+    var totalPreviews = databasePreviews.length;
     if (totalSources === 0) {
       alert(state.lang === 'zh' ? '没有可删除的数据。' : 'No data to delete.');
       return;
@@ -3458,20 +3681,20 @@
       alert(step + ' 已删 ' + (fRes.data || []).length + ' 条');
       // 2. 预览
       step = '预览';
-      var pvIds = state.libraryPreviews.map(function(p) { return p.id; });
+      var pvIds = databasePreviews.map(function(p) { return p.id; });
       var pRes = await state.supabase.from('vf_asset_previews').delete().in('id', pvIds).select();
       if (pRes.error) throw new Error(step + ': ' + pRes.error.message);
       alert(step + ' 已删 ' + (pRes.data || []).length + '/' + pvIds.length + ' 条');
       // 3. 源文件
       step = '源文件';
-      var srcIds = state.librarySources.map(function(s) { return s.id; });
+      var srcIds = databaseSources.map(function(s) { return s.id; });
       var sRes = await state.supabase.from('vf_source_files').delete().in('id', srcIds).select();
       if (sRes.error) throw new Error(step + ': ' + sRes.error.message);
       alert(step + ' 已删 ' + (sRes.data || []).length + '/' + srcIds.length + ' 条');
       // 4. 存储文件
       step = '存储';
       var filePaths = [];
-      state.librarySources.forEach(function(s) {
+      databaseSources.forEach(function(s) {
         if (s.source_path) filePaths.push(s.source_path);
         if (s.source_path) filePaths.push(s.source_path.replace(/\/[^/]+$/, '/_thumb.jpg'));
       });
@@ -3519,6 +3742,10 @@
   }
 
   async function toggleLibraryFavorite(item) {
+    if (isSharedStaticSource(item?.source)) {
+      alert(state.lang === 'zh' ? '共享组件会实时同步到云端，暂不单独收藏。' : 'Shared components sync in real time and cannot be favorited separately yet.');
+      return;
+    }
     const uid = state.session.user.id;
     const pid = item.preview.id;
     if (state.libraryFavorites.has(pid)) {
@@ -3534,6 +3761,10 @@
   }
 
   async function downloadLibraryFile(item, kind) {
+    if (isSharedStaticSource(item?.source)) {
+      alert(state.lang === 'zh' ? '共享组件请直接在静态编辑器中调用。' : 'Use shared components directly in the Static editor.');
+      return;
+    }
     if (kind === 'source' && !canDownloadSource()) return;
     var filename = kind === 'source' ? item.source.source_filename : item.preview.preview_filename || 'preview.svg';
     // 即时反馈：轻 toast
@@ -3616,6 +3847,9 @@
   }
 
   async function openLibraryTemplate(item) {
+    if (isSharedStaticSource(item?.source)) {
+      return useSharedStaticLibraryAsset(item);
+    }
     if (state.localPreview || !state.supabase) {
       alert(state.lang === 'zh' ? '本地预览不能打开云端模板。' : 'Local preview cannot open cloud templates.');
       return;
@@ -3634,6 +3868,20 @@
     }
   }
 
+  async function useSharedStaticLibraryAsset(item) {
+    const payload = item?.source?.staticPayload;
+    if (!payload) throw new Error(state.lang === 'zh' ? '这个共享素材缺少可调用的数据。' : 'This shared asset has no usable data.');
+    location.hash = 'static';
+    navigate('static');
+    await waitForToolImporter();
+    const importer = state.activeFrame?.contentWindow?.VF_APPLY_SHARED_LIBRARY_ASSET;
+    if (typeof importer !== 'function') {
+      throw new Error(state.lang === 'zh' ? '静态编辑器还没有准备好，请刷新后重试。' : 'The Static editor is not ready. Refresh and try again.');
+    }
+    const result = await importer(payload);
+    if (!result?.success) throw new Error(result?.message || (state.lang === 'zh' ? '共享素材调用失败。' : 'Failed to use shared asset.'));
+  }
+
   async function loadLibraryTemplateSnapshot(item) {
     const { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).download(item.source.source_path);
     if (error) throw error;
@@ -3641,7 +3889,7 @@
   }
 
   async function logAssetEvent(eventType, item, extraMeta) {
-    if (state.localPreview || !state.supabase) return;
+    if (state.localPreview || !state.supabase || isSharedStaticSource(item?.source)) return;
     try {
       var row = {
         actor_id: state.session.user.id,
@@ -3686,9 +3934,14 @@
   }
 
   function visibleLibraryTags(source) {
-    return (source?.tags || [])
+    const tags = (source?.tags || [])
       .filter(tag => !String(tag).startsWith('vf:'))
+      .filter(tag => tag !== '资源位模板')
       .filter(Boolean);
+    if (libraryKindOfSource(source) !== 'template') return [...new Set(tags)];
+    const isComponent = tags.includes('组件');
+    const topLevel = isComponent ? '组件' : '模板';
+    return [...new Set([topLevel, ...tags])];
   }
 
   function selectedLibraryTagValues() {
@@ -3769,7 +4022,7 @@ function libraryTagsForForm(formData, kind) {
   }
 
   function canManageSource(_source) {
-    return !state.localPreview && !!state.session;
+    return !isSharedStaticSource(_source) && !state.localPreview && !!state.session;
   }
 
   function parseTags(value) {
@@ -4887,7 +5140,7 @@ function libraryTagsForForm(formData, kind) {
         country_id: null,
         activity_id: null,
         category_id: null,
-        tags: normalizeLibraryTags('template', ['未分类', '静态模板']),
+        tags: normalizeLibraryTags('template', ['模板', '静态模板']),
         visibility: 'all',
         source_path: sourcePath,
         source_filename: `${title.trim()}.json`,
@@ -4910,6 +5163,7 @@ function libraryTagsForForm(formData, kind) {
         sort_order: 10
       }]);
       if (previewInsert.error) throw previewInsert.error;
+      notifyStaticTemplateLibraryChanged();
       alert(state.lang === 'zh' ? '已保存到模板库。' : 'Saved to Template Library.');
     } catch (error) {
       await cleanupFailedLibraryUpload(sourceId, sourceInserted, uploadedPaths);

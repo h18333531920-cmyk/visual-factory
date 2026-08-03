@@ -1594,11 +1594,10 @@
                 </div>
             </div>
             <div class="asset-tabs">
-                <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')">模板</button>
-                <button class="asset-tab" data-asset-tab="tag" onclick="switchAssetTab('tag')">标签组</button>
-                <button class="asset-tab" data-asset-tab="logo" onclick="switchAssetTab('logo')">Logo</button>
-                <button class="asset-tab" data-asset-tab="reference" onclick="switchAssetTab('reference')">参考元素</button>
+                <button class="asset-tab active" data-asset-tab="template" onclick="switchAssetTab('template')">模板</button>
+                <button class="asset-tab" data-asset-tab="component" onclick="switchAssetTab('component')">组件</button>
             </div>
+            <div class="reference-filter asset-taxonomy-filter" id="asset-taxonomy-filter"></div>
             <div class="asset-list" id="asset-list-ui"></div>
             <div class="asset-library-footer">
                 <div class="asset-library-note">正式版和测试版会读取同一份云端公共资产库。</div>
@@ -1735,7 +1734,11 @@
     let aiFeatureMode = 'generate';
     let aiProvider = 'openai';
     const AI_REFERENCE_LIMIT = 8;
-    const REFERENCE_ELEMENT_CATEGORIES = { food: '食物', background: '背景' };
+    const REFERENCE_ELEMENT_CATEGORIES = { food: '其他素材', background: '背景', other: '其他素材' };
+    const ASSET_LIBRARY_TAXONOMY = {
+        template: ['全部', '社媒物料', 'C端物料'],
+        component: ['全部', '标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材']
+    };
     let aiReferenceImages = [];
     let selectedKeywordTagIds = [];
     let presetLibrary = [];
@@ -1743,8 +1746,11 @@
     let logoAssets = [];
     let referenceElements = [];
     let referenceElementCategory = 'food';
+    let currentAssetCategory = '全部';
+    let pendingLogoCategory = 'LOGO';
+    let cloudTemplateAssets = [];
     let activeTemplatePackId = null;
-    let currentAssetTab = 'layout';
+    let currentAssetTab = 'template';
     let draggingLayerId = null;
     let aiProgressTimer = null;
     let historyStack = []; let historyIdx = -1; let isRestoring = false;
@@ -1758,6 +1764,7 @@
     const GLOBAL_STATE_KEY = 'global';
     const SHARED_ASSETS_API = '/api/static-assets';
     let sharedAssetSaveTimer = null;
+    let sharedAssetRefreshTimer = null;
     function getGlobalSnapshot() { return { tagColorPresets, arcColorPresets, keywordTags, presetLibrary, tagPresetLibrary, referenceElements, logoAssets }; }
     function applyGlobalData(data = {}) {
         if(data.tagColorPresets) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
@@ -1864,6 +1871,9 @@
         });
         const data = await res.json().catch(() => ({}));
         if(!res.ok || data.success === false) throw new Error(data.message || '公共资产同步失败');
+        if(window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'vf:shared-static-assets-updated', updatedAt: data.updatedAt || new Date().toISOString() }, location.origin);
+        }
         return true;
     }
     async function loadSharedAssetsFromCloud() {
@@ -2795,6 +2805,7 @@
             id: genId('ref_element'),
             name: file.name.replace(/\.[^/.]+$/, ''),
             category: category === 'background' ? 'background' : 'food',
+            libraryCategory: category === 'background' ? '背景' : '其他素材',
             mimeType: file.type || 'image/png',
             src,
             createdAt: new Date().toISOString()
@@ -3736,17 +3747,45 @@
 
     /* ================= 内嵌资产库系统 ================= */
     function switchAssetTab(tab) {
-        currentAssetTab = tab;
+        currentAssetTab = tab === 'component' ? 'component' : 'template';
+        currentAssetCategory = '全部';
         document.querySelectorAll('.asset-tab').forEach(b => b.classList.toggle('active', b.dataset.assetTab === tab));
         refreshSaveActiveAssetButton();
         renderAssetLibrary();
     }
+    function switchAssetCategory(category) {
+        currentAssetCategory = category || '全部';
+        if(currentAssetTab === 'component') {
+            if(category === '背景') referenceElementCategory = 'background';
+            if(category === '其他素材') referenceElementCategory = 'food';
+            if(category === 'LOGO' || category === 'KIKI') pendingLogoCategory = category;
+        }
+        refreshSaveActiveAssetButton();
+        renderAssetLibrary();
+    }
+    function renderAssetTaxonomyFilter() {
+        const mount = document.getElementById('asset-taxonomy-filter');
+        if(!mount) return;
+        const categories = ASSET_LIBRARY_TAXONOMY[currentAssetTab] || [];
+        mount.innerHTML = categories.map(category => `<button type="button" class="${currentAssetCategory === category ? 'active' : ''}" onclick="switchAssetCategory('${category}')">${category}</button>`).join('');
+    }
     function refreshSaveActiveAssetButton() {
         const btn = document.getElementById('save-active-asset-btn');
         if(!btn) return;
-        const isReferenceTab = currentAssetTab === 'reference';
-        btn.hidden = isReferenceTab;
-        btn.textContent = currentAssetTab === 'logo' ? '上传 Logo' : '保存当前';
+        btn.hidden = false;
+        if(currentAssetTab === 'template') {
+            btn.textContent = '保存当前';
+            return;
+        }
+        const labels = {
+            '标签': '保存标签',
+            '背景': '上传背景',
+            '品牌圆弧': '新增圆弧色',
+            'LOGO': '上传 Logo',
+            'KIKI': '上传 KIKI',
+            '其他素材': '上传素材'
+        };
+        btn.textContent = labels[currentAssetCategory] || '选择分类';
     }
     function toggleAssetLibraryExpanded() {
         const expanded = !document.body.classList.contains('asset-library-expanded');
@@ -3772,68 +3811,79 @@
     document.addEventListener('click', e => { if(!e.target.closest('.toolbar-more-wrap')) closeToolbarMore(); });
     document.addEventListener('click', e => { if(!e.target.closest('.new-artboard-menu-wrap')) closeNewArtboardMenu(); });
     async function saveActiveAsset() {
-        if(currentAssetTab === 'layout') return await saveToPreset();
-        if(currentAssetTab === 'tag') return await saveTagComboPreset();
-        if(currentAssetTab === 'reference') return document.getElementById('reference-element-upload').click();
-        document.getElementById('logo-upload').click();
+        if(currentAssetTab === 'template') return await saveToPreset();
+        if(currentAssetCategory === '标签') return await saveTagComboPreset();
+        if(currentAssetCategory === '品牌圆弧') return addArcPreset();
+        if(currentAssetCategory === 'LOGO' || currentAssetCategory === 'KIKI') {
+            pendingLogoCategory = currentAssetCategory;
+            return document.getElementById('logo-upload').click();
+        }
+        if(currentAssetCategory === '背景' || currentAssetCategory === '其他素材') {
+            referenceElementCategory = currentAssetCategory === '背景' ? 'background' : 'food';
+            return document.getElementById('reference-element-upload').click();
+        }
+        showToast('请先选择组件分类', true);
     }
-    function switchReferenceCategory(category) {
-        referenceElementCategory = category === 'background' ? 'background' : 'food';
-        renderAssetLibrary();
+    function assetTemplateCategory(item) {
+        return ['社媒物料', 'C端物料'].includes(item?.libraryCategory) ? item.libraryCategory : '';
+    }
+    function assetComponentCategoryForLogo(item) {
+        if(item?.libraryCategory === 'KIKI') return 'KIKI';
+        return /kiki/i.test(String(item?.name || '')) ? 'KIKI' : 'LOGO';
+    }
+    function assetComponentCategoryForReference(item) {
+        return item?.libraryCategory === '背景' || item?.category === 'background' ? '背景' : '其他素材';
+    }
+    function matchesAssetCategory(category, itemCategory) {
+        return category === '全部' || category === itemCategory;
     }
     function renderAssetLibrary() {
         const list = document.getElementById('asset-list-ui'); if(!list) return;
         list.innerHTML = '';
-        if(currentAssetTab === 'layout') {
-            const items = presetLibrary;
-            if(items.length === 0) { list.innerHTML = `<div class="asset-empty">暂无版式，点击“保存套组”存三画板模板。</div>`; return; }
-            items.forEach(p => {
+        renderAssetTaxonomyFilter();
+        if(currentAssetTab === 'template') {
+            const localItems = presetLibrary.filter(item => matchesAssetCategory(currentAssetCategory, assetTemplateCategory(item)));
+            const cloudItems = cloudTemplateAssets.filter(item => matchesAssetCategory(currentAssetCategory, item.category || ''));
+            if(localItems.length === 0 && cloudItems.length === 0) { list.innerHTML = `<div class="asset-empty">暂无模板。点击“保存套组”可保存三画板模板。</div>`; return; }
+            cloudItems.forEach(item => {
+                list.appendChild(createAssetItem({
+                    title: item.title,
+                    meta: `云端模板${item.category ? ` · ${item.category}` : ''}`,
+                    asset: item,
+                    type: 'cloud-template',
+                    img: item.previewUrl,
+                    onApply: () => openCloudTemplateFromParent(item.id)
+                }));
+            });
+            localItems.forEach(p => {
                 const isPack = p.kind === 'pack';
                 const meta = isPack ? `三画板套组 · ${getFixedArtboardPresets().map(item => p.artboards?.[item.id]?.layers?.length || 0).join('/')} 图层` : `${p.size} · ${p.elements?.length || 0} 图层`;
                 list.appendChild(createAssetItem({ title: p.name, meta, asset: p, type: isPack ? 'pack' : 'layout', current: isPack && p.id === activeTemplatePackId, onApply: () => applyLayoutPreset(p.id), onDelete: () => deleteLayoutPreset(p.id) }));
             });
-        } else if(currentAssetTab === 'tag') {
-            if(tagPresetLibrary.length === 0) { list.innerHTML = `<div class="asset-empty">多选标签后点击“保存当前”，可保存标签组合。</div>`; return; }
-            tagPresetLibrary.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, asset: p, type: 'tag', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
-        } else if(currentAssetTab === 'logo') {
-            if(logoAssets.length === 0) { list.innerHTML = `<div class="asset-empty">点击“保存当前”上传常用 Logo，之后可固定调用。</div>`; return; }
-            logoAssets.forEach(l => list.appendChild(createAssetItem({ title: l.name, meta: '点击添加到画布', asset: l, type: 'logo', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
         } else {
-            const controls = document.createElement('div');
-            controls.className = 'reference-filter';
-            controls.innerHTML = `
-                <button type="button" class="${referenceElementCategory === 'food' ? 'active' : ''}" onclick="switchReferenceCategory('food')">食物</button>
-                <button type="button" class="${referenceElementCategory === 'background' ? 'active' : ''}" onclick="switchReferenceCategory('background')">背景</button>
-                <button type="button" onclick="document.getElementById('reference-element-upload').click()">+ 上传</button>
-            `;
-            list.appendChild(controls);
-            list.appendChild(createReferenceDropZone());
-            const items = referenceElements.filter(item => item.category === referenceElementCategory);
-            if(items.length === 0) {
-                const empty = document.createElement('div');
-                empty.className = 'asset-empty';
-                empty.textContent = `暂无${REFERENCE_ELEMENT_CATEGORIES[referenceElementCategory]}元素，拖入图片或点击上传添加。`;
-                list.appendChild(empty);
-                return;
+            const category = currentAssetCategory;
+            if(category === '标签' || category === '全部') {
+                tagPresetLibrary.filter(item => matchesAssetCategory(category, '标签')).forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, asset: p, type: 'tag', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
             }
-            items.forEach(item => {
-                list.appendChild(createAssetItem({
-                    title: item.name,
-                    meta: `${REFERENCE_ELEMENT_CATEGORIES[item.category] || '参考'} · 拖到生图参考图`,
-                    asset: item,
-                    type: 'reference',
-                    img: item.src,
-                    onApply: () => addReferenceElementToAI(item),
-                    onDelete: () => deleteReferenceElement(item.id)
-                }));
-            });
+            if(category === '品牌圆弧' || category === '全部') {
+                arcColorPresets.filter(item => matchesAssetCategory(category, '品牌圆弧')).forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: '品牌圆弧 · 点击添加', asset: p, type: 'arc', onApply: () => addLayer('arc', { cIn: p.cIn, cOut: p.cOut }) })));
+            }
+            if(['LOGO', 'KIKI', '全部'].includes(category)) {
+                logoAssets.filter(item => matchesAssetCategory(category, assetComponentCategoryForLogo(item))).forEach(l => list.appendChild(createAssetItem({ title: l.name, meta: `${assetComponentCategoryForLogo(l)} · 点击添加到画布`, asset: l, type: 'logo', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
+            }
+            if(['背景', '其他素材', '全部'].includes(category)) {
+                referenceElements.filter(item => matchesAssetCategory(category, assetComponentCategoryForReference(item))).forEach(item => list.appendChild(createAssetItem({ title: item.name, meta: `${assetComponentCategoryForReference(item)} · 拖到生图参考图`, asset: item, type: 'reference', img: item.src, onApply: () => addReferenceElementToAI(item), onDelete: () => deleteReferenceElement(item.id) })));
+                if(category !== '全部') list.appendChild(createReferenceDropZone());
+            }
+            if(list.children.length === 0) list.innerHTML = `<div class="asset-empty">暂无${category === '全部' ? '组件' : category}。选择对应分类后可上传或保存。</div>`;
         }
     }
     function createReferenceDropZone() {
         const zone = document.createElement('button');
         zone.type = 'button';
         zone.className = 'reference-drop-zone';
-        zone.innerHTML = `拖拽上传${REFERENCE_ELEMENT_CATEGORIES[referenceElementCategory]}元素<br>或点击选择图片`;
+        const label = currentAssetCategory === '背景' ? '背景' : '其他素材';
+        zone.innerHTML = `拖拽上传${label}<br>或点击选择图片`;
         zone.onclick = () => document.getElementById('reference-element-upload').click();
         ['dragenter', 'dragover'].forEach(type => {
             zone.addEventListener(type, e => {
@@ -3857,6 +3907,63 @@
         });
         return zone;
     }
+    function requestCloudTemplateAssets() {
+        if(window.parent === window) return;
+        const requestId = genId('cloud_templates');
+        window.parent.postMessage({ type: 'vf:request-cloud-template-list', requestId }, location.origin);
+    }
+    function openCloudTemplateFromParent(sourceId) {
+        if(window.parent === window) return Promise.reject(new Error('云端模板只能在 GCC Design 工作台内打开'));
+        const requestId = genId('open_cloud_template');
+        return new Promise((resolve, reject) => {
+            const timer = window.setTimeout(() => {
+                window.removeEventListener('message', onMessage);
+                reject(new Error('打开云端模板超时，请稍后重试'));
+            }, 12000);
+            function onMessage(event) {
+                if(event.origin !== location.origin || event.data?.type !== 'vf:open-cloud-template-result' || event.data.requestId !== requestId) return;
+                window.clearTimeout(timer);
+                window.removeEventListener('message', onMessage);
+                if(event.data.success) resolve(event.data);
+                else reject(new Error(event.data.message || '打开云端模板失败'));
+            }
+            window.addEventListener('message', onMessage);
+            window.parent.postMessage({ type: 'vf:open-cloud-template', requestId, sourceId }, location.origin);
+        });
+    }
+    window.addEventListener('message', event => {
+        if(event.origin !== location.origin || !event.data) return;
+        if(event.data.type === 'vf:cloud-template-list') {
+            cloudTemplateAssets = Array.isArray(event.data.items) ? event.data.items : [];
+            if(currentAssetTab === 'template') renderAssetLibrary();
+        }
+        if(event.data.type === 'vf:cloud-template-library-updated') requestCloudTemplateAssets();
+    });
+    window.VF_APPLY_SHARED_LIBRARY_ASSET = async function(payload = {}) {
+        const asset = payload.asset;
+        if(!asset || !payload.type) return { success: false, message: '共享素材数据不完整。' };
+        try {
+            if(payload.type === 'layout') {
+                presetLibrary = mergeById(presetLibrary, [asset]);
+                applyLayoutPreset(asset.id);
+            } else if(payload.type === 'tag') {
+                tagPresetLibrary = mergeById(tagPresetLibrary, [asset]);
+                applyTagComboPreset(asset.id);
+            } else if(payload.type === 'logo') {
+                logoAssets = mergeById(logoAssets, [asset]);
+                await addLogoFromAsset(asset.id);
+            } else if(payload.type === 'reference') {
+                await addReferenceElementToAI(asset);
+            } else if(payload.type === 'arc') {
+                addLayer('arc', { cIn: asset.cIn, cOut: asset.cOut });
+            } else {
+                return { success: false, message: '暂不支持此共享素材类型。' };
+            }
+            return { success: true };
+        } catch(error) {
+            return { success: false, message: error.message || '共享素材调用失败。' };
+        }
+    };
     function createAssetItem({ title, meta, type, asset, img, current = false, onApply, onDelete }) {
         const item = document.createElement('div'); item.className = `asset-item ${current ? 'current' : ''}`;
         item.onclick = () => {
@@ -3951,6 +4058,10 @@
     function renderAssetPreview(root, { type, asset, img }) {
         root.innerHTML = '';
         const large = arguments[1]?.large;
+        if(type === 'cloud-template') {
+            root.innerHTML = img ? `<img src="${img}" alt="">` : '<div class="asset-preview-empty">云端模板</div>';
+            return;
+        }
         if(type === 'reference') {
             root.innerHTML = `<img src="${img || asset?.src || ''}" alt="">`;
             return;
@@ -3961,6 +4072,10 @@
         }
         if(type === 'tag') {
             root.appendChild(createLayerGroupPreview(asset?.elements || [], { maxW: large ? 405 : 138, maxH: large ? 267 : 92 }));
+            return;
+        }
+        if(type === 'arc') {
+            root.innerHTML = `<div style="width:76%;height:48%;border-radius:50% 50% 0 0 / 100% 100% 0 0;background:linear-gradient(135deg, ${asset?.cIn || '#FFCC00'} 0 48%, ${asset?.cOut || '#00D06C'} 49% 100%);"></div>`;
             return;
         }
         if(type === 'pack') {
@@ -4076,7 +4191,7 @@
     async function saveToPreset() {
         if(layers.length === 0) return showToast('画板为空', true);
         const name = await askText('命名版式', `版式 ${formatPresetTime()}`); if(!name) return;
-        presetLibrary.push({ id: genId('p'), name, size: currentRatio, elements: JSON.parse(JSON.stringify(layers)) });
+        presetLibrary.push({ id: genId('p'), name, size: currentRatio, libraryCategory: ['社媒物料', 'C端物料'].includes(currentAssetCategory) ? currentAssetCategory : '', elements: JSON.parse(JSON.stringify(layers)) });
         const ok = await saveGlobalData();
         renderAssetLibrary();
         showToast(ok ? '已保存到版式库' : '已保存到当前页面，但本地持久化失败', !ok);
@@ -4094,7 +4209,7 @@
                 layers: cloneData(artboards[preset.id]?.layers || [])
             };
         });
-        const pack = { id: genId('pack'), kind: 'pack', name, artboards: packArtboards, createdAt: new Date().toISOString() };
+        const pack = { id: genId('pack'), kind: 'pack', name, libraryCategory: ['社媒物料', 'C端物料'].includes(currentAssetCategory) ? currentAssetCategory : '', artboards: packArtboards, createdAt: new Date().toISOString() };
         presetLibrary.push(pack);
         activeTemplatePackId = pack.id;
         const ok = await saveGlobalData();
@@ -4714,9 +4829,9 @@
         files.forEach(file => {
             const reader = new FileReader();
             reader.onload = ev => {
-                const logo = { id: genId('logo_asset'), name: file.name.replace(/\.[^/.]+$/, ''), src: ev.target.result };
+                const logo = { id: genId('logo_asset'), name: file.name.replace(/\.[^/.]+$/, ''), libraryCategory: pendingLogoCategory === 'KIKI' ? 'KIKI' : 'LOGO', src: ev.target.result };
                 logoAssets.push(logo); saveLogoToDB(logo); loaded++;
-                if(loaded === files.length) { saveGlobalData(); currentAssetTab = 'logo'; switchAssetTab('logo'); showToast(`已保存 ${files.length} 个 Logo 素材`); }
+                if(loaded === files.length) { saveGlobalData(); switchAssetTab('component'); switchAssetCategory(pendingLogoCategory); showToast(`已保存 ${files.length} 个${pendingLogoCategory}素材`); }
             };
             reader.readAsDataURL(file);
         });
@@ -4984,6 +5099,13 @@
         renderLayersList();
         renderProperties();
         renderAssetLibrary();
+        requestCloudTemplateAssets();
+        if(!sharedAssetRefreshTimer) {
+            sharedAssetRefreshTimer = window.setInterval(() => {
+                loadSharedAssetsFromCloud();
+                requestCloudTemplateAssets();
+            }, 15000);
+        }
         renderPromptTags();
         refreshAIConsole();
         saveHistory();
