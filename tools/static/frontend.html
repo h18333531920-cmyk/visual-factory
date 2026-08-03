@@ -1464,6 +1464,104 @@
                 inset: 128px 28px 28px;
             }
         }
+
+        /* Template library: compact controls so the preview grid stays the focus. */
+        .asset-library-card .card-title {
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .asset-library-card .card-title-wrap {
+            flex: 0 0 auto;
+        }
+
+        .asset-library-actions {
+            min-width: 0;
+            gap: 5px;
+        }
+
+        .asset-library-actions .btn-icon {
+            height: 28px;
+            min-height: 28px;
+            padding: 0 8px !important;
+            border-radius: 9px;
+            font-size: 10px !important;
+            font-weight: 760;
+            white-space: nowrap;
+        }
+
+        .asset-library-card .asset-tabs {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 4px;
+            margin-bottom: 8px;
+            padding: 4px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: rgba(16, 19, 24, 0.045);
+        }
+
+        .asset-library-card .asset-tab {
+            min-height: 32px;
+            padding: 0 10px;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-sub);
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .asset-library-card .asset-tab.active {
+            background: var(--primary);
+            color: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 19, 24, 0.18);
+        }
+
+        .asset-library-card .asset-taxonomy-filter {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
+            margin: 0 0 10px;
+        }
+
+        .asset-library-card .asset-taxonomy-filter button {
+            height: 31px;
+            min-width: 0;
+            padding: 0 8px;
+            border-radius: 8px;
+            overflow: hidden;
+            font-size: 11px;
+            font-weight: 760;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .asset-library-card .asset-taxonomy-filter[data-mode="template"] button {
+            grid-column: span 1;
+        }
+
+        .asset-library-card .asset-list {
+            max-height: 306px;
+            padding-right: 4px;
+        }
+
+        @media (max-width: 560px) {
+            .asset-library-card .card-title {
+                align-items: flex-start;
+                flex-wrap: wrap;
+            }
+
+            .asset-library-actions {
+                width: 100%;
+                margin-left: 0;
+                justify-content: space-between;
+            }
+
+            .asset-library-actions .btn-icon {
+                flex: 1 1 auto;
+                padding: 0 5px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1585,7 +1683,7 @@
         <div class="pane-content">
             <div class="module-card asset-library-card">
             <div class="card-title">
-                <div class="card-title-wrap">资产库</div>
+                <div class="card-title-wrap">模板库</div>
                 <div class="asset-library-actions">
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="exportAssetBackup()" title="导出当前域名下的版式、标签组、Logo 和字体">导出包</button>
                     <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="document.getElementById('backup-import').click()" title="导入从正式版导出的资产包">导入包</button>
@@ -1600,8 +1698,8 @@
             <div class="reference-filter asset-taxonomy-filter" id="asset-taxonomy-filter"></div>
             <div class="asset-list" id="asset-list-ui"></div>
             <div class="asset-library-footer">
-                <div class="asset-library-note">正式版和测试版会读取同一份云端公共资产库。</div>
-                <button class="btn-icon asset-library-expand-btn" id="asset-library-expand-btn" onclick="toggleAssetLibraryExpanded()" title="上下展开资产库" aria-label="上下展开资产库">⌃</button>
+                <div class="asset-library-note">正式版和测试版会读取同一份云端模板与组件。</div>
+                <button class="btn-icon asset-library-expand-btn" id="asset-library-expand-btn" onclick="toggleAssetLibraryExpanded()" title="上下展开模板库" aria-label="上下展开模板库">⌃</button>
             </div>
         </div>
 
@@ -3791,6 +3889,7 @@
         const mount = document.getElementById('asset-taxonomy-filter');
         if(!mount) return;
         const categories = ASSET_LIBRARY_TAXONOMY[currentAssetTab] || [];
+        mount.dataset.mode = currentAssetTab;
         mount.innerHTML = categories.map(category => `<button type="button" class="${currentAssetCategory === category ? 'active' : ''}" onclick="switchAssetCategory('${category}')">${category}</button>`).join('');
     }
     function refreshSaveActiveAssetButton() {
@@ -3817,7 +3916,7 @@
         const button = document.getElementById('asset-library-expand-btn');
         if(button) {
             button.textContent = expanded ? '⌄' : '⌃';
-            button.title = expanded ? '收起资产库' : '上下展开资产库';
+            button.title = expanded ? '收起模板库' : '上下展开模板库';
             button.setAttribute('aria-label', button.title);
         }
         requestAnimationFrame(() => resizeCanvas());
@@ -3851,6 +3950,23 @@
     function assetTemplateCategory(item) {
         return ['社媒物料', 'C端物料'].includes(item?.libraryCategory) ? item.libraryCategory : '';
     }
+    function isUsableTemplatePreviewUrl(value) {
+        return typeof value === 'string' && /^(?:data:image\/(?:png|jpe?g|webp|gif|svg\+xml)|https?:\/\/)/i.test(value.trim());
+    }
+    function templatePreviewUrl(item) {
+        const directPreview = item?.previewUrl || item?.previewDataUrl || item?.thumbnail || item?.cover;
+        if(isUsableTemplatePreviewUrl(directPreview)) return directPreview;
+        const groups = [];
+        if(Array.isArray(item?.elements)) groups.push(item.elements);
+        if(item?.artboards && typeof item.artboards === 'object') {
+            Object.values(item.artboards).forEach(board => { if(Array.isArray(board?.layers)) groups.push(board.layers); });
+        }
+        for(const layers of groups) {
+            const imageLayer = layers.find(layer => layer?.type === 'image' && isUsableTemplatePreviewUrl(layer?.src));
+            if(imageLayer) return imageLayer.src;
+        }
+        return '';
+    }
     function assetComponentCategoryForLogo(item) {
         if(item?.libraryCategory === 'KIKI') return 'KIKI';
         return /kiki/i.test(String(item?.name || '')) ? 'KIKI' : 'LOGO';
@@ -3866,9 +3982,13 @@
         list.innerHTML = '';
         renderAssetTaxonomyFilter();
         if(currentAssetTab === 'template') {
-            const localItems = presetLibrary.filter(item => matchesAssetCategory(currentAssetCategory, assetTemplateCategory(item)));
-            const cloudItems = cloudTemplateAssets.filter(item => matchesAssetCategory(currentAssetCategory, item.category || ''));
-            if(localItems.length === 0 && cloudItems.length === 0) { list.innerHTML = `<div class="asset-empty">暂无模板。点击“保存套组”可保存三画板模板。</div>`; return; }
+            const localItems = presetLibrary
+                .filter(item => matchesAssetCategory(currentAssetCategory, assetTemplateCategory(item)))
+                .filter(item => Boolean(templatePreviewUrl(item)));
+            const cloudItems = cloudTemplateAssets
+                .filter(item => matchesAssetCategory(currentAssetCategory, item.category || ''))
+                .filter(item => isUsableTemplatePreviewUrl(item.previewUrl));
+            if(localItems.length === 0 && cloudItems.length === 0) { list.innerHTML = `<div class="asset-empty">暂无可预览模板。点击“保存套组”可保存三画板模板。</div>`; return; }
             cloudItems.forEach(item => {
                 list.appendChild(createAssetItem({
                     title: item.title,

@@ -1594,10 +1594,27 @@
     return Boolean(source?.staticShared && source?.staticPayload);
   }
 
-  function sharedStaticPreview(title, accent = '#16a34a') {
-    const label = escapeHtml(String(title || '云端素材').slice(0, 32));
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><rect width="1200" height="800" fill="#f8fafc"/><rect x="72" y="72" width="1056" height="656" rx="36" fill="#fff" stroke="#e2e8f0" stroke-width="4"/><rect x="132" y="140" width="250" height="42" rx="21" fill="${accent}" opacity=".16"/><rect x="132" y="246" width="620" height="68" rx="20" fill="#0f172a" opacity=".92"/><rect x="132" y="346" width="440" height="34" rx="17" fill="#e2e8f0"/><circle cx="940" cy="334" r="112" fill="${accent}" opacity=".9"/><path d="M780 574c112-132 228-132 348 0v88H780z" fill="${accent}" opacity=".22"/><text x="132" y="292" font-family="Arial, sans-serif" font-size="46" font-weight="700" fill="#fff">${label}</text><text x="132" y="630" font-family="Arial, sans-serif" font-size="30" fill="#64748b">GCC Design shared cloud library</text></svg>`;
-    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  function isUsableStaticImageUrl(value) {
+    return typeof value === 'string' && /^(?:data:image\/(?:png|jpe?g|webp|gif|svg\+xml)|https?:\/\/)/i.test(value.trim());
+  }
+
+  function staticLayoutPreviewUrl(item) {
+    const directPreview = item?.previewUrl || item?.previewDataUrl || item?.thumbnail || item?.cover;
+    if (isUsableStaticImageUrl(directPreview)) return directPreview;
+
+    const layerGroups = [];
+    if (Array.isArray(item?.elements)) layerGroups.push(item.elements);
+    if (item?.artboards && typeof item.artboards === 'object') {
+      Object.values(item.artboards).forEach(board => {
+        if (Array.isArray(board?.layers)) layerGroups.push(board.layers);
+      });
+    }
+
+    for (const layers of layerGroups) {
+      const imageLayer = layers.find(layer => layer?.type === 'image' && isUsableStaticImageUrl(layer?.src));
+      if (imageLayer) return imageLayer.src;
+    }
+    return '';
   }
 
   function staticComponentCategoryForReference(item) {
@@ -1614,7 +1631,9 @@
     const now = payload.updatedAt || new Date().toISOString();
     const records = [];
     const add = (group, item, category, type, imageUrl, width = 1200, height = 800) => {
-      if (!item?.id) return;
+      // Only publish assets with a real visual preview. Older JSON-only presets stay intact
+      // in the static tool, but no longer appear as fake document/placeholder cards here.
+      if (!item?.id || !isUsableStaticImageUrl(imageUrl)) return;
       const sourceId = `shared-static:${group}:${item.id}`;
       const title = item.name || item.title || '未命名素材';
       const source = {
@@ -1640,17 +1659,17 @@
         height,
         sort_order: 10,
         created_at: source.created_at,
-        staticUrl: imageUrl || sharedStaticPreview(title, group === '模板' ? '#0ea5e9' : '#7c3aed')
+        staticUrl: imageUrl
       };
       records.push({ source, preview });
     };
 
     (Array.isArray(data.presetLibrary) ? data.presetLibrary : []).forEach(item => {
       const category = ['社媒物料', 'C端物料'].includes(item.libraryCategory) ? item.libraryCategory : '';
-      add('模板', item, category, 'layout');
+      add('模板', item, category, 'layout', staticLayoutPreviewUrl(item));
     });
-    (Array.isArray(data.tagPresetLibrary) ? data.tagPresetLibrary : []).forEach(item => add('组件', item, '标签', 'tag'));
-    (Array.isArray(data.arcColorPresets) ? data.arcColorPresets : []).forEach(item => add('组件', item, '品牌圆弧', 'arc'));
+    // Tag and arc presets have no bitmap cover. They remain available in DIY static,
+    // instead of being represented by generic placeholder cards in the cloud library.
     (Array.isArray(payload.logos) ? payload.logos : []).forEach(item => add('组件', item, staticComponentCategoryForLogo(item), 'logo', item.src));
     (Array.isArray(data.referenceElements) ? data.referenceElements : []).forEach(item => add('组件', item, staticComponentCategoryForReference(item), 'reference', item.src));
     return records;
