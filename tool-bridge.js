@@ -236,14 +236,65 @@
         activeLayerIds = [];
         if (typeof renderCanvas === 'function') renderCanvas();
       }
-      const canvas = await html2canvas(wrap, {
+      // 克隆 wrapper 到屏幕外固定位置截图，避免 CSS transform 导致偏移
+      var clone = wrap.cloneNode(true);
+      var cw = wrap.offsetWidth, ch = wrap.offsetHeight;
+      clone.style.cssText = 'position:fixed;left:-9999px;top:0;transform:none;width:' + cw + 'px;height:' + ch + 'px;z-index:-1;overflow:hidden;background:#FFFFFF;';
+      document.body.appendChild(clone);
+      // html2canvas 会在存在 letter-spacing 时把文本拆成单个字符绘制，
+      // 这会破坏阿拉伯语的连写。仅在预览副本中归零字距，并明确 RTL 方向；
+      // 编辑画板和导出数据均不受影响。
+      clone.querySelectorAll('.layer-text-wrapper, .layer-tag-wrapper').forEach(function (node) {
+        var text = node.textContent || '';
+        var hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+        var isRtl = hasArabic || node.dir === 'rtl' || node.getAttribute('lang') === 'ar' || getComputedStyle(node).direction === 'rtl';
+        if (!isRtl) return;
+        node.setAttribute('dir', 'rtl');
+        node.setAttribute('lang', 'ar');
+        node.style.direction = 'rtl';
+        node.style.unicodeBidi = 'plaintext';
+        node.style.letterSpacing = '0px';
+        node.querySelectorAll('.layer-text-content').forEach(function (content) {
+          content.setAttribute('dir', 'rtl');
+          content.style.direction = 'rtl';
+          content.style.unicodeBidi = 'plaintext';
+          content.style.letterSpacing = '0px';
+        });
+      });
+      // 归零字距后，阿拉伯字与紧邻问号之间会失去原本的细小留白。
+      // 仅在截图副本内补一个 hair space；阿拉伯字仍作为完整文本运行绘制，不会被拆散。
+      var rtlTextNodes = [];
+      var textWalker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+      while (textWalker.nextNode()) rtlTextNodes.push(textWalker.currentNode);
+      rtlTextNodes.forEach(function (textNode) {
+        var parent = textNode.parentElement;
+        if (!parent || !parent.closest('[dir="rtl"], [lang="ar"]')) return;
+        textNode.nodeValue = textNode.nodeValue.replace(/([\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])([؟?])/g, '$1\u200A$2');
+      });
+      // 把克隆体中的背景图替换为 <img>
+      clone.querySelectorAll('.layer-image-div').forEach(function(div) {
+        var bg = div.style.backgroundImage;
+        if (bg && /^url\(/.test(bg)) {
+          var url = bg.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
+          var img = document.createElement('img');
+          img.src = url;
+          img.style.cssText = 'width:100%;height:100%;display:block;object-fit:cover;object-position:center;';
+          div.style.backgroundImage = 'none';
+          div.appendChild(img);
+        }
+      });
+      await new Promise(function(r) { setTimeout(r, 200); });
+      const canvas = await html2canvas(clone, {
         scale: 2,
+        width: cw,
+        height: ch,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#FFFFFF',
         logging: false,
         imageTimeout: 0
       });
+      document.body.removeChild(clone);
       return canvas.toDataURL('image/png');
     } finally {
       if (safeGuide) safeGuide.style.display = oldGuideDisplay;
@@ -394,4 +445,7 @@
       loop: layer.loop
     };
   }
+
+  // 暴露给 frontend.html 调用（模板同步需要生成预览图）
+  window.captureStaticPreviewDataUrl = captureStaticPreviewDataUrl;
 })();

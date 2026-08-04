@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260731-clear-layers-v1';
+  const TOOL_UI_VERSION = '20260804-unified-v73';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -150,10 +150,10 @@
       }
     },
     template: {
-      tag1: ['资源位模板', '组件'],
+      tag1: ['模版', '组件'],
       tag2ByTag1: {
-        '资源位模板': ['开机海报', '弹窗', '头图', 'banner'],
-        '组件': ['标签', '场景']
+        '模版': ['社媒物料', 'C端物料'],
+        '组件': ['标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材']
       }
     }
   };
@@ -200,6 +200,10 @@
       favorites: false,
       selectedCountries: [],
       selectedActivities: [],
+      selectedStrategies: [],
+      selectedElements: [],
+      selectedFormats: [],
+      selectedQuantities: [],
       searchHistory: []
     }
   };
@@ -253,6 +257,8 @@
     window.addEventListener('hashchange', () => {
       navigate((location.hash || '#home').slice(1));
     });
+    // 静态DIY模板同步消息监听
+    window.addEventListener('message', handleToolMessage);
     // 全局拖拽上传：从桌面拖图片到页面任意位置，自动弹出上传弹窗
     var dropOverlay = document.createElement('div');
     dropOverlay.id = 'global-drop-overlay';
@@ -561,7 +567,7 @@
     els.saveProjectBtn.hidden = !['static', 'dynamic'].includes(state.route);
     els.saveTemplateBtn.hidden = state.route !== 'static';
     if (state.route === 'home') renderCreativeHome();
-    if (state.route === 'library') renderLibrary();
+    if (state.route === 'library') { state.libraryDataLoaded = false; renderLibrary(); }
     if (state.route === 'static') renderTool('static');
     if (state.route === 'dynamic') renderTool('dynamic');
     if (state.route === 'request') renderRequestFlow();
@@ -829,23 +835,38 @@
           <div class="filter-dropdown-wrap">
             <button class="ghost-btn" type="button" id="library-filter-btn">${state.lang === 'zh' ? '筛选 ▾' : 'Filter ▾'}</button>
             <div id="library-filter-panel" class="filter-dropdown" hidden>
-              <div class="filter-section" id="filter-country-section">
+              <div class="filter-section" data-filter-section="country">
                 <h4>${state.lang === 'zh' ? '国家' : 'Country'}</h4>
-                <div class="filter-capsules" id="filter-country-options">
-                  <button type="button" class="filter-capsule active" data-value="all">${state.lang === 'zh' ? '全部' : 'All'}</button>
-                </div>
+                <div class="filter-capsules" data-filter-options="country"></div>
               </div>
-              <div class="filter-section" id="filter-activity-section">
+              <div class="filter-section" data-filter-section="activity">
                 <h4>${state.lang === 'zh' ? '活动类型' : 'Activity'}</h4>
-                <div class="filter-capsules" id="filter-activity-options">
-                  <button type="button" class="filter-capsule active" data-value="all">${state.lang === 'zh' ? '全部' : 'All'}</button>
-                </div>
+                <div class="filter-capsules" data-filter-options="activity"></div>
+              </div>
+              <div class="filter-section" data-filter-section="strategy">
+                <h4>${state.lang === 'zh' ? '业务策略' : 'Strategy'}</h4>
+                <div class="filter-capsules" data-filter-options="strategy"></div>
+              </div>
+              <div class="filter-section" data-filter-section="element">
+                <h4>${state.lang === 'zh' ? '元素' : 'Element'}</h4>
+                <div class="filter-capsules" data-filter-options="element"></div>
+              </div>
+              <div class="filter-section" data-filter-section="format">
+                <h4>${state.lang === 'zh' ? '格式' : 'Format'}</h4>
+                <div class="filter-capsules" data-filter-options="format"></div>
+              </div>
+              <div class="filter-section" data-filter-section="quantity">
+                <h4>${state.lang === 'zh' ? '数量' : 'Quantity'}</h4>
+                <div class="filter-capsules" data-filter-options="quantity"></div>
               </div>
               <div class="filter-section">
                 <h4>${state.lang === 'zh' ? '收藏' : 'Favorites'}</h4>
                 <div class="filter-capsules">
                   <button type="button" id="filter-favorites-btn" class="filter-capsule${state.libraryFilters.favorites ? ' active' : ''}" data-value="toggle">${state.libraryFilters.favorites ? '★' : '☆'} ${state.lang === 'zh' ? '仅收藏' : 'Favorites only'}</button>
                 </div>
+              </div>
+              <div class="filter-section" style="border-top:1px solid #e2e8f0;padding-top:10px;margin-top:4px;">
+                <button type="button" id="delete-all-templates-btn" class="ghost-btn" style="color:#dc2626;font-size:12px;width:100%;">🗑 ${state.lang === 'zh' ? '删除全部模版' : 'Delete all templates'}</button>
               </div>
             </div>
           </div>
@@ -951,34 +972,34 @@
                 </div>
               </div>
 
-              <label class="library-drop-zone" data-upload-mode="gallery" data-drop-input="library-gallery-input">
+              <div class="library-drop-zone" data-upload-mode="gallery" data-drop-input="library-gallery-input">
                 <input name="gallery_files" id="library-gallery-input" type="file" accept="image/jpeg,image/png,image/webp" multiple>
                 <span>${state.lang === 'zh' ? '图库图片' : 'Gallery images'}</span>
                 <strong>${state.lang === 'zh' ? '拖拽 JPG / PNG / WEBP 到这里，可多选' : 'Drop JPG / PNG / WEBP here, multiple allowed'}</strong>
                 <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No files selected'}</small>
                 <div class="drop-thumb-strip" data-thumb-strip style="display:none;"></div>
-              </label>
+              </div>
               <div class="library-form-grid two" data-upload-mode="source">
-                <label class="library-drop-zone" data-drop-input="library-source-input">
+                <div class="library-drop-zone" data-drop-input="library-source-input">
                   <input name="source_file" id="library-source-input" type="file" accept=".psd,.psb,.ai,.pdf,.zip,.rar,.7z,.gz,.tar,application/pdf,application/zip,application/x-rar-compressed,application/x-7z-compressed,application/gzip,application/x-tar">
                   <span>${state.lang === 'zh' ? '源文件' : 'Source file'}</span>
                   <strong>${state.lang === 'zh' ? '拖拽 1 个 PSD / PSB / AI / PDF / ZIP 到这里' : 'Drop one PSD / PSB / AI / PDF / ZIP here'}</strong>
                   <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No file selected'}</small>
-                </label>
-                <label class="library-drop-zone" data-drop-input="library-preview-input">
+                </div>
+                <div class="library-drop-zone" data-drop-input="library-preview-input">
                   <input name="preview_files" id="library-preview-input" type="file" accept="image/jpeg,image/png,image/webp" multiple>
                   <span>${state.lang === 'zh' ? '预览图' : 'Preview images'}</span>
                   <strong>${state.lang === 'zh' ? '拖拽 1-5 张 JPG / PNG / WEBP 到这里' : 'Drop 1-5 JPG / PNG / WEBP files here'}</strong>
                   <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No file selected'}</small>
                   <div class="drop-thumb-strip" data-thumb-strip style="display:none;"></div>
-                </label>
+                </div>
               </div>
-              <label class="library-drop-zone" data-upload-mode="template" data-drop-input="library-template-input">
+              <div class="library-drop-zone" data-upload-mode="template" data-drop-input="library-template-input">
                 <input name="template_file" id="library-template-input" type="file" accept=".json">
                 <span>${state.lang === 'zh' ? '模板文件' : 'Template file'}</span>
                 <strong>${state.lang === 'zh' ? '拖拽 JSON 模板到这里' : 'Drop JSON template here'}</strong>
                 <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No file selected'}</small>
-              </label>
+              </div>
             </div>
             <div class="library-upload-footer">
               <div id="library-upload-message" class="message"></div>
@@ -1162,6 +1183,10 @@
         state.libraryFilters.tag4 = 'all';
         state.libraryFilters.selectedCountries = [];
         state.libraryFilters.selectedActivities = [];
+        state.libraryFilters.selectedStrategies = [];
+        state.libraryFilters.selectedElements = [];
+        state.libraryFilters.selectedFormats = [];
+        state.libraryFilters.selectedQuantities = [];
         state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
         document.querySelectorAll('[data-library-kind]').forEach(item => item.classList.toggle('active', item.dataset.libraryKind === state.libraryFilters.kind));
         document.getElementById('library-tag-rows').innerHTML = renderLibraryTagRows(state.libraryFilters.kind || 'all');
@@ -1287,6 +1312,27 @@
       state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
       filterLibraryCardsInPlace();
     });
+    document.getElementById('delete-all-templates-btn')?.addEventListener('click', async function() {
+      if (!confirm(state.lang === 'zh' ? '确定删除全部模版库内容？此操作不可恢复。' : 'Delete ALL templates? This cannot be undone.')) return;
+      this.disabled = true; this.textContent = state.lang === 'zh' ? '删除中...' : 'Deleting...';
+      try {
+        var { data: sources } = await state.supabase.from('vf_source_files').select('id, source_path').contains('tags', ['vf:kind:template']);
+        if (sources && sources.length) {
+          // 收集所有 storage 路径
+          var paths = [];
+          sources.forEach(function(s) {
+            if (s.source_path) paths.push(s.source_path);
+            // 预览文件在 {userId}/previews/{sourceId}/ 下，批量删除较复杂，跳过
+          });
+          if (paths.length) await state.supabase.storage.from(LIBRARY_BUCKET).remove(paths);
+          var ids = sources.map(function(s) { return s.id; });
+          await state.supabase.from('vf_source_files').delete().in('id', ids);
+        }
+        alert(state.lang === 'zh' ? '已删除 ' + (sources ? sources.length : 0) + ' 条模版记录。' : 'Deleted ' + (sources ? sources.length : 0) + ' templates.');
+      } catch(e) { alert('Error: ' + e.message); }
+      this.disabled = false; this.textContent = '🗑 ' + (state.lang === 'zh' ? '删除全部模版' : 'Delete all templates');
+      renderLibrary();
+    });
     document.addEventListener('click', event => {
       const wrap = document.querySelector('.filter-dropdown-wrap');
       if (filterPanel && wrap && !wrap.contains(event.target) && !filterPanel.hidden) {
@@ -1376,8 +1422,21 @@
       if (state.libraryFilters.tag2 !== 'all' && !tags.includes(state.libraryFilters.tag2)) return false;
       if (state.libraryFilters.tag3 !== 'all' && !tags.includes(state.libraryFilters.tag3)) return false;
       if (state.libraryFilters.tag4 !== 'all' && !tags.includes(state.libraryFilters.tag4)) return false;
-      if (state.libraryFilters.selectedCountries && state.libraryFilters.selectedCountries.length && !state.libraryFilters.selectedCountries.includes(item.source.country_id)) return false;
-      if (state.libraryFilters.selectedActivities && state.libraryFilters.selectedActivities.length && !state.libraryFilters.selectedActivities.includes(item.source.activity_id)) return false;
+      // 国家筛选（匹配选项的显示名）
+      if (state.libraryFilters.selectedCountries && state.libraryFilters.selectedCountries.length) {
+        var countryLabel = libCountryLabel(item.source);
+        if (!state.libraryFilters.selectedCountries.includes(countryLabel)) return false;
+      }
+      // 活动类型筛选（匹配选项的显示名）
+      if (state.libraryFilters.selectedActivities && state.libraryFilters.selectedActivities.length) {
+        var activityLabel = libActivityLabel(item.source);
+        if (!state.libraryFilters.selectedActivities.includes(activityLabel)) return false;
+      }
+      // 业务策略 / 元素 / 格式 / 数量 筛选（匹配 visible tags）
+      if (state.libraryFilters.selectedStrategies && state.libraryFilters.selectedStrategies.length && !state.libraryFilters.selectedStrategies.some(function(s) { return tags.includes(s); })) return false;
+      if (state.libraryFilters.selectedElements && state.libraryFilters.selectedElements.length && !state.libraryFilters.selectedElements.some(function(e) { return tags.includes(e); })) return false;
+      if (state.libraryFilters.selectedFormats && state.libraryFilters.selectedFormats.length && !state.libraryFilters.selectedFormats.some(function(f) { return tags.includes(f); })) return false;
+      if (state.libraryFilters.selectedQuantities && state.libraryFilters.selectedQuantities.length && !state.libraryFilters.selectedQuantities.some(function(q) { return tags.includes(q); })) return false;
       if (state.libraryFilters.favorites && !state.libraryFavorites.has(item.preview.id)) return false;
       return true;
     });
@@ -1442,44 +1501,50 @@
     return text.includes(query);
   }
 
-      
+
+  var FILTER_SECTIONS_CONFIG = {
+    country: { values: ['沙特阿拉伯','阿联酋','卡塔尔','科威特','巴林','阿曼'], matchBy: 'country' },
+    activity: { values: ['premium','picks','一人食','聚餐','品牌合作','足球','夏日','新年','开斋节','宰牲节','国庆节'], matchBy: 'activity' },
+    strategy: { values: ['新人专属','裂变','大促','闪购','买一送一','抽奖','免运'], matchBy: 'tags' },
+    element: { values: ['银行卡','券','kiki','骑手','国旗','商家赠品（手机、耳机、PS5）'], matchBy: 'tags' },
+    format: { values: ['仅jpg/png/pdf','含Psd文件','含Ai文件'], matchBy: 'tags' },
+    quantity: { values: ['单素材','成套素材'], matchBy: 'tags' }
+  };
+  var FILTER_STATE_KEYS = { country: 'selectedCountries', activity: 'selectedActivities', strategy: 'selectedStrategies', element: 'selectedElements', format: 'selectedFormats', quantity: 'selectedQuantities' };
+
   function populateFilterOptions() {
-    const countrySection = document.getElementById('filter-country-section');
-    const actSection = document.getElementById('filter-activity-section');
-    if (countrySection) {
-      countrySection.style.display = state.libraryFilters.kind === 'template' ? 'none' : '';
-    }
-    if (actSection) {
-      actSection.style.display = (state.libraryFilters.kind === 'source' || state.libraryFilters.kind === 'template') ? '' : 'none';
-    }
-    ['country', 'activity'].forEach(type => {
-      const container = document.getElementById('filter-' + type + '-options');
+    Object.keys(FILTER_SECTIONS_CONFIG).forEach(function(sectionId) {
+      var container = document.querySelector('[data-filter-options="' + sectionId + '"]');
       if (!container) return;
-      const typeLabel = type === 'country' ? 'Countries' : 'Activities';
-      const selectedAll = !state.libraryFilters['selected' + typeLabel]?.length;
-      const items = libraryOptions(type);
-      let html = '<button type="button" class="filter-capsule' + (selectedAll ? ' active' : '') + '" data-value="all">' + (state.lang === 'zh' ? '全部' : 'All') + '</button>';
-      html += items.map(item => {
-        const sel = state.libraryFilters['selected' + typeLabel]?.includes(item.id);
-        return '<button type="button" class="filter-capsule' + (sel ? ' active' : '') + '" data-value="' + item.id + '">' + escapeHtml(state.lang === 'zh' ? item.name_zh : (item.name_en || item.name_zh)) + '</button>';
-      }).join('');
+      var config = FILTER_SECTIONS_CONFIG[sectionId];
+      var stateKey = FILTER_STATE_KEYS[sectionId];
+      var selected = state.libraryFilters[stateKey] || [];
+      var selectedAll = !selected.length;
+      var html = '<button type="button" class="filter-capsule' + (selectedAll ? ' active' : '') + '" data-value="all">' + (state.lang === 'zh' ? '全部' : 'All') + '</button>';
+      config.values.forEach(function(val) {
+        var sel = selected.includes(val);
+        html += '<button type="button" class="filter-capsule' + (sel ? ' active' : '') + '" data-value="' + val + '">' + escapeHtml(val) + '</button>';
+      });
       container.innerHTML = html;
-      container.querySelectorAll('.filter-capsule').forEach(btn => {
-        btn.addEventListener('click', () => {
+      container.querySelectorAll('.filter-capsule').forEach(function(btn) {
+        btn.addEventListener('click', function() {
           if (btn.dataset.value === 'all') {
-            container.querySelectorAll('.filter-capsule').forEach(b => b.classList.toggle('active', b === btn));
+            container.querySelectorAll('.filter-capsule').forEach(function(b) { b.classList.toggle('active', b === btn); });
           } else {
-            const allBtn = container.querySelector('.filter-capsule[data-value="all"]');
+            var allBtn = container.querySelector('.filter-capsule[data-value="all"]');
             if (allBtn) allBtn.classList.remove('active');
             btn.classList.toggle('active');
           }
-          const activeButtons = container.querySelectorAll('.filter-capsule.active:not([data-value="all"])');
-          state.libraryFilters['selected' + typeLabel] = Array.from(activeButtons).map(b => b.dataset.value);
+          var activeButtons = container.querySelectorAll('.filter-capsule.active:not([data-value="all"])');
+          state.libraryFilters[stateKey] = Array.from(activeButtons).map(function(b) { return b.dataset.value; });
           state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
           filterLibraryCardsInPlace();
         });
       });
     });
+    // 显示/隐藏：模版库不显示国家
+    var countrySection = document.querySelector('[data-filter-section="country"]');
+    if (countrySection) countrySection.style.display = state.libraryFilters.kind === 'template' ? 'none' : '';
   }
 
   function updateKindTabIndicator() {
@@ -1582,8 +1647,14 @@
   async function loadLibraryData() {
     const status = document.getElementById('library-status');
     if (!state.localPreview && state.libraryDataLoaded) {
+      // 先快速渲染内存数据，后台静默刷新 Supabase
       renderLibrarySelects();
       renderLibraryGrid();
+      refreshKindTabCounts();
+      // 后台从 Supabase 拉最新数据合并（处理其他设备/用户的变更）
+      setTimeout(async function() {
+        try { state.libraryDataLoaded = false; await loadLibraryData(); } catch(e) {}
+      }, 2000);
       return;
     }
     if (!state.localPreview && state.libraryDataPromise) {
@@ -1629,6 +1700,12 @@
     state.libraryPreviewUrls = {};
     state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
     await loadLibraryData();
+    refreshKindTabCounts();
+    renderLibraryGrid();
+    // 刷新筛选标签计数
+    var tagRows = document.getElementById('library-tag-rows');
+    if (tagRows) tagRows.innerHTML = renderLibraryTagRows(state.libraryFilters.kind || 'all');
+    wireLibraryTagButtons();
   }
 
   async function seedActivityTypes() {
@@ -1838,8 +1915,12 @@
         return selectedLibraryTagValues().every(tag => visibleLibraryTags(item.source).includes(tag));
       })
       .filter(item => !state.libraryFilters.favorites || state.libraryFavorites.has(item.preview.id))
-      .filter(item => !state.libraryFilters.selectedCountries || !state.libraryFilters.selectedCountries.length || state.libraryFilters.selectedCountries.includes(item.source.country_id))
-      .filter(item => !state.libraryFilters.selectedActivities || !state.libraryFilters.selectedActivities.length || state.libraryFilters.selectedActivities.includes(item.source.activity_id))
+      .filter(item => !state.libraryFilters.selectedCountries || !state.libraryFilters.selectedCountries.length || state.libraryFilters.selectedCountries.includes(libCountryLabel(item.source)))
+      .filter(item => !state.libraryFilters.selectedActivities || !state.libraryFilters.selectedActivities.length || state.libraryFilters.selectedActivities.includes(libActivityLabel(item.source)))
+      .filter(item => !state.libraryFilters.selectedStrategies || !state.libraryFilters.selectedStrategies.length || state.libraryFilters.selectedStrategies.some(function(s) { return visibleLibraryTags(item.source).includes(s); }))
+      .filter(item => !state.libraryFilters.selectedElements || !state.libraryFilters.selectedElements.length || state.libraryFilters.selectedElements.some(function(e) { return visibleLibraryTags(item.source).includes(e); }))
+      .filter(item => !state.libraryFilters.selectedFormats || !state.libraryFilters.selectedFormats.length || state.libraryFilters.selectedFormats.some(function(f) { return visibleLibraryTags(item.source).includes(f); }))
+      .filter(item => !state.libraryFilters.selectedQuantities || !state.libraryFilters.selectedQuantities.length || state.libraryFilters.selectedQuantities.some(function(q) { return visibleLibraryTags(item.source).includes(q); }))
       .filter(item => {
         if (!query) return true;
         const text = [
@@ -2097,6 +2178,16 @@
 
   function wireLibraryCards() {
     document.querySelectorAll('.library-card').forEach(card => {
+      // 双击模板 → 跳转静态DIY编辑
+      card.addEventListener('dblclick', function(event) {
+        if (event.target.closest('button')) return; // 忽略按钮上的双击
+        var item = libraryItemByPreviewId(card.dataset.previewId);
+        if (!item || !item.source) return;
+        var kind = libraryKindOfSource(item.source);
+        if (kind === 'template') {
+          openLibraryTemplate(item).catch(function(e) { alert(e.message); });
+        }
+      });
       card.addEventListener('click', event => {
         // 多选模式下：点击卡片=勾选切换，点击按钮照常
         if (state.libraryMultiSelect) {
@@ -2112,6 +2203,8 @@
         }
         const button = event.target.closest('button[data-action]');
         if (!button) {
+          var clickItem = libraryItemByPreviewId(card.dataset.previewId);
+          if (clickItem && libraryKindOfSource(clickItem.source) === 'template') return; // 模版单击不弹窗，双击打开
           selectLibraryItem(card.dataset.previewId);
           return;
         }
@@ -2934,6 +3027,8 @@
       input.addEventListener('change', () => {
         filterOversizedFiles(input);
         updateDropZoneSummary(zone, input.files);
+        // 有文件时让隐形 input 不拦截点击，× 按钮才能被点到
+        input.style.pointerEvents = (input.files && input.files.length) ? 'none' : '';
       });
       zone.addEventListener('dragenter', event => {
         event.preventDefault();
@@ -3515,7 +3610,18 @@
       return;
     }
     await reloadLibraryData();
+    // 通知静态DIY iframe 同步删除
+    notifyStaticIframe({ type: 'vf:template-deleted', sourceId: sourceId });
     void logAssetEvent('delete', item);
+  }
+
+  function notifyStaticIframe(msg) {
+    try {
+      var frame = state.toolFrames['static'];
+      if (frame && frame.contentWindow) {
+        frame.contentWindow.postMessage(msg, location.origin);
+      }
+    } catch(e) {}
   }
 
   async function toggleLibraryFavorite(item) {
@@ -3622,22 +3728,42 @@
     }
     try {
       const snapshot = await loadLibraryTemplateSnapshot(item);
-      validateProjectSnapshot(snapshot, 'static');
       location.hash = 'static';
       navigate('static');
-      await waitForToolImporter();
-      const result = await state.activeFrame.contentWindow.VF_IMPORT_PROJECT(snapshot);
-      if (!result?.success) throw new Error(result?.message || (state.lang === 'zh' ? '模板打开失败。' : 'Failed to open template.'));
+      if (snapshot.schema === 'vf-project-snapshot/v1') {
+        validateProjectSnapshot(snapshot, 'static');
+        await waitForToolImporter();
+        const result = await state.activeFrame.contentWindow.VF_IMPORT_PROJECT(snapshot);
+        if (!result?.success) throw new Error(result?.message || (state.lang === 'zh' ? '模板打开失败。' : 'Failed to open template.'));
+      } else {
+        // 版式/套组/标签组/Logo → 发送数据到 iframe 应用
+        await waitForToolImporter();
+        notifyStaticIframe({ type: 'vf:apply-template', data: snapshot, sourceId: item.source.id });
+      }
       await logAssetEvent('use_static', item);
     } catch (error) {
       alert(error.message);
     }
   }
 
+  var _templateSnapshotCache = {};
   async function loadLibraryTemplateSnapshot(item) {
-    const { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).download(item.source.source_path);
-    if (error) throw error;
-    return JSON.parse(await data.text());
+    var path = item.source.source_path;
+    // 如果刚上传的，优先用缓存
+    if (_templateSnapshotCache[path]) return _templateSnapshotCache[path];
+    // 重试最多 3 次，处理 Storage 复制延迟
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        var { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).download(path);
+        if (error) throw error;
+        var json = JSON.parse(await data.text());
+        _templateSnapshotCache[path] = json;
+        return json;
+      } catch (e) {
+        if (attempt < 2) await new Promise(function(r) { setTimeout(r, 800); });
+        else throw e;
+      }
+    }
   }
 
   async function logAssetEvent(eventType, item, extraMeta) {
@@ -3756,6 +3882,14 @@ function libraryTagsForForm(formData, kind) {
     return optionName(state.libraryOptions.find(item => item.id === id));
   }
 
+  function libCountryLabel(source) {
+    return optionNameById(source.country_id);
+  }
+
+  function libActivityLabel(source) {
+    return optionNameById(source.activity_id);
+  }
+
   function libraryItemByPreviewId(id) {
     return state.libraryItems.find(item => item.preview.id === id);
   }
@@ -3819,9 +3953,16 @@ function libraryTagsForForm(formData, kind) {
   function dataUrlToBlob(dataUrl) {
     const [header, body] = String(dataUrl || '').split(',');
     const mime = header.match(/data:([^;]+)/)?.[1] || 'application/octet-stream';
-    const binary = atob(body || '');
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    var bytes;
+    if (header.includes(';base64')) {
+      const binary = atob(body || '');
+      bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    } else {
+      // URI 编码的数据 URL（如 SVG），用 TextEncoder
+      const decoded = decodeURIComponent(body || '');
+      bytes = new TextEncoder().encode(decoded);
+    }
     return new Blob([bytes], { type: mime });
   }
 
@@ -4279,9 +4420,9 @@ function libraryTagsForForm(formData, kind) {
       return 'other';
     }
 
-    var CAT_LABELS_ZH = { upload: '上传素材', download: '下载素材', favorite: '收藏', diy: '使用DIY' };
-    var CAT_LABELS_EN = { upload: 'Upload', download: 'Download', favorite: 'Favorite', diy: 'DIY Use' };
-    var CAT_ORDER = ['upload','download','favorite','diy'];
+    var CAT_LABELS_ZH = { upload: '上传素材', download: '下载素材', view: '查看详情', favorite: '收藏', edit: '编辑素材', delete: '删除素材', diy: '使用DIY', login: '登录' };
+    var CAT_LABELS_EN = { upload: 'Upload', download: 'Download', view: 'View', favorite: 'Favorite', edit: 'Edit', delete: 'Delete', diy: 'DIY Use', login: 'Login' };
+    var CAT_ORDER = ['upload','download','view','favorite','edit','delete','diy','login'];
 
     // ===== 销毁旧图表 =====
     function destroyCharts() {
@@ -4358,16 +4499,22 @@ function libraryTagsForForm(formData, kind) {
             responsive: true, maintainAspectRatio: false, cutout: '68%',
             layout: { padding: { bottom: 10 } },
             plugins: {
-              legend: { position: 'right', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 14, font: { size: 11 }, color: '#64748b' } },
+              legend: { position: 'right', onClick: function(e, legendItem, legend) { if (legendItem.index !== undefined) { legend.chart.toggleDataVisibility(legendItem.index); legend.chart.update(); } }, labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 14, font: { size: 11 }, color: '#64748b' } },
               tooltip: { callbacks: { label: function(ctx) { var pct = ((ctx.raw / totalCat) * 100).toFixed(1); return ' ' + ctx.label + ': ' + ctx.raw + ' (' + pct + '%)'; } } }
             }
           },
           plugins: [{
             id: 'centerText', afterDraw: function(chart) {
               var meta = chart.getDatasetMeta(0); if (!meta.data.length) return;
+              // 只统计未隐藏的项，点击图例屏蔽后中间数字同步变化
+              var visibleTotal = 0;
+              var ds = chart.data.datasets[0];
+              for (var i = 0; i < ds.data.length; i++) {
+                if (chart.getDataVisibility(i)) visibleTotal += ds.data[i];
+              }
               var ctx = chart.ctx, c = meta.data[0], x = c.x, y = c.y;
               ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-              ctx.font = "bold 24px -apple-system, sans-serif"; ctx.fillStyle = '#1e293b'; ctx.fillText(totalCat, x, y - 6);
+              ctx.font = "bold 24px -apple-system, sans-serif"; ctx.fillStyle = '#1e293b'; ctx.fillText(visibleTotal, x, y - 6);
               ctx.font = "11px -apple-system, sans-serif"; ctx.fillStyle = '#64748b'; ctx.fillText(zh ? '总操作' : 'Total', x, y + 14);
               ctx.restore();
             }
@@ -4887,7 +5034,7 @@ function libraryTagsForForm(formData, kind) {
         country_id: null,
         activity_id: null,
         category_id: null,
-        tags: normalizeLibraryTags('template', ['未分类', '静态模板']),
+        tags: normalizeLibraryTags('template', ['模版', '社媒物料']),
         visibility: 'all',
         source_path: sourcePath,
         source_filename: `${title.trim()}.json`,
@@ -4919,6 +5066,344 @@ function libraryTagsForForm(formData, kind) {
       button.textContent = originalText;
     }
   }
+
+  // ===== 顶部同步进度条 =====
+  var _syncQueue = [];
+  function showGlobalProgress(text) {
+    var bar = document.getElementById('sync-progress-bar');
+    var fill = document.getElementById('sync-progress-fill');
+    var toast = document.getElementById('sync-progress-toast');
+    if (bar) bar.style.display = 'block';
+    if (fill) fill.style.width = '30%';
+    if (toast) { toast.style.display = 'block'; toast.textContent = text || '正在同步...'; }
+  }
+  function updateGlobalProgress(percent, text) {
+    var fill = document.getElementById('sync-progress-fill');
+    var toast = document.getElementById('sync-progress-toast');
+    if (fill) fill.style.width = (percent || 50) + '%';
+    if (toast && text) toast.textContent = text;
+  }
+  function hideGlobalProgress(doneText) {
+    var bar = document.getElementById('sync-progress-bar');
+    var fill = document.getElementById('sync-progress-fill');
+    var toast = document.getElementById('sync-progress-toast');
+    if (fill) fill.style.width = '100%';
+    if (toast) { toast.textContent = doneText || '✅ 同步完成'; toast.style.background = '#0d9488'; }
+    setTimeout(function() {
+      if (bar) bar.style.display = 'none';
+      if (fill) fill.style.width = '0%';
+      if (toast) { toast.style.display = 'none'; toast.style.background = '#0f172a'; }
+    }, 2000);
+  }
+  // ===== 静态DIY模板 ↔ 素材库同步 =====
+  async function handleToolMessage(event) {
+    var msg = event.data;
+    if (!msg || !msg.type) return;
+    // 只接受来自静态DIY iframe 的消息
+    if (!msg.type.startsWith('vf:')) return;
+    var sourceWindow = event.source;
+    switch (msg.type) {
+      case 'vf:save-template':
+        await handleSaveTemplate(msg, sourceWindow);
+        refreshLibraryIfOpen();
+        break;
+      case 'vf:delete-template':
+        await handleDeleteTemplate(msg, sourceWindow);
+        refreshLibraryIfOpen();
+        break;
+      case 'vf:request-templates':
+        handleFetchTemplates(sourceWindow);
+        break;
+    }
+  }
+
+  async function handleSaveTemplate(msg, sourceWindow) {
+    if (state.localPreview || !state.supabase || !state.session) {
+      replySyncProgress(sourceWindow, 'error', null, 'Not logged in');
+      return;
+    }
+    showGlobalProgress('⏳ 正在保存「' + (msg.name || '模板') + '」到素材库...');
+    replySyncProgress(sourceWindow, 'uploading');
+    var sourceId = crypto.randomUUID();
+    var uploadedPaths = [];
+    var sourceInserted = false;
+    try {
+      var userId = state.session.user.id;
+      // 重名检测：如已有同名模板 → 名称加数字后缀
+      var finalName = msg.name || '未命名模板';
+      var { data: existing } = await state.supabase.from('vf_source_files')
+        .select('title').ilike('title', finalName + '%').limit(20);
+      if (existing && existing.length > 0) {
+        var existingNames = existing.map(function(r) { return r.title; });
+        var suffix = 2;
+        var candidate = finalName + ' (' + suffix + ')';
+        while (existingNames.indexOf(candidate) !== -1) {
+          suffix++;
+          candidate = finalName + ' (' + suffix + ')';
+        }
+        finalName = candidate;
+      }
+      // 构建 JSON 数据
+      var schemaMap = { pack: 'vf-template-pack/v1', layout: 'vf-layout-preset/v1', tagcombo: 'vf-tag-combo/v1', logo: 'vf-logo-asset/v1' };
+      var schemaName = schemaMap[msg.templateType] || 'vf-layout-preset/v1';
+      var jsonData = { schema: schemaName, name: finalName, exportedAt: new Date().toISOString() };
+      if (msg.templateType === 'pack') {
+        jsonData.artboards = msg.data.artboards;
+      } else if (msg.templateType === 'tagcombo') {
+        jsonData.elements = msg.data.elements || [];
+      } else if (msg.templateType === 'logo') {
+        jsonData.src = msg.data.src || '';
+      } else {
+        jsonData.size = msg.data.size || '';
+        jsonData.canvasW = msg.data.canvasW || 0;
+        jsonData.canvasH = msg.data.canvasH || 0;
+        jsonData.elements = msg.data.elements || [];
+      }
+      var jsonBlob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+      // 预览图处理
+      var previewBlob = msg.previewDataUrl ? dataUrlToBlob(msg.previewDataUrl) : null;
+      if (previewBlob && previewBlob.size > 2 * 1024 * 1024) {
+        previewBlob = await compressImageBlob(previewBlob, 2 * 1024 * 1024);
+      }
+      // 上传到 Supabase Storage
+      var sourcePath = userId + '/sources/' + sourceId + '/' + safeStorageName(finalName + '.json');
+      var sourceUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, jsonBlob, { upsert: false, contentType: 'application/json' });
+      if (sourceUpload.error) throw sourceUpload.error;
+      uploadedPaths.push(sourcePath);
+      var previewPath = '', dimensions = { width: 0, height: 0 };
+      if (previewBlob) {
+        previewPath = userId + '/previews/' + sourceId + '/' + safeStorageName(finalName + '-preview.png');
+        var previewUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(previewPath, previewBlob, { upsert: false, contentType: previewBlob.type || 'image/png' });
+        if (previewUpload.error) throw previewUpload.error;
+        uploadedPaths.push(previewPath);
+        dimensions = await readImageDimensions(new File([previewBlob], 'preview.png', { type: previewBlob.type || 'image/png' }));
+      }
+      // 插入数据库
+      // 按新标签结构分配 tag1/tag2
+      var tagMap = {
+        layout: ['模版', msg.subTag || '社媒物料'],
+        pack: ['模版', msg.subTag || '社媒物料'],
+        full: ['模版', msg.subTag || '社媒物料'],
+        tagcombo: ['组件', msg.subTag || '标签'],
+        logo: ['组件', msg.subTag || 'LOGO']
+      };
+      var tagsToUse = tagMap[msg.templateType] || ['模版', '社媒物料'];
+      var sourceInsert = await state.supabase.from('vf_source_files').insert([{
+        id: sourceId,
+        title: finalName,
+        country_id: null, activity_id: null, category_id: null,
+        tags: normalizeLibraryTags('template', tagsToUse),
+        visibility: 'all',
+        source_path: sourcePath,
+        source_filename: finalName + '.json',
+        source_mime_type: 'application/json',
+        source_size_bytes: jsonBlob.size,
+        source_ext: 'json',
+        uploaded_by: userId
+      }]);
+      if (sourceInsert.error) throw sourceInsert.error;
+      sourceInserted = true;
+      if (previewBlob) {
+        var previewInsert = await state.supabase.from('vf_asset_previews').insert([{
+          id: crypto.randomUUID(),
+          source_file_id: sourceId,
+          preview_path: previewPath,
+          preview_filename: finalName + '-preview.png',
+          preview_mime_type: previewBlob.type || 'image/png',
+          preview_size_bytes: previewBlob.size,
+          width: dimensions.width, height: dimensions.height,
+          sort_order: 10
+        }]);
+        if (previewInsert.error) throw previewInsert.error;
+      }
+      // 立即更新内存中的 library 数据，切换时无需等 Supabase 复制
+      state.librarySources.push({
+        id: sourceId, title: finalName, tags: normalizeLibraryTags('template', tagsToUse),
+        country_id: null, activity_id: null, category_id: null,
+        source_path: sourcePath, source_filename: finalName + '.json',
+        source_mime_type: 'application/json', source_size_bytes: jsonBlob.size,
+        source_ext: 'json', uploaded_by: userId, created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+      });
+      if (previewBlob) {
+        state.libraryPreviews.push({
+          id: crypto.randomUUID(), source_file_id: sourceId,
+          preview_path: previewPath, preview_filename: finalName + '-preview.png',
+          preview_mime_type: previewBlob.type || 'image/png', preview_size_bytes: previewBlob.size,
+          width: dimensions.width, height: dimensions.height, sort_order: 10
+        });
+        state.libraryPreviewUrls[previewPath] = msg.previewDataUrl || '';
+      }
+      state.libraryDataLoaded = true;
+      _templateSnapshotCache[sourcePath] = jsonData;
+      updateGlobalProgress(80, '正在保存「' + finalName + '」...');
+      replySyncProgress(sourceWindow, 'done', sourceId, null, finalName, msg.name, msg.tempId);
+      hideGlobalProgress('✅「' + finalName + '」已保存');
+    } catch (error) {
+      await cleanupFailedLibraryUpload(sourceId, sourceInserted, uploadedPaths);
+      replySyncProgress(sourceWindow, 'error', null, error.message, msg.name, msg.tempId);
+      hideGlobalProgress('❌ 保存失败');
+    }
+  }
+
+  function replySyncProgress(sourceWindow, status, sourceId, error, finalName, originalName, tempId) {
+    try {
+      sourceWindow.postMessage({ type: 'vf:sync-progress', status: status, sourceId: sourceId || '', error: error || '', finalName: finalName || '', originalName: originalName || '', tempId: tempId || '' }, location.origin);
+    } catch (e) { /* 忽略发送失败 */ }
+  }
+
+  async function handleDeleteTemplate(msg, sourceWindow) {
+    if (!msg.sourceId || state.localPreview || !state.supabase) return;
+    try {
+      var { data: src } = await state.supabase.from('vf_source_files').select('source_path').eq('id', msg.sourceId).single();
+      if (src && src.source_path) {
+        var userId = state.session ? state.session.user.id : '';
+        var previewsPath = userId + '/previews/' + msg.sourceId + '/';
+        var { data: previews } = await state.supabase.storage.from(LIBRARY_BUCKET).list(previewsPath, { limit: 10 });
+        var pathsToDelete = [src.source_path];
+        if (previews && previews.length > 0) {
+          previews.forEach(function(p) { pathsToDelete.push(previewsPath + p.name); });
+        }
+        await state.supabase.storage.from(LIBRARY_BUCKET).remove(pathsToDelete);
+      }
+      await state.supabase.from('vf_source_files').delete().eq('id', msg.sourceId);
+      // 立即从内存移除，无需等 Supabase 复制
+      state.librarySources = state.librarySources.filter(function(s) { return s.id !== msg.sourceId; });
+      state.libraryPreviews = state.libraryPreviews.filter(function(p) { return p.source_file_id !== msg.sourceId; });
+    } catch (error) {
+      console.warn('Template delete failed:', error);
+    }
+  }
+
+  async function handleFetchTemplates(sourceWindow) {
+    if (state.localPreview || !state.supabase) {
+      try { sourceWindow.postMessage({ type: 'vf:templates-loaded', templates: [] }, location.origin); } catch (e) {}
+      return;
+    }
+    try {
+      var { data: sources, error } = await state.supabase.from('vf_source_files')
+        .select('id, title, tags, source_path')
+        .contains('tags', ['vf:kind:template'])
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      // 查询所有预览图
+      var sourceIds = (sources || []).map(function(s) { return s.id; });
+      var previewMap = {};
+      if (sourceIds.length > 0) {
+        var { data: previews } = await state.supabase.from('vf_asset_previews')
+          .select('source_file_id, preview_path, width, height')
+          .in('source_file_id', sourceIds)
+          .order('sort_order', { ascending: true })
+          .limit(sourceIds.length || 50);
+        var previewDims = {}; // { sourceId: { w, h } }
+        if (previews) {
+          // 每个 source 取第一个预览图
+          var seen = {};
+          previews.forEach(function(p) {
+            if (!seen[p.source_file_id] && p.preview_path) {
+              seen[p.source_file_id] = true;
+              previewMap[p.source_file_id] = p.preview_path;
+              if (p.width && p.height) previewDims[p.source_file_id] = { w: p.width, h: p.height };
+            }
+          });
+        }
+      }
+      // 先发元数据（不包含预览 URL），再后台下载预览图 + JSON
+      var templates = [];
+      for (var i = 0; i < (sources || []).length; i++) {
+        var s = sources[i];
+        var t = s.tags || [];
+        var templateType = 'layout';
+        if ((t.includes('标签') && t.includes('组件')) || t.includes('标签组')) templateType = 'tagcombo';
+        else if (t.includes('LOGO') || t.includes('Logo') || t.includes('背景') || t.includes('KIKI') || t.includes('其他素材') || t.includes('品牌圆弧')) templateType = 'logo';
+        else if (t.includes('社媒物料') || t.includes('C端物料') || t.includes('模版') || t.includes('版式') || t.includes('套组') || t.includes('静态模板')) templateType = 'layout';
+        var dims = previewDims[s.id] || {};
+        templates.push({ id: s.id, name: s.title, templateType: templateType, tags: t, previewW: dims.w || 0, previewH: dims.h || 0 });
+      }
+      sourceWindow.postMessage({ type: 'vf:templates-loaded', templates: templates }, location.origin);
+      // 后台逐个下载预览图（转 data URL）+ JSON 并推送
+      for (var j = 0; j < (sources || []).length; j++) {
+        var src = sources[j];
+        // 下载预览图
+        var previewPath = previewMap[src.id];
+        var previewDataUrl = '';
+        if (previewPath) {
+          if (state.libraryPreviewUrls && state.libraryPreviewUrls[previewPath]) {
+            previewDataUrl = state.libraryPreviewUrls[previewPath];
+          } else {
+            try {
+              var { data: pBlob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(previewPath);
+              if (pBlob) {
+                previewDataUrl = await new Promise(function(resolve) {
+                  var reader = new FileReader();
+                  reader.onload = function() { resolve(reader.result); };
+                  reader.onerror = function() { resolve(''); };
+                  reader.readAsDataURL(pBlob);
+                });
+              }
+            } catch(e) {}
+          }
+        }
+        if (previewDataUrl) {
+          sourceWindow.postMessage({ type: 'vf:template-preview', id: src.id, previewUrl: previewDataUrl }, location.origin);
+        }
+        // 下载 JSON 数据
+        try {
+          var { data: blob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(src.source_path);
+          if (!blob) continue;
+          var json = JSON.parse(await blob.text());
+          sourceWindow.postMessage({ type: 'vf:template-data', id: src.id, data: json }, location.origin);
+        } catch (e) {}
+      }
+    } catch (error) {
+      try { sourceWindow.postMessage({ type: 'vf:templates-loaded', templates: [], error: error.message }, location.origin); } catch (e) {}
+    }
+  }
+
+  // 如果当前在素材库页面，自动刷新数据
+  async function refreshLibraryIfOpen() {
+    if (state.route === 'library') {
+      try {
+        await loadLibraryData();
+        refreshKindTabCounts();
+        renderLibraryGrid();
+      } catch(e) { /* 静默 */ }
+    }
+  }
+
+  // 图片 Blob 压缩到目标大小以下
+  function compressImageBlob(blob, maxBytes) {
+    return new Promise(function(resolve, reject) {
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function() {
+        URL.revokeObjectURL(url);
+        var canvas = document.createElement('canvas');
+        var w = img.width, h = img.height;
+        // 逐步缩小直到满足大小
+        var quality = 0.9;
+        var attempt = 0;
+        function tryCompress() {
+          canvas.width = w; canvas.height = h;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(function(compressed) {
+            if (!compressed) { resolve(blob); return; }
+            if (compressed.size <= maxBytes || attempt > 5) { resolve(compressed); return; }
+            // 缩小尺寸并降低质量
+            w = Math.floor(w * 0.7); h = Math.floor(h * 0.7);
+            quality = Math.max(0.3, quality - 0.1);
+            attempt++;
+            tryCompress();
+          }, 'image/jpeg', quality);
+        }
+        tryCompress();
+      };
+      img.onerror = function() { URL.revokeObjectURL(url); resolve(blob); };
+      img.src = url;
+    });
+  }
+  // ===== 模板同步结束 =====
 
   async function saveProject(event) {
     event.preventDefault();

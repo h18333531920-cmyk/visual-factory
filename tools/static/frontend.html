@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GCC Design - Static DIY</title>
-    <script src="../../config.js?v=20260629-discount-tag4"></script>
-    <script src="../../tool-auth-guard.js?v=20260629-discount-tag4"></script>
+    <script src="../../config.js?v=20260804-unified-v73"></script>
+    <script src="../../tool-auth-guard.js?v=20260804-unified-v73"></script>
     <script src="../vendor/html2canvas.min.js"></script>
     
     <style>
@@ -18,6 +18,7 @@
         .workspace-tabs button { border: 0; background: transparent; padding: 0; color: #111827; font-size: 14px; font-weight: 520; cursor: pointer; }
         .workspace-tabs button.active { color: #101114; font-weight: 880; }
         .editor-layout { display: flex; gap: 30px; max-width: 1560px; width: 100%; height: calc(100vh - 110px); }
+        .asset-pane { width: 260px; flex-shrink: 0; background: transparent; border-radius: 0; display: flex; flex-direction: column; border: 0; box-shadow: none; overflow-y: auto; overflow-x: hidden; }
         .left-pane { flex: 1; background: #EAEAEA; border-radius: 9px; position: relative; display: flex; align-items: center; justify-content: center; border: 0; overflow: hidden; background-image: none; }
         .ratio-nav { position: absolute; top: 26px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; gap: 8px; background: transparent; padding: 0; border-radius: 0; box-shadow: none; border: 0; }
         .ratio-nav button { background: #FFFFFF; border: 1px solid #111827; padding: 5px 16px; border-radius: 999px; cursor: pointer; color: #111827; font-weight: 760; font-size: 12px; transition: 0.2s; }
@@ -36,6 +37,8 @@
         .canvas-actions button { min-width: 70px; height: 28px; border: 1px solid #111827; border-radius: 999px; background: #FFFFFF; color: #111827; font-size: 12px; font-weight: 800; }
         .canvas-actions button:last-child,
         .canvas-actions button.primary { background: #717171; border-color: #717171; color: #FFFFFF; }
+        .canvas-actions button.save-template-btn { min-width: 70px; height: 28px; border: 1px solid #059669; border-radius: 999px; background: #10b981; color: #FFFFFF; font-size: 12px; font-weight: 800; cursor: pointer; }
+        .canvas-actions button.save-template-btn:hover { background: #059669; }
 
         .canvas-wrapper { position: absolute; left: 50%; top: 50%; background: #FFFFFF; box-shadow: none; overflow: hidden; transform-origin: center center; }
         .left-pane.drag-file-over .canvas-wrapper { box-shadow: 0 0 0 3px rgba(16,17,20,0.18), 0 20px 60px rgba(16,17,20,0.10); }
@@ -51,7 +54,7 @@
         .artboard-preview-canvas { position: absolute; left: 0; top: 0; transform-origin: top left; overflow: hidden; background: #FFFFFF; }
         .layer-base { position: absolute; pointer-events: none; }
         
-        .layer-image-wrapper { position: absolute; cursor: grab; transform-origin: center center; pointer-events: auto; box-shadow: 0 0 0 1px rgba(0,0,0,0.05); }
+        .layer-image-wrapper { position: absolute; cursor: grab; transform-origin: center center; pointer-events: auto; }
         .layer-image-wrapper:active { cursor: grabbing; }
         .layer-image-div { width: 100%; height: 100%; background-size: cover; background-position: center; pointer-events: none; }
         .layer-image-img { width: 100%; height: 100%; display: block; pointer-events: none; }
@@ -67,9 +70,39 @@
         .layer-tag-wrapper:active { cursor: grabbing; }
         .layer-text-wrapper { position: absolute; cursor: grab; transform-origin: center center; pointer-events: auto; }
         .layer-text-wrapper:active { cursor: grabbing; }
-        .layer-text-content { white-space: pre-wrap; overflow-wrap: anywhere; }
-        
+        .layer-text-content { overflow-wrap: anywhere; outline: none; }
+        .layer-text-content[contenteditable="true"] { cursor: text; }
+        .layer-text-editing .layer-text-content { outline: 2px solid #2563EB; outline-offset: 3px; border-radius: 2px; }
+
+        /* 数字步进器 */
+        .stepper-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .stepper-label { font-size: 12px; color: var(--text-sub); font-weight: 600; width: 42px; flex-shrink: 0; }
+        .stepper-btn { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; color: var(--text-main); user-select: none; }
+        .stepper-btn:hover { background: #f0f2f5; border-color: #999; }
+        .stepper-value { flex: 1; height: 28px; border: 1px solid var(--border); border-radius: 6px; text-align: center; font-size: 13px; font-weight: 600; cursor: ew-resize; background: #fff; display: flex; align-items: center; justify-content: center; user-select: none; }
+        .stepper-value:hover { border-color: var(--primary); }
+        .stepper-value[contenteditable="true"] { cursor: text; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); outline: none; }
+        .stepper-unit { font-size: 11px; color: var(--text-sub); width: 20px; flex-shrink: 0; }
+        .text-mode-toggle { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 14px; background: #f0f2f5; border-radius: 8px; padding: 3px; }
+        .text-mode-btn { border: 0; background: transparent; border-radius: 6px; padding: 8px 4px; cursor: pointer; font-size: 18px; color: #666; transition: 0.15s; text-align: center; line-height: 1; }
+        .text-mode-btn:hover { color: #333; }
+        .text-mode-btn.active { background: #fff; color: #2563EB; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .text-mode-btn span { display: block; font-size: 10px; font-weight: 600; margin-top: 2px; }
+
         .is-active-layer { outline: 3px dashed var(--primary); outline-offset: 4px; }
+        .is-new-layer {
+            outline: 3px solid #4f6df5 !important;
+            outline-offset: 6px;
+            box-shadow: 0 0 0 3px #fff, 0 0 0 6px rgba(79,109,245,.5), 0 0 22px rgba(79,109,245,.72) !important;
+            animation: new-layer-pulse 1s ease-in-out infinite alternate;
+        }
+        .is-new-layer::after {
+            content: '新添加'; position: absolute; left: 50%; top: -30px;
+            transform: translateX(-50%); padding: 4px 7px; border-radius: 5px;
+            background: #4f6df5; color: #fff; font: 700 11px/1 Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+            letter-spacing: .02em; white-space: nowrap; pointer-events: none;
+        }
+        @keyframes new-layer-pulse { from { opacity: 1; } to { opacity: .72; } }
         
         .tag-pill { display: inline-block; height: 60px; line-height: 60px; padding: 0 36px; border-radius: 30px; font-size: 36px; font-weight: inherit; white-space: pre; letter-spacing: inherit; font-kerning: normal; font-feature-settings: "kern" 1; pointer-events: auto; text-align: center; }
         .discount-pill { position: relative; display: inline-flex; align-items: center; white-space: nowrap; font-kerning: normal; font-feature-settings: "kern" 1; pointer-events: auto; }
@@ -210,12 +243,17 @@
         .asset-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
         .asset-tab { border: 1px solid var(--border); background: #FFFFFF; border-radius: 9px; padding: 8px 6px; font-size: 12px; font-weight: 800; cursor: pointer; color: var(--text-sub); }
         .asset-tab.active { background: var(--text-main); border-color: var(--text-main); color: #FFFFFF; }
+        .filter-capsule { border: 1px solid var(--border); background: #FFFFFF; border-radius: 999px; font-size: 11px; font-weight: 800; cursor: pointer; color: var(--text-sub); padding: 4px 10px; box-shadow: none; }
+        .filter-capsule.active { background: #0b0d12; border-color: #0b0d12; color: #fff; }
         .asset-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-height: 260px; overflow-y: auto; padding: 0 4px 4px 0; align-items: start; }
-        .asset-item { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: #FFFFFF; cursor: pointer; }
-        .asset-item:hover { border-color: var(--primary); }
-        .asset-item.current { border-color: var(--text-main); box-shadow: 0 0 0 2px rgba(16,17,20,0.08); }
-        .asset-thumb { width: 100%; aspect-ratio: 1.38; border-radius: 7px; background: #F3F5F7; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 10px; font-weight: 800; color: var(--text-sub); }
-        .asset-thumb img { width: 100%; height: 100%; object-fit: contain; }
+        .asset-item { position: relative; min-width: 0; cursor: pointer; border-radius: 8px; overflow: hidden; }
+        .asset-item:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(15,23,42,0.12); }
+        .asset-item.current { box-shadow: 0 0 0 2px var(--primary); }
+        .asset-thumb { width: 100%; border-radius: 0; background: transparent; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .asset-thumb img { width: 100%; height: auto; display: block; }
+        .asset-info { padding: 4px 0 0; }
+        .asset-name { font-size: 11px; font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .asset-meta { display: none; }
         .asset-thumb.logo-thumb { background-color: #f7f8f6; background-image: linear-gradient(45deg, #e3e5e1 25%, transparent 25%), linear-gradient(-45deg, #e3e5e1 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e3e5e1 75%), linear-gradient(-45deg, transparent 75%, #e3e5e1 75%); background-size: 14px 14px; background-position: 0 0, 0 7px, 7px -7px, -7px 0; }
         .asset-preview-stage { position: relative; overflow: hidden; background: #FFFFFF; }
         .asset-preview-canvas { position: absolute; left: 0; top: 0; transform-origin: top left; overflow: hidden; background: #FFFFFF; }
@@ -248,91 +286,7 @@
         .asset-item.reference-element { cursor: grab; }
         .asset-item.reference-element:active { cursor: grabbing; }
 
-        .asset-library-expand-btn {
-            width: 32px;
-            min-width: 32px;
-            height: 30px;
-            padding: 0;
-            border-radius: 9px;
-            background: #F2F4F3;
-            color: var(--text-sub);
-            font-size: 16px;
-            font-weight: 700;
-            line-height: 1;
-        }
-
-        .asset-library-expand-btn:hover {
-            background: #E8EBE9;
-            color: var(--text-main);
-        }
-
-        .asset-library-actions {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .asset-library-actions .btn-icon {
-            min-width: 0;
-            height: 26px;
-            padding: 0 7px !important;
-            font-size: 10px !important;
-            white-space: nowrap;
-        }
-
-        .asset-library-footer {
-            display: flex;
-            align-items: flex-end;
-            justify-content: space-between;
-            gap: 10px;
-            margin-top: 8px;
-        }
-
-        .asset-library-note {
-            flex: 1;
-            min-width: 0;
-            font-size: 11px;
-            color: var(--text-sub);
-            line-height: 1.5;
-        }
-
-        body.asset-library-expanded .asset-library-card {
-            flex: 0 0 auto;
-            min-height: 0;
-            overflow: visible;
-        }
-
-        body.asset-library-expanded .asset-library-card .asset-list {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-            height: auto;
-            min-height: fit-content;
-            max-height: none !important;
-            overflow: visible !important;
-            padding-right: 8px;
-        }
-
-        body.asset-library-expanded .asset-library-card .asset-library-footer {
-            position: relative;
-            z-index: 2;
-        }
-
-        body.asset-library-expanded .asset-library-card .asset-thumb {
-            aspect-ratio: 1.48;
-        }
-
-        body.asset-library-expanded .asset-library-card .asset-name {
-            font-size: 13px;
-        }
-
-        body.asset-library-expanded .asset-library-card .asset-meta {
-            font-size: 12px;
-        }
-
         @media (max-width: 760px) {
-            body.asset-library-expanded .asset-library-card .asset-list {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
         }
 
         .prompt-tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
@@ -1464,17 +1418,323 @@
                 inset: 128px 28px 28px;
             }
         }
+
+        /* Static DIY studio refresh — presentation only; all editor hooks remain unchanged. */
+        :root {
+            --primary: #202226;
+            --primary-hover: #090a0c;
+            --bg-canvas: #f3f4f6;
+            --panel-bg: #ffffff;
+            --card-bg: #ffffff;
+            --border: #e8eaed;
+            --border-strong: #cfd3d8;
+            --text-main: #202124;
+            --text-sub: #747980;
+            --shadow: 0 10px 30px rgba(30, 34, 40, 0.08);
+        }
+
+        html, body { background: #fff; }
+        body {
+            gap: 12px;
+            padding: 16px 20px 20px;
+            min-width: 1080px;
+        }
+
+        button { transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease; }
+        button:hover { transform: translateY(-1px); }
+        button:active { transform: translateY(0); }
+
+        .workspace-tabs {
+            width: 100%; height: 34px; padding: 0 4px;
+            gap: 10px; border-bottom: 1px solid var(--border);
+        }
+        .workspace-tabs strong, .workspace-tabs button { font-size: 13px; }
+        .workspace-tabs strong::after, .workspace-tabs .workspace-overview-tab.active::after {
+            bottom: -11px; height: 2px; background: var(--text-main);
+        }
+        .workspace-tabs button { color: var(--text-sub); padding: 0 8px; }
+        .workspace-tabs button.active, .workspace-tabs .workspace-overview-tab { color: var(--text-main); }
+        .workspace-tabs .new-artboard-trigger {
+            height: 28px; min-width: 88px; padding: 0 13px;
+            border-radius: 7px; box-shadow: none;
+        }
+
+        .editor-layout {
+            width: 100%; max-width: none; height: calc(100vh - 82px);
+            gap: 0; border: 1px solid var(--border); overflow: hidden;
+            background: #fff; border-radius: 0;
+        }
+        .asset-pane {
+            width: 276px; flex: 0 0 276px; overflow: hidden;
+            border-right: 1px solid var(--border); background: #fff;
+        }
+        .asset-pane .asset-library-card {
+            height: 100%; padding: 18px 14px; border: 0; border-radius: 0;
+            display: flex; flex-direction: column; box-shadow: none;
+        }
+        .asset-pane .card-title { padding: 0 4px; margin-bottom: 14px; }
+
+        .left-pane {
+            min-width: 0; border: 0; border-radius: 0; box-shadow: none;
+            background: var(--bg-canvas);
+        }
+        .left-pane::before { background-image: none; }
+        .canvas-wrapper {
+            box-shadow: 0 7px 22px rgba(26, 31, 39, .12);
+            border: 1px solid rgba(31, 35, 40, .04);
+        }
+        .empty-hint { color: #a3a7ad; font-size: 14px; font-weight: 600; }
+
+        .left-pane .ratio-nav {
+            top: 18px; left: 20px; transform: none; flex-direction: row;
+            gap: 5px; padding: 5px; background: rgba(255,255,255,.92);
+            border: 1px solid var(--border); border-radius: 8px;
+            box-shadow: 0 4px 14px rgba(32, 33, 36, .06);
+        }
+        .left-pane .ratio-nav button {
+            width: auto; min-width: 48px; height: 28px; padding: 0 9px;
+            border: 0; border-radius: 5px; background: transparent;
+            color: #656b73; box-shadow: none; backdrop-filter: none;
+        }
+        .left-pane .ratio-nav button:hover { background: #f1f2f3; color: var(--text-main); }
+        .left-pane .ratio-nav button.active { background: var(--primary); color: #fff; }
+        .left-pane .ratio-nav .new-artboard-trigger { width: auto; min-width: 82px; background: #fff; color: var(--text-main); border-left: 1px solid var(--border); border-radius: 0; }
+
+        .left-pane .canvas-actions { top: 18px; right: 20px; gap: 6px; }
+        .left-pane .canvas-actions button {
+            min-width: 62px; height: 30px; padding: 0 11px; border-radius: 7px;
+            background: #fff; border: 1px solid var(--border-strong); color: var(--text-main);
+            box-shadow: 0 3px 10px rgba(32, 33, 36, .05); backdrop-filter: none;
+        }
+        .left-pane .canvas-actions button:hover { border-color: #8d939b; background: #fafafa; }
+        .left-pane .canvas-actions button.save-template-btn,
+        .left-pane .canvas-actions button.primary:last-of-type { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .left-pane .canvas-actions button.save-template-btn:hover,
+        .left-pane .canvas-actions button.primary:last-of-type:hover { background: var(--primary-hover); }
+
+        .right-pane {
+            width: 360px; flex: 0 0 360px; overflow: hidden;
+            border-left: 1px solid var(--border); background: #fff;
+        }
+        .pane-header {
+            min-height: 60px; padding: 0 18px; border-bottom: 1px solid var(--border);
+            align-items: center;
+        }
+        .pane-header h2 { font-size: 17px; letter-spacing: -.01em; }
+        .header-actions { gap: 4px; }
+        .pane-header .btn-icon, .layer-card-actions .btn-icon {
+            min-height: 30px; border-radius: 6px; background: transparent;
+            border-color: transparent; box-shadow: none;
+        }
+        .pane-header .btn-icon:hover, .layer-card-actions .btn-icon:hover { background: #f1f2f3; border-color: transparent; }
+        .pane-content { gap: 0; padding: 0; background: #fff; }
+        .module-card {
+            padding: 19px 18px 20px; border: 0; border-bottom: 1px solid var(--border);
+            border-radius: 0; background: #fff; box-shadow: none;
+        }
+        .card-title { margin-bottom: 13px; font-size: 15px; font-weight: 780; }
+        .card-title::before { display: none; }
+
+        .asset-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-bottom: 12px; }
+        .asset-tab {
+            min-height: 31px; padding: 0 5px; border: 1px solid var(--border);
+            border-radius: 6px; background: #f4f5f6; color: #60656d; font-weight: 700;
+        }
+        .asset-tab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+        #diy-subtag-row { padding: 0 2px; margin-bottom: 9px !important; }
+        .filter-capsule { padding: 4px 9px; border-color: var(--border); border-radius: 5px; font-size: 11px; box-shadow: none; }
+        .filter-capsule.active { background: #30343a; border-color: #30343a; box-shadow: none; }
+        .asset-list { flex: 1; max-height: none; gap: 10px; padding: 2px 4px 18px 2px; }
+        .asset-item { border: 1px solid transparent; border-radius: 8px; background: #fff; }
+        .asset-item:hover, .asset-item.current { border-color: var(--border-strong); box-shadow: 0 5px 14px rgba(32,33,36,.10); }
+        .asset-thumb { border: 1px solid var(--border); border-radius: 8px; background: #f7f8f9; }
+        .asset-info { padding: 6px 3px 0; }
+        .asset-name { font-size: 12px; font-weight: 700; }
+
+        /* Preserve each preview's natural aspect ratio and pack cards like a material-library masonry feed. */
+        #asset-list-ui:not(:has(.reference-filter)) {
+            display: block;
+            columns: 2;
+            column-gap: 10px;
+            overflow-y: auto;
+        }
+        #asset-list-ui:not(:has(.reference-filter)) .asset-item {
+            display: inline-block;
+            width: 100%;
+            margin: 0 0 10px;
+            break-inside: avoid;
+            vertical-align: top;
+        }
+        #asset-list-ui:not(:has(.reference-filter)) .asset-thumb,
+        #asset-list-ui:not(:has(.reference-filter)) .asset-thumb img {
+            height: auto;
+            aspect-ratio: auto;
+        }
+        #asset-list-ui:not(:has(.reference-filter)) .asset-empty {
+            display: block;
+            break-inside: avoid;
+        }
+
+        .layer-drop-zone { min-height: 40px; margin-bottom: 10px; border-radius: 7px; background: #f8f9fa; border-color: #d7dadd; }
+        .layer-item { padding: 9px 10px; border-radius: 7px; background: #fff; border-color: var(--border); }
+        .layer-item.active { background: #f5f6f7; border-color: #8b9199; box-shadow: none; }
+        .input-text, .input-select, .textarea, .semantic-select, .stepper-value {
+            border-color: #dfe2e5; border-radius: 6px; background: #fff;
+        }
+        .stepper-btn { border-color: #dfe2e5; border-radius: 6px; }
+        .btn, .btn-icon, .prompt-tag-chip, .p-tab, .add-menu button { border-radius: 6px; }
+        .btn-outline { border-color: #dfe2e5; }
+        .btn-dark, .p-tab.active, .prompt-tag-chip.active { background: var(--primary); border-color: var(--primary); }
+        .ai-console { border-radius: 8px; }
+        .ai-menu-btn { border-radius: 6px; }
+        .toolbar-more-menu, .add-menu, .ai-dropdown { border-radius: 8px; }
+
+        @media (max-width: 1280px) {
+            body { min-width: 0; padding: 12px; }
+            .asset-pane { width: 240px; flex-basis: 240px; }
+            .right-pane { width: 330px; flex-basis: 330px; }
+            .left-pane .canvas-actions { top: 14px; right: 14px; }
+            .left-pane .ratio-nav { top: 14px; left: 14px; }
+        }
+
+        /* Collapsible asset rail — CSS-only to keep the editor runtime untouched. */
+        .editor-layout { position: relative; }
+        .asset-pane-collapse-toggle {
+            position: absolute; width: 1px; height: 1px; opacity: 0;
+            pointer-events: none;
+        }
+        .asset-pane-collapse-handle {
+            position: absolute; left: 276px; top: 50%; z-index: 50;
+            width: 19px; height: 64px; transform: translateY(-50%);
+            border: 0; border-radius: 0 32px 32px 0; background: #fff;
+            box-shadow: 1px 0 0 var(--border);
+            cursor: pointer; transition: left .22s ease, background-color .16s ease, box-shadow .16s ease;
+        }
+        .asset-pane-collapse-handle::before {
+            content: "‹"; position: absolute; inset: 0;
+            display: grid; place-items: center; color: #9aa0a7;
+            font-size: 23px; font-weight: 300; line-height: 1;
+            transition: transform .22s ease, color .16s ease;
+        }
+        .asset-pane-collapse-handle:hover { background: #f7f8f9; box-shadow: 2px 0 0 var(--border-strong); }
+        .asset-pane-collapse-handle:hover::before { color: var(--text-main); }
+        #asset-pane-collapse-toggle:focus-visible + .asset-pane + .asset-pane-collapse-handle {
+            outline: 2px solid #4b83f5; outline-offset: 2px;
+        }
+        #asset-pane-collapse-toggle:checked ~ .asset-pane {
+            width: 0; flex-basis: 0; border-right-color: transparent;
+        }
+        #asset-pane-collapse-toggle:checked ~ .asset-pane .asset-library-card { opacity: 0; }
+        #asset-pane-collapse-toggle:checked ~ .asset-pane-collapse-handle { left: 0; }
+        #asset-pane-collapse-toggle:checked ~ .asset-pane-collapse-handle::before { transform: rotate(180deg); }
+        .asset-pane { transition: width .22s ease, flex-basis .22s ease, border-color .22s ease; }
+        .asset-pane .asset-library-card { transition: opacity .12s ease; }
+
+        .font-drop-zone {
+            min-height: 104px; padding: 16px; border: 1px dashed #cfd4da;
+            border-radius: 9px; background: #fafbfc; color: var(--text-sub);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 5px; text-align: center; cursor: pointer;
+            transition: border-color .16s ease, background-color .16s ease, color .16s ease;
+        }
+        .font-drop-zone:hover, .font-drop-zone.drag-over {
+            border-color: var(--text-main); background: #f4f5f6; color: var(--text-main);
+        }
+        .font-drop-zone-icon {
+            width: 30px; height: 30px; border: 1px solid currentColor; border-radius: 7px;
+            display: grid; place-items: center; font-size: 13px; font-weight: 800;
+        }
+        .font-drop-zone strong { color: var(--text-main); font-size: 13px; font-weight: 760; }
+        .font-drop-zone span:last-child { font-size: 11px; line-height: 1.4; }
+
+        /* New-artboard picker: a compact creation panel, keeping the original menu actions intact. */
+        .new-artboard-menu {
+            left: 0; top: calc(100% + 12px); width: 320px; padding: 0 0 12px;
+            border: 1px solid var(--border); border-radius: 12px; background: #fff;
+            box-shadow: 0 18px 44px rgba(28, 32, 38, .14); overflow-x: hidden;
+            max-height: calc(100vh - 88px); overflow-y: auto;
+        }
+        .new-artboard-menu.open { display: block; }
+        .new-artboard-menu-header {
+            height: 52px; padding: 0 16px; margin-bottom: 12px;
+            border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;
+        }
+        .new-artboard-menu-header strong { color: var(--text-main); font-size: 16px; font-weight: 780; }
+        .new-artboard-menu .new-artboard-menu-close {
+            width: 30px; height: 30px; min-width: 30px; padding: 0; border: 0;
+            border-radius: 6px; background: transparent; color: #8d949d; font-size: 28px; font-weight: 300; line-height: 1;
+        }
+        .new-artboard-menu .new-artboard-menu-close:hover { background: #f1f2f3; color: var(--text-main); }
+        .new-artboard-inline-custom { padding: 0 12px 14px; }
+        .new-artboard-inline-title { margin-bottom: 8px; color: #656b73; font-size: 12px; font-weight: 730; }
+        .new-artboard-dimension-row { display: flex; align-items: center; gap: 7px; }
+        .new-artboard-dimensions {
+            height: 38px; flex: 1; min-width: 0; padding: 0 9px; border: 1px solid #dfe2e5;
+            border-radius: 8px; background: #fff; display: flex; align-items: center; gap: 7px;
+        }
+        .new-artboard-dimensions:focus-within { border-color: #9198a0; box-shadow: 0 0 0 3px rgba(32,34,38,.06); }
+        .new-artboard-dimensions input { width: 0; min-width: 0; flex: 1; border: 0; background: transparent; color: var(--text-main); font: inherit; font-size: 13px; outline: 0; }
+        .new-artboard-dimensions input::placeholder { color: #abb1b9; }
+        .new-artboard-dimensions span { color: #b0b5bb; font-size: 15px; font-weight: 400; }
+        .new-artboard-unit { color: #737982; font-size: 13px; font-weight: 650; }
+        .new-artboard-menu .new-artboard-inline-create {
+            width: 48px; min-width: 48px; height: 38px; padding: 0; border: 0; border-radius: 8px;
+            background: var(--primary); color: #fff; font-size: 13px; font-weight: 760; box-shadow: none;
+        }
+        .new-artboard-menu .new-artboard-inline-create:hover { background: var(--primary-hover); }
+        .new-artboard-menu-section { padding: 0 16px 7px; color: #858b93; font-size: 11px; font-weight: 760; }
+        .new-artboard-menu > button:not(.new-artboard-menu-close):not(.new-artboard-menu-custom) {
+            width: calc(100% - 12px); min-width: 0; height: 34px; margin: 0 6px; padding: 0 10px;
+            border: 0; border-radius: 7px; background: transparent; color: var(--text-main);
+            display: flex; align-items: center; justify-content: flex-start; gap: 8px; box-shadow: none;
+            font-size: 13px; font-weight: 650; text-align: left;
+        }
+        .new-artboard-menu > button:not(.new-artboard-menu-close):not(.new-artboard-menu-custom):hover { background: #f1f2f3; color: var(--text-main); }
+        .new-artboard-menu > button:not(.new-artboard-menu-close):not(.new-artboard-menu-custom) .new-board-icon {
+            width: 18px; height: 18px; border: 0; border-radius: 0; position: relative;
+        }
+        .new-artboard-menu > button:not(.new-artboard-menu-close):not(.new-artboard-menu-custom) .new-board-icon::after {
+            position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+            border: 1.7px solid #6a88f7; border-radius: 1px;
+        }
+
+        @media (max-width: 1280px) {
+            .asset-pane-collapse-handle { left: 240px; }
+        }
     </style>
 </head>
 <body>
 
 <div class="toast" id="toast">提示信息</div>
-<input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2" style="display:none">
+<input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2" multiple style="display:none">
 <input type="file" id="bg-upload" accept="image/png, image/jpeg, image/webp" style="display:none">
 <input type="file" id="ai-reference-upload" accept="image/png, image/jpeg, image/webp" multiple style="display:none">
 <input type="file" id="reference-element-upload" accept="image/png, image/jpeg, image/webp, image/svg+xml" multiple style="display:none">
 <input type="file" id="logo-upload" accept="image/png, image/jpeg, image/svg+xml" multiple style="display:none">
+<input type="file" id="component-upload" accept="image/png, image/jpeg, image/webp, image/svg+xml" multiple style="display:none">
 <input type="file" id="backup-import" accept="application/json,.json" style="display:none">
+
+<!-- 组件上传标签选择弹窗 -->
+<div class="modal-overlay" id="component-upload-modal" style="display:none; z-index:10010;">
+  <div class="modal-content" style="width:380px;">
+    <div class="modal-header"><h3>上传到组件库</h3><button class="close-btn" type="button" onclick="closeComponentUploadModal()">×</button></div>
+    <div style="padding:16px;">
+      <div id="comp-upload-files-info" style="font-size:12px;color:var(--text-sub);margin-bottom:12px;"></div>
+      <label class="label">选择分类</label>
+      <div id="comp-upload-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+        <button class="filter-capsule active" data-ctag="背景" onclick="selectCompUploadTag('背景',this)">背景</button>
+        <button class="filter-capsule" data-ctag="LOGO" onclick="selectCompUploadTag('LOGO',this)">LOGO</button>
+        <button class="filter-capsule" data-ctag="KIKI" onclick="selectCompUploadTag('KIKI',this)">KIKI</button>
+        <button class="filter-capsule" data-ctag="其他素材" onclick="selectCompUploadTag('其他素材',this)">其他素材</button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline" style="flex:1;" onclick="closeComponentUploadModal()">取消</button>
+        <button class="btn btn-dark" style="flex:1;" id="comp-upload-confirm" onclick="confirmComponentUpload()">上传</button>
+      </div>
+      <div id="comp-upload-msg" style="font-size:12px;margin-top:8px;text-align:center;"></div>
+    </div>
+  </div>
+</div>
 
 <div class="modal-overlay" id="export-overlay" style="z-index: 10000; flex-direction: column;">
     <div class="modal-content" style="width: auto; text-align: center;">
@@ -1491,8 +1751,12 @@
         </div>
         <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
             <div class="card-title"><div class="card-title-wrap">字体库管理</div></div>
-            <button class="btn btn-outline" onclick="document.getElementById('font-upload').click()">Aa 上传字体</button>
-            <div style="margin-top:8px; font-size:12px; color:var(--text-sub);">支持 TTF、OTF、WOFF、WOFF2；上传后可在文本和标签中直接选择。</div>
+            <div class="font-drop-zone" id="font-drop-zone" role="button" tabindex="0" onclick="document.getElementById('font-upload').click()" title="点击选择或拖入字体文件">
+                <span class="font-drop-zone-icon">Aa</span>
+                <strong>拖入字体文件到这里</strong>
+                <span>或点击一次选择多个 TTF、OTF、WOFF、WOFF2 文件</span>
+            </div>
+            <div style="margin-top:8px; font-size:12px; color:var(--text-sub);">同一字体的不同字重会自动合并，在文字面板的“字重”中切换。</div>
             <div id="custom-font-list" style="margin-top: 12px; font-size: 12px; color: var(--text-sub); display:flex; gap:12px; flex-wrap:wrap;"></div>
         </div>
         <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
@@ -1525,7 +1789,16 @@
     <div class="new-artboard-menu-wrap add-custom-artboard-tab">
         <button type="button" class="new-artboard-trigger" onclick="toggleNewArtboardMenu(event)">新建画板</button>
         <div class="new-artboard-menu" id="new-artboard-menu">
-            <button type="button" onclick="openCustomArtboardDialog(); closeNewArtboardMenu();">自定义</button>
+            <div class="new-artboard-menu-header"><strong>新建画板</strong><button type="button" class="new-artboard-menu-close" onclick="closeNewArtboardMenu()" aria-label="关闭">×</button></div>
+            <div class="new-artboard-inline-custom">
+                <div class="new-artboard-inline-title">自定义尺寸</div>
+                <div class="new-artboard-dimension-row">
+                    <div class="new-artboard-dimensions"><input id="new-artboard-width" type="number" min="64" max="6000" step="1" placeholder="宽"><span>×</span><input id="new-artboard-height" type="number" min="64" max="6000" step="1" placeholder="高"></div>
+                    <span class="new-artboard-unit">px</span>
+                    <button type="button" class="new-artboard-inline-create" onclick="createInlineCustomArtboard()">创建</button>
+                </div>
+            </div>
+            <div class="new-artboard-menu-section">预设画板</div>
             <button type="button" onclick="createPresetArtboard('head'); closeNewArtboardMenu();">头图 750*500</button>
             <button type="button" onclick="createPresetArtboard('splash'); closeNewArtboardMenu();">开屏 1000*2168</button>
             <button type="button" onclick="createPresetArtboard('banner'); closeNewArtboardMenu();">Banner 1396*424</button>
@@ -1541,9 +1814,29 @@
 </div>
 
 <div class="editor-layout">
-    <div class="left-pane" id="left-pane">
+        <input class="asset-pane-collapse-toggle" id="asset-pane-collapse-toggle" type="checkbox" aria-label="折叠资产库">
+        <div class="asset-pane" id="asset-pane">
+<div class="module-card asset-library-card">
+            <div class="card-title">
+                <div class="card-title-wrap">资产库</div>
+
+            </div>
+            <div class="asset-tabs">
+                <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')" style="white-space:nowrap;">模版 <small id="diy-count-layout">· 0</small></button>
+                <button class="asset-tab" data-asset-tab="component" onclick="switchAssetTab('component')" style="white-space:nowrap;">组件 <small id="diy-count-component">· 0</small></button>
+                <button class="asset-tab" data-asset-tab="reference" onclick="switchAssetTab('reference')" style="white-space:nowrap;">参考元素</button>
+            </div>
+            <div id="diy-subtag-row" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"></div>
+            <div class="asset-list" id="asset-list-ui"></div>
+
+        </div>
+
+    </div>
+    <label class="asset-pane-collapse-handle" for="asset-pane-collapse-toggle" title="折叠资产库" aria-label="折叠或展开资产库"></label>
+<div class="left-pane" id="left-pane">
         <div class="canvas-toolbar">
             <div class="canvas-actions">
+                <button type="button" class="save-template-btn" onclick="saveActiveAsset()" id="canvas-save-btn">保存模版</button>
                 <button type="button" class="primary" onclick="extendFromHead()">一键延展</button>
                 <button type="button" class="primary" onclick="exportPNG()">导出</button>
                 <div class="toolbar-more-wrap">
@@ -1583,30 +1876,7 @@
         </div>
 
         <div class="pane-content">
-            <div class="module-card asset-library-card">
-            <div class="card-title">
-                <div class="card-title-wrap">资产库</div>
-                <div class="asset-library-actions">
-                    <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="exportAssetBackup()" title="导出当前域名下的版式、标签组、Logo 和字体">导出包</button>
-                    <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="document.getElementById('backup-import').click()" title="导入从正式版导出的资产包">导入包</button>
-                    <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="saveTemplatePack()">保存套组</button>
-                    <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="saveActiveAsset()" id="save-active-asset-btn">保存当前</button>
-                </div>
-            </div>
-            <div class="asset-tabs">
-                <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')">模板</button>
-                <button class="asset-tab" data-asset-tab="tag" onclick="switchAssetTab('tag')">标签组</button>
-                <button class="asset-tab" data-asset-tab="logo" onclick="switchAssetTab('logo')">Logo</button>
-                <button class="asset-tab" data-asset-tab="reference" onclick="switchAssetTab('reference')">参考元素</button>
-            </div>
-            <div class="asset-list" id="asset-list-ui"></div>
-            <div class="asset-library-footer">
-                <div class="asset-library-note">正式版和测试版会读取同一份云端公共资产库。</div>
-                <button class="btn-icon asset-library-expand-btn" id="asset-library-expand-btn" onclick="toggleAssetLibraryExpanded()" title="上下展开资产库" aria-label="上下展开资产库">⌃</button>
-            </div>
-        </div>
-
-            <div class="module-card layer-module-card" id="layer-module-card">
+                                    <div class="module-card layer-module-card" id="layer-module-card">
                 <div class="card-title">
                     <div class="card-title-wrap">图层</div>
                     <div class="layer-card-actions">
@@ -1674,8 +1944,6 @@
                 </div>
             </div>
 
-            <button class="btn btn-outline" style="padding: 14px; font-size: 14px;" onclick="exportAllArtboards()">导出全部画布</button>
-            <button class="btn btn-dark" style="padding: 14px; font-size: 14px;" onclick="exportPNG()">导出当前 PNG</button>
         </div>
     </div>
 </div>
@@ -1747,6 +2015,8 @@
     let currentAssetTab = 'layout';
     let draggingLayerId = null;
     let aiProgressTimer = null;
+    let newlyAddedLayerIds = new Set();
+    let newlyAddedLayerTimer = null;
     let historyStack = []; let historyIdx = -1; let isRestoring = false;
     const SHARED_TAG_PROPS = ['text', 'font', 'fontWeight', 'bgCol', 'textCol', 'shadowCol', 'shadowOpacity', 'shadowThickness', 'letterSpacing', 'tagPaddingX', 'tagTextOffsetY'];
     const SHARED_DISCOUNT_TAG_PROPS = ['mainText', 'topText', 'bottomText', 'font', 'fontWeight', 'bgCol', 'textCol', 'shadowCol', 'shadowOpacity', 'shadowThickness', 'letterSpacing', 'tagPaddingX', 'tagPaddingY', 'tagTextOffsetY', 'mainFontSize', 'topFontSize', 'bottomFontSize', 'sideGap', 'sideLineGap'];
@@ -1758,15 +2028,13 @@
     const GLOBAL_STATE_KEY = 'global';
     const SHARED_ASSETS_API = '/api/static-assets';
     let sharedAssetSaveTimer = null;
-    function getGlobalSnapshot() { return { tagColorPresets, arcColorPresets, keywordTags, presetLibrary, tagPresetLibrary, referenceElements, logoAssets }; }
+    function getGlobalSnapshot() { return { tagColorPresets, arcColorPresets, keywordTags, referenceElements }; }
     function applyGlobalData(data = {}) {
         if(data.tagColorPresets) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
         if(data.arcColorPresets) arcColorPresets = data.arcColorPresets;
         if(data.keywordTags) keywordTags = data.keywordTags;
-        if(data.presetLibrary) presetLibrary = data.presetLibrary;
-        if(data.tagPresetLibrary) tagPresetLibrary = data.tagPresetLibrary;
         if(data.referenceElements) referenceElements = data.referenceElements;
-        if(data.logoAssets) logoAssets = data.logoAssets;
+        // presetLibrary / tagPresetLibrary / logoAssets 不再从本地加载，全部从素材库（Supabase）获取
     }
     function mergeById(localItems = [], cloudItems = []) {
         const map = new Map();
@@ -1778,24 +2046,16 @@
     }
     function mergeCloudAssetData(data = {}, fonts = [], logos = []) {
         const hadLocalAssets = hasLocalSharedAssets();
-        const cloudPresetLibrary = Array.isArray(data.presetLibrary) ? data.presetLibrary : [];
-        const cloudTagPresetLibrary = Array.isArray(data.tagPresetLibrary) ? data.tagPresetLibrary : [];
         const cloudReferenceElements = Array.isArray(data.referenceElements) ? data.referenceElements : [];
-        const cloudLogos = Array.isArray(logos) ? logos : [];
 
         if(data.tagColorPresets?.length) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
         if(data.arcColorPresets?.length) arcColorPresets = data.arcColorPresets;
         if(data.keywordTags?.length) keywordTags = data.keywordTags;
-        presetLibrary = mergeById(presetLibrary, cloudPresetLibrary);
-        tagPresetLibrary = mergeById(tagPresetLibrary, cloudTagPresetLibrary);
         referenceElements = mergeById(referenceElements, cloudReferenceElements);
-        logoAssets = mergeById(logoAssets, cloudLogos);
+        // presetLibrary / tagPresetLibrary / logoAssets 全部从 Supabase 获取，不在这里合并
 
         const shouldBackfillCloud = hadLocalAssets && (
-            presetLibrary.length > cloudPresetLibrary.length ||
-            tagPresetLibrary.length > cloudTagPresetLibrary.length ||
             referenceElements.length > cloudReferenceElements.length ||
-            logoAssets.length > cloudLogos.length ||
             customFonts.length > fonts.length
         );
         return shouldBackfillCloud;
@@ -1808,10 +2068,8 @@
                 tagColorPresets,
                 arcColorPresets,
                 keywordTags,
-                tagPresetLibrary,
-                referenceElements,
-                logoAssets,
-                presetMeta: presetLibrary.map(p => ({ id: p.id, name: p.name, size: p.size, count: p.elements?.length || 0 }))
+                referenceElements
+                // presetLibrary / tagPresetLibrary / logoAssets 全部从 Supabase 获取
             }));
         } catch(e) {}
         queueSharedAssetSave();
@@ -1905,6 +2163,20 @@
     async function saveStateToDB(value) { try { const db = await initDB(); const tx = db.transaction('state', 'readwrite'); tx.objectStore('state').put({ key: GLOBAL_STATE_KEY, value, updatedAt: new Date().toISOString() }); return await new Promise(resolve => { tx.oncomplete = () => resolve(true); tx.onerror = () => resolve(false); tx.onabort = () => resolve(false); }); } catch(e) { return false; } }
     async function loadStateFromDB() { try { const db = await initDB(); const tx = db.transaction('state', 'readonly'); const req = tx.objectStore('state').get(GLOBAL_STATE_KEY); return await new Promise(resolve => { req.onsuccess = e => resolve(e.target.result?.value || null); req.onerror = () => resolve(null); }); } catch(e) { return null; } }
     async function saveFontToDB(fontObj) { try { const db = await initDB(); const tx = db.transaction('fonts', 'readwrite'); tx.objectStore('fonts').put(fontObj); } catch(e) {} }
+    async function deleteFontFromDB(name) { try { const db = await initDB(); const tx = db.transaction('fonts', 'readwrite'); tx.objectStore('fonts').delete(name); } catch(e) {} }
+    window.deleteFont = function(index) {
+        var font = customFonts[index];
+        if (!font) return;
+        customFonts.splice(index, 1);
+        deleteFontFromDB(font.name);
+        // 移除注册的 FontFace
+        try { document.fonts.forEach(function(f) { if (f.family === font.value) document.fonts.delete(f); }); } catch(e) {}
+        renderSettings();
+        renderProperties();
+        renderCanvas();
+        queueSharedAssetSave(0);
+        showToast('已删除字体：' + font.name);
+    };
     async function saveLogoToDB(logoObj) { try { const db = await initDB(); const tx = db.transaction('logos', 'readwrite'); tx.objectStore('logos').put(logoObj); } catch(e) {} }
     async function deleteLogoFromDB(id) { try { const db = await initDB(); const tx = db.transaction('logos', 'readwrite'); tx.objectStore('logos').delete(id); } catch(e) {} }
     async function saveReferenceElementToDB(item) { try { const db = await initDB(); const tx = db.transaction('referenceElements', 'readwrite'); tx.objectStore('referenceElements').put(item); } catch(e) {} }
@@ -1935,13 +2207,14 @@
         } catch(e) { return false; }
     }
     async function registerFontAsset(f) {
-        if(!f || !f.id || !f.data) return false;
+        if(!f || !f.data) return false;
+        const normalized = normalizeCustomFontAsset(f);
         try {
-            const loaded = await new FontFace(f.id, `url(${f.data})`).load();
+            const loaded = await new FontFace(normalized.familyId, `url(${normalized.data})`, { weight: String(normalized.weight), style: 'normal' }).load();
             document.fonts.add(loaded);
             await document.fonts.ready;
-            if(!customFonts.some(item => item.name === f.name)) {
-                customFonts.push({ name: f.name, value: f.value || cssFontFamily(f.id), data: f.data, id: f.id, fileName: f.fileName });
+            if(!customFonts.some(item => item.name === normalized.name)) {
+                customFonts.push(normalized);
             }
             return true;
         } catch(e) { return false; }
@@ -1964,9 +2237,18 @@
     async function loadLogosFromDB() {
         try {
             const db = await initDB(); const tx = db.transaction('logos', 'readonly'); const req = tx.objectStore('logos').getAll();
-            logoAssets = await new Promise(resolve => {
+            const dbLogos = await new Promise(resolve => {
                 req.onsuccess = e => resolve(e.target.result || []);
                 req.onerror = () => resolve([]);
+            });
+            // 合并而非覆盖：保留 logoAssets 中已有的 cloudId
+            dbLogos.forEach(function(dbLogo) {
+                var existing = logoAssets.find(function(l) { return l.id === dbLogo.id; });
+                if (!existing) {
+                    logoAssets.push(dbLogo);
+                } else if (dbLogo.src && !existing.src) {
+                    existing.src = dbLogo.src;
+                }
             });
             renderAssetLibrary();
         } catch(e) {}
@@ -2036,6 +2318,20 @@
         }, true);
         saveHistory();
         showToast(`已新建 ${preset.label} 画板`);
+    }
+    function createInlineCustomArtboard() {
+        if(!canCreateCustomArtboard()) return;
+        const widthInput = document.getElementById('new-artboard-width');
+        const heightInput = document.getElementById('new-artboard-height');
+        const w = Number(widthInput?.value), h = Number(heightInput?.value);
+        if(!Number.isFinite(w) || !Number.isFinite(h) || w < 64 || h < 64 || w > 6000 || h > 6000) {
+            showToast('请输入 64 到 6000 px 的宽度和高度', true);
+            return;
+        }
+        const id = createCustomArtboardPreset({ label: nextArtboardLabel('自定义'), w, h }, true);
+        if(!id) return;
+        widthInput.value = ''; heightInput.value = '';
+        closeNewArtboardMenu(); saveHistory(); showToast(`已新建 ${w} × ${h} 画板`);
     }
     function createCustomArtboardPreset({ id = genId('custom_board'), label = '自定义', w = 1080, h = 1080 } = {}, switchTo = true) {
         const existing = ARTBOARD_PRESETS.find(p => p.id === id);
@@ -2134,13 +2430,34 @@
         });
         renderCustomArtboardControls();
     }
+    async function deleteCustomArtboard(id) {
+        if (!isCustomArtboardId(id)) return;
+        if (!await askConfirm('删除这个自定义画板？画板上的图层也会被删除。')) return;
+        // 从 ARTBOARD_PRESETS 中移除（const 数组用 splice）
+        var idx = ARTBOARD_PRESETS.findIndex(function(p) { return p.id === id; });
+        if (idx >= 0) ARTBOARD_PRESETS.splice(idx, 1);
+        if (artboards[id]) delete artboards[id];
+        if (SIZES[id]) delete SIZES[id];
+        // 如果当前在这个画板上，切换到第一个可用画板
+        if (currentArtboardId === id) {
+            currentArtboardId = getFixedArtboardPresets()[0]?.id || ARTBOARD_PRESETS[0]?.id || 'head';
+            currentRatio = SIZES[currentArtboardId] ? currentArtboardId : '16:9';
+            loadArtboard(currentArtboardId, false);
+        }
+        renderCustomArtboardControls();
+        syncArtboardTabs();
+        syncRatioNav();
+        saveHistory();
+        renderCanvas(); renderLayersList(); renderProperties();
+    }
+
     function normalizeArtboardSnapshot(snapshot = {}) {
         const next = ARTBOARD_PRESETS.reduce((acc, preset) => {
             const incoming = snapshot[preset.id] || {};
             acc[preset.id] = {
                 id: preset.id,
                 label: preset.label,
-                ratio: preset.ratio,
+                ratio: incoming.ratio || preset.ratio,
                 layers: cloneData(incoming.layers || [])
             };
             return acc;
@@ -2196,12 +2513,20 @@
             ? getFixedArtboardPresets().filter(preset => (artboards[preset.id]?.layers || []).length > 0)
             : [];
         [...fixedPackTabs, ...getCustomArtboardPresets()].forEach(preset => {
+            var isCustom = isCustomArtboardId(preset.id);
             const topBtn = document.createElement('button');
             topBtn.type = 'button';
             topBtn.className = 'artboard-tab custom-artboard-tab';
             topBtn.dataset.artboard = preset.id;
             topBtn.textContent = getArtboardTopLabel(preset);
             topBtn.onclick = () => switchArtboard(preset.id);
+            if (isCustom) {
+                var delTop = document.createElement('span');
+                delTop.textContent = ' ×';
+                delTop.style.cssText = 'color:#94a3b8;font-size:10px;cursor:pointer;';
+                delTop.onclick = function(e) { e.stopPropagation(); deleteCustomArtboard(preset.id); };
+                topBtn.appendChild(delTop);
+            }
             topAnchor?.parentNode?.appendChild(topBtn);
 
             const ratioBtn = document.createElement('button');
@@ -2209,6 +2534,13 @@
             ratioBtn.className = 'custom-ratio-tab';
             ratioBtn.dataset.artboard = preset.id;
             ratioBtn.textContent = preset.label;
+            if (isCustom) {
+                var delRatio = document.createElement('span');
+                delRatio.textContent = ' ×';
+                delRatio.style.cssText = 'color:#94a3b8;font-size:10px;cursor:pointer;';
+                delRatio.onclick = function(e) { e.stopPropagation(); deleteCustomArtboard(preset.id); };
+                ratioBtn.appendChild(delRatio);
+            }
             ratioBtn.onclick = () => switchArtboard(preset.id);
             ratioAnchor?.parentNode?.insertBefore(ratioBtn, ratioAnchor);
         });
@@ -2256,9 +2588,9 @@
         if(state.artboards) {
             artboards = normalizeArtboardSnapshot(state.artboards);
             currentArtboardId = artboards[state.currentArtboardId] ? state.currentArtboardId : 'head';
-            const preset = getArtboardPreset(currentArtboardId);
-            currentRatio = preset.ratio;
-            layers = cloneData(artboards[currentArtboardId].layers || []);
+            var board = artboards[currentArtboardId];
+            currentRatio = (board && board.ratio) || getArtboardPreset(currentArtboardId).ratio;
+            layers = cloneData(board.layers || []);
         } else {
             currentArtboardId = 'head';
             currentRatio = state.ratio || 'head';
@@ -2296,6 +2628,22 @@
         showToast('已取消撤回');
     }
     document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && textEditLayerId) { e.preventDefault(); exitTextEdit(); return; }
+        if (e.key === 'Enter' && !textEditLayerId && !e.metaKey && !e.ctrlKey && activeLayerIds.length === 1) {
+            var tl = layers.find(function(x) { return x.id === activeLayerIds[0]; });
+            if (tl && tl.type === 'text' && !tl.locked && document.activeElement === document.body) {
+                e.preventDefault();
+                textEditLayerId = tl.id;
+                var tel = document.getElementById(tl.id);
+                if (tel) {
+                    tel.classList.add('layer-text-editing');
+                    var tce = tel.querySelector('[contenteditable]');
+                    if (tce) { tce.contentEditable = 'true'; tce.style.userSelect = 'text'; tce.focus(); }
+                }
+                return;
+            }
+        }
+        if (e.target.isContentEditable) return; // 编辑文字时使用浏览器原生撤销
         const tag = e.target?.tagName;
         if(['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
         const mod = e.metaKey || e.ctrlKey;
@@ -2312,6 +2660,7 @@
     document.addEventListener('keydown', e => {
         const tag = e.target?.tagName;
         if(['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
+        if (e.target.isContentEditable) return; // 正在编辑文字时不删除图层
         if(document.getElementById('mini-dialog')?.style.display === 'flex') return;
         if((e.key === 'Delete' || e.key === 'Backspace') && activeLayerIds.length > 0) {
             e.preventDefault();
@@ -2406,6 +2755,64 @@
         return dataUrl.replace(/^data:[^;]+;base64,/, `data:${mime};base64,`);
     }
     function cssFontFamily(fontId) { return `"${String(fontId).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}", sans-serif`; }
+    const FONT_WEIGHT_DEFINITIONS = [
+        { weight: 100, label: '细体', test: /(?:thin|hairline|细体|极细)/i },
+        { weight: 200, label: '特细', test: /(?:extra[-_ ]?light|ultra[-_ ]?light|特细)/i },
+        { weight: 300, label: '轻体', test: /(?:light|轻体)/i },
+        { weight: 500, label: '中等', test: /(?:medium|中等)/i },
+        { weight: 800, label: '特粗', test: /(?:extra[-_ ]?bold|ultra[-_ ]?bold|特粗)/i },
+        { weight: 600, label: '半粗', test: /(?:semi[-_ ]?bold|demi[-_ ]?bold|半粗)/i },
+        { weight: 700, label: '加粗', test: /(?:bold|粗体)/i },
+        { weight: 900, label: '黑体', test: /(?:black|heavy|poster|黑体|特黑)/i }
+    ];
+    function getFontWeightInfo(name = '') {
+        const source = String(name);
+        const hit = FONT_WEIGHT_DEFINITIONS.find(item => item.test.test(source));
+        return hit || { weight: 400, label: '常规', test: /(?:regular|normal|book|常规)/i };
+    }
+    function getFontFamilyName(name = '') {
+        let family = String(name).replace(/\.[^.]+$/, '').replace(/\s*\(\d+\)\s*$/, '');
+        FONT_WEIGHT_DEFINITIONS.forEach(item => { family = family.replace(item.test, ''); });
+        family = family.replace(/(?:regular|normal|book|italic|oblique|常规)/ig, '');
+        return family.replace(/[._-]+/g, ' ').replace(/\s{2,}/g, ' ').trim() || String(name);
+    }
+    function makeFontFamilyId(familyName) {
+        const key = Array.from(String(familyName).normalize('NFKD')).map(char => /[a-zA-Z0-9]/.test(char) ? char : ('u' + char.codePointAt(0).toString(16))).join('_');
+        return 'CF_' + key.replace(/_+/g, '_').replace(/^_+|_+$/g, '').slice(0, 56);
+    }
+    function normalizeCustomFontAsset(font = {}) {
+        const name = font.name || String(font.fileName || '自定义字体').replace(/\.[^.]+$/, '');
+        const familyName = font.familyName || getFontFamilyName(name);
+        const weightInfo = font.weight ? { weight: Number(font.weight), label: font.weightLabel || getFontWeightInfo(name).label } : getFontWeightInfo(name);
+        const familyId = font.familyId || makeFontFamilyId(familyName);
+        return { ...font, name, familyName, familyId, weight: weightInfo.weight, weightLabel: weightInfo.label, value: cssFontFamily(familyId), id: font.id || familyId };
+    }
+    function getCustomFontFamilies() {
+        const groups = new Map();
+        customFonts.map(normalizeCustomFontAsset).forEach(font => {
+            if(!groups.has(font.familyId)) groups.set(font.familyId, { familyId: font.familyId, familyName: font.familyName, fonts: [] });
+            const group = groups.get(font.familyId);
+            if(!group.fonts.some(item => item.weight === font.weight)) group.fonts.push(font);
+        });
+        return [...groups.values()].map(group => ({ ...group, fonts: group.fonts.sort((a, b) => a.weight - b.weight) }));
+    }
+    function getFontWeightOptions(fontValue, selectedWeight) {
+        const family = getCustomFontFamilies().find(item => cssFontFamily(item.familyId) === fontValue);
+        const weights = family ? family.fonts : [
+            { weight: 500, weightLabel: '中等' }, { weight: 700, weightLabel: '加粗' },
+            { weight: 800, weightLabel: '特粗' }, { weight: 900, weightLabel: '黑体' }
+        ];
+        const selected = weights.some(item => item.weight === Number(selectedWeight)) ? Number(selectedWeight) : weights[0].weight;
+        return { selected, html: weights.map(item => `<option value="${item.weight}" ${item.weight === selected ? 'selected' : ''}>${item.weightLabel}</option>`).join('') };
+    }
+    window.selectLayerFontFamily = function(fontValue) {
+        const layer = layers.find(item => item.id === activeLayerIds[0]);
+        if(!layer) return;
+        const weight = getFontWeightOptions(fontValue, layer.fontWeight).selected;
+        layer.font = fontValue;
+        layer.fontWeight = weight;
+        saveHistory(); renderCanvas(); renderProperties();
+    };
     function isCustomFont(fontValue = '') { return String(fontValue).includes('CF_'); }
     function getTagFontWeight(l) { return l.fontWeight !== undefined ? l.fontWeight : (isCustomFont(l.font) ? 400 : 900); }
     function normalizeAlpha(value) {
@@ -2821,6 +3228,7 @@
         deleteReferenceElementFromDB(id);
         saveGlobalData();
         renderAssetLibrary();
+        queueSharedAssetSave(0);
         showToast('已删除参考元素');
     }
     async function addAIReferenceFiles(files) {
@@ -2993,13 +3401,12 @@
         return cloned.map(layer => {
             layer.x = (Number(layer.x) || source.w / 2) * scaleX;
             layer.y = (Number(layer.y) || source.h / 2) * scaleY;
-            layer.scale = (Number(layer.scale) || 1) * uniform;
-            if(layer.type === 'image' && Math.abs((Number(layer.baseW) || 0) - source.w) < 4 && Math.abs((Number(layer.baseH) || 0) - source.h) < 4) {
-                layer.baseW = target.w;
-                layer.baseH = target.h;
-                layer.x = target.w / 2;
-                layer.y = target.h / 2;
-                layer.scale = 1;
+            // 图片/纯色层：缩放 baseW/baseH 而不是 scale，避免 layout box 溢出画布
+            if (layer.type === 'image' || layer.type === 'solid') {
+                layer.baseW = (Number(layer.baseW) || source.w) * uniform;
+                layer.baseH = (Number(layer.baseH) || source.h) * uniform;
+            } else {
+                layer.scale = (Number(layer.scale) || 1) * uniform;
             }
             return layer;
         });
@@ -3389,18 +3796,18 @@
         tagColorPresets.forEach((p, index) => { const alpha = normalizeAlpha(p.shadowOpacity); list.innerHTML += `<div class="setting-row" style="flex-wrap:wrap;"><input type="text" class="setting-input" value="${p.name}" onchange="updateTagPreset(${index}, 'name', this.value)"><div class="color-box" style="background:${p.bg}" title="标签底色"></div><input type="text" class="setting-input" value="${p.bg}" onchange="updateTagPreset(${index}, 'bg', this.value)"><div class="color-box" style="background:${p.text}" title="文字颜色"></div><input type="text" class="setting-input" value="${p.text}" onchange="updateTagPreset(${index}, 'text', this.value)"><div class="color-box" style="background:${colorWithAlpha(p.shadow, alpha)}" title="投影颜色"></div><input type="text" class="setting-input" value="${p.shadow}" onchange="updateTagPreset(${index}, 'shadow', this.value)"><span style="font-size:11px;color:var(--text-sub);font-weight:800;">投影透明度</span><input type="range" min="0" max="1" step="0.05" value="${alpha}" style="width:96px; flex:0 0 96px; margin:0;" oninput="updateTagPreset(${index}, 'shadowOpacity', parseFloat(this.value)); this.nextElementSibling.innerText = Math.round(parseFloat(this.value)*100)+'%'"><span style="width:38px;font-size:11px;font-weight:800;color:var(--text-main);">${Math.round(alpha*100)}%</span><button class="l-btn" style="color:var(--danger);" onclick="deleteTagPreset(${index})">✖</button></div>`; });
         const arcList = document.getElementById('settings-arc-preset-list'); arcList.innerHTML = '';
         arcColorPresets.forEach((p, index) => { arcList.innerHTML += `<div class="setting-row"><input type="text" class="setting-input" value="${p.name}" onchange="updateArcPreset(${index}, 'name', this.value)"><div class="color-box" style="background:${p.cIn}"></div><input type="text" class="setting-input" value="${p.cIn}" onchange="updateArcPreset(${index}, 'cIn', this.value)"><div class="color-box" style="background:${p.cOut}"></div><input type="text" class="setting-input" value="${p.cOut}" onchange="updateArcPreset(${index}, 'cOut', this.value)"><div style="width: 80px;"></div><button class="l-btn" style="color:var(--danger);" onclick="deleteArcPreset(${index})">✖</button></div>`; });
-        const fontList = document.getElementById('custom-font-list'); fontList.innerHTML = customFonts.map(f => `<div style="background:#F3F5F7; padding:4px 8px; border-radius:4px; font-weight:bold;">✅ ${f.name}</div>`).join('') || '暂无导入字体';
+        const fontList = document.getElementById('custom-font-list'); fontList.innerHTML = customFonts.map((f, i) => `<div style="background:#F3F5F7; padding:4px 8px; border-radius:4px; font-weight:bold; display:flex; align-items:center; gap:6px;"><span>✅ ${f.name}</span><button class="l-btn" style="color:var(--danger); font-size:12px;" onclick="deleteFont(${i})" title="删除字体">✖</button></div>`).join('') || '暂无导入字体';
     }
 
     function updateTagPreset(i, k, v) { tagColorPresets[i][k] = k === 'shadowOpacity' ? normalizeAlpha(v) : v; saveGlobalData(); if(k !== 'shadowOpacity') renderSettings(); renderProperties(); renderCanvas(); }
     function addTagPreset() { tagColorPresets.push({ id: genId('c'), name: '新预设', bg: '#00D06C', text: '#FFFFFF', shadow: '#111827', shadowOpacity: 1 }); saveGlobalData(); renderSettings(); }
-    function deleteTagPreset(i) { tagColorPresets.splice(i, 1); saveGlobalData(); renderSettings(); }
+    function deleteTagPreset(i) { tagColorPresets.splice(i, 1); saveGlobalData(); renderSettings(); queueSharedAssetSave(0); }
     function updateKeywordTag(i, k, v) { keywordTags[i][k] = v; saveGlobalData(); renderPromptTags(); }
     function addKeywordTag() { keywordTags.push({ id: genId('kw'), name: '新标签', prompt: '输入关键词' }); saveGlobalData(); renderSettings(); renderPromptTags(); }
-    function deleteKeywordTag(i) { const id = keywordTags[i]?.id; keywordTags.splice(i, 1); selectedKeywordTagIds = selectedKeywordTagIds.filter(x => x !== id); saveGlobalData(); renderSettings(); renderPromptTags(); }
+    function deleteKeywordTag(i) { const id = keywordTags[i]?.id; keywordTags.splice(i, 1); selectedKeywordTagIds = selectedKeywordTagIds.filter(x => x !== id); saveGlobalData(); renderSettings(); renderPromptTags(); queueSharedAssetSave(0); }
     function updateArcPreset(i, k, v) { arcColorPresets[i][k] = v; saveGlobalData(); renderSettings(); renderProperties(); renderCanvas(); }
     function addArcPreset() { arcColorPresets.push({ id: genId('ac'), name: '新圆弧', cIn: '#FFCC00', cOut: '#00D06C' }); saveGlobalData(); renderSettings(); }
-    function deleteArcPreset(i) { arcColorPresets.splice(i, 1); saveGlobalData(); renderSettings(); }
+    function deleteArcPreset(i) { arcColorPresets.splice(i, 1); saveGlobalData(); renderSettings(); queueSharedAssetSave(0); }
 
     /* ================= 统一图层添加 ================= */
     function addLayer(type, extraData = {}) {
@@ -3410,7 +3817,7 @@
         let newL = { id: genId(type), type, x: w/2, y: h/2, scale: 1, locked: false };
         
         if (type === 'image') {
-            newL.zIndex = minZ - 1; newL.rotation = 0; newL.baseW = w; newL.baseH = h; newL.flipX = false;
+            newL.zIndex = maxZ + 1; newL.rotation = 0; newL.baseW = w; newL.baseH = h; newL.flipX = false;
             Object.assign(newL, extraData);
         } else if (type === 'logo') {
             newL.zIndex = maxZ + 1; newL.rotation = 0; newL.baseW = 260; newL.baseH = 160; newL.flipX = false;
@@ -3418,12 +3825,23 @@
         } else {
             newL.zIndex = maxZ + 1; 
             if(type === 'arc') Object.assign(newL, { rIn: 400, wIn: 40, wOut: 120, cIn: '#00D06C', cOut: '#111827' });
-            else if(type === 'text') Object.assign(newL, { x: Math.round(w * 0.3), y: Math.round(h * 0.32), rotation: 0, text: '主标题\n文字', font: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 88, lineHeight: 0.95, letterSpacing: 0, maxWidth: 620, textAlign: 'left', textCol: '#111827' });
-            else if(type === 'tag') Object.assign(newL, { rotation: -3, shadowThickness: 12, shadowOpacity: 1, letterSpacing: 0, tagPaddingX: 36, tagTextOffsetY: 0, text: 'NEW TAG', font: '-apple-system, sans-serif', bgCol: '#00D06C', textCol: '#FFFFFF', shadowCol: '#111827' });
+            else if(type === 'text') Object.assign(newL, { x: Math.round(w * 0.3), y: Math.round(h * 0.32), rotation: 0, text: '主标题\n文字', font: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 88, lineHeight: 0.95, letterSpacing: 0, maxWidth: 620, textAlign: 'auto', textAlignMode: 'auto', textBoxAnchor: 'center', textCol: '#111827', resizeMode: 'autoWidth', textDirection: 'auto' });
+            else if(type === 'tag') Object.assign(newL, { rotation: -3, tagHeight: 60, shadowThickness: 12, shadowOpacity: 1, letterSpacing: 0, tagPaddingX: 36, tagTextOffsetY: 0, text: 'NEW TAG', font: '-apple-system, sans-serif', bgCol: '#00D06C', textCol: '#FFFFFF', shadowCol: '#111827' });
             else if(type === 'discountTag') Object.assign(newL, { rotation: -5, shadowThickness: 12, shadowOpacity: 0.45, letterSpacing: -3, tagPaddingX: 34, tagPaddingY: 15, tagTextOffsetY: 0, mainText: '60', topText: '%', bottomText: 'off', mainFontSize: 96, topFontSize: 52, bottomFontSize: 42, sideGap: 8, sideLineGap: -2, font: 'Arial Black, sans-serif', bgCol: '#050505', textCol: '#7CFF00', shadowCol: '#111827' });
         }
         if(['tag', 'discountTag', 'arc', 'solid'].includes(type)) ensureSharedKey(newL);
-        layers.push(newL); activeLayerIds = [newL.id]; saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+        layers.push(newL); activeLayerIds = [newL.id];
+        if(['logo', 'tag', 'discountTag', 'arc'].includes(type)) markNewlyAddedLayers([newL]);
+        saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+    }
+
+    function markNewlyAddedLayers(newLayers) {
+        newlyAddedLayerIds = new Set((newLayers || []).map(layer => layer?.id).filter(Boolean));
+        clearTimeout(newlyAddedLayerTimer);
+        newlyAddedLayerTimer = setTimeout(() => {
+            newlyAddedLayerIds.clear();
+            renderCanvas();
+        }, 3200);
     }
 
     /* ================= 核心渲染 ================= */
@@ -3443,6 +3861,7 @@
             wrapper.className = 'layer-image-wrapper layer-base';
             wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation}deg) scale(${l.scale}) scaleX(${l.flipX ? -1 : 1})`;
             wrapper.style.width = l.baseW + 'px'; wrapper.style.height = l.baseH + 'px';
+            wrapper.style.opacity = (l.opacity !== undefined ? l.opacity : 1);
             const objectFit = l.type === 'logo' ? 'contain' : (l.fitMode === 'contain' ? 'contain' : 'cover');
             wrapper.innerHTML = `<img class="layer-image-img" src="${l.src}" style="object-fit:${objectFit};">`;
         }
@@ -3460,16 +3879,44 @@
         }
         else if(l.type === 'text') {
             wrapper.className = 'layer-text-wrapper layer-base';
-            wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation || 0}deg) scale(${l.scale || 1})`;
-            wrapper.style.width = `${Number(l.maxWidth) || 620}px`;
+            var dir = getEffectiveTextDirection(l);
+            var align = getEffectiveTextAlign(l, dir);
+            // New text layers always use their box centre as the anchor. Legacy layers retain their old anchor until converted.
+            var useBoxCenterAnchor = l.textBoxAnchor === 'center';
+            var legacyAnchorAlign = l.textAlign === 'right' ? 'right' : 'left';
+            var tx = '-50%', ty = '-50%', tOrigin = 'center center';
+            if (!useBoxCenterAnchor && legacyAnchorAlign === 'left') { tx = '0'; tOrigin = 'left center'; }
+            else if (!useBoxCenterAnchor && legacyAnchorAlign === 'right') { tx = '-100%'; tOrigin = 'right center'; }
+            wrapper.style.transform = `translate(${tx}, ${ty}) rotate(${l.rotation || 0}deg) scale(${l.scale || 1})`;
+            wrapper.style.transformOrigin = tOrigin;
             wrapper.style.fontFamily = l.font || 'Arial Black, sans-serif';
             wrapper.style.fontWeight = Number(l.fontWeight) || 900;
             wrapper.style.fontSize = `${Number(l.fontSize) || 88}px`;
             wrapper.style.lineHeight = Number(l.lineHeight) || 0.95;
             wrapper.style.letterSpacing = `${Number(l.letterSpacing) || 0}px`;
             wrapper.style.color = l.textCol || '#FFFFFF';
-            wrapper.style.textAlign = l.textAlign || 'left';
-            wrapper.innerHTML = `<div class="layer-text-content">${escapeHtml(l.text || '').replace(/\n/g, '<br>')}</div>`;
+            wrapper.style.textAlign = align;
+            wrapper.style.direction = dir;
+            wrapper.style.unicodeBidi = 'plaintext';
+            wrapper.lang = dir === 'rtl' ? 'ar' : 'en';
+            var mode = l.resizeMode || 'autoWidth';
+            var ws = 'pre';
+            if (mode === 'autoWidth') {
+                wrapper.style.width = 'auto';
+            } else {
+                wrapper.style.width = `${Number(l.maxWidth) || 620}px`;
+                ws = 'pre-wrap';
+            }
+            if (mode === 'fixedSize' && l.textBoxHeight) {
+                wrapper.style.height = l.textBoxHeight + 'px';
+                wrapper.style.overflow = 'hidden';
+            } else {
+                wrapper.style.height = 'auto';
+                wrapper.style.overflow = 'visible';
+            }
+            var editing = textEditLayerId === l.id;
+            var safeText = String(l.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            wrapper.innerHTML = '<div class="layer-text-content" contenteditable="' + (editing ? 'true' : 'false') + '" oninput="syncTextEdit(\'' + l.id + '\', this)" onblur="syncTextEdit(\'' + l.id + '\', this)" style="white-space:' + ws + ';">' + safeText + '</div>';
         }
         else if(l.type === 'tag') {
             wrapper.className = 'layer-tag-wrapper layer-base';
@@ -3484,9 +3931,11 @@
             const paddingX = Number.isFinite(Number(l.tagPaddingX)) ? Number(l.tagPaddingX) : 36;
             const textOffsetY = Number.isFinite(Number(l.tagTextOffsetY)) ? Number(l.tagTextOffsetY) : 0;
             const textSpan = `<span style="display:inline-block; transform:translateY(${textOffsetY}px);">${safeText}</span>`;
-            const pillBox = `height:60px; line-height:60px; padding:0 ${paddingX}px; border-radius:30px;`;
-            const autoAngle = Math.atan2(thick, paddingX * 2 + String(l.text || '').length * 22) * (180/Math.PI);
-            wrapper.innerHTML = `<div style="position:relative; display:inline-block;"><div class="tag-pill" style="position:absolute; left:0; top:0; width:100%; ${pillBox} background:${shadowColor}; color:transparent; z-index:0; transform-origin: 30px 30px; transform: rotate(${autoAngle}deg); clip-path: inset(-100px -100px -100px 30px);">${textSpan}</div><div class="tag-pill" style="position:relative; ${pillBox} background:${l.bgCol}; color:${l.textCol}; z-index:1;">${textSpan}</div></div>`;
+            var tagH = Number(l.tagHeight) || 60;
+            const pillBox = `height:${tagH}px; line-height:${tagH}px; padding:0 ${paddingX}px; border-radius:${Math.round(tagH/2)}px;`;
+            const autoAngle = Math.atan2(thick, paddingX * 2 + String(l.text || '').length * (tagH * 0.37)) * (180/Math.PI);
+            var halfH = Math.round(tagH/2);
+            wrapper.innerHTML = `<div style="position:relative; display:inline-block;"><div class="tag-pill" style="position:absolute; left:0; top:0; width:100%; ${pillBox} background:${shadowColor}; color:transparent; z-index:0; transform-origin: ${halfH}px ${halfH}px; transform: rotate(${autoAngle}deg); clip-path: inset(-100px -100px -100px ${halfH}px);">${textSpan}</div><div class="tag-pill" style="position:relative; ${pillBox} background:${l.bgCol}; color:${l.textCol}; z-index:1;">${textSpan}</div></div>`;
         }
         else if(l.type === 'discountTag') {
             normalizeDiscountTagLayer(l);
@@ -3520,6 +3969,7 @@
             wrapper.innerHTML = `<div style="position:relative; display:inline-block;"><div class="discount-pill" style="position:absolute; left:0; top:0; width:100%; height:100%; ${pillStyle} background:${shadowColor}; color:transparent; z-index:0; transform-origin:${transformOriginX}px 50%; transform:rotate(${autoAngle}deg); clip-path:inset(-160px -160px -160px ${leftClip}px);">${inner}</div><div class="discount-pill" style="position:relative; ${pillStyle} color:${l.textCol}; background:${l.bgCol}; z-index:1;">${inner}</div></div>`;
         }
         if(active) wrapper.classList.add('is-active-layer');
+        if(newlyAddedLayerIds.has(l.id)) wrapper.classList.add('is-new-layer');
         return wrapper;
     }
     function renderCanvas() {
@@ -3620,6 +4070,36 @@
         renderCanvas(); renderArtboardPreviews();
         if(activeLayerIds.length === 1) { const el = document.getElementById('val-'+p); if(el) el.innerText = formatPropValue(p, v); }
     };
+    function detectTextDirection(text = '') {
+        let rtl = 0, ltr = 0;
+        for(const char of String(text)) {
+            if(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(char)) rtl++;
+            else if(/[A-Za-z\u00C0-\u024F]/.test(char)) ltr++;
+        }
+        return rtl > ltr ? 'rtl' : 'ltr';
+    }
+    function getEffectiveTextDirection(layer) {
+        if(layer?.textDirectionMode === 'manual' && ['ltr', 'rtl'].includes(layer.textDirection)) return layer.textDirection;
+        return detectTextDirection(layer?.text || '');
+    }
+    function getEffectiveTextAlign(layer, direction = getEffectiveTextDirection(layer)) {
+        if(layer?.textAlignMode === 'manual' && ['left', 'center', 'right'].includes(layer.textAlign)) return layer.textAlign;
+        return direction === 'rtl' ? 'right' : 'left';
+    }
+    window.setTextAlignment = function(nextAlign) {
+        activeLayerIds.forEach(id => {
+            const layer = layers.find(item => item.id === id);
+            if(!layer || layer.type !== 'text') return;
+            if(layer.textBoxAnchor !== 'center') {
+                // Convert the legacy left/right anchor to the box centre before changing alignment.
+                layer.x = getTextLayerPixelBounds(layer).cx;
+                layer.textBoxAnchor = 'center';
+            }
+            layer.textAlign = nextAlign;
+            layer.textAlignMode = 'manual';
+        });
+        renderCanvas(); renderArtboardPreviews(); renderProperties(); saveHistory();
+    };
     window.applyTagColor = function(b, t, s, o = 1) {
         activeLayerIds.forEach(id => {
             const l = layers.find(x => x.id === id);
@@ -3654,37 +4134,61 @@
         }
 
         const l = layers.find(x => x.id === activeLayerIds[0]); if(!l) return;
-        let fontOptions = `<option value="-apple-system, sans-serif">系统默认字体</option><option value="Arial Black, sans-serif">Arial Black (超粗体)</option>`; 
-        customFonts.forEach(f => { fontOptions += `<option value='${f.value}'>${f.name}</option>`; });
+        // 字体列表由 JS 运行时动态填充，包含系统字体和用户通过设置面板上传的自定义字体。
+        let fontOptions = `<option value="-apple-system, sans-serif">系统默认字体</option><option value="Arial Black, sans-serif">Arial Black (超粗体)</option>`;
+        getCustomFontFamilies().forEach(group => { fontOptions += `<option value='${cssFontFamily(group.familyId)}'>${escapeHtml(group.familyName)}</option>`; });
+        if(l.font && String(l.font).includes('CF_') && !getCustomFontFamilies().some(group => cssFontFamily(group.familyId) === l.font)) {
+            fontOptions += `<option value='${escapeHtml(l.font)}'>已使用的旧版自定义字体</option>`;
+        }
+        const selectedWeightInfo = getFontWeightOptions(l.font, l.fontWeight);
 
         if(l.type === 'image' || l.type === 'logo') {
             const title = l.type === 'logo' ? 'Logo属性调整' : '图片属性调整';
             const fitMode = l.fitMode || 'cover';
             const fitControls = l.type === 'image' ? `<label class="label">图片适配</label><div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px;"><button class="btn ${fitMode === 'cover' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="applyImageFitMode('cover')">铺满</button><button class="btn ${fitMode === 'contain' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="applyImageFitMode('contain')">完整</button><button class="btn btn-outline" type="button" onclick="applyImageFitMode('original')">原图</button></div><div style="font-size:11px; color:var(--text-sub); line-height:1.55; margin:-4px 0 14px;">铺满会裁切；完整不裁切；原图按原比例放入画布。</div>` : '';
-            area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">${title}</div>${fitControls}<div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.2" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div style="display:flex; gap:8px; margin-top:16px;"><button class="btn btn-outline" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="centerLayer()">居中</button><button class="btn btn-outline" style="flex:1;" onclick="toggleFlipX()" title="镜像反转">镜像</button></div>`;
+            area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">${title}</div>${fitControls}<div class="slider-row"><span class="s-label">不透明度</span><input type="range" min="0" max="1" step="0.05" value="${l.opacity !== undefined ? l.opacity : 1}" oninput="updateProp('opacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-opacity">${Math.round((l.opacity !== undefined ? l.opacity : 1) * 100)}%</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div style="display:flex; gap:8px; margin-top:16px;"><button class="btn btn-outline" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="centerLayer()">居中</button><button class="btn btn-outline" style="flex:1;" onclick="toggleFlipX()" title="镜像反转">镜像</button></div>`;
         }
         else if(l.type === 'solid') {
             area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">延展背景色块</div><label class="label">颜色</label><input type="text" class="input-text" value="${escapeHtml(l.color || '#00875f')}" oninput="updateProp('color', this.value)" onchange="saveHistory()"><div style="font-size:12px; color:var(--text-sub); line-height:1.6;">用于开屏和 Banner 的品牌色背景，可按项目需要微调。</div>`;
         }
         else if(l.type === 'text') {
-            const textAlign = l.textAlign || 'left';
+            const textAlign = getEffectiveTextAlign(l);
             const textColor = l.textCol || '#FFFFFF';
-            const fontWeight = Number(l.fontWeight) || 900;
+            const fontWeight = selectedWeightInfo.selected;
             const selectedFontOptions = fontOptions.replace(`value="${l.font}"`, `value="${l.font}" selected`).replace(`value='${l.font}'`, `value='${l.font}' selected`);
-            area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">文本属性调整</div><label class="label">主标题文案</label><textarea class="input-text" style="min-height:82px; resize:vertical; line-height:1.45;" oninput="updateProp('text', this.value)" onchange="saveHistory()">${escapeHtml(l.text || '')}</textarea><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${selectedFontOptions}</select><div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;"><div><label class="label">字体粗细</label><select class="input-select" onchange="updateProp('fontWeight', parseInt(this.value)); saveHistory();"><option value="500" ${fontWeight === 500 ? 'selected' : ''}>中等</option><option value="700" ${fontWeight === 700 ? 'selected' : ''}>加粗</option><option value="800" ${fontWeight === 800 ? 'selected' : ''}>特粗</option><option value="900" ${fontWeight === 900 ? 'selected' : ''}>黑体</option></select></div><div><label class="label">文字颜色</label><input type="color" value="${escapeHtml(textColor)}" style="width:100%; height:38px; padding:2px; border:1px solid var(--border); border-radius:8px; background:#FFF; cursor:pointer;" oninput="updateProp('textCol', this.value)" onchange="saveHistory()"></div></div><label class="label">对齐方式</label><div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px;"><button class="btn ${textAlign === 'left' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="updateProp('textAlign','left'); saveHistory(); renderProperties();">左对齐</button><button class="btn ${textAlign === 'center' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="updateProp('textAlign','center'); saveHistory(); renderProperties();">居中</button><button class="btn ${textAlign === 'right' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="updateProp('textAlign','right'); saveHistory(); renderProperties();">右对齐</button></div><div class="slider-row"><span class="s-label">字号</span><input type="range" min="24" max="240" step="1" value="${l.fontSize ?? 88}" oninput="updateProp('fontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-fontSize">${l.fontSize ?? 88}px</span></div><div class="slider-row"><span class="s-label">行距</span><input type="range" min="0.7" max="1.8" step="0.05" value="${l.lineHeight ?? 0.95}" oninput="updateProp('lineHeight', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-lineHeight">${Number(l.lineHeight ?? 0.95).toFixed(2)}</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">文字宽度</span><input type="range" min="120" max="1200" step="10" value="${l.maxWidth ?? 620}" oninput="updateProp('maxWidth', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-maxWidth">${l.maxWidth ?? 620}px</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.2" max="3" step="0.05" value="${l.scale ?? 1}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale ?? 1}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation ?? 0}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation ?? 0}°</span></div><button class="btn btn-outline" style="width:100%; margin-top:4px;" type="button" onclick="centerLayer()">居中画板</button>`;
+            var stepper = function(prop, label, min, max, step, unit, fmt) {
+                var val = l[prop] !== undefined ? l[prop] : (prop === 'fontSize' ? 88 : prop === 'maxWidth' ? 620 : prop === 'lineHeight' ? 0.95 : prop === 'letterSpacing' ? 0 : prop === 'scale' ? 1 : 0);
+                var display = fmt ? fmt(val) : (prop === 'lineHeight' ? Number(val).toFixed(2) : prop === 'letterSpacing' ? (Number(val)||0).toFixed(1) : Math.round(val||0));
+                return '<div class="stepper-row"><span class="stepper-label">' + label + '</span><button class="stepper-btn" onclick="stepperAdjust(\'' + prop + '\',' + (-step) + ',' + min + ',' + max + ')">−</button><span class="stepper-value" id="stepper-' + prop + '" data-prop="' + prop + '" data-min="' + min + '" data-max="' + max + '" data-step="' + step + '" onmousedown="stepperStartScrub(event,\'' + prop + '\',' + min + ',' + max + ',' + step + ')">' + display + '</span><button class="stepper-btn" onclick="stepperAdjust(\'' + prop + '\',' + step + ',' + min + ',' + max + ')">+</button><span class="stepper-unit">' + unit + '</span></div>';
+            };
+            var widthStepper = stepper('maxWidth','宽度',10,4000,10,'px');
+            var heightStepper = '';
+            area.innerHTML = '<div style="text-align:center;color:var(--text-main);font-size:14px;font-weight:bold;padding:10px 0;margin-bottom:12px;border-bottom:1px dashed var(--border);">文本属性</div>'
+                + '<label class="label">文字内容</label><textarea class="input-text" style="min-height:56px;resize:vertical;line-height:1.45;font-size:13px;" oninput="updateProp(\'text\',this.value)" onchange="saveHistory()">' + escapeHtml(l.text || '') + '</textarea>'
+                + '<div style="font-size:11px;color:var(--text-sub);margin:-6px 0 8px;">💡 双击画布文字可直接编辑</div>'
+                + '<label class="label">字体</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">' + selectedFontOptions + '</select>'
+                + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp(\'fontWeight\',parseInt(this.value));saveHistory();renderCanvas();">' + selectedWeightInfo.html + '</select></div><div><label class="label">颜色</label><input type="color" value="' + escapeHtml(textColor) + '" style="width:100%;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;background:#FFF;cursor:pointer;" oninput="updateProp(\'textCol\',this.value)" onchange="saveHistory()"></div></div>'
+                + stepper('fontSize','字号',1,480,1,'px')
+                + '<label class="label" style="margin-bottom:8px;">对齐</label><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;"><button class="btn ' + (textAlign==='left'?'btn-dark':'btn-outline') + '" type="button" onclick="setTextAlignment(\'left\')">左对齐</button><button class="btn ' + (textAlign==='center'?'btn-dark':'btn-outline') + '" type="button" onclick="setTextAlignment(\'center\')">居中</button><button class="btn ' + (textAlign==='right'?'btn-dark':'btn-outline') + '" type="button" onclick="setTextAlignment(\'right\')">右对齐</button></div>'
+                + stepper('lineHeight','行距',0.1,5,0.05,'')
+                + stepper('letterSpacing','字距',-50,30,0.5,'px')
+                + widthStepper + heightStepper
+                + stepper('scale','缩放',0.01,10,0.05,'x')
+                + stepper('rotation','旋转',-180,180,1,'°')
+                + '<button class="btn btn-outline" style="width:100%;margin-top:4px;" type="button" onclick="centerLayer()">居中画板</button>';
         }
         else if(l.type === 'tag') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="applyTagColor('${p.bg}', '${p.text}', '${p.shadow}', ${alpha})" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;"></div>`; });
-            area.innerHTML = `<label class="label">文案内容</label><input type="text" class="input-text" value="${escapeHtml(l.text)}" oninput="updateProp('text', this.value)" onchange="saveHistory()"><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.3" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-8" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">内边距</span><input type="range" min="8" max="80" step="1" value="${l.tagPaddingX ?? 36}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 36}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-18" max="18" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="30" step="1" value="${l.shadowThickness||12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness||12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 1)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 1)*100)}%</span></div>`;
+            area.innerHTML = `<label class="label">文案内容</label><input type="text" class="input-text" value="${escapeHtml(l.text)}" oninput="updateProp('text', this.value)" onchange="saveHistory()"><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();"><option value="300" ${(l.fontWeight||900)===300?'selected':''}>细体</option><option value="400" ${(l.fontWeight||900)===400?'selected':''}>常规</option><option value="700" ${(l.fontWeight||900)===700?'selected':''}>加粗</option><option value="900" ${(l.fontWeight||900)===900?'selected':''}>黑体</option></select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">标签高度</span><input type="range" min="10" max="300" step="1" value="${l.tagHeight || 60}" oninput="updateProp('tagHeight', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagHeight">${l.tagHeight || 60}px</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-50" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">内边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingX ?? 36}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 36}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="30" step="1" value="${l.shadowThickness||12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness||12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 1)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 1)*100)}%</span></div>`;
         } 
         else if(l.type === 'discountTag') {
             normalizeDiscountTagLayer(l);
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="applyTagColor('${p.bg}', '${p.text}', '${p.shadow}', ${alpha})" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;"></div>`; });
-            area.innerHTML = `<label class="label">主文字</label><input type="text" class="input-text" value="${escapeHtml(l.mainText)}" oninput="updateProp('mainText', this.value)" onchange="saveHistory()"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><div><label class="label">右上角</label><input type="text" class="input-text" value="${escapeHtml(l.topText)}" oninput="updateProp('topText', this.value)" onchange="saveHistory()"></div><div><label class="label">右下角</label><input type="text" class="input-text" value="${escapeHtml(l.bottomText)}" oninput="updateProp('bottomText', this.value)" onchange="saveHistory()"></div></div><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.3" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">主字大小</span><input type="range" min="48" max="150" step="1" value="${l.mainFontSize ?? 96}" oninput="updateProp('mainFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-mainFontSize">${l.mainFontSize ?? 96}px</span></div><div class="slider-row"><span class="s-label">%大小</span><input type="range" min="20" max="90" step="1" value="${l.topFontSize ?? l.sideFontSize ?? 52}" oninput="updateProp('topFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-topFontSize">${l.topFontSize ?? l.sideFontSize ?? 52}px</span></div><div class="slider-row"><span class="s-label">Off大小</span><input type="range" min="16" max="80" step="1" value="${l.bottomFontSize ?? l.sideFontSize ?? 42}" oninput="updateProp('bottomFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-bottomFontSize">${l.bottomFontSize ?? l.sideFontSize ?? 42}px</span></div><div class="slider-row"><span class="s-label">左右间距</span><input type="range" min="-8" max="32" step="1" value="${l.sideGap ?? 8}" oninput="updateProp('sideGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideGap">${l.sideGap ?? 8}px</span></div><div class="slider-row"><span class="s-label">%/Off间距</span><input type="range" min="-18" max="24" step="1" value="${l.sideLineGap ?? -2}" oninput="updateProp('sideLineGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideLineGap">${l.sideLineGap ?? -2}px</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="18" step="0.5" value="${l.letterSpacing ?? -3}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? -3}px</span></div><div class="slider-row"><span class="s-label">左右边距</span><input type="range" min="8" max="90" step="1" value="${l.tagPaddingX ?? 34}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 34}px</span></div><div class="slider-row"><span class="s-label">上下边距</span><input type="range" min="4" max="48" step="1" value="${l.tagPaddingY ?? 15}" oninput="updateProp('tagPaddingY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingY">${l.tagPaddingY ?? 15}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-24" max="24" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="36" step="1" value="${l.shadowThickness ?? 12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness ?? 12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 0.45)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 0.45)*100)}%</span></div>`;
+            area.innerHTML = `<label class="label">主文字</label><input type="text" class="input-text" value="${escapeHtml(l.mainText)}" oninput="updateProp('mainText', this.value)" onchange="saveHistory()"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><div><label class="label">右上角</label><input type="text" class="input-text" value="${escapeHtml(l.topText)}" oninput="updateProp('topText', this.value)" onchange="saveHistory()"></div><div><label class="label">右下角</label><input type="text" class="input-text" value="${escapeHtml(l.bottomText)}" oninput="updateProp('bottomText', this.value)" onchange="saveHistory()"></div></div><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">主字大小</span><input type="range" min="48" max="150" step="1" value="${l.mainFontSize ?? 96}" oninput="updateProp('mainFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-mainFontSize">${l.mainFontSize ?? 96}px</span></div><div class="slider-row"><span class="s-label">%大小</span><input type="range" min="20" max="90" step="1" value="${l.topFontSize ?? l.sideFontSize ?? 52}" oninput="updateProp('topFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-topFontSize">${l.topFontSize ?? l.sideFontSize ?? 52}px</span></div><div class="slider-row"><span class="s-label">Off大小</span><input type="range" min="16" max="80" step="1" value="${l.bottomFontSize ?? l.sideFontSize ?? 42}" oninput="updateProp('bottomFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-bottomFontSize">${l.bottomFontSize ?? l.sideFontSize ?? 42}px</span></div><div class="slider-row"><span class="s-label">左右间距</span><input type="range" min="-8" max="32" step="1" value="${l.sideGap ?? 8}" oninput="updateProp('sideGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideGap">${l.sideGap ?? 8}px</span></div><div class="slider-row"><span class="s-label">%/Off间距</span><input type="range" min="-18" max="24" step="1" value="${l.sideLineGap ?? -2}" oninput="updateProp('sideLineGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideLineGap">${l.sideLineGap ?? -2}px</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="18" step="0.5" value="${l.letterSpacing ?? -3}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? -3}px</span></div><div class="slider-row"><span class="s-label">左右边距</span><input type="range" min="8" max="90" step="1" value="${l.tagPaddingX ?? 34}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 34}px</span></div><div class="slider-row"><span class="s-label">上下边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingY ?? 15}" oninput="updateProp('tagPaddingY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingY">${l.tagPaddingY ?? 15}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="36" step="1" value="${l.shadowThickness ?? 12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness ?? 12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 0.45)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 0.45)*100)}%</span></div>`;
         }
         else if(l.type === 'arc') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; arcColorPresets.forEach(p => { const isActive = l.cIn === p.cIn && l.cOut === p.cOut; presetHtml += `<div onclick="applyArcColor('${p.cIn}', '${p.cOut}')" style="width:36px; height:36px; border-radius:50%; background:${p.cIn}; border: 4px solid ${p.cOut}; box-shadow: 0 0 0 ${isActive ? '2px' : '0'} var(--text-main); cursor:pointer;"></div>`; });
-            area.innerHTML = `<label class="label">一键圆弧品牌色</label>${presetHtml}</div><div class="slider-row"><span class="s-label">整体缩放</span><input type="range" min="0.2" max="3" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">中心半径</span><input type="range" min="100" max="1000" step="1" value="${l.rIn}" oninput="updateProp('rIn', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rIn">${l.rIn}</span></div><div class="slider-row"><span class="s-label">内环粗细</span><input type="range" min="10" max="400" step="1" value="${l.wIn}" oninput="updateProp('wIn', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-wIn">${l.wIn}</span></div><div class="slider-row"><span class="s-label">外环粗细</span><input type="range" min="0" max="400" step="1" value="${l.wOut}" oninput="updateProp('wOut', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-wOut">${l.wOut}</span></div>`;
+            area.innerHTML = `<label class="label">一键圆弧品牌色</label>${presetHtml}</div><div class="slider-row"><span class="s-label">整体缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">中心半径</span><input type="range" min="10" max="2000" step="1" value="${l.rIn}" oninput="updateProp('rIn', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rIn">${l.rIn}</span></div><div class="slider-row"><span class="s-label">内环粗细</span><input type="range" min="0" max="600" step="1" value="${l.wIn}" oninput="updateProp('wIn', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-wIn">${l.wIn}</span></div><div class="slider-row"><span class="s-label">外环粗细</span><input type="range" min="0" max="400" step="1" value="${l.wOut}" oninput="updateProp('wOut', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-wOut">${l.wOut}</span></div>`;
         }
     }
     
@@ -3705,30 +4209,229 @@
 
     /* ================= 图层统一拖拽引擎 ================= */
     let isDragging = false, dragStartX = 0, dragStartY = 0, dragData = [], hasDragged = false;
+    var textEditLayerId = null;
+    window.syncTextEdit = function(id, el) {
+        var l = layers.find(function(x) { return x.id === id; });
+        if (!l) return;
+        // 把 contenteditable 的 innerHTML 转回纯文本
+        var html = el.innerHTML || '';
+        var text = html
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<div>/gi, '\n').replace(/<\/div>/gi, '')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#(\d+);/g, function(_, d) { return String.fromCharCode(Number(d)); });
+        // 去掉开头/末尾多余换行，压缩连续换行
+        text = text.replace(/^\n+/, '').replace(/\n+$/, '').replace(/\n{3,}/g, '\n\n');
+        l.text = text;
+        // 同步右侧面板
+        if (activeLayerIds.length === 1 && activeLayerIds[0] === id) {
+            var ta = document.querySelector('#prop-edit-area textarea');
+            if (ta) ta.value = text;
+        }
+    };
+    function exitTextEdit() {
+        if (!textEditLayerId) return;
+        var el = document.getElementById(textEditLayerId);
+        if (el) {
+            var ce = el.querySelector('[contenteditable]');
+            if (ce) { ce.contentEditable = 'false'; ce.blur(); }
+            el.classList.remove('layer-text-editing');
+        }
+        textEditLayerId = null;
+        saveHistory();
+    }
+    function getTextLayerPixelBounds(l) {
+        var scale = Number(l.scale) || 1;
+        var mode = l.resizeMode || 'autoWidth';
+        var fs = (Number(l.fontSize) || 88) * scale;
+        var lh = Number(l.lineHeight) || 0.95;
+        var lines = String(l.text || '').split('\n');
+        var maxLines = lines.length || 1;
+        var h = Math.max(fs, maxLines * fs * lh);
+        var w;
+        if (mode === 'autoWidth') {
+            var maxChars = 0;
+            lines.forEach(function(ln) { if (ln.length > maxChars) maxChars = ln.length; });
+            maxChars = Math.max(1, maxChars);
+            var ls = (Number(l.letterSpacing) || 0) * scale;
+            w = Math.max(fs, maxChars * (fs * 0.6 + ls));
+        } else if (mode === 'fixedSize' && l.textBoxHeight) {
+            w = (Number(l.maxWidth) || 620) * scale;
+            h = l.textBoxHeight * scale;
+        } else {
+            w = (Number(l.maxWidth) || 620) * scale;
+        }
+        // Legacy layers used left/right edges as anchors. New layers always keep their box centre as the anchor.
+        var cx = l.x;
+        if(l.textBoxAnchor !== 'center') {
+            if(l.textAlign === 'left') cx += w / 2;
+            else if(l.textAlign === 'right') cx -= w / 2;
+        }
+        return { w: w, h: h, cx: cx, cy: l.y };
+    }
+    var stepperScrub = null;
+    window.stepperAdjust = function(prop, delta, min, max) {
+        activeLayerIds.forEach(function(id) {
+            var l = layers.find(function(x) { return x.id === id; });
+            if (!l) return;
+            var cur = Number(l[prop]) || 0;
+            l[prop] = Math.max(min, Math.min(max, Math.round((cur + delta) * 100) / 100));
+        });
+        renderCanvas(); saveHistory();
+    };
+    var stepperPending = null;
+    window.stepperStartScrub = function(e, prop, min, max, step) {
+        e.stopPropagation();
+        // 双击进入输入模式
+        if (e.detail === 2) { stepperStartInput(e, prop); return; }
+        var l = layers.find(function(x) { return x.id === activeLayerIds[0]; });
+        if (!l) return;
+        stepperPending = { prop: prop, min: min, max: max, step: step, startX: e.clientX, startVal: Number(l[prop]) || 0 };
+        window.addEventListener('mousemove', stepperMaybeStart);
+        window.addEventListener('mouseup', stepperCancel);
+    };
+    function stepperMaybeStart(e) {
+        if (!stepperPending) return;
+        if (Math.abs(e.clientX - stepperPending.startX) > 3) {
+            // 开始拖拽擦除
+            stepperScrub = stepperPending;
+            stepperPending = null;
+            window.removeEventListener('mousemove', stepperMaybeStart);
+            window.removeEventListener('mouseup', stepperCancel);
+            window.addEventListener('mousemove', stepperScrubMove);
+            window.addEventListener('mouseup', stepperScrubEnd);
+            e.preventDefault();
+        }
+    }
+    function stepperCancel() {
+        stepperPending = null;
+        window.removeEventListener('mousemove', stepperMaybeStart);
+        window.removeEventListener('mouseup', stepperCancel);
+    }
+    function stepperScrubMove(e) {
+        if (!stepperScrub) return;
+        var d = (e.clientX - stepperScrub.startX) * (stepperScrub.step * (e.shiftKey ? 10 : 1));
+        var val = stepperScrub.startVal + d;
+        if (stepperScrub.prop === 'fontSize' || stepperScrub.prop === 'maxWidth' || stepperScrub.prop === 'textBoxHeight' || stepperScrub.prop === 'rotation') val = Math.round(val);
+        else val = Math.round(val * 100) / 100;
+        val = Math.max(stepperScrub.min, Math.min(stepperScrub.max, val));
+        activeLayerIds.forEach(function(id) {
+            var l = layers.find(function(x) { return x.id === id; });
+            if (!l) return;
+            l[stepperScrub.prop] = val;
+        });
+        renderCanvas();
+        var el = document.getElementById('stepper-' + stepperScrub.prop);
+        if (el) el.textContent = stepperFmt(stepperScrub.prop, val);
+    }
+    function stepperScrubEnd() {
+        if (stepperScrub) { saveHistory(); renderProperties(); stepperScrub = null; }
+        window.removeEventListener('mousemove', stepperScrubMove);
+        window.removeEventListener('mouseup', stepperScrubEnd);
+    }
+    window.stepperStartInput = function(e, prop) {
+        if (!prop) return;
+        e.preventDefault(); e.stopPropagation();
+        stepperPending = null; stepperScrub = null;
+        var el = document.getElementById('stepper-' + prop);
+        if (!el || el.contentEditable === 'true') return;
+        el.contentEditable = 'true';
+        el.focus();
+        el._prev = el.textContent;
+        var min = Number(el.dataset.min), max = Number(el.dataset.max);
+        el.addEventListener('blur', function finish() {
+            el.contentEditable = 'false';
+            el.removeEventListener('blur', finish);
+            var raw = (el.textContent || '').replace(/[^0-9.\\-]/g, '');
+            var val = parseFloat(raw);
+            if (isNaN(val)) { el.textContent = el._prev || ''; return; }
+            val = Math.max(min, Math.min(max, val));
+            if (prop === 'fontSize' || prop === 'maxWidth' || prop === 'textBoxHeight' || prop === 'rotation') val = Math.round(val);
+            else val = Math.round(val * 100) / 100;
+            activeLayerIds.forEach(function(id) {
+                var l = layers.find(function(x) { return x.id === id; });
+                if (!l) return;
+                l[prop] = val;
+            });
+            renderCanvas(); saveHistory();
+            el.textContent = stepperFmt(prop, val);
+        });
+        el.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Enter') { ev.preventDefault(); el.blur(); }
+            if (ev.key === 'Escape') { el.textContent = el._prev || ''; el.blur(); }
+        });
+    };
+    function stepperFmt(prop, val) {
+        if (prop === 'lineHeight') return Number(val).toFixed(2);
+        if (prop === 'letterSpacing') return (Number(val)||0).toFixed(1);
+        if (prop === 'scale') return Number(val).toFixed(2) + 'x';
+        if (prop === 'rotation') return Math.round(val||0) + '°';
+        return Math.round(val||0) + '';
+    }
     document.getElementById('canvas-wrapper').addEventListener('mousedown', e => {
-        hasDragged = false; const wrap = e.target.closest('.layer-base');
-        if(wrap) { 
-            const id = wrap.dataset.id; const l = layers.find(x => x.id === id); if(!l || l.locked) return; 
-            if(e.shiftKey) { if(!activeLayerIds.includes(id)) activeLayerIds.push(id); } 
+        hasDragged = false;
+        // 双击文字图层 → 进入编辑
+        var wrap = e.target.closest('.layer-base');
+        if (wrap && e.detail === 2) {
+            var dblId = wrap.dataset.id;
+            var dblL = layers.find(function(x) { return x.id === dblId; });
+            if (dblL && dblL.type === 'text' && !dblL.locked) {
+                e.preventDefault();
+                exitTextEdit();
+                if (!activeLayerIds.includes(dblId)) { activeLayerIds = [dblId]; renderCanvas(); renderLayersList(); renderProperties(); }
+                textEditLayerId = dblId;
+                var el = document.getElementById(dblId);
+                if (el) {
+                    el.classList.add('layer-text-editing');
+                    var ce = el.querySelector('[contenteditable]');
+                    if (ce) {
+                        ce.contentEditable = 'true';
+                        ce.style.userSelect = 'text';
+                        ce.focus();
+                        // 光标移到末尾
+                        var range = document.createRange();
+                        range.selectNodeContents(ce);
+                        range.collapse(false);
+                        var sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                }
+                isDragging = false;
+                return;
+            }
+        }
+        if (wrap) {
+            // 编辑模式下：点击同一图层 → 保持编辑状态；点击其他图层 → 退出编辑
+            if (textEditLayerId) {
+                if (wrap.dataset.id === textEditLayerId) return; // 让 contenteditable 处理
+                exitTextEdit();
+            }
+            const id = wrap.dataset.id; const l = layers.find(x => x.id === id); if(!l || l.locked) return;
+            if(e.shiftKey) { if(!activeLayerIds.includes(id)) activeLayerIds.push(id); }
             else { if(!activeLayerIds.includes(id)) activeLayerIds = [id]; }
-            isDragging = true; dragStartX = e.clientX; dragStartY = e.clientY; 
+            isDragging = true; dragStartX = e.clientX; dragStartY = e.clientY;
             dragData = activeLayerIds.map(selId => ({ id: selId, ix: layers.find(x => x.id === selId).x, iy: layers.find(x => x.id === selId).y }));
-            renderCanvas(); renderLayersList(); renderProperties(); 
-        } else { activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); }
+            renderCanvas(); renderLayersList(); renderProperties();
+        } else { exitTextEdit(); activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); }
     });
-    window.addEventListener('mousemove', e => { 
-        if(isDragging && activeLayerIds.length > 0) { 
+    window.addEventListener('mousemove', e => {
+        if(isDragging && activeLayerIds.length > 0) {
             hasDragged = true; let dx = (e.clientX - dragStartX) / currentScale; let dy = (e.clientY - dragStartY) / currentScale;
             if(e.shiftKey) {
                 if(Math.abs(dx) >= Math.abs(dy)) dy = 0;
                 else dx = 0;
             }
             dragData.forEach(data => { const l = layers.find(x => x.id === data.id); if(l) { l.x = data.ix + dx; l.y = data.iy + dy; document.getElementById(data.id).style.left = l.x + 'px'; document.getElementById(data.id).style.top = l.y + 'px'; }});
-        } 
+        }
     });
-    window.addEventListener('mouseup', e => { 
-        if(isDragging) { 
-            isDragging = false; saveHistory(); 
+    window.addEventListener('mouseup', e => {
+        if(isDragging) {
+            isDragging = false; saveHistory();
             const wrap = e.target.closest('.layer-base');
             if(!hasDragged && !e.shiftKey && wrap && activeLayerIds.length > 1) { activeLayerIds = [wrap.dataset.id]; renderCanvas(); renderLayersList(); renderProperties(); }
         }
@@ -3737,27 +4440,18 @@
     /* ================= 内嵌资产库系统 ================= */
     function switchAssetTab(tab) {
         currentAssetTab = tab;
+        diySubtagFilter = '全部';
+        diySelectedSubtag = '全部';
         document.querySelectorAll('.asset-tab').forEach(b => b.classList.toggle('active', b.dataset.assetTab === tab));
         refreshSaveActiveAssetButton();
         renderAssetLibrary();
     }
     function refreshSaveActiveAssetButton() {
-        const btn = document.getElementById('save-active-asset-btn');
+        const btn = document.getElementById('canvas-save-btn');
         if(!btn) return;
         const isReferenceTab = currentAssetTab === 'reference';
         btn.hidden = isReferenceTab;
-        btn.textContent = currentAssetTab === 'logo' ? '上传 Logo' : '保存当前';
-    }
-    function toggleAssetLibraryExpanded() {
-        const expanded = !document.body.classList.contains('asset-library-expanded');
-        document.body.classList.toggle('asset-library-expanded', expanded);
-        const button = document.getElementById('asset-library-expand-btn');
-        if(button) {
-            button.textContent = expanded ? '⌄' : '⌃';
-            button.title = expanded ? '收起资产库' : '上下展开资产库';
-            button.setAttribute('aria-label', button.title);
-        }
-        requestAnimationFrame(() => resizeCanvas());
+        btn.textContent = currentAssetTab === 'component' ? '上传组件' : '保存模版';
     }
     function toggleAddMenu(e) { e.stopPropagation(); document.getElementById('add-menu')?.classList.toggle('open'); }
     function closeAddMenu() { document.getElementById('add-menu')?.classList.remove('open'); }
@@ -3771,33 +4465,510 @@
     }
     document.addEventListener('click', e => { if(!e.target.closest('.toolbar-more-wrap')) closeToolbarMore(); });
     document.addEventListener('click', e => { if(!e.target.closest('.new-artboard-menu-wrap')) closeNewArtboardMenu(); });
+    // ===== 模版同步到素材库 =====
+    function notifyParent(msg) {
+        try { window.parent.postMessage(msg, location.origin); } catch(e) {}
+    }
+
+    function renderPresetPreview(elements, ratio) {
+        // 用 Canvas 2D 渲染图层生成预览图
+        var size = SIZES[ratio] || SIZES['16:9'] || { w: 1600, h: 900 };
+        var PW = 400, PH = Math.round(PW * size.h / size.w);
+        var canvas = document.createElement('canvas');
+        canvas.width = PW; canvas.height = PH;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, PW, PH);
+        if (!elements || !elements.length) return canvas.toDataURL('image/png');
+        var scale = PW / size.w;
+        var sorted = elements.slice().sort(function(a, b) { return (a.zIndex || 0) - (b.zIndex || 0); });
+        var imgCache = {};
+        function loadImg(src) {
+            return new Promise(function(resolve) {
+                if (imgCache[src]) { resolve(imgCache[src]); return; }
+                var img = new Image();
+                img.onload = function() { imgCache[src] = img; resolve(img); };
+                img.onerror = function() { resolve(null); };
+                if (src && src.startsWith('data:')) img.src = src; else resolve(null);
+            });
+        }
+        async function drawLayers() {
+            for (var i = 0; i < sorted.length; i++) {
+                var l = sorted[i];
+                var x = (l.x || 0) * scale, y = (l.y || 0) * scale;
+                var sc = (l.scale || 1) * scale;
+                ctx.save();
+                try {
+                    if (l.type === 'image' && l.src && l.src.startsWith('data:')) {
+                        var img = await loadImg(l.src);
+                        var iw = (l.rw || l.baseW || l.width || 200) * sc;
+                        var ih = (l.rh || l.baseH || l.height || 100) * sc;
+                        if (img) ctx.drawImage(img, x, y, iw, ih);
+                        else { ctx.fillStyle = '#e2e8f0'; ctx.fillRect(x, y, iw || 40, ih || 30); }
+                    } else if (l.type === 'text') {
+                        var fs = Math.max(4, (l.fontSize || 32) * scale);
+                        var previewText = String(l.text ?? l.content ?? '');
+                        var previewDirection = getEffectiveTextDirection(l);
+                        ctx.font = (l.fontWeight || 'normal') + ' ' + fs + 'px ' + (l.font || 'sans-serif');
+                        ctx.fillStyle = l.textCol || l.color || '#000000';
+                        ctx.direction = previewDirection;
+                        ctx.textAlign = getEffectiveTextAlign(l, previewDirection);
+                        previewText.split('\n').forEach(function(line, li) {
+                            ctx.fillText(line, x, y + li * fs * 1.3);
+                        });
+                    } else if (l.type === 'tag' || l.type === 'discountTag' || l.type === 'tagPill') {
+                        var bg = l.bg || l.backgroundColor || '#00D06C';
+                        var tfs = Math.max(4, (l.fontSize || 24) * scale);
+                        var tagText = String(l.text ?? l.content ?? '');
+                        var tagDirection = detectTextDirection(tagText);
+                        ctx.font = (l.fontWeight || 'bold') + ' ' + tfs + 'px ' + (l.font || 'sans-serif');
+                        ctx.direction = tagDirection;
+                        var tw = ctx.measureText(tagText).width + 12 * scale;
+                        var th = tfs * 1.6;
+                        ctx.fillStyle = bg;
+                        ctx.fillRect(x, y, tw, th);
+                        ctx.fillStyle = l.textColor || l.color || '#FFFFFF';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(tagText, x + tw / 2, y + th * 0.7);
+                    } else if (l.type === 'solid') {
+                        ctx.fillStyle = l.color || l.fill || '#cccccc';
+                        ctx.fillRect(x, y, ((l.rw || l.width || 100)) * sc, ((l.rh || l.height || 60)) * sc);
+                    }
+                } catch(e) {}
+                ctx.restore();
+            }
+        }
+        return drawLayers().then(function() { return canvas.toDataURL('image/png'); });
+    }
+
+    async function capturePreviewForSync() {
+        // 直接使用 DIY 自带的截图函数，和顶部"保存到模版库"用的是同一个
+        if (typeof window.VF_EXPORT_TEMPLATE_ASSET === 'function') {
+            try {
+                var result = await window.VF_EXPORT_TEMPLATE_ASSET({ title: 'preview' });
+                if (result && result.previewDataUrl) return result.previewDataUrl;
+            } catch(e) { console.warn('VF_EXPORT_TEMPLATE_ASSET failed:', e); }
+        }
+        if (typeof window.captureStaticPreviewDataUrl === 'function') {
+            try { return await window.captureStaticPreviewDataUrl(); } catch(e) {}
+        }
+        return null;
+    }
+
+    function parseArtboardSize(ratio) {
+        var map = { 'head': {w:750,h:500}, 'splash': {w:1000,h:2168}, 'banner': {w:1396,h:424},
+            '16:9': {w:1600,h:900}, '3:2': {w:1200,h:800}, '4:3': {w:1200,h:900},
+            '1:1': {w:1000,h:1000}, '3:4': {w:900,h:1200}, '2:3': {w:800,h:1200}, '9:16': {w:900,h:1600} };
+        if (map[ratio]) return map[ratio];
+        var parts = (ratio || '16:9').split(':');
+        var rw = parseFloat(parts[0]) || 16, rh = parseFloat(parts[1]) || 9;
+        var base = 100;
+        return { w: Math.round(rw * base), h: Math.round(rh * base) };
+    }
+
+    function compressImageDataUrl(dataUrl, maxMB) {
+        if (!dataUrl || !dataUrl.startsWith('data:image/')) return dataUrl;
+        var maxBytes = (maxMB || 2) * 1024 * 1024;
+        // 估算当前大小
+        var headLen = dataUrl.indexOf(',') + 1;
+        var sizeEstimate = Math.ceil((dataUrl.length - headLen) * 0.75);
+        if (sizeEstimate <= maxBytes) return dataUrl;
+        return new Promise(function(resolve) {
+            var img = new Image();
+            img.onload = function() {
+                var canvas = document.createElement('canvas');
+                var w = img.width, h = img.height, quality = 0.8, attempt = 0;
+                function tryIt() {
+                    canvas.width = w; canvas.height = h;
+                    var ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    var result = canvas.toDataURL('image/jpeg', quality);
+                    var newSize = Math.ceil((result.length - result.indexOf(',') - 1) * 0.75);
+                    if (newSize <= maxBytes || attempt > 5) { resolve(result); return; }
+                    w = Math.floor(w * 0.7); h = Math.floor(h * 0.7);
+                    quality = Math.max(0.3, quality - 0.1);
+                    attempt++;
+                    tryIt();
+                }
+                tryIt();
+            };
+            img.onerror = function() { resolve(dataUrl); };
+            img.src = dataUrl;
+        });
+    }
+
+    // 压缩 layers 中的大图 data URL
+    async function compressLayersForSync(layers) {
+        if (!layers || !layers.length) return layers;
+        var cloned = JSON.parse(JSON.stringify(layers));
+        for (var i = 0; i < cloned.length; i++) {
+            if (cloned[i].type === 'image' && cloned[i].src && cloned[i].src.startsWith('data:')) {
+                cloned[i].src = await compressImageDataUrl(cloned[i].src, 2);
+            }
+        }
+        return cloned;
+    }
+
+    function showSyncStatus(status) {
+        var bar = document.getElementById('sync-status-bar');
+        var text = document.getElementById('sync-status-text');
+        var icon = document.getElementById('sync-status-icon');
+        if (!bar || !text || !icon) return;
+        bar.style.display = 'block';
+        if (status === 'uploading') {
+            text.textContent = '正在同步到素材库...';
+            icon.textContent = '⏳';
+            bar.style.background = '#f0fdf4'; bar.style.color = '#166534'; bar.style.borderColor = '#bbf7d0';
+        } else if (status === 'done') {
+            text.textContent = '已同步 ✓';
+            icon.textContent = '';
+            bar.style.background = '#f0fdf4'; bar.style.color = '#166534'; bar.style.borderColor = '#bbf7d0';
+            setTimeout(function() { bar.style.display = 'none'; }, 2000);
+        } else if (status === 'error') {
+            text.textContent = '同步失败，下次打开时重试 ⚠️';
+            icon.textContent = '';
+            bar.style.background = '#fef2f2'; bar.style.color = '#991b1b'; bar.style.borderColor = '#fecaca';
+        } else if (status === 'migrating') {
+            text.textContent = status;
+            icon.textContent = '⏳';
+            bar.style.background = '#eff6ff'; bar.style.color = '#1e40af'; bar.style.borderColor = '#bfdbfe';
+        }
+    }
+
+    function generatePlaceholderPreview(name, subType) {
+        var label = (subType || 'asset').toUpperCase();
+        var safeName = (name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">'
+            + '<rect width="400" height="300" fill="#f1f5f9"/>'
+            + '<rect x="150" y="110" width="100" height="80" rx="8" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="1.5"/>'
+            + '<text x="200" y="142" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#94a3b8">' + label + '</text>'
+            + '<text x="200" y="164" text-anchor="middle" font-family="sans-serif" font-size="22" fill="#64748b">📄</text>'
+            + '<text x="200" y="220" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#94a3b8">' + safeName + '</text>'
+            + '</svg>';
+        return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+    }
+
+    async function syncPresetToCloud(preset, templateType) {
+        if (!preset || preset.cloudId) return; // 已有 cloudId 说明已同步过
+        try {
+            // 截取当前画布作为预览图
+            var previewDataUrl = await capturePreviewForSync();
+            // 降级：渲染失败则用文字占位图
+            if (!previewDataUrl || previewDataUrl.length < 1500) {
+                var labelMap = { layout: '版式', pack: '套组', tagcombo: '标签组', logo: 'Logo' };
+                previewDataUrl = generatePlaceholderPreview(preset.name, labelMap[templateType] || templateType);
+            }
+            // 立即将预览图写入 preset，避免 renderAssetLibrary 降级到 mini 渲染
+            preset.previewUrl = previewDataUrl;
+            // 准备数据
+            var data = {};
+            if (templateType === 'pack') {
+                data.artboards = preset.artboards || {};
+            } else {
+                data.elements = await compressLayersForSync(preset.elements);
+                data.size = preset.size || currentRatio;
+            }
+            showSyncStatus('uploading');
+            notifyParent({ type: 'vf:save-template', templateType: templateType, name: preset.name, data: data, previewDataUrl: previewDataUrl || '' });
+        } catch(e) { /* 静默失败 */ }
+    }
+
+    // 监听父窗口的同步进度回复
+    window.addEventListener('message', function(event) {
+        if (!event.data || !event.data.type) return;
+        if (event.data.type === 'vf:sync-progress') {
+            if (event.data.status === 'done' && event.data.sourceId) {
+                var tempId = event.data.tempId || '';
+                var finalName = event.data.finalName || '';
+                [presetLibrary, tagPresetLibrary, logoAssets].forEach(function(arr) {
+                    for (var i = arr.length - 1; i >= 0; i--) {
+                        if (arr[i]._pending && (arr[i].id === tempId || arr[i].name === (event.data.originalName || ''))) {
+                            arr[i].cloudId = event.data.sourceId;
+                            arr[i]._pending = false;
+                            if (finalName && finalName !== arr[i].name) arr[i].name = finalName;
+                            renderAssetLibrary();
+                            showToast('✅ 已保存到素材库：' + arr[i].name);
+                            return;
+                        }
+                    }
+                });
+            } else if (event.data.status === 'error') {
+                showToast('❌ 保存失败：' + (event.data.error || ''), true);
+            }
+        } else if (event.data.type === 'vf:templates-loaded') {
+            // 从 Supabase 加载，但保留本地 _pending 未完成的保存
+            var pendingLayouts = presetLibrary.filter(function(p) { return p._pending; });
+            var pendingTags = tagPresetLibrary.filter(function(p) { return p._pending; });
+            var pendingLogos = logoAssets.filter(function(l) { return l._pending; });
+            var templates = event.data.templates || [];
+            presetLibrary = []; tagPresetLibrary = []; logoAssets = [];
+            templates.forEach(function(ct) {
+                if (ct.templateType === 'tagcombo') {
+                    tagPresetLibrary.push({ id: ct.id, cloudId: ct.id, name: ct.name, elements: [], _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
+                } else if (ct.templateType === 'logo') {
+                    logoAssets.push({ id: ct.id, cloudId: ct.id, name: ct.name, src: '', _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
+                } else if (ct.templateType === 'pack') {
+                    presetLibrary.push({ id: ct.id, cloudId: ct.id, kind: 'pack', name: ct.name, artboards: {}, _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
+                } else {
+                    presetLibrary.push({ id: ct.id, cloudId: ct.id, name: ct.name, size: '', elements: [], _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
+                }
+            });
+            // 把还没收到保存确认的 _pending 项加回去
+            presetLibrary.push.apply(presetLibrary, pendingLayouts);
+            tagPresetLibrary.push.apply(tagPresetLibrary, pendingTags);
+            logoAssets.push.apply(logoAssets, pendingLogos);
+            renderAssetLibrary();
+        } else if (event.data.type === 'vf:template-preview') {
+            // 接收预览图 data URL
+            var pid = event.data.id;
+            var pUrl = event.data.previewUrl || '';
+            if (pUrl) {
+                [presetLibrary, tagPresetLibrary, logoAssets].forEach(function(arr) {
+                    var item = arr.find(function(x) { return x.cloudId === pid; });
+                    if (item) item.previewUrl = pUrl;
+                });
+                renderAssetLibrary();
+            }
+        } else if (event.data.type === 'vf:template-data') {
+            // 后台到达的完整 JSON 数据，更新对应模板
+            var tid = event.data.id;
+            var tdata = event.data.data || {};
+            [presetLibrary, tagPresetLibrary, logoAssets].forEach(function(arr) {
+                var item = arr.find(function(x) { return x.cloudId === tid; });
+                if (!item) return;
+                item._lazy = false;
+                if (tdata.elements) item.elements = tdata.elements;
+                if (tdata.artboards) item.artboards = tdata.artboards;
+                if (tdata.size) item.size = tdata.size;
+                if (tdata.canvasW) item.canvasW = tdata.canvasW;
+                if (tdata.canvasH) item.canvasH = tdata.canvasH;
+                if (tdata.src) item.src = tdata.src;
+            });
+            renderAssetLibrary();
+        } else if (event.data.type === 'vf:apply-template') {
+            var d = event.data.data || {};
+            if (d.schema === 'vf-layout-preset/v1' && d.elements) {
+                // 切换到模板保存时的比例/尺寸
+                if (d.size && d.size !== currentRatio) {
+                    if (SIZES[d.size]) {
+                        currentRatio = d.size;
+                    } else if (d.canvasW && d.canvasH) {
+                        SIZES[d.size] = { w: d.canvasW, h: d.canvasH };
+                        currentRatio = d.size;
+                    } else {
+                        var iw2 = 1080, ih2 = 1080;
+                        (d.elements || []).forEach(function(el) {
+                            var bw = Number(el.baseW) || 0, bh = Number(el.baseH) || 0;
+                            if (bw > iw2 && bw < 6000) iw2 = Math.max(iw2, bw);
+                            if (bh > ih2 && bh < 6000) ih2 = Math.max(ih2, bh);
+                        });
+                        SIZES[d.size] = { w: iw2, h: ih2 };
+                        currentRatio = d.size;
+                    }
+                    if (currentRatio === d.size) {
+                        resizeCanvas();
+                        syncRatioNav();
+                    }
+                }
+                var keepTypes2 = ['image', 'logo', 'arc', 'solid'];
+                var keptLayers2 = layers.filter(function(l) { return keepTypes2.includes(l.type); }).map(function(l) { return JSON.parse(JSON.stringify(l)); });
+                var newEls = cloneData(d.elements);
+                keptLayers2.forEach(function(l) { l.id = genId(l.type); l.locked = false; newEls.push(l); });
+                layers = newEls;
+                activeLayerIds = layers.filter(function(l) { return l.type !== 'image'; }).map(function(l) { return l.id; });
+                if (!activeLayerIds.length) activeLayerIds = layers.map(function(l) { return l.id; });
+                saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+                showToast('已应用版式：' + (d.name || ''));
+            } else if (d.schema === 'vf-template-pack/v1' && d.artboards) {
+                saveCurrentArtboardState();
+                var nextArtboards = normalizeArtboardSnapshot(d.artboards || {});
+                artboards = nextArtboards;
+                activeTemplatePackId = event.data.sourceId || '';
+                currentArtboardId = getFixedArtboardPresets().find(function(preset) { return (artboards[preset.id]?.layers || []).length > 0; })?.id || 'head';
+                loadArtboard(currentArtboardId, false);
+                activeLayerIds = [];
+                saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); renderAssetLibrary();
+                showToast('已应用套组：' + (d.name || ''));
+            } else if (d.schema === 'vf-tag-combo/v1' && d.elements) {
+                var tagLayers = cloneLayersForInsert(d.elements, true);
+                layers.push.apply(layers, tagLayers);
+                activeLayerIds = tagLayers.map(function(l) { return l.id; });
+                markNewlyAddedLayers(tagLayers);
+                saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+                showToast('已应用标签组：' + (d.name || ''));
+            } else if (d.schema === 'vf-logo-asset/v1' && d.src) {
+                if (typeof addLayer === 'function') addLayer('logo', { src: d.src });
+                showToast('已添加Logo：' + (d.name || ''));
+            }
+        } else if (event.data.type === 'vf:template-deleted') {
+            var sid = event.data.sourceId;
+            presetLibrary = presetLibrary.filter(function(p) { return p.cloudId !== sid; });
+            tagPresetLibrary = tagPresetLibrary.filter(function(p) { return p.cloudId !== sid; });
+            logoAssets = logoAssets.filter(function(l) { return l.cloudId !== sid; });
+            renderAssetLibrary();
+        }
+    });
+
+    async function syncTagPresetToCloud(preset) {
+        if (!preset || preset.cloudId) return;
+        try {
+            showSyncStatus('uploading');
+            var previewDataUrl = await capturePreviewForSync();
+            if (!previewDataUrl || previewDataUrl.length < 1500) {
+                previewDataUrl = generatePlaceholderPreview(preset.name, '标签组');
+            }
+            notifyParent({ type: 'vf:save-template', templateType: 'tagcombo', name: preset.name, data: { elements: preset.elements }, previewDataUrl: previewDataUrl || '' });
+        } catch(e) {}
+    }
+
+    async function syncLogoToCloud(logo) {
+        if (!logo || logo.cloudId) return;
+        try {
+            showSyncStatus('uploading');
+            var previewDataUrl = (logo.src && logo.src.startsWith('data:')) ? logo.src : '';
+            if (!previewDataUrl || previewDataUrl.length < 1500) {
+                previewDataUrl = generatePlaceholderPreview(logo.name, 'Logo');
+            }
+            notifyParent({ type: 'vf:save-template', templateType: 'logo', name: logo.name, data: { src: logo.src }, previewDataUrl: previewDataUrl });
+        } catch(e) {}
+    }
+
+    async function syncAllToLibrary() {
+        // 清掉所有旧 cloudId，确保全部重新上传
+        presetLibrary.forEach(function(p) { delete p.cloudId; delete p.cloudName; });
+        tagPresetLibrary.forEach(function(p) { delete p.cloudId; delete p.cloudName; });
+        logoAssets.forEach(function(l) { delete l.cloudId; delete l.cloudName; });
+        await saveGlobalData();
+        var layoutToSync = presetLibrary.slice();
+        var tagsToSync = tagPresetLibrary.slice();
+        var logosToSync = logoAssets.slice();
+        var total = layoutToSync.length + tagsToSync.length + logosToSync.length;
+        if (!total) { showToast('没有可同步的内容'); return; }
+        var done = 0;
+        for (var i = 0; i < layoutToSync.length; i++) {
+            done++;
+            var p = layoutToSync[i];
+            showSyncStatus('同步到素材库 (' + done + '/' + total + ') ...');
+            await syncPresetToCloud(p, p.kind === 'pack' ? 'pack' : 'layout');
+            await new Promise(function(r) { setTimeout(r, 500); });
+        }
+        for (var j = 0; j < tagsToSync.length; j++) {
+            done++;
+            showSyncStatus('同步到素材库 (' + done + '/' + total + ') ...');
+            await syncTagPresetToCloud(tagsToSync[j]);
+            await new Promise(function(r) { setTimeout(r, 500); });
+        }
+        for (var k = 0; k < logosToSync.length; k++) {
+            done++;
+            showSyncStatus('同步到素材库 (' + done + '/' + total + ') ...');
+            await syncLogoToCloud(logosToSync[k]);
+            await new Promise(function(r) { setTimeout(r, 500); });
+        }
+        showSyncStatus('done');
+        showToast('同步完成：' + total + ' 项已上传到素材库');
+    }
+    // ===== 模版同步结束 =====
+
     async function saveActiveAsset() {
         if(currentAssetTab === 'layout') return await saveToPreset();
-        if(currentAssetTab === 'tag') return await saveTagComboPreset();
+        if(currentAssetTab === 'component') {
+            // 组件 tab：根据选中项判断保存标签组合还是 Logo
+            return document.getElementById('logo-upload').click();
+        }
         if(currentAssetTab === 'reference') return document.getElementById('reference-element-upload').click();
-        document.getElementById('logo-upload').click();
     }
     function switchReferenceCategory(category) {
         referenceElementCategory = category === 'background' ? 'background' : 'food';
         renderAssetLibrary();
     }
+    var diySubtagFilter = '全部';
+    var diySelectedSubtag = '全部'; // 真正选中的分类，影响保存时的 tag2
+    var DIY_SUBTAGS = {
+        layout: ['全部', '社媒物料', 'C端物料'],
+        component: ['全部', '标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材']
+    };
+    function renderDiySubtags() {
+        var row = document.getElementById('diy-subtag-row');
+        if (!row) return;
+        var tags = DIY_SUBTAGS[currentAssetTab] || [];
+        if (tags.length <= 1) { row.innerHTML = ''; return; }
+        // 计算每个二级标签下的项目数量
+        var counts = {};
+        tags.forEach(function(t) { counts[t] = 0; });
+        if (currentAssetTab === 'layout') {
+            presetLibrary.forEach(function(p) {
+                tags.forEach(function(t) {
+                    if (t === '全部') { counts[t]++; return; }
+                    if ((p.name || '').indexOf(t) !== -1) counts[t]++;
+                });
+            });
+        } else if (currentAssetTab === 'component') {
+            tagPresetLibrary.concat(logoAssets).forEach(function(item) {
+                var itemTag = item.subTag || item._subTag || '';
+                if (!itemTag && item.tags && Array.isArray(item.tags)) {
+                    var tt = item.tags;
+                    if (tt.includes('标签')) itemTag = '标签';
+                    else if (tt.includes('背景')) itemTag = '背景';
+                    else if (tt.includes('品牌圆弧')) itemTag = '品牌圆弧';
+                    else if (tt.includes('LOGO')) itemTag = 'LOGO';
+                    else if (tt.includes('KIKI')) itemTag = 'KIKI';
+                    else if (tt.includes('其他素材')) itemTag = '其他素材';
+                }
+                counts['全部']++;
+                if (counts[itemTag] !== undefined) counts[itemTag]++;
+            });
+        }
+        row.innerHTML = tags.map(function(t) {
+            var isFilterActive = diySubtagFilter === t;
+            var isSelected = diySelectedSubtag === t;
+            var style = 'font-size:11px;padding:2px 10px;';
+            if (isSelected && t !== '全部') style += 'background:#0d9488;color:#fff;border-color:#0d9488;';
+            var cnt = counts[t] || 0;
+            var label = t + ' · ' + cnt;
+            return '<button class="filter-capsule' + (isFilterActive || isSelected ? ' active' : '') + '" onclick="diySubtagFilter=\'' + t + '\';diySelectedSubtag=\'' + t + '\';renderAssetLibrary();" style="' + style + '">' + label + '</button>';
+        }).join('');
+    }
+
     function renderAssetLibrary() {
+        var cl = document.getElementById('diy-count-layout'); if (cl) cl.textContent = '· ' + presetLibrary.length;
+        var cc = document.getElementById('diy-count-component'); if (cc) cc.textContent = '· ' + (tagPresetLibrary.length + logoAssets.length);
+        renderDiySubtags();
         const list = document.getElementById('asset-list-ui'); if(!list) return;
         list.innerHTML = '';
         if(currentAssetTab === 'layout') {
-            const items = presetLibrary;
-            if(items.length === 0) { list.innerHTML = `<div class="asset-empty">暂无版式，点击“保存套组”存三画板模板。</div>`; return; }
+            const items = presetLibrary.filter(function(p) {
+                if (diySubtagFilter === '全部') return true;
+                // 按 name 或标签粗略匹配
+                return (p.name || '').indexOf(diySubtagFilter) !== -1;
+            });
+            if(items.length === 0) { list.innerHTML = '<div class=”asset-empty”>暂无版式</div>'; return; }
             items.forEach(p => {
                 const isPack = p.kind === 'pack';
                 const meta = isPack ? `三画板套组 · ${getFixedArtboardPresets().map(item => p.artboards?.[item.id]?.layers?.length || 0).join('/')} 图层` : `${p.size} · ${p.elements?.length || 0} 图层`;
                 list.appendChild(createAssetItem({ title: p.name, meta, asset: p, type: isPack ? 'pack' : 'layout', current: isPack && p.id === activeTemplatePackId, onApply: () => applyLayoutPreset(p.id), onDelete: () => deleteLayoutPreset(p.id) }));
             });
-        } else if(currentAssetTab === 'tag') {
-            if(tagPresetLibrary.length === 0) { list.innerHTML = `<div class="asset-empty">多选标签后点击“保存当前”，可保存标签组合。</div>`; return; }
-            tagPresetLibrary.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, asset: p, type: 'tag', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
-        } else if(currentAssetTab === 'logo') {
-            if(logoAssets.length === 0) { list.innerHTML = `<div class="asset-empty">点击“保存当前”上传常用 Logo，之后可固定调用。</div>`; return; }
-            logoAssets.forEach(l => list.appendChild(createAssetItem({ title: l.name, meta: '点击添加到画布', asset: l, type: 'logo', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
+        } else if(currentAssetTab === 'component') {
+            // 按 sub-tag 筛选
+            var filterFn = function(item) {
+                if (diySubtagFilter === '全部') return true;
+                var itemTag = item.subTag || item._subTag || '';
+                // 从 tags 数组推断（从 Supabase 加载的项）
+                if (!itemTag && item.tags && Array.isArray(item.tags)) {
+                    var t = item.tags;
+                    if (t.includes('标签')) itemTag = '标签';
+                    else if (t.includes('背景')) itemTag = '背景';
+                    else if (t.includes('品牌圆弧')) itemTag = '品牌圆弧';
+                    else if (t.includes('LOGO')) itemTag = 'LOGO';
+                    else if (t.includes('KIKI')) itemTag = 'KIKI';
+                    else if (t.includes('其他素材')) itemTag = '其他素材';
+                }
+                return itemTag === diySubtagFilter;
+            };
+            var filteredTags = tagPresetLibrary.filter(filterFn);
+            var filteredLogos = logoAssets.filter(filterFn);
+            var totalComp = filteredTags.length + filteredLogos.length;
+            if(totalComp === 0) { list.innerHTML = '<div class=”asset-empty”>暂无组件</div>'; return; }
+            filteredTags.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, asset: p, type: 'tag', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
+            filteredLogos.forEach(l => list.appendChild(createAssetItem({ title: l.name, meta: '点击添加到画布', asset: l, type: 'logo', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
         } else {
             const controls = document.createElement('div');
             controls.className = 'reference-filter';
@@ -3897,10 +5068,7 @@
         item.appendChild(thumb);
         if(type === 'pack') item.appendChild(createPackHoverPreview(asset));
         item.appendChild(info);
-        if(onDelete) item.appendChild(actions);
-        item.addEventListener('mouseenter', () => showAssetHoverPreview(item, { title, meta, type, asset, img }));
-        item.addEventListener('mousemove', () => positionAssetHoverPreview(item));
-        item.addEventListener('mouseleave', hideAssetHoverPreview);
+        if(onDelete) { actions.style.cssText = 'position:absolute;top:2px;right:2px;bottom:auto;left:auto;z-index:5;'; item.appendChild(actions); }
         return item;
     }
     function getAssetHoverEl() {
@@ -3950,26 +5118,54 @@
     }
     function renderAssetPreview(root, { type, asset, img }) {
         root.innerHTML = '';
-        const large = arguments[1]?.large;
+        // 优先用 Supabase 存储的真实预览图
+        var previewImg = asset?.previewUrl || img || '';
+        if (previewImg) {
+            root.innerHTML = '<img src="' + previewImg + '" alt="" style="width:100%;height:100%;object-fit:contain;">';
+            return;
+        }
         if(type === 'reference') {
-            root.innerHTML = `<img src="${img || asset?.src || ''}" alt="">`;
+            root.innerHTML = '<img src="' + (img || asset?.src || '') + '" alt="">';
             return;
         }
         if(type === 'logo') {
-            root.innerHTML = `<img src="${img}" alt="">`;
+            if (asset?.src && asset.src.startsWith('data:')) {
+                root.innerHTML = '<img src="' + asset.src + '" alt="">';
+            } else {
+                root.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;font-size:12px;">🖼</div>';
+            }
             return;
         }
+        // 没有预览图时降级为 mini 渲染
+        var large = arguments[1]?.large;
         if(type === 'tag') {
             root.appendChild(createLayerGroupPreview(asset?.elements || [], { maxW: large ? 405 : 138, maxH: large ? 267 : 92 }));
             return;
         }
         if(type === 'pack') {
-            const board = asset?.artboards?.head || asset?.artboards?.banner || asset?.artboards?.splash;
-            const ratio = board?.ratio || 'head';
+            var board = asset?.artboards?.head || asset?.artboards?.banner || asset?.artboards?.splash;
+            var ratio = board?.ratio || 'head';
             root.appendChild(createMiniArtboardPreview(board?.layers || [], ratio, { maxW: large ? 405 : 138, maxH: large ? 267 : 92 }));
             return;
         }
-        root.appendChild(createMiniArtboardPreview(asset?.elements || [], asset?.size || currentRatio, { maxW: large ? 405 : 138, maxH: large ? 267 : 92 }));
+        var previewRatio = asset?.size;
+        if (!previewRatio || !SIZES[previewRatio]) {
+            var els = asset?.elements || [];
+            var maxX = 0, maxY = 0;
+            els.forEach(function(el) {
+                var ex = (Number(el.x) || 0) + (Number(el.baseW) || 0) / 2;
+                var ey = (Number(el.y) || 0) + (Number(el.baseH) || 0) / 2;
+                if (ex > maxX) maxX = Math.ceil(ex);
+                if (ey > maxY) maxY = Math.ceil(ey);
+            });
+            if (maxX > 100 && maxY > 100) {
+                previewRatio = maxX + 'x' + maxY;
+                SIZES[previewRatio] = { w: maxX, h: maxY };
+            } else {
+                previewRatio = currentRatio;
+            }
+        }
+        root.appendChild(createMiniArtboardPreview(asset?.elements || [], previewRatio, { maxW: large ? 405 : 138, maxH: large ? 267 : 92 }));
     }
     function createMiniArtboardPreview(sourceLayers, ratio, options = {}) {
         const maxW = options.maxW || 140;
@@ -4039,29 +5235,72 @@
     function applyLayoutPreset(id) {
         const p = presetLibrary.find(x => x.id === id); if(!p) return;
         if(p.kind === 'pack') return applyTemplatePack(p);
-        const currentImages = layers.filter(l => l.type === 'image').map(l => JSON.parse(JSON.stringify(l)));
-        const newLayers = adaptPresetElementsToCurrent(p.elements, p.size);
-        if(currentImages.length > 0) {
-            const presetImages = newLayers.filter(l => l.type === 'image');
-            if(presetImages.length > 0) {
-                presetImages.forEach((imgLayer, index) => {
-                    const currentImage = currentImages[index] || currentImages[currentImages.length - 1];
-                    const placeholderZ = imgLayer.zIndex;
-                    Object.keys(imgLayer).forEach(key => delete imgLayer[key]);
-                    Object.assign(imgLayer, { ...currentImage, id: genId('image'), zIndex: placeholderZ, locked: false, flipX: currentImage.flipX ?? false });
-                });
-                if(currentImages.length > presetImages.length) {
-                    const minZ = newLayers.length > 0 ? Math.min(...newLayers.map(l => l.zIndex)) : 1;
-                    currentImages.slice(presetImages.length).forEach((img, index) => {
-                        newLayers.push({ ...img, id: genId('image'), zIndex: minZ - currentImages.length + index, locked: false, flipX: img.flipX ?? false });
+        // 先保存当前状态，确保 Ctrl+Z 能回到应用模板前的状态
+        saveHistory();
+        // 切换到模板保存时的比例/尺寸，避免跨比例缩放导致元素尺寸错乱
+        if (p.size && p.size !== currentRatio) {
+            if (SIZES[p.size]) {
+                currentRatio = p.size;
+            } else if (p.canvasW && p.canvasH) {
+                // 自定义画板：用保存的宽高重建
+                SIZES[p.size] = { w: p.canvasW, h: p.canvasH };
+                currentRatio = p.size;
+            } else {
+                // 兜底：从元素推断画布大小（取最大坐标/尺寸）
+                var inferredW = 1080, inferredH = 1080;
+                if (p.elements && p.elements.length > 0) {
+                    p.elements.forEach(function(el) {
+                        var bw = Number(el.baseW) || 0, bh = Number(el.baseH) || 0;
+                        var ex = (Number(el.x) || 0) + bw / 2;
+                        var ey = (Number(el.y) || 0) + bh / 2;
+                        if (bw > inferredW && bw < 6000) inferredW = Math.max(inferredW, bw);
+                        if (bh > inferredH && bh < 6000) inferredH = Math.max(inferredH, bh);
+                        if (ex > inferredW) inferredW = Math.max(inferredW, Math.ceil(ex));
+                        if (ey > inferredH) inferredH = Math.max(inferredH, Math.ceil(ey));
                     });
                 }
-            } else {
-                const minZ = newLayers.length > 0 ? Math.min(...newLayers.map(l => l.zIndex)) : 1;
-                currentImages.forEach((img, index) => {
-                    newLayers.push({ ...img, id: genId('image'), zIndex: minZ - currentImages.length + index, locked: false, flipX: img.flipX ?? false });
+                SIZES[p.size] = { w: inferredW, h: inferredH };
+                currentRatio = p.size;
+            }
+            if (currentRatio === p.size) {
+                resizeCanvas();
+                syncRatioNav();
+            }
+        }
+        // 保留用户添加的非模版图层：图片、Logo、圆弧、色块
+        var keepTypes = ['image', 'logo', 'arc', 'solid'];
+        var keptLayers = layers.filter(function(l) { return keepTypes.includes(l.type); }).map(function(l) { return JSON.parse(JSON.stringify(l)); });
+        const newLayers = adaptPresetElementsToCurrent(p.elements, p.size);
+        if(keptLayers.length > 0) {
+            var keptImages = keptLayers.filter(function(l) { return l.type === 'image'; });
+            var keptOthers = keptLayers.filter(function(l) { return l.type !== 'image'; });
+            // 图片：匹配模板中的图片位，保留用户图片内容
+            var presetImages = newLayers.filter(function(l) { return l.type === 'image'; });
+            if(presetImages.length > 0) {
+                presetImages.forEach(function(imgLayer, index) {
+                    var ci = keptImages[index] || keptImages[keptImages.length - 1];
+                    var pz = imgLayer.zIndex;
+                    Object.keys(imgLayer).forEach(function(key) { delete imgLayer[key]; });
+                    Object.assign(imgLayer, { ...ci, id: genId('image'), zIndex: pz, locked: false, flipX: ci.flipX ?? false });
+                });
+                if(keptImages.length > presetImages.length) {
+                    var minZ = newLayers.length > 0 ? Math.min.apply(null, newLayers.map(function(l) { return l.zIndex; })) : 1;
+                    keptImages.slice(presetImages.length).forEach(function(img, index) {
+                        newLayers.push({ ...img, id: genId('image'), zIndex: minZ - keptImages.length + index, locked: false, flipX: img.flipX ?? false });
+                    });
+                }
+            } else if(keptImages.length > 0) {
+                var minZ2 = newLayers.length > 0 ? Math.min.apply(null, newLayers.map(function(l) { return l.zIndex; })) : 1;
+                keptImages.forEach(function(img, index) {
+                    newLayers.push({ ...img, id: genId('image'), zIndex: minZ2 - keptImages.length + index, locked: false, flipX: img.flipX ?? false });
                 });
             }
+            // 非图片图层（Logo、圆弧、色块）：直接追加
+            keptOthers.forEach(function(l) {
+                l.id = genId(l.type);
+                l.locked = false;
+                newLayers.push(l);
+            });
         }
         layers = newLayers;
         activeLayerIds = newLayers.filter(l => l.type !== 'image').map(l => l.id);
@@ -4070,16 +5309,30 @@
     }
     async function deleteLayoutPreset(id) {
         if(!await askConfirm('删除这个版式预设？')) return;
+        var preset = presetLibrary.find(function(p) { return p.id === id; });
+        if (preset && preset.cloudId) {
+            notifyParent({ type: 'vf:delete-template', sourceId: preset.cloudId });
+        }
         presetLibrary = presetLibrary.filter(p => p.id !== id);
-        await saveGlobalData(); renderAssetLibrary(); showToast('已删除版式预设');
+        renderAssetLibrary(); showToast('已删除');
     }
     async function saveToPreset() {
         if(layers.length === 0) return showToast('画板为空', true);
         const name = await askText('命名版式', `版式 ${formatPresetTime()}`); if(!name) return;
-        presetLibrary.push({ id: genId('p'), name, size: currentRatio, elements: JSON.parse(JSON.stringify(layers)) });
-        const ok = await saveGlobalData();
+        var elements = JSON.parse(JSON.stringify(layers));
+        var tempId = genId('p');
+        var preset = { id: tempId, name, size: currentRatio, elements: elements, _pending: true };
+        presetLibrary.push(preset);
         renderAssetLibrary();
-        showToast(ok ? '已保存到版式库' : '已保存到当前页面，但本地持久化失败', !ok);
+        showToast('正在保存到素材库...');
+        // 截取预览图，上传到 Supabase
+        var previewDataUrl = await capturePreviewForSync();
+        if (!previewDataUrl || previewDataUrl.length < 1500) previewDataUrl = generatePlaceholderPreview(name, '版式');
+        preset.previewUrl = previewDataUrl;
+        renderAssetLibrary();
+        var subTag = (diySelectedSubtag && diySelectedSubtag !== '全部') ? diySelectedSubtag : '社媒物料';
+        var canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
+        notifyParent({ type: 'vf:save-template', templateType: 'layout', name: name, data: { size: currentRatio, canvasW: canvasSize.w, canvasH: canvasSize.h, elements: elements }, previewDataUrl: previewDataUrl || '', tempId: tempId, subTag: subTag });
     }
     async function saveTemplatePack() {
         saveCurrentArtboardState();
@@ -4094,14 +5347,20 @@
                 layers: cloneData(artboards[preset.id]?.layers || [])
             };
         });
-        const pack = { id: genId('pack'), kind: 'pack', name, artboards: packArtboards, createdAt: new Date().toISOString() };
+        var tempId = genId('pack');
+        const pack = { id: tempId, kind: 'pack', name, artboards: packArtboards, createdAt: new Date().toISOString(), _pending: true };
         presetLibrary.push(pack);
         activeTemplatePackId = pack.id;
-        const ok = await saveGlobalData();
         renderAssetLibrary();
-        showToast(ok ? '已保存三画板套组' : '已保存到当前页面，但本地持久化失败', !ok);
+        showToast('正在保存到素材库...');
+        var previewDataUrl = await capturePreviewForSync();
+        if (!previewDataUrl || previewDataUrl.length < 1500) previewDataUrl = generatePlaceholderPreview(name, '套组');
+        pack.previewUrl = previewDataUrl;
+        renderAssetLibrary();
+        notifyParent({ type: 'vf:save-template', templateType: 'pack', name: name, data: { artboards: packArtboards }, previewDataUrl: previewDataUrl || '', tempId: tempId });
     }
     function applyTemplatePack(pack) {
+        saveHistory();
         saveCurrentArtboardState();
         const nextArtboards = normalizeArtboardSnapshot(pack.artboards || {});
         artboards = nextArtboards;
@@ -4117,24 +5376,61 @@
         const tags = getSelectedTagLayers();
         if(tags.length === 0) return showToast('请先选择一个或多个标签图层', true);
         const name = await askText('命名标签组合', `标签组合 ${formatPresetTime()}`); if(!name) return;
-        tagPresetLibrary.push({ id: genId('tp'), name, elements: JSON.parse(JSON.stringify(tags)) });
-        const ok = await saveGlobalData();
+        var tempId = genId('tp');
+        var preset = { id: tempId, name, elements: JSON.parse(JSON.stringify(tags)), _pending: true };
+        tagPresetLibrary.push(preset);
         renderAssetLibrary();
-        showToast(ok ? '已保存到标签组合库' : '已保存到当前页面，但本地持久化失败', !ok);
+        showToast('正在保存到素材库...');
+        var previewDataUrl = await capturePreviewForSync();
+        if (!previewDataUrl || previewDataUrl.length < 1500) previewDataUrl = generatePlaceholderPreview(name, '标签组');
+        preset.previewUrl = previewDataUrl;
+        renderAssetLibrary();
+        notifyParent({ type: 'vf:save-template', templateType: 'tagcombo', name: name, data: { elements: preset.elements }, previewDataUrl: previewDataUrl || '', tempId: tempId });
     }
     function applyTagComboPreset(id) {
         const p = tagPresetLibrary.find(x => x.id === id); if(!p) return;
-        const newLayers = cloneLayersForInsert(p.elements, true);
-        layers.push(...newLayers); activeLayerIds = newLayers.map(l => l.id);
-        saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast('标签组合已应用');
+        saveHistory();
+        var newLayers = cloneLayersForInsert(p.elements, true);
+        // 如果画板上有选中的标签组件，替换它：新组件继承被替换组件的坐标、缩放、旋转等
+        var selectedTags = layers.filter(function(l) { return activeLayerIds.includes(l.id) && (l.type === 'tag' || l.type === 'discountTag'); });
+        if (selectedTags.length > 0) {
+            var inherited = selectedTags[0];
+            newLayers.forEach(function(nl, i) {
+                nl.x = inherited.x;
+                nl.y = inherited.y;
+                nl.rotation = inherited.rotation;
+                nl.scale = inherited.scale;
+                nl.zIndex = inherited.zIndex;
+                if (nl.type === 'tag' || nl.type === 'discountTag') {
+                    nl.tagHeight = inherited.tagHeight;
+                    nl.tagPaddingX = inherited.tagPaddingX;
+                }
+            });
+            // 删除被替换的选中组件
+            layers = layers.filter(function(l) { return !activeLayerIds.includes(l.id); });
+        }
+        layers.push(...newLayers); activeLayerIds = newLayers.map(l => l.id); markNewlyAddedLayers(newLayers);
+        saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast(selectedTags.length > 0 ? '已替换标签组件' : '标签组合已应用');
     }
     async function deleteTagComboPreset(id) {
         if(!await askConfirm('删除这个标签组合？')) return;
+        var preset = tagPresetLibrary.find(function(p) { return p.id === id; });
+        if (preset && preset.cloudId) { notifyParent({ type: 'vf:delete-template', sourceId: preset.cloudId }); }
         tagPresetLibrary = tagPresetLibrary.filter(p => p.id !== id);
-        await saveGlobalData(); renderAssetLibrary(); showToast('已删除标签组合');
+        renderAssetLibrary(); showToast('已删除');
     }
     async function addLogoFromAsset(id) {
         const logo = logoAssets.find(l => l.id === id); if(!logo) return;
+        // 如果画板上有选中的 logo 或 image 层，替换它
+        var selectedImg = layers.find(function(l) { return activeLayerIds.includes(l.id) && (l.type === 'logo' || l.type === 'image'); });
+        if (selectedImg) {
+            saveHistory();
+            selectedImg.src = logo.src;
+            selectedImg.type = 'logo';
+            selectedImg.fitMode = 'contain';
+            saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast('已替换 Logo');
+            return;
+        }
         const size = await readImageSize(logo.src);
         const targetW = 260; const targetH = Math.max(60, targetW * size.h / size.w);
         addLayer('logo', { src: logo.src, baseW: targetW, baseH: targetH });
@@ -4142,8 +5438,10 @@
     function deleteLogoAsset(id) {
         askConfirm('删除这个 Logo 素材？').then(ok => {
             if(!ok) return;
+            var logo = logoAssets.find(function(l) { return l.id === id; });
+            if (logo && logo.cloudId) { notifyParent({ type: 'vf:delete-template', sourceId: logo.cloudId }); }
             logoAssets = logoAssets.filter(l => l.id !== id);
-            deleteLogoFromDB(id); saveGlobalData(); renderAssetLibrary(); showToast('已删除 Logo 素材');
+            renderAssetLibrary(); showToast('已删除');
         });
     }
 
@@ -4575,18 +5873,13 @@
             if(data.tagColorPresets) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
             if(data.arcColorPresets) arcColorPresets = data.arcColorPresets;
             if(data.keywordTags) keywordTags = data.keywordTags;
-            if(data.presetLibrary) presetLibrary = data.presetLibrary;
-            if(data.tagPresetLibrary) tagPresetLibrary = data.tagPresetLibrary;
             if(data.referenceElements) referenceElements = data.referenceElements;
 
             const fonts = Array.isArray(backup.fonts) ? backup.fonts : [];
-            const logos = Array.isArray(backup.logos) ? backup.logos : [];
             await replaceStoreInDB('fonts', fonts);
-            await replaceStoreInDB('logos', logos);
             await replaceStoreInDB('referenceElements', referenceElements);
 
             customFonts = [];
-            logoAssets = logos;
             await Promise.all(fonts.map(registerFontAsset));
             await saveGlobalData();
             renderSettings();
@@ -4595,7 +5888,43 @@
             renderCanvas();
             renderLayersList();
             renderProperties();
-            showToast(`资产已恢复：${presetLibrary.length} 个版式，${tagPresetLibrary.length} 个标签组合，${fonts.length} 个字体，${logos.length} 个 Logo，${referenceElements.length} 个参考元素`);
+            // 导入的版式/标签组/Logo 上传到素材库
+            const layouts = Array.isArray(data.presetLibrary) ? data.presetLibrary : [];
+            const tagCombos = Array.isArray(data.tagPresetLibrary) ? data.tagPresetLibrary : [];
+            const logos = Array.isArray(backup.logos) ? backup.logos : [];
+            var totalImport = layouts.length + tagCombos.length + logos.length;
+            var labelMap = { layout: '版式', pack: '套组', tagcombo: '标签组', logo: 'Logo' };
+            for (var i = 0; i < layouts.length; i++) {
+                var lp = layouts[i];
+                var pType = lp.kind === 'pack' ? 'pack' : 'layout';
+                var previewElements = lp.elements || [];
+                var previewRatio = lp.size || '16:9';
+                if (pType === 'pack' && lp.artboards) {
+                    var boardIds = ['head', 'splash', 'banner'];
+                    for (var bi = 0; bi < boardIds.length; bi++) {
+                        var bd = lp.artboards[boardIds[bi]];
+                        if (bd && bd.layers && bd.layers.length) {
+                            previewElements = bd.layers;
+                            previewRatio = bd.ratio || boardIds[bi];
+                            break;
+                        }
+                    }
+                }
+                var preview = await renderPresetPreview(previewElements, previewRatio);
+                if (!preview || preview.length < 1500) preview = generatePlaceholderPreview(lp.name || '导入版式', labelMap[pType] || pType);
+                notifyParent({ type: 'vf:save-template', templateType: pType, name: lp.name || '导入版式', data: { size: lp.size || '', elements: lp.elements || [], artboards: lp.artboards }, previewDataUrl: preview, tempId: genId('p') });
+            }
+            for (var j = 0; j < tagCombos.length; j++) {
+                var tp = tagCombos[j];
+                var tPlaceholder = generatePlaceholderPreview(tp.name || '导入标签组', '标签组');
+                notifyParent({ type: 'vf:save-template', templateType: 'tagcombo', name: tp.name || '导入标签组', data: { elements: tp.elements || [] }, previewDataUrl: tPlaceholder, tempId: genId('tp') });
+            }
+            for (var k = 0; k < logos.length; k++) {
+                var lg = logos[k];
+                var lPreview = lg.src || generatePlaceholderPreview(lg.name || '导入Logo', 'Logo');
+                notifyParent({ type: 'vf:save-template', templateType: 'logo', name: lg.name || '导入Logo', data: { src: lg.src || '' }, previewDataUrl: lPreview, tempId: genId('logo_asset') });
+            }
+            showToast('已导入并上传到素材库：' + layouts.length + ' 个版式，' + tagCombos.length + ' 个标签组合，' + fonts.length + ' 个字体，' + logos.length + ' 个 Logo，' + referenceElements.length + ' 个参考元素');
         } catch(e) {
             console.error('导入资产备份失败:', e);
             showToast('导入失败，请确认这是 GCC Poster 备份 JSON', true);
@@ -4714,14 +6043,95 @@
         files.forEach(file => {
             const reader = new FileReader();
             reader.onload = ev => {
-                const logo = { id: genId('logo_asset'), name: file.name.replace(/\.[^/.]+$/, ''), src: ev.target.result };
-                logoAssets.push(logo); saveLogoToDB(logo); loaded++;
-                if(loaded === files.length) { saveGlobalData(); currentAssetTab = 'logo'; switchAssetTab('logo'); showToast(`已保存 ${files.length} 个 Logo 素材`); }
+                const logo = { id: genId('logo_asset'), name: file.name.replace(/\.[^/.]+$/, ''), src: ev.target.result, _pending: true };
+                logoAssets.push(logo); loaded++;
+                // 直接上传到素材库
+                var previewDataUrl = logo.src && logo.src.startsWith('data:') ? logo.src : '';
+                notifyParent({ type: 'vf:save-template', templateType: 'logo', name: logo.name, data: { src: logo.src }, previewDataUrl: previewDataUrl, tempId: logo.id });
+                if(loaded === files.length) { currentAssetTab = 'logo'; switchAssetTab('logo'); showToast(`正在保存 ${files.length} 个 Logo 到素材库...`); }
             };
             reader.readAsDataURL(file);
         });
         e.target.value = '';
     });
+
+    // ===== 组件拖拽上传 =====
+    var compUploadFiles = [];
+    var compUploadTag = '背景';
+    window.selectCompUploadTag = function(tag, btn) {
+        compUploadTag = tag;
+        document.querySelectorAll('#comp-upload-tags .filter-capsule').forEach(function(b) { b.classList.remove('active'); });
+        if (btn) btn.classList.add('active');
+    };
+    window.closeComponentUploadModal = function() {
+        document.getElementById('component-upload-modal').style.display = 'none';
+        compUploadFiles = [];
+    };
+    window.confirmComponentUpload = function() {
+        if (compUploadFiles.length === 0) return;
+        var msgEl = document.getElementById('comp-upload-msg');
+        msgEl.textContent = '上传中...';
+        var loaded = 0;
+        compUploadFiles.forEach(function(file) {
+            var reader = new FileReader();
+            reader.onload = function(ev) {
+                var dataUrl = ev.target.result;
+                var name = file.name.replace(/\.[^/.]+$/, '');
+                var tempId = genId('logo_asset');
+                var item = { id: tempId, name: name, src: dataUrl, _pending: true, subTag: compUploadTag };
+                logoAssets.push(item);
+                notifyParent({ type: 'vf:save-template', templateType: 'logo', name: name, data: { src: dataUrl }, previewDataUrl: dataUrl, tempId: tempId, subTag: compUploadTag });
+                loaded++;
+                if (loaded === compUploadFiles.length) {
+                    renderAssetLibrary();
+                    msgEl.textContent = '✅ 已上传 ' + loaded + ' 个文件到「' + compUploadTag + '」';
+                    setTimeout(function() { closeComponentUploadModal(); }, 1500);
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+    document.getElementById('component-upload').addEventListener('change', function(e) {
+        compUploadFiles = [...e.target.files];
+        if (compUploadFiles.length === 0) return;
+        document.getElementById('comp-upload-files-info').textContent = '已选择 ' + compUploadFiles.length + ' 个文件';
+        document.getElementById('component-upload-modal').style.display = 'flex';
+        document.querySelectorAll('#comp-upload-tags .filter-capsule').forEach(function(b, i) { b.classList.toggle('active', i === 0); });
+        compUploadTag = '背景';
+        document.getElementById('comp-upload-msg').textContent = '';
+        e.target.value = '';
+    });
+    function setupComponentDrop() {
+        var targets = [document.getElementById('asset-list-ui'), document.getElementById('diy-subtag-row')];
+        targets.forEach(function(target) {
+            if (!target) return;
+            ['dragenter', 'dragover'].forEach(function(evType) {
+                target.addEventListener(evType, function(e) {
+                    if (!isFileDragEvent(e)) return;
+                    e.preventDefault(); e.stopPropagation();
+                    e.dataTransfer.dropEffect = 'copy';
+                    target.style.outline = '2px dashed #0d9488';
+                    target.style.outlineOffset = '-4px';
+                });
+            });
+            target.addEventListener('dragleave', function(e) {
+                target.style.outline = '';
+            });
+            target.addEventListener('drop', function(e) {
+                if (!isFileDragEvent(e)) return;
+                e.preventDefault(); e.stopPropagation();
+                target.style.outline = '';
+                var imageFiles = [...e.dataTransfer.files].filter(function(f) { return f.type.startsWith('image/'); });
+                if (imageFiles.length === 0) return;
+                compUploadFiles = imageFiles;
+                document.getElementById('comp-upload-files-info').textContent = '已选择 ' + compUploadFiles.length + ' 个文件';
+                document.getElementById('component-upload-modal').style.display = 'flex';
+                document.querySelectorAll('#comp-upload-tags .filter-capsule').forEach(function(b, i) { b.classList.toggle('active', i === 0); });
+                compUploadTag = '背景';
+                document.getElementById('comp-upload-msg').textContent = '';
+            });
+        });
+    }
 
     document.getElementById('reference-element-upload').addEventListener('change', e => {
         const files = e.target.files; if(!files || files.length === 0) return;
@@ -4739,26 +6149,56 @@
         addAIReferenceFiles(files).catch(err => showToast(err.message || '参考图读取失败', true)).finally(() => { e.target.value = ''; });
     });
     
-    document.getElementById('font-upload').addEventListener('change', e => { 
-        const file = e.target.files[0]; if(!file) return; const name = file.name.replace(/\.[^/.]+$/, ""); 
-        if(customFonts.some(f => f.name === name)) { showToast(`字体 [${name}] 已存在，请勿重复上传`, true); e.target.value = ''; return; } 
-        const fontName = 'CF_' + Date.now(); const reader = new FileReader(); 
-        
-        reader.onload = ev => { 
-            const fontDataUrl = normalizeFontDataUrl(ev.target.result, file.name);
-            const font = new FontFace(fontName, `url(${fontDataUrl})`); 
-            
-            font.load().then(async loaded => { 
-                document.fonts.add(loaded); 
-                await document.fonts.ready;
-                const fontValue = cssFontFamily(fontName);
-                const fontData = { name: name, value: fontValue, data: fontDataUrl, id: fontName, fileName: file.name }; 
-                customFonts.push(fontData); saveFontToDB(fontData); 
-                if(activeLayerIds.length === 1) { const l = layers.find(x => x.id === activeLayerIds[0]); if(l && ['text', 'tag', 'discountTag'].includes(l.type)) { l.font = fontValue; renderCanvas(); } }
-                renderProperties(); renderSettings(); showToast(`字体 [${name}] 安装且持久化成功`); saveHistory(); 
-            }).catch(() => showToast('字体解析失败，请确保格式正确', true)); 
-        }; 
-        reader.readAsDataURL(file); e.target.value = ''; 
+    function readFontFile(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = event => resolve(normalizeFontDataUrl(event.target.result, file.name));
+            reader.onerror = () => reject(new Error('文件读取失败'));
+            reader.readAsDataURL(file);
+        });
+    }
+    async function addFontFiles(inputFiles) {
+        const files = Array.from(inputFiles || []).filter(file => /\.(ttf|otf|woff2?)$/i.test(file.name || ''));
+        if(!files.length) { showToast('请选择 TTF、OTF、WOFF 或 WOFF2 字体文件', true); return; }
+        let installedCount = 0, skippedCount = 0, failedCount = 0;
+        for(const file of files) {
+            const name = file.name.replace(/\.[^/.]+$/, '');
+            if(customFonts.some(font => font.name === name)) { skippedCount++; continue; }
+            try {
+                const fontData = normalizeCustomFontAsset({ name, data: await readFontFile(file), fileName: file.name });
+                if(!await registerFontAsset(fontData)) throw new Error('字体解析失败');
+                await saveFontToDB(fontData);
+                installedCount++;
+            } catch(error) {
+                failedCount++;
+            }
+        }
+        if(installedCount) {
+            queueSharedAssetSave();
+            renderCanvas(); renderProperties(); renderSettings(); saveHistory();
+        }
+        const results = [installedCount ? `已安装 ${installedCount} 个` : '', skippedCount ? `跳过 ${skippedCount} 个重复文件` : '', failedCount ? `${failedCount} 个解析失败` : ''].filter(Boolean).join('，');
+        showToast(results || '没有可安装的字体', failedCount > 0 && !installedCount);
+    }
+    document.getElementById('font-upload').addEventListener('change', event => {
+        addFontFiles(event.target.files).finally(() => { event.target.value = ''; });
+    });
+    const fontDropZone = document.getElementById('font-drop-zone');
+    ['dragenter', 'dragover'].forEach(type => fontDropZone?.addEventListener(type, event => {
+        if(!isFileDragEvent(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        fontDropZone.classList.add('drag-over');
+    }));
+    ['dragleave', 'dragend'].forEach(type => fontDropZone?.addEventListener(type, event => {
+        if(type === 'dragleave' && fontDropZone.contains(event.relatedTarget)) return;
+        fontDropZone.classList.remove('drag-over');
+    }));
+    fontDropZone?.addEventListener('drop', event => {
+        if(!isFileDragEvent(event)) return;
+        event.preventDefault();
+        fontDropZone.classList.remove('drag-over');
+        addFontFiles(event.dataTransfer.files);
     });
 
     /* ================= AI 图形引擎集成 ================= */
@@ -4971,11 +6411,13 @@
     async function bootApp() {
         await loadGlobalData();
         await loadFontsFromDB();
-        await loadLogosFromDB();
         await loadReferenceElementsFromDB();
         await loadSharedAssetsFromCloud();
+        // 从素材库（Supabase）加载模板/标签组/Logo
+        notifyParent({ type: 'vf:request-templates' });
         setupCanvasDropImport();
         setupLayerDropImport();
+        setupComponentDrop();
         setupAIReferenceDrop();
         renderCustomArtboardControls();
         syncRatioNav();
@@ -4992,6 +6434,6 @@
     bootApp();
 
 </script>
-<script src="../../tool-bridge.js?v=20260629-discount-tag4"></script>
+<script src="../../tool-bridge.js?v=20260804-unified-v73"></script>
 </body>
 </html>
