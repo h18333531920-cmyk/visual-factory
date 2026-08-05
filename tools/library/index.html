@@ -142,6 +142,10 @@
   .card-img-wrap { width: 100%; position: relative; background: #000; border-radius: 16px 16px 0 0; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 160px; cursor: zoom-in;}
   .card-img-wrap img { width: 100%; height: auto; display: block; transition: opacity 0.2s;}
   .card-img-wrap:hover img { opacity: 0.8; }
+  .library-template-size-hover { position: absolute; right: 0; bottom: 0; left: 0; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; padding: 14px 16px 13px; color: #fff; background: rgba(10, 12, 16, 0.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); opacity: 0; transform: translateY(100%); pointer-events: none; transition: opacity .18s ease, transform .2s cubic-bezier(.2,.8,.2,1); }
+  .image-card.template-preview-card:hover .library-template-size-hover { opacity: 1; transform: translateY(0); }
+  .library-template-size-ratio { font-size: 16px; font-weight: 750; line-height: 1.15; letter-spacing: .01em; }
+  .library-template-size-pixels { color: rgba(255,255,255,.72); font-size: 12px; font-weight: 600; line-height: 1.2; }
   .file-icon-placeholder { color: #4a505e; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 0;}
   .card-img-wrap:hover .file-icon-placeholder { opacity: 0.8; }
   .file-icon-placeholder svg { width: 40px; height: 40px; }
@@ -821,14 +825,15 @@
 
     filteredImages.forEach(imgData => {
       const card = document.createElement('div');
-      card.className = 'image-card';
+      const isTemplatePreview = imgData.libType === 'sources';
+      card.className = 'image-card' + (isTemplatePreview ? ' template-preview-card' : '');
       
       const isOwner = imgData.uploader_id === currentUser.id;
       const canEdit = currentUser.role === 'admin' || (currentUser.role === 'designer' && isOwner);
       const readOnlyAttr = !canEdit ? 'readonly class="brand-input readonly-input"' : 'class="brand-input"';
 
       let mediaHTML = '';
-      if (imgData.coverUrl) { mediaHTML = `<img src="${imgData.coverUrl}" loading="lazy">`; } 
+      if (imgData.coverUrl) { mediaHTML = `<img src="${imgData.coverUrl}" loading="lazy" ${isTemplatePreview ? `onload="updateLibraryTemplateCardSize(this, '${imgData.id}')"` : ''}>`; }
       else if (imgData.libType === 'assets') { mediaHTML = `<img src="${imgData.url}" loading="lazy">`; } 
       else {
           mediaHTML = `
@@ -842,6 +847,7 @@
       card.innerHTML = `
         <div class="card-img-wrap" onclick="openDetailModal('${imgData.id}')">
           ${mediaHTML}
+          ${isTemplatePreview && imgData.coverUrl ? `<div class="library-template-size-hover" id="library-template-size-${imgData.id}"><span class="library-template-size-ratio">—</span><span class="library-template-size-pixels">读取尺寸中…</span></div>` : ''}
         </div>
         <div class="card-content">
           <input type="text" ${readOnlyAttr} placeholder="${t.brand_ph}" value="${imgData.brandName || ''}" onchange="updateAssetField('${imgData.id}', 'brandName', this.value)">
@@ -851,6 +857,21 @@
     });
     galleryContainer.appendChild(fragment);
   }
+
+  function getLibraryPreviewSizeInfo(width, height) {
+    width = Math.round(Number(width) || 0); height = Math.round(Number(height) || 0);
+    if(width < 1 || height < 1) return null;
+    var a = width, b = height;
+    while(b) { var remainder = a % b; a = b; b = remainder; }
+    var divisor = a || 1;
+    return { ratio: (width / divisor) + ':' + (height / divisor), pixels: width + ' × ' + height + ' px' };
+  }
+  window.updateLibraryTemplateCardSize = function(image, id) {
+    var info = getLibraryPreviewSizeInfo(image && image.naturalWidth, image && image.naturalHeight);
+    var overlay = document.getElementById('library-template-size-' + id);
+    if(!overlay || !info) return;
+    overlay.innerHTML = '<span class="library-template-size-ratio">' + info.ratio + '</span><span class="library-template-size-pixels">' + info.pixels + '</span>';
+  };
 
   // === 详情弹窗 ===
   window.openDetailModal = (id) => { currentModalImgId = String(id); renderModal(); document.getElementById('detail-modal').classList.add('show'); };

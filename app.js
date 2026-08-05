@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260805-font-download-binary-v89';
+  const TOOL_UI_VERSION = '20260805-palette-shadow-default-v122';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -2291,6 +2291,7 @@
     const sourceLabel = kind === 'template'
       ? (state.lang === 'zh' ? '模板文件' : 'Template')
       : (state.lang === 'zh' ? '源文件' : 'Source');
+    const templateSizeInfo = kind === 'template' ? libraryPreviewDimensionInfo(preview) : null;
     const quickUse = kind === 'gallery'
       ? `<button type="button" data-action="use-static">${state.lang === 'zh' ? '静态' : 'Static'}</button><button type="button" data-action="use-dynamic">${state.lang === 'zh' ? '动态' : 'Motion'}</button>`
       : kind === 'template'
@@ -2314,10 +2315,11 @@
         </article>`;
     }
     return `
-      <article class="library-card ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
+      <article class="library-card ${kind === 'template' ? 'template-preview-card' : ''} ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
         <div class="library-thumb-wrap">
           <div class="multi-check"></div>
           <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded')" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
+          ${templateSizeInfo ? `<div class="library-template-size-hover"><span class="library-template-size-ratio">${escapeHtml(templateSizeInfo.ratio)}</span><span class="library-template-size-pixels">${escapeHtml(templateSizeInfo.pixels)}</span></div>` : ''}
           <div class="library-card-icons">
             <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
             <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}">↓</button>
@@ -2337,6 +2339,16 @@
         </div>
       </article>
     `;
+  }
+
+  function libraryPreviewDimensionInfo(preview) {
+    const width = Math.round(Number(preview?.width) || 0);
+    const height = Math.round(Number(preview?.height) || 0);
+    if (width < 1 || height < 1) return null;
+    let a = width, b = height;
+    while (b) { const remainder = a % b; a = b; b = remainder; }
+    const divisor = a || 1;
+    return { ratio: `${width / divisor}:${height / divisor}`, pixels: `${width} × ${height} px` };
   }
 
   function wireLibraryCards() {
@@ -5292,7 +5304,11 @@ function libraryTagsForForm(formData, kind) {
     var fill = document.getElementById('sync-progress-fill');
     var toast = document.getElementById('sync-progress-toast');
     if (fill) fill.style.width = '100%';
-    if (toast) { toast.textContent = doneText || '✅ 同步完成'; toast.style.background = '#0d9488'; }
+    if (toast) {
+      const finalText = doneText || '✅ 同步完成';
+      toast.textContent = finalText;
+      toast.style.background = finalText.startsWith('❌') ? '#dc2626' : '#0d9488';
+    }
     setTimeout(function() {
       if (bar) bar.style.display = 'none';
       if (fill) fill.style.width = '0%';
@@ -5326,7 +5342,12 @@ function libraryTagsForForm(formData, kind) {
         handleFetchFontBinary(msg, sourceWindow);
         break;
       case 'vf:save-shared-assets':
-        handleSaveSharedAssets(msg, sourceWindow);
+        await handleSaveSharedAssets(msg, sourceWindow, event.origin);
+        break;
+      case 'vf:shared-assets-status':
+        if (msg.status === 'uploading') showGlobalProgress(msg.message || '正在同步配色方案…');
+        else if (msg.status === 'done') hideGlobalProgress(msg.message || '✅ 配色方案已同步');
+        else if (msg.status === 'error') hideGlobalProgress(msg.message || '❌ 配色方案同步失败');
         break;
     }
   }
@@ -5584,9 +5605,10 @@ function libraryTagsForForm(formData, kind) {
     }
   }
 
-  async function handleSaveSharedAssets(msg, sourceWindow) {
+  async function handleSaveSharedAssets(msg, sourceWindow, replyOrigin) {
+    const targetOrigin = replyOrigin || location.origin;
     if (!state.supabase) {
-      try { sourceWindow.postMessage({ type: 'vf:shared-assets-saved', success: false, message: 'Supabase 未初始化' }, location.origin); } catch (e) {}
+      try { sourceWindow.postMessage({ type: 'vf:shared-assets-saved', success: false, message: 'Supabase 未初始化' }, targetOrigin); } catch (e) {}
       return;
     }
     try {
@@ -5596,11 +5618,43 @@ function libraryTagsForForm(formData, kind) {
       var file = new File([jsonBlob], 'shared-assets.json', { type: 'application/json' });
       var upload = await state.supabase.storage.from(LIBRARY_BUCKET).upload('static/shared-assets.json', file, { upsert: true, contentType: 'application/json' });
       if (upload.error) throw upload.error;
-      try { sourceWindow.postMessage({ type: 'vf:shared-assets-saved', success: true }, location.origin); } catch (e) {}
+      try { sourceWindow.postMessage({ type: 'vf:shared-assets-saved', success: true }, targetOrigin); } catch (e) {}
     } catch (error) {
-      try { sourceWindow.postMessage({ type: 'vf:shared-assets-saved', success: false, message: error.message || '保存失败' }, location.origin); } catch (e) {}
+      try { sourceWindow.postMessage({ type: 'vf:shared-assets-saved', success: false, message: error.message || '保存失败' }, targetOrigin); } catch (e) {}
     }
   }
+
+  // 配色使用和普通素材相同的用户 sources 路径，不再写入受限的共享 static 文件。
+  const PALETTE_CONFIG_TAG = 'vf:internal:palette-config';
+  window.VF_SAVE_COLOR_PALETTES = async function (payload) {
+    if (!state.supabase || !state.session?.user?.id) throw new Error('未登录，无法同步配色方案');
+    const userId = state.session.user.id;
+    const data = payload?.data || payload || {};
+    const jsonText = JSON.stringify({ tagColorPresets: Array.isArray(data.tagColorPresets) ? data.tagColorPresets : [], arcColorPresets: Array.isArray(data.arcColorPresets) ? data.arcColorPresets : [], updatedAt: new Date().toISOString() });
+    const existing = await state.supabase.from('vf_source_files').select('id, source_path').eq('uploaded_by', userId).contains('tags', [PALETTE_CONFIG_TAG]).order('updated_at', { ascending: false }).limit(1);
+    if (existing.error) throw existing.error;
+    const sourceId = existing.data?.[0]?.id || crypto.randomUUID();
+    const sourcePath = existing.data?.[0]?.source_path || `${userId}/sources/${sourceId}/color-palettes.json`;
+    const file = new File([new Blob([jsonText], { type: 'application/json' })], 'color-palettes.json', { type: 'application/json' });
+    const upload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, file, { upsert: true, contentType: 'application/json' });
+    if (upload.error) throw upload.error;
+    if (existing.data?.[0]) {
+      const update = await state.supabase.from('vf_source_files').update({ updated_at: new Date().toISOString(), source_size_bytes: file.size }).eq('id', sourceId);
+      if (update.error) throw update.error;
+    } else {
+      const insert = await state.supabase.from('vf_source_files').insert([{ id: sourceId, title: 'DIY 配色方案', tags: [PALETTE_CONFIG_TAG], visibility: 'all', source_path: sourcePath, source_filename: file.name, source_mime_type: 'application/json', source_size_bytes: file.size, source_ext: 'json', uploaded_by: userId }]);
+      if (insert.error) throw insert.error;
+    }
+    return { data: JSON.parse(jsonText) };
+  };
+  window.VF_LOAD_COLOR_PALETTES = async function () {
+    if (!state.supabase) return null;
+    const latest = await state.supabase.from('vf_source_files').select('source_path').contains('tags', [PALETTE_CONFIG_TAG]).order('updated_at', { ascending: false }).limit(1);
+    if (latest.error || !latest.data?.[0]?.source_path) return null;
+    const file = await state.supabase.storage.from(LIBRARY_BUCKET).download(latest.data[0].source_path);
+    if (file.error) throw file.error;
+    return { data: JSON.parse(await file.data.text()) };
+  };
 
   async function handleFetchFontBinary(msg, sourceWindow) {
     try {

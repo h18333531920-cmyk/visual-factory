@@ -261,15 +261,24 @@
           content.style.letterSpacing = '0px';
         });
       });
-      // 归零字距后，阿拉伯字与紧邻问号之间会失去原本的细小留白。
-      // 仅在截图副本内补一个 hair space；阿拉伯字仍作为完整文本运行绘制，不会被拆散。
+      // 截图引擎在处理末尾问号时不会完全保留浏览器的标点留白。
+      // 仅在截图副本内补一个 hair space：阿拉伯字仍作为完整文本运行绘制，
+      // 英文问号也会与编辑画布保持相同的细小视觉间距；原模板文案不被改动。
       var rtlTextNodes = [];
       var textWalker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
       while (textWalker.nextNode()) rtlTextNodes.push(textWalker.currentNode);
       rtlTextNodes.forEach(function (textNode) {
         var parent = textNode.parentElement;
-        if (!parent || !parent.closest('[dir="rtl"], [lang="ar"]')) return;
-        textNode.nodeValue = textNode.nodeValue.replace(/([\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])([؟?])/g, '$1\u200A$2');
+        if (!parent) return;
+        if (parent.closest('[dir="rtl"], [lang="ar"]')) {
+          textNode.nodeValue = textNode.nodeValue.replace(/([\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])([؟?])/g, '$1\u200A$2');
+        } else {
+          // html2canvas 在带字距的文本中可能忽略普通 ASCII 空格；预览副本
+          // 使用不换行空格，让词间距与画布一致，再补齐末尾问号的细微留白。
+          textNode.nodeValue = textNode.nodeValue
+            .replace(/([A-Za-z0-9])\s+([A-Za-z0-9])/g, '$1\u00A0$2')
+            .replace(/([A-Za-z0-9])([?？])/g, '$1\u200A$2');
+        }
       });
       // 把克隆体中的背景图替换为 <img>
       clone.querySelectorAll('.layer-image-div').forEach(function(div) {

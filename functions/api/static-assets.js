@@ -1,4 +1,4 @@
-import { getSupabaseConfig, json, requireAdmin } from '../_shared.js';
+import { getBearerToken, getSupabaseConfig, getUserFromToken, json, requireCloudflareEnv } from '../_shared.js';
 
 const DEFAULT_BUCKET = 'vf-library';
 const DEFAULT_PATH = 'static/shared-assets.json';
@@ -137,7 +137,10 @@ export async function onRequestGet({ env }) {
 
 export async function onRequestPut({ request, env }) {
   try {
-    await requireAdmin(request, env);
+    // 配色、字体等公共设计资产需要由已登录的团队成员保存；不再限定管理员，
+    // 以便与素材库中的字体上传权限保持一致。
+    requireCloudflareEnv(env);
+    await getUserFromToken(env, getBearerToken(request));
     const target = getStorageTarget(env);
     const existingPayload = await readExistingPayload(env, target);
     const payload = mergeAssetPayload(existingPayload, await request.json());
