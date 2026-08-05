@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260804-unified-v73';
+  const TOOL_UI_VERSION = '20260805-export-cors-v79';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -5114,6 +5114,9 @@ function libraryTagsForForm(formData, kind) {
       case 'vf:request-templates':
         handleFetchTemplates(sourceWindow);
         break;
+      case 'vf:save-shared-assets':
+        handleSaveSharedAssets(msg, sourceWindow);
+        break;
     }
   }
 
@@ -5357,6 +5360,24 @@ function libraryTagsForForm(formData, kind) {
       }
     } catch (error) {
       try { sourceWindow.postMessage({ type: 'vf:templates-loaded', templates: [], error: error.message }, location.origin); } catch (e) {}
+    }
+  }
+
+  async function handleSaveSharedAssets(msg, sourceWindow) {
+    if (!state.supabase) {
+      try { sourceWindow.postMessage({ type: 'vf:shared-assets-saved', success: false, message: 'Supabase 未初始化' }, location.origin); } catch (e) {}
+      return;
+    }
+    try {
+      var payload = msg.payload || {};
+      var jsonStr = JSON.stringify(payload, null, 2);
+      var jsonBlob = new Blob([jsonStr], { type: 'application/json' });
+      var file = new File([jsonBlob], 'shared-assets.json', { type: 'application/json' });
+      var upload = await state.supabase.storage.from(LIBRARY_BUCKET).upload('static/shared-assets.json', file, { upsert: true, contentType: 'application/json' });
+      if (upload.error) throw upload.error;
+      try { sourceWindow.postMessage({ type: 'vf:shared-assets-saved', success: true }, location.origin); } catch (e) {}
+    } catch (error) {
+      try { sourceWindow.postMessage({ type: 'vf:shared-assets-saved', success: false, message: error.message || '保存失败' }, location.origin); } catch (e) {}
     }
   }
 

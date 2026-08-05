@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GCC Design - Static DIY</title>
-    <script src="../../config.js?v=20260804-unified-v73"></script>
-    <script src="../../tool-auth-guard.js?v=20260804-unified-v73"></script>
+    <script src="../../config.js?v=20260804-unified-v75"></script>
+    <script src="../../tool-auth-guard.js?v=20260804-unified-v75"></script>
     <script src="../vendor/html2canvas.min.js"></script>
     
     <style>
@@ -1378,6 +1378,59 @@
             background: rgba(16, 19, 24, 0.06);
         }
 
+        .export-dropdown-wrap { position: relative; }
+        .export-dropdown-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            width: 270px;
+            background: rgba(255,255,255,0.88);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.5);
+            border-radius: 14px;
+            box-shadow: 0 12px 50px rgba(0,0,0,0.12);
+            padding: 8px;
+            z-index: 100;
+        }
+        .export-dropdown-menu.open { display: block; }
+        .export-dropdown-menu button {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 9px 14px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .export-dropdown-menu button:hover { background: #f1f5f9; }
+        .export-dropdown-menu button:disabled { opacity: 0.35; cursor: not-allowed; }
+        .export-dropdown-menu button:disabled:hover { background: transparent; }
+        .export-dropdown-menu .export-dim {
+            font-size: 11px;
+            color: var(--text-sub);
+            font-weight: 400;
+            margin-left: auto;
+        }
+        .export-dropdown-menu .export-warn {
+            font-size: 10px;
+            color: #ef4444;
+            font-weight: 500;
+        }
+        .export-dropdown-menu hr {
+            margin: 6px 4px;
+            border: none;
+            border-top: 1px solid #e2e8f0;
+        }
+
         .custom-board-menu-item {
             display: none !important;
         }
@@ -1838,7 +1891,10 @@
             <div class="canvas-actions">
                 <button type="button" class="save-template-btn" onclick="saveActiveAsset()" id="canvas-save-btn">保存模版</button>
                 <button type="button" class="primary" onclick="extendFromHead()">一键延展</button>
-                <button type="button" class="primary" onclick="exportPNG()">导出</button>
+                <div class="export-dropdown-wrap">
+                    <button type="button" class="primary" onclick="toggleExportMenu(event)">导出 ⌄</button>
+                    <div class="export-dropdown-menu" id="export-dropdown-menu"></div>
+                </div>
                 <div class="toolbar-more-wrap">
                     <button type="button" onclick="toggleToolbarMore(event)">更多</button>
                     <div class="toolbar-more-menu" id="toolbar-more-menu">
@@ -2012,6 +2068,8 @@
     let referenceElements = [];
     let referenceElementCategory = 'food';
     let activeTemplatePackId = null;
+    // 素材库先返回卡片元数据，再异步返回完整模板。只保留最后一次点击，避免慢响应覆盖新选择。
+    let pendingLayoutPresetId = '';
     let currentAssetTab = 'layout';
     let draggingLayerId = null;
     let aiProgressTimer = null;
@@ -2115,27 +2173,96 @@
     }
     async function saveSharedAssetsToCloud() {
         const payload = await buildSharedAssetPayload();
+        // 先尝试 Vercel API
         const res = await fetch(SHARED_ASSETS_API, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
             body: JSON.stringify(payload)
         });
         const data = await res.json().catch(() => ({}));
-        if(!res.ok || data.success === false) throw new Error(data.message || '公共资产同步失败');
+        if(!res.ok || data.success === false) {
+            // Vercel API 不可用（如 GitHub Pages），尝试通过父窗口 Supabase 直传
+            console.warn('Vercel API 保存失败，尝试父窗口直传 Supabase:', data.message || '');
+            try {
+                await saveSharedAssetsViaParent(payload);
+                return true;
+            } catch(e) {
+                throw new Error(data.message || e.message || '公共资产同步失败');
+            }
+        }
         return true;
     }
+    function saveSharedAssetsViaParent(payload) {
+        return new Promise((resolve, reject) => {
+            const handler = (e) => {
+                if(e.data && e.data.type === 'vf:shared-assets-saved') {
+                    window.removeEventListener('message', handler);
+                    if(e.data.success) resolve(true);
+                    else reject(new Error(e.data.message || '保存失败'));
+                }
+            };
+            window.addEventListener('message', handler);
+            notifyParent({ type: 'vf:save-shared-assets', payload: payload });
+            // 超时处理
+            setTimeout(() => { window.removeEventListener('message', handler); reject(new Error('保存超时')); }, 15000);
+        });
+    }
     async function loadSharedAssetsFromCloud() {
+        // 先从 Vercel API 加载（gccdesign.app 等有 serverless function 的部署环境）
         try {
             const res = await fetch(SHARED_ASSETS_API, { headers: getAuthHeaders() });
             const payload = await res.json().catch(() => ({}));
-            if(!res.ok || payload.success === false) return false;
-            if(payload.exists === false) {
+            if(res.ok && payload.success !== false) {
+                if(payload.exists === false) {
+                    if(hasLocalSharedAssets()) queueSharedAssetSave(300);
+                    return false;
+                }
+                const fonts = Array.isArray(payload.fonts) ? payload.fonts : [];
+                const logos = Array.isArray(payload.logos) ? payload.logos : [];
+                const shouldBackfillCloud = mergeCloudAssetData(payload.data || {}, fonts, logos);
+
+                await saveStateToDB(getGlobalSnapshot());
+                await replaceStoreInDB('logos', logoAssets);
+                await replaceStoreInDB('referenceElements', referenceElements);
+                if(fonts.length) {
+                    await replaceStoreInDB('fonts', fonts);
+                    customFonts = [];
+                    await Promise.all(fonts.map(registerFontAsset));
+                }
+
+                renderSettings();
+                renderPromptTags();
+                renderAssetLibrary();
+                renderProperties();
+                renderCanvas();
+                if(shouldBackfillCloud) queueSharedAssetSave(300);
+                return true;
+            }
+        } catch(error) {
+            console.warn('Vercel API 加载公共资产失败，尝试 Supabase 直连:', error);
+        }
+
+        // 降级：直接读 Supabase Storage（GitHub Pages 等无 serverless function 的环境）
+        try {
+            const config = window.VF_CONFIG || window.parent?.VF_CONFIG || {};
+            const supabaseUrl = (config.supabaseUrl || 'https://juuqvjmhzdgfggzrivbb.supabase.co').replace(/\/+$/, '');
+            const supabaseKey = config.supabaseAnonKey || 'sb_publishable_PIa3V0LGlOn1K6G1nBUeqw_kiFB6fjt';
+            const storageUrl = supabaseUrl + '/storage/v1/object/vf-library/static/shared-assets.json';
+            const res = await fetch(storageUrl, {
+                headers: { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey }
+            });
+            if(!res.ok) {
                 if(hasLocalSharedAssets()) queueSharedAssetSave(300);
                 return false;
             }
+            const rawPayload = await res.json().catch(() => null);
+            if(!rawPayload) return false;
+            // Supabase 直连返回格式可能与 Vercel API 不同，做兼容处理
+            const payload = rawPayload.success !== undefined ? rawPayload : { success: true, exists: true, ...rawPayload };
             const fonts = Array.isArray(payload.fonts) ? payload.fonts : [];
             const logos = Array.isArray(payload.logos) ? payload.logos : [];
-            const shouldBackfillCloud = mergeCloudAssetData(payload.data || {}, fonts, logos);
+            const data = payload.data || rawPayload;
+            const shouldBackfillCloud = mergeCloudAssetData(data, fonts, logos);
 
             await saveStateToDB(getGlobalSnapshot());
             await replaceStoreInDB('logos', logoAssets);
@@ -2154,7 +2281,7 @@
             if(shouldBackfillCloud) queueSharedAssetSave(300);
             return true;
         } catch(error) {
-            console.warn('公共资产读取失败:', error);
+            console.warn('Supabase 直连公共资产读取失败:', error);
             return false;
         }
     }
@@ -4463,7 +4590,7 @@
     function closeToolbarMore() {
         document.getElementById('toolbar-more-menu')?.classList.remove('open');
     }
-    document.addEventListener('click', e => { if(!e.target.closest('.toolbar-more-wrap')) closeToolbarMore(); });
+    document.addEventListener('click', e => { if(!e.target.closest('.toolbar-more-wrap')) closeToolbarMore(); if(!e.target.closest('.export-dropdown-wrap')) closeExportMenu(); });
     document.addEventListener('click', e => { if(!e.target.closest('.new-artboard-menu-wrap')) closeNewArtboardMenu(); });
     // ===== 模版同步到素材库 =====
     function notifyParent(msg) {
@@ -4732,6 +4859,7 @@
             // 后台到达的完整 JSON 数据，更新对应模板
             var tid = event.data.id;
             var tdata = event.data.data || {};
+            var loadedRequestedPresetId = '';
             [presetLibrary, tagPresetLibrary, logoAssets].forEach(function(arr) {
                 var item = arr.find(function(x) { return x.cloudId === tid; });
                 if (!item) return;
@@ -4742,8 +4870,14 @@
                 if (tdata.canvasW) item.canvasW = tdata.canvasW;
                 if (tdata.canvasH) item.canvasH = tdata.canvasH;
                 if (tdata.src) item.src = tdata.src;
+                if (pendingLayoutPresetId && item.id === pendingLayoutPresetId) loadedRequestedPresetId = item.id;
             });
             renderAssetLibrary();
+            if (loadedRequestedPresetId) {
+                pendingLayoutPresetId = '';
+                // 等卡片数据更新后再应用，保证连续点击时只应用最后选中的模板。
+                requestAnimationFrame(function() { applyLayoutPreset(loadedRequestedPresetId); });
+            }
         } else if (event.data.type === 'vf:apply-template') {
             var d = event.data.data || {};
             if (d.schema === 'vf-layout-preset/v1' && d.elements) {
@@ -4769,10 +4903,9 @@
                         syncRatioNav();
                     }
                 }
-                var keepTypes2 = ['image', 'logo', 'arc', 'solid'];
-                var keptLayers2 = layers.filter(function(l) { return keepTypes2.includes(l.type); }).map(function(l) { return JSON.parse(JSON.stringify(l)); });
-                var newEls = cloneData(d.elements);
-                keptLayers2.forEach(function(l) { l.id = genId(l.type); l.locked = false; newEls.push(l); });
+                // 套用模板是一次原子替换：不能保留上一张模板的图片、Logo 或圆环，
+                // 否则连续点击时会发生叠加或被新背景遮住。
+                var newEls = cloneData(d.elements).map(function(l) { l._templateLayer = true; return l; });
                 layers = newEls;
                 activeLayerIds = layers.filter(function(l) { return l.type !== 'image'; }).map(function(l) { return l.id; });
                 if (!activeLayerIds.length) activeLayerIds = layers.map(function(l) { return l.id; });
@@ -4781,6 +4914,9 @@
             } else if (d.schema === 'vf-template-pack/v1' && d.artboards) {
                 saveCurrentArtboardState();
                 var nextArtboards = normalizeArtboardSnapshot(d.artboards || {});
+                Object.keys(nextArtboards).forEach(function(boardId) {
+                    nextArtboards[boardId].layers.forEach(function(layer) { layer._templateLayer = true; });
+                });
                 artboards = nextArtboards;
                 activeTemplatePackId = event.data.sourceId || '';
                 currentArtboardId = getFixedArtboardPresets().find(function(preset) { return (artboards[preset.id]?.layers || []).length > 0; })?.id || 'head';
@@ -5234,6 +5370,12 @@
     }
     function applyLayoutPreset(id) {
         const p = presetLibrary.find(x => x.id === id); if(!p) return;
+        if (p._lazy) {
+            pendingLayoutPresetId = id;
+            showToast('正在加载模板内容，请稍候…');
+            return;
+        }
+        pendingLayoutPresetId = '';
         if(p.kind === 'pack') return applyTemplatePack(p);
         // 先保存当前状态，确保 Ctrl+Z 能回到应用模板前的状态
         saveHistory();
@@ -5267,45 +5409,14 @@
                 syncRatioNav();
             }
         }
-        // 保留用户添加的非模版图层：图片、Logo、圆弧、色块
-        var keepTypes = ['image', 'logo', 'arc', 'solid'];
-        var keptLayers = layers.filter(function(l) { return keepTypes.includes(l.type); }).map(function(l) { return JSON.parse(JSON.stringify(l)); });
+        // 模板切换必须完整替换画板。保留上一模板的图片/Logo/圆环会造成组件叠加，
+        // 并可能被新模板背景遮住，表现为随机消失。
         const newLayers = adaptPresetElementsToCurrent(p.elements, p.size);
-        if(keptLayers.length > 0) {
-            var keptImages = keptLayers.filter(function(l) { return l.type === 'image'; });
-            var keptOthers = keptLayers.filter(function(l) { return l.type !== 'image'; });
-            // 图片：匹配模板中的图片位，保留用户图片内容
-            var presetImages = newLayers.filter(function(l) { return l.type === 'image'; });
-            if(presetImages.length > 0) {
-                presetImages.forEach(function(imgLayer, index) {
-                    var ci = keptImages[index] || keptImages[keptImages.length - 1];
-                    var pz = imgLayer.zIndex;
-                    Object.keys(imgLayer).forEach(function(key) { delete imgLayer[key]; });
-                    Object.assign(imgLayer, { ...ci, id: genId('image'), zIndex: pz, locked: false, flipX: ci.flipX ?? false });
-                });
-                if(keptImages.length > presetImages.length) {
-                    var minZ = newLayers.length > 0 ? Math.min.apply(null, newLayers.map(function(l) { return l.zIndex; })) : 1;
-                    keptImages.slice(presetImages.length).forEach(function(img, index) {
-                        newLayers.push({ ...img, id: genId('image'), zIndex: minZ - keptImages.length + index, locked: false, flipX: img.flipX ?? false });
-                    });
-                }
-            } else if(keptImages.length > 0) {
-                var minZ2 = newLayers.length > 0 ? Math.min.apply(null, newLayers.map(function(l) { return l.zIndex; })) : 1;
-                keptImages.forEach(function(img, index) {
-                    newLayers.push({ ...img, id: genId('image'), zIndex: minZ2 - keptImages.length + index, locked: false, flipX: img.flipX ?? false });
-                });
-            }
-            // 非图片图层（Logo、圆弧、色块）：直接追加
-            keptOthers.forEach(function(l) {
-                l.id = genId(l.type);
-                l.locked = false;
-                newLayers.push(l);
-            });
-        }
+        newLayers.forEach(function(layer) { layer._templateLayer = true; });
         layers = newLayers;
         activeLayerIds = newLayers.filter(l => l.type !== 'image').map(l => l.id);
         if(activeLayerIds.length === 0) activeLayerIds = newLayers.map(l => l.id);
-        saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast(currentImages.length > 0 ? '已套用版式，并保留当前图片' : '已切换到该版式');
+        saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast('已切换到该模板');
     }
     async function deleteLayoutPreset(id) {
         if(!await askConfirm('删除这个版式预设？')) return;
@@ -5363,6 +5474,9 @@
         saveHistory();
         saveCurrentArtboardState();
         const nextArtboards = normalizeArtboardSnapshot(pack.artboards || {});
+        Object.keys(nextArtboards).forEach(function(boardId) {
+            nextArtboards[boardId].layers.forEach(function(layer) { layer._templateLayer = true; });
+        });
         artboards = nextArtboards;
         activeTemplatePackId = pack.id;
         currentArtboardId = getFixedArtboardPresets().find(preset => (artboards[preset.id]?.layers || []).length > 0)?.id || 'head';
@@ -6329,22 +6443,64 @@
         } finally { updateAIProgress('正在应用扩图结果...', 96); stopAIProgress(); if(btn) { btn.innerText = ogText; btn.disabled = false; } }
     }
 
+    const SAFE_CANVAS_PX = 67108864; // ~67M 像素，浏览器 canvas 安全上限（约 8192×8192）
+    function toggleExportMenu(e) {
+        e?.stopPropagation();
+        buildExportMenu();
+        document.getElementById('export-dropdown-menu')?.classList.toggle('open');
+    }
+    function closeExportMenu() {
+        document.getElementById('export-dropdown-menu')?.classList.remove('open');
+    }
+    function buildExportMenu() {
+        var menu = document.getElementById('export-dropdown-menu');
+        if (!menu) return;
+        var wrap = document.getElementById('canvas-wrapper');
+        var w = wrap.offsetWidth;
+        var h = wrap.offsetHeight;
+        var scales = [0.5, 1, 2, 3];
+        var labels = { '0.5': '0.5x (低清)', '1': '1x (标清)', '2': '2x (高清)', '3': '3x (超清)' };
+        var html = '';
+        scales.forEach(function(s) {
+            var outW = Math.round(w * s);
+            var outH = Math.round(h * s);
+            var totalPx = outW * outH;
+            var overLimit = totalPx > SAFE_CANVAS_PX;
+            html += '<button onclick="exportPNG(' + s + '); closeExportMenu();"'
+                + (overLimit ? ' disabled' : '')
+                + '>' + (labels[s] || s + 'x')
+                + '<span class="export-dim">' + outW + ' × ' + outH + 'px</span>'
+                + (overLimit ? '<span class="export-warn">超限</span>' : '')
+                + '</button>';
+        });
+        html += '<hr>';
+        html += '<button onclick="exportAllArtboards(2); closeExportMenu();" style="font-weight:500;">📦 导出全部画板 (2x)</button>';
+        menu.innerHTML = html;
+    }
     async function renderCurrentArtboardBlob(scale = 3) {
         const wrap = document.getElementById('canvas-wrapper');
         const safeGuide = document.getElementById('safe-guide');
-        const origCss = wrap.style.cssText;
         const oldGuideDisplay = safeGuide ? safeGuide.style.display : '';
-        const {w, h} = SIZES[currentRatio];
         if(safeGuide) safeGuide.style.display = 'none';
-        wrap.style.cssText = `position: fixed; left: 0px; top: 0px; width: ${w}px; height: ${h}px; transform: none; z-index: 10001; background: #FFFFFF; overflow: hidden;`;
+        // 导出使用画板的离屏副本，不能直接修改正在编辑的画板尺寸/定位，
+        // 否则会产生画板闪烁，也可能使 html2canvas 在重排期间截图失败。
+        const clone = wrap.cloneNode(true);
+        const width = wrap.offsetWidth;
+        const height = wrap.offsetHeight;
+        // 自动压低倍率：确保输出的总像素数在浏览器安全范围内
+        const safeScale = Math.min(scale, Math.sqrt(SAFE_CANVAS_PX / (width * height)));
+        clone.style.cssText = `position:fixed;left:-99999px;top:0;width:${width}px;height:${height}px;transform:none;z-index:-1;overflow:hidden;background:#FFFFFF;pointer-events:none;`;
+        document.body.appendChild(clone);
         try {
-            void wrap.offsetWidth;
-            await waitForImagesIn(wrap);
+            await waitForImagesIn(clone);
             await new Promise(r => setTimeout(r, 300));
-            const canvas = await html2canvas(wrap, { scale, useCORS: true, allowTaint: true, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 0 });
-            return await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            // 允许被跨域图片污染的 canvas 会在 toBlob 时被浏览器拒绝读取，最终导致导出失败。
+            // useCORS 会优先加载可安全导出的远程图片；不支持 CORS 的资源不会破坏整张导出图。
+            const canvas = await html2canvas(clone, { scale: safeScale, width, height, useCORS: true, allowTaint: false, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 0 });
+            const blob = await new Promise((resolve, reject) => canvas.toBlob(result => result ? resolve(result) : reject(new Error('无法生成 PNG 文件')), 'image/png'));
+            return blob;
         } finally {
-            wrap.style.cssText = origCss;
+            clone.remove();
             if(safeGuide) safeGuide.style.display = oldGuideDisplay;
             syncSafeGuide();
         }
@@ -6359,7 +6515,8 @@
         link.remove();
         URL.revokeObjectURL(link.href);
     }
-    async function exportPNG() {
+    async function exportPNG(scale) {
+        scale = scale || 3;
         if(layers.length === 0) return showToast('画板为空，无法导出', true);
         await document.fonts.ready;
         const oldActive = [...activeLayerIds];
@@ -6368,18 +6525,20 @@
         renderCanvas(); renderLayersList(); renderProperties();
         overlay.style.display = 'flex';
         try {
-            const blob = await renderCurrentArtboardBlob(3);
+            const blob = await renderCurrentArtboardBlob(scale);
             downloadBlob(blob, `GCC_${getArtboardPreset(currentArtboardId).label}_${Date.now()}.png`);
-            showToast('✅ 3倍超清 PNG 导出成功');
+            showToast('✅ ' + scale + '倍 PNG 导出成功');
         } catch (e) {
-            showToast('❌ 导出异常', true);
+            console.error('PNG 导出失败:', e);
+            showToast('❌ 导出失败：' + (e?.message || '未知错误'), true);
         } finally {
             overlay.style.display = 'none';
             activeLayerIds = oldActive;
             renderCanvas(); renderLayersList(); renderProperties();
         }
     }
-    async function exportAllArtboards() {
+    async function exportAllArtboards(scale) {
+        scale = scale || 2;
         saveCurrentArtboardState();
         const exportable = ARTBOARD_PRESETS.filter(p => (artboards[p.id]?.layers || []).length > 0);
         if(exportable.length === 0) return showToast('三个画布都是空的，无法导出', true);
@@ -6393,13 +6552,14 @@
                 loadArtboard(preset.id, false);
                 activeLayerIds = [];
                 renderCanvas(); renderLayersList(); renderProperties();
-                const blob = await renderCurrentArtboardBlob(3);
+                const blob = await renderCurrentArtboardBlob(scale);
                 downloadBlob(blob, `GCC_${preset.label}_${Date.now()}.png`);
                 await new Promise(r => setTimeout(r, 180));
             }
             showToast(`✅ 已导出 ${exportable.length} 个画布`);
         } catch(e) {
-            showToast('❌ 批量导出异常', true);
+            console.error('批量 PNG 导出失败:', e);
+            showToast('❌ 批量导出失败：' + (e?.message || '未知错误'), true);
         } finally {
             loadArtboard(originalArtboardId, false);
             activeLayerIds = originalActive.filter(id => layers.some(l => l.id === id));
@@ -6434,6 +6594,6 @@
     bootApp();
 
 </script>
-<script src="../../tool-bridge.js?v=20260804-unified-v73"></script>
+<script src="../../tool-bridge.js?v=20260804-unified-v75"></script>
 </body>
 </html>
