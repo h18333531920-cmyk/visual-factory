@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260805-export-cors-v79';
+  const TOOL_UI_VERSION = '20260805-font-download-binary-v89';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -153,7 +153,7 @@
       tag1: ['模版', '组件'],
       tag2ByTag1: {
         '模版': ['社媒物料', 'C端物料'],
-        '组件': ['标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材']
+        '组件': ['标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材', '字体']
       }
     }
   };
@@ -1440,6 +1440,11 @@
       if (state.libraryFilters.favorites && !state.libraryFavorites.has(item.preview.id)) return false;
       return true;
     });
+    // 字体卡按家族聚合后，不能沿用原来的增量显隐逻辑；旧卡会被保留在 DOM 中。
+    // 直接重建网格，确保切换「字体」筛选时也只留下每个字体家族的一张卡片。
+    state.libraryItems = groupFontLibraryItems(state.libraryItems);
+    renderLibraryGrid();
+    return;
     var visibleItems = state.libraryItems.slice(0, state.libraryVisibleLimit);
     var existingCards = grid.querySelectorAll('.library-card');
     var existingIds = new Set();
@@ -1615,14 +1620,21 @@
   }
 
   function countTagOccurrences(kind, tagValue, parentFilters) {
-    return state.librarySources.filter(function(source) {
+    var matchingSources = state.librarySources.filter(function(source) {
       if (libraryKindOfSource(source) !== kind) return false;
       var tags = visibleLibraryTags(source);
       if (!tags.includes(tagValue)) return false;
       return Object.keys(parentFilters).every(function(k) {
         return !parentFilters[k] || parentFilters[k] === 'all' || tags.includes(parentFilters[k]);
       });
-    }).length;
+    });
+    // 字体标签按「字体家族」统计，而非按每个字重的文件记录统计。
+    if (kind === 'template' && tagValue === '字体') {
+      return new Set(matchingSources.map(function(source) {
+        return fontFamilyNameFromTitle(source.title).toLocaleLowerCase();
+      })).size;
+    }
+    return matchingSources.length;
   }
 
   function libraryTagRows(kind) {
@@ -1790,6 +1802,21 @@
       if (error) throw error;
       previews.push(...(data || []));
     }
+    // 字体本身没有位图预览时，也要在素材库中生成一个虚拟卡片预览。
+    // 这样旧字体资产和新上传字体都能以字体卡片的方式出现。
+    const previewedSourceIds = new Set(previews.map(item => item.source_file_id));
+    state.librarySources.forEach(function(source) {
+      const tags = visibleLibraryTags(source);
+      if (tags.includes('组件') && tags.includes('字体') && !previewedSourceIds.has(source.id)) {
+        previews.push({
+          id: 'font-preview-' + source.id,
+          source_file_id: source.id,
+          preview_path: '', preview_filename: source.title + '.font-card',
+          preview_mime_type: 'font/card', preview_size_bytes: 0,
+          width: 960, height: 520, sort_order: 10, created_at: source.created_at || ''
+        });
+      }
+    });
     const sourceOrder = new Map(state.librarySources.map((source, index) => [source.id, index]));
     state.libraryPreviews = previews.sort((a, b) => {
       const sourceDiff = (sourceOrder.get(a.source_file_id) ?? 999999) - (sourceOrder.get(b.source_file_id) ?? 999999);
@@ -1935,7 +1962,7 @@
         ].join(' ').toLowerCase();
         return text.includes(query);
       });
-    state.libraryItems = filteredItems;
+    state.libraryItems = groupFontLibraryItems(filteredItems);
     var visibleItems = state.libraryItems.slice(0, state.libraryVisibleLimit);
     // 按宽高比交替排列，每4张一组，保持新图优先
     var GROUP = 4;
@@ -2128,6 +2155,125 @@
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
   }
 
+  function isFontLibraryItem(item) {
+    if (!item || !item.source) return false;
+    var tags = visibleLibraryTags(item.source);
+    return libraryKindOfSource(item.source) === 'template' && tags.includes('组件') && tags.includes('字体');
+  }
+
+  function fontFamilyNameFromTitle(title) {
+    var value = String(title || '').trim();
+    // 上传字体通常以「家族名-字重」命名。只有末尾明确为常见字重时才移除，避免误伤字体名本身。
+    var family = value.replace(/[\s_-]+(?:extra[\s_-]?light|ultra[\s_-]?light|thin|hairline|light|regular|normal|book|medium|semi[\s_-]?bold|demi[\s_-]?bold|bold|heavy|extra[\s_-]?bold|black)(?:[\s_-]+(?:italic|oblique))?$/i, '');
+    return family.replace(/[\s_-]+$/, '').trim() || value;
+  }
+
+  function fontWeightLabelFromTitle(title) {
+    var match = String(title || '').match(/(?:^|[\s_-])(extra[\s_-]?light|ultra[\s_-]?light|thin|hairline|light|regular|normal|book|medium|semi[\s_-]?bold|demi[\s_-]?bold|bold|heavy|extra[\s_-]?bold|black)(?:[\s_-]+(italic|oblique))?$/i);
+    if (!match) return 'Regular';
+    var labels = {
+      extralight: 'ExtraLight', ultralight: 'UltraLight', thin: 'Thin', hairline: 'Hairline',
+      light: 'Light', regular: 'Regular', normal: 'Normal', book: 'Book', medium: 'Medium',
+      semibold: 'SemiBold', demibold: 'DemiBold', bold: 'Bold', heavy: 'Heavy',
+      extrabold: 'ExtraBold', black: 'Black'
+    };
+    var key = String(match[1]).replace(/[\s_-]/g, '').toLowerCase();
+    return (labels[key] || match[1]) + (match[2] ? ' Italic' : '');
+  }
+
+  function groupFontLibraryItems(items) {
+    var groups = new Map();
+    var result = [];
+    (items || []).forEach(function(item) {
+      if (!isFontLibraryItem(item)) {
+        result.push(item);
+        return;
+      }
+      var family = fontFamilyNameFromTitle(item.source.title);
+      var key = family.toLocaleLowerCase();
+      var group = groups.get(key);
+      if (!group) {
+        group = Object.assign({}, item, { fontFamilyName: family, fontVariants: [item] });
+        groups.set(key, group);
+        result.push(group);
+      } else {
+        group.fontVariants.push(item);
+      }
+    });
+    return result;
+  }
+
+  function showFontFamilyMenu(anchor, item) {
+    var menu = document.getElementById('context-menu');
+    if (!menu) return;
+    var variants = item.fontVariants || [item];
+    var isFamily = variants.length > 1;
+    menu.innerHTML = isFamily
+      ? '<button type="button" data-font-menu-action="manage"><span class="ctx-icon">⚙</span>' + (state.lang === 'zh' ? '管理' : 'Manage') + '</button>'
+      : '<button type="button" data-font-menu-action="download"><span class="ctx-icon">⇩</span>' + (state.lang === 'zh' ? '下载' : 'Download') + '</button>' +
+        '<button type="button" class="danger" data-font-menu-action="delete"><span class="ctx-icon">⌫</span>' + (state.lang === 'zh' ? '删除' : 'Delete') + '</button>';
+    menu.classList.add('show');
+    var rect = anchor.getBoundingClientRect();
+    requestAnimationFrame(function() {
+      var x = Math.min(rect.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8);
+      var y = Math.min(rect.bottom + 8, window.innerHeight - menu.offsetHeight - 8);
+      menu.style.left = Math.max(8, x) + 'px';
+      menu.style.top = Math.max(8, y) + 'px';
+    });
+    menu.querySelectorAll('[data-font-menu-action]').forEach(function(button) {
+      button.addEventListener('click', function() {
+        var action = button.dataset.fontMenuAction;
+        hideContextMenu();
+        if (action === 'manage') return openFontFamilyManager(item);
+        if (action === 'download') return downloadLibraryFile(variants[0], 'source');
+        if (action === 'delete') return deleteLibrarySource(variants[0].source.id);
+      });
+    });
+  }
+
+  function openFontFamilyManager(item) {
+    document.getElementById('font-family-manager-modal')?.remove();
+    var variants = item.fontVariants || [item];
+    var family = item.fontFamilyName || fontFamilyNameFromTitle(item.source.title);
+    var rows = variants.map(function(variant, index) {
+      var label = fontWeightLabelFromTitle(variant.source.title);
+      return '<label style="display:flex;align-items:center;gap:20px;padding:13px 0;cursor:pointer;">' +
+        '<input type="checkbox" data-font-variant-index="' + index + '" style="width:22px;height:22px;accent-color:#466bf6;">' +
+        '<span style="flex:1;font-size:25px;line-height:1.2;font-weight:' + (/bold|heavy|black/i.test(label) ? '700' : /medium/i.test(label) ? '500' : '400') + ';font-style:' + (/italic/i.test(label) ? 'italic' : 'normal') + ';">' + escapeHtml(family) + '</span>' +
+        '<span style="padding:7px 16px;border-radius:999px;background:#f1f2ff;color:#466bf6;font-size:16px;white-space:nowrap;">' + escapeHtml(label) + '</span>' +
+      '</label>';
+    }).join('');
+    var modal = document.createElement('div');
+    modal.id = 'font-family-manager-modal';
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = '<section role="dialog" aria-modal="true" style="width:min(960px,calc(100vw - 40px));height:min(820px,calc(100vh - 48px));background:#fff;border-radius:20px;display:flex;flex-direction:column;box-shadow:0 22px 80px rgba(0,0,0,.28);overflow:hidden;">' +
+      '<header style="display:flex;align-items:center;justify-content:space-between;padding:28px 46px;border-bottom:1px solid #e8e8ea;"><h2 style="margin:0;font-size:30px;font-weight:500;">' + escapeHtml(family) + '</h2><button type="button" data-font-modal-close style="border:0;background:transparent;font-size:38px;line-height:1;cursor:pointer;">×</button></header>' +
+      '<div style="flex:1;overflow:auto;padding:30px 46px;">' + rows + '</div>' +
+      '<footer style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 46px;border-top:1px solid #e8e8ea;">' +
+        '<label style="display:flex;align-items:center;gap:10px;font-size:18px;cursor:pointer;"><input id="font-family-select-all" type="checkbox" style="width:22px;height:22px;accent-color:#466bf6;">' + (state.lang === 'zh' ? '全选' : 'Select all') + '</label>' +
+        '<div style="display:flex;gap:16px;"><button type="button" data-font-modal-delete style="padding:13px 28px;border:1px solid #d8dadd;background:#fff;border-radius:12px;font-size:18px;cursor:pointer;">' + (state.lang === 'zh' ? '删除' : 'Delete') + '</button><button type="button" data-font-modal-download style="padding:13px 28px;border:0;background:#466bf6;color:#fff;border-radius:12px;font-size:18px;cursor:pointer;">' + (state.lang === 'zh' ? '下载' : 'Download') + '</button></div>' +
+      '</footer></section>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(event) { if (event.target === modal) modal.remove(); });
+    modal.querySelector('[data-font-modal-close]').addEventListener('click', function() { modal.remove(); });
+    var boxes = Array.from(modal.querySelectorAll('[data-font-variant-index]'));
+    modal.querySelector('#font-family-select-all').addEventListener('change', function(event) {
+      boxes.forEach(function(box) { box.checked = event.target.checked; });
+    });
+    function selectedVariants() { return boxes.filter(function(box) { return box.checked; }).map(function(box) { return variants[Number(box.dataset.fontVariantIndex)]; }); }
+    modal.querySelector('[data-font-modal-download]').addEventListener('click', async function() {
+      var selected = selectedVariants();
+      if (!selected.length) return alert(state.lang === 'zh' ? '请先选择字重。' : 'Select at least one style.');
+      for (var i = 0; i < selected.length; i++) await downloadLibraryFile(selected[i], 'source');
+    });
+    modal.querySelector('[data-font-modal-delete]').addEventListener('click', async function() {
+      var selected = selectedVariants();
+      if (!selected.length) return alert(state.lang === 'zh' ? '请先选择字重。' : 'Select at least one style.');
+      for (var i = 0; i < selected.length; i++) await deleteLibrarySource(selected[i].source.id);
+      modal.remove();
+    });
+  }
+
   function renderLibraryCard(item) {
     const source = item.source;
     const preview = item.preview;
@@ -2150,6 +2296,23 @@
       : kind === 'template'
         ? `<button type="button" data-action="use-static">${state.lang === 'zh' ? '打开' : 'Open'}</button>`
         : '';
+    const isFontCard = !!item.fontVariants || (kind === 'template' && tags.includes('组件') && tags.includes('字体'));
+    if (isFontCard) {
+      const variants = item.fontVariants || [item];
+      const fontName = item.fontFamilyName || fontFamilyNameFromTitle(source.title);
+      const styleLabel = variants.length > 1 ? `${variants.length} 个字重` : fontWeightLabelFromTitle(variants[0].source.title);
+      return `
+        <article class="library-card library-font-card ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" data-font-family="${escapeAttr(fontName)}" tabindex="0" style="border:1px solid #e8eaed;border-radius:14px;background:#fff;overflow:hidden;box-shadow:none;">
+          <div class="multi-check"></div>
+          <div style="height:142px;margin:14px 14px 0;border-radius:10px;background:#f7f7f9;display:flex;align-items:center;padding:22px;overflow:hidden;">
+            <span style="font-size:28px;line-height:1.2;font-weight:600;color:#202124;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(fontName)}</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 16px;color:#666b73;font-size:15px;">
+            <span>${escapeHtml(styleLabel)}</span>
+            <button type="button" data-action="font-menu" title="字体选项" style="border:0;background:#f0f1f3;color:#9aa0a6;border-radius:7px;font-size:22px;line-height:1;cursor:pointer;padding:5px 9px;">⋯</button>
+          </div>
+        </article>`;
+    }
     return `
       <article class="library-card ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
         <div class="library-thumb-wrap">
@@ -2210,6 +2373,11 @@
         }
         const item = libraryItemByPreviewId(card.dataset.previewId);
         if (!item) return;
+        if (button.dataset.action === 'font-menu') {
+          event.stopPropagation();
+          showFontFamilyMenu(button, item);
+          return;
+        }
         handleLibraryCardAction(button.dataset.action, item);
       });
       card.addEventListener('contextmenu', event => {
@@ -3612,7 +3780,7 @@
     await reloadLibraryData();
     // 通知静态DIY iframe 同步删除
     notifyStaticIframe({ type: 'vf:template-deleted', sourceId: sourceId });
-    void logAssetEvent('delete', item);
+    void logAssetEvent('delete', { source: source, preview: relatedPreviews[0] || null });
   }
 
   function notifyStaticIframe(msg) {
@@ -3641,6 +3809,9 @@
 
   async function downloadLibraryFile(item, kind) {
     if (kind === 'source' && !canDownloadSource()) return;
+    if (kind === 'source' && isFontLibraryItem(item)) {
+      return downloadFontLibraryFile(item);
+    }
     var filename = kind === 'source' ? item.source.source_filename : item.preview.preview_filename || 'preview.svg';
     // 即时反馈：轻 toast
     showDownloadToast(filename);
@@ -3672,6 +3843,39 @@
     if (error) { alert(error.message); return; }
     triggerBlobDownload(data, filename);
     await logAssetEvent(kind === 'source' ? 'download_source' : 'download_preview', item);
+  }
+
+  async function downloadFontLibraryFile(item) {
+    try {
+      var source = item.source;
+      var jsonBlob;
+      if (state.localPreview) {
+        var recoveredUrl = source.source_public_url;
+        if (!recoveredUrl) throw new Error(state.lang === 'zh' ? '该字体记录缺少原始数据。' : 'This font record has no source data.');
+        var response = await fetch(new URL(recoveredUrl, location.href).toString());
+        if (!response.ok) throw new Error('Font source request failed: ' + response.status);
+        jsonBlob = await response.blob();
+      } else {
+        var result = await state.supabase.storage.from(LIBRARY_BUCKET).download(source.source_path);
+        if (result.error) throw result.error;
+        jsonBlob = result.data;
+      }
+      var fontPayload = JSON.parse(await jsonBlob.text());
+      if (!fontPayload.data || !String(fontPayload.data).startsWith('data:')) {
+        throw new Error(state.lang === 'zh' ? '字体文件数据不完整。' : 'The stored font data is incomplete.');
+      }
+      var filename = fontPayload.fileName || (fontPayload.name || source.title || 'font') + '.ttf';
+      // 旧记录可能没有 fileName；避免仍以 JSON 扩展名下载。
+      if (/\.json$/i.test(filename)) filename = filename.replace(/\.json$/i, '.ttf');
+      showDownloadToast(filename);
+      triggerBlobDownload(dataUrlToBlob(fontPayload.data), filename);
+      await logAssetEvent('download_source', item, { asset_type: 'font' });
+    } catch (error) {
+      console.warn('Font download failed:', error);
+      alert(state.lang === 'zh'
+        ? '字体下载失败：' + (error.message || '无法读取字体文件')
+        : 'Font download failed: ' + (error.message || 'Unable to read the font file.'));
+    }
   }
 
   function showDownloadToast(filename) {
@@ -5114,6 +5318,13 @@ function libraryTagsForForm(formData, kind) {
       case 'vf:request-templates':
         handleFetchTemplates(sourceWindow);
         break;
+      case 'vf:save-font':
+        await handleSaveTemplate(msg, sourceWindow);
+        refreshLibraryIfOpen();
+        break;
+      case 'vf:fetch-font-binary':
+        handleFetchFontBinary(msg, sourceWindow);
+        break;
       case 'vf:save-shared-assets':
         handleSaveSharedAssets(msg, sourceWindow);
         break;
@@ -5147,7 +5358,7 @@ function libraryTagsForForm(formData, kind) {
         finalName = candidate;
       }
       // 构建 JSON 数据
-      var schemaMap = { pack: 'vf-template-pack/v1', layout: 'vf-layout-preset/v1', tagcombo: 'vf-tag-combo/v1', logo: 'vf-logo-asset/v1' };
+      var schemaMap = { pack: 'vf-template-pack/v1', layout: 'vf-layout-preset/v1', tagcombo: 'vf-tag-combo/v1', logo: 'vf-logo-asset/v1', font: 'vf-font-asset/v1' };
       var schemaName = schemaMap[msg.templateType] || 'vf-layout-preset/v1';
       var jsonData = { schema: schemaName, name: finalName, exportedAt: new Date().toISOString() };
       if (msg.templateType === 'pack') {
@@ -5156,6 +5367,13 @@ function libraryTagsForForm(formData, kind) {
         jsonData.elements = msg.data.elements || [];
       } else if (msg.templateType === 'logo') {
         jsonData.src = msg.data.src || '';
+      } else if (msg.templateType === 'font') {
+        jsonData.familyName = msg.familyName || finalName;
+        jsonData.familyId = msg.familyId || '';
+        jsonData.weight = msg.weight || 400;
+        jsonData.weightLabel = msg.weightLabel || '常规';
+        jsonData.fileName = msg.fileName || (finalName + '.ttf');
+        jsonData.data = msg.data || '';
       } else {
         jsonData.size = msg.data.size || '';
         jsonData.canvasW = msg.data.canvasW || 0;
@@ -5188,7 +5406,8 @@ function libraryTagsForForm(formData, kind) {
         pack: ['模版', msg.subTag || '社媒物料'],
         full: ['模版', msg.subTag || '社媒物料'],
         tagcombo: ['组件', msg.subTag || '标签'],
-        logo: ['组件', msg.subTag || 'LOGO']
+        logo: ['组件', msg.subTag || 'LOGO'],
+        font: ['组件', msg.subTag || '字体']
       };
       var tagsToUse = tagMap[msg.templateType] || ['模版', '社媒物料'];
       var sourceInsert = await state.supabase.from('vf_source_files').insert([{
@@ -5317,7 +5536,8 @@ function libraryTagsForForm(formData, kind) {
         var s = sources[i];
         var t = s.tags || [];
         var templateType = 'layout';
-        if ((t.includes('标签') && t.includes('组件')) || t.includes('标签组')) templateType = 'tagcombo';
+        if (t.includes('字体') && t.includes('组件')) templateType = 'font';
+        else if ((t.includes('标签') && t.includes('组件')) || t.includes('标签组')) templateType = 'tagcombo';
         else if (t.includes('LOGO') || t.includes('Logo') || t.includes('背景') || t.includes('KIKI') || t.includes('其他素材') || t.includes('品牌圆弧')) templateType = 'logo';
         else if (t.includes('社媒物料') || t.includes('C端物料') || t.includes('模版') || t.includes('版式') || t.includes('套组') || t.includes('静态模板')) templateType = 'layout';
         var dims = previewDims[s.id] || {};
@@ -5350,7 +5570,8 @@ function libraryTagsForForm(formData, kind) {
         if (previewDataUrl) {
           sourceWindow.postMessage({ type: 'vf:template-preview', id: src.id, previewUrl: previewDataUrl }, location.origin);
         }
-        // 下载 JSON 数据
+        // 下载 JSON 数据（字体文件较大，跳过预加载，用户点击时才按需下载）
+        if (t.includes('字体') && t.includes('组件')) continue;
         try {
           var { data: blob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(src.source_path);
           if (!blob) continue;
@@ -5378,6 +5599,35 @@ function libraryTagsForForm(formData, kind) {
       try { sourceWindow.postMessage({ type: 'vf:shared-assets-saved', success: true }, location.origin); } catch (e) {}
     } catch (error) {
       try { sourceWindow.postMessage({ type: 'vf:shared-assets-saved', success: false, message: error.message || '保存失败' }, location.origin); } catch (e) {}
+    }
+  }
+
+  async function handleFetchFontBinary(msg, sourceWindow) {
+    try {
+      var { data: source } = await state.supabase.from('vf_source_files')
+        .select('source_path').eq('id', msg.sourceId).single();
+      if (!source || !source.source_path) throw new Error('字体未找到');
+      var { data: blob, error } = await state.supabase.storage
+        .from(LIBRARY_BUCKET).download(source.source_path);
+      if (error) throw error;
+      var json = JSON.parse(await blob.text());
+      sourceWindow.postMessage({
+        type: 'vf:font-binary',
+        id: msg.sourceId,
+        dataUrl: json.data || '',
+        familyName: json.familyName || '',
+        familyId: json.familyId || '',
+        weight: json.weight || 400,
+        weightLabel: json.weightLabel || '',
+        error: ''
+      }, location.origin);
+    } catch (e) {
+      sourceWindow.postMessage({
+        type: 'vf:font-binary',
+        id: msg.sourceId,
+        dataUrl: '',
+        error: e.message || '下载失败'
+      }, location.origin);
     }
   }
 
