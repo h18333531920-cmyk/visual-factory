@@ -1704,7 +1704,18 @@
         #diy-subtag-row { padding: 0 2px; margin-bottom: 9px !important; }
         .filter-capsule { padding: 4px 9px; border-color: var(--border); border-radius: 5px; font-size: 11px; box-shadow: none; }
         .filter-capsule.active { background: #30343a; border-color: #30343a; box-shadow: none; }
-        .asset-list { flex: 1; max-height: none; gap: 10px; padding: 2px 4px 18px 2px; }
+        .asset-list {
+            flex: 1;
+            min-height: 0;
+            max-width: 100%;
+            max-height: none;
+            gap: 10px;
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+            padding: 2px 4px 18px 2px;
+        }
         .asset-item { border: 1px solid transparent; border-radius: 8px; background: #fff; }
         .asset-item:hover, .asset-item.current { border-color: var(--border-strong); box-shadow: 0 5px 14px rgba(32,33,36,.10); }
         .asset-thumb { border: 1px solid var(--border); border-radius: 8px; background: #f7f8f9; }
@@ -1738,19 +1749,24 @@
         /* Preserve each preview's natural aspect ratio and pack cards like a material-library masonry feed. */
         #asset-list-ui:not(:has(.reference-filter)) {
             display: block;
+            width: 100%;
+            max-width: 100%;
             columns: 2;
             column-gap: 10px;
+            overflow-x: hidden;
             overflow-y: auto;
         }
         #asset-list-ui:not(:has(.reference-filter)) .asset-item {
             display: inline-block;
             width: 100%;
+            max-width: 100%;
             margin: 0 0 10px;
             break-inside: avoid;
             vertical-align: top;
         }
         #asset-list-ui:not(:has(.reference-filter)) .asset-thumb,
         #asset-list-ui:not(:has(.reference-filter)) .asset-thumb img {
+            max-width: 100%;
             height: auto;
             aspect-ratio: auto;
         }
