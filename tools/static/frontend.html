@@ -6860,6 +6860,27 @@
     fontModalDropZone?.addEventListener('drop', function(event) { if(isFileDragEvent(event)) { event.preventDefault(); fontModalDropZone.style.borderColor = ''; openFontUploadModal(event.dataTransfer.files, true); } });
 
     /* ================= AI 图形引擎集成 ================= */
+    function isStaticPreviewRuntime() {
+        const host = String(location.hostname || '').toLowerCase();
+        return host.endsWith('.github.io');
+    }
+
+    function requireAIBackendRuntime() {
+        if(!isStaticPreviewRuntime()) return;
+        throw new Error('当前是 GitHub 静态预览页，不能使用生图、扩图或提示词优化。请改用 Cloudflare Pages 测试版或正式站。');
+    }
+
+    async function readAIResponse(response, actionLabel) {
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if(!contentType.includes('application/json')) {
+            if(isStaticPreviewRuntime()) {
+                throw new Error('当前是 GitHub 静态预览页，不能使用生图、扩图或提示词优化。请改用 Cloudflare Pages 测试版或正式站。');
+            }
+            throw new Error(`${actionLabel}接口返回异常（HTTP ${response.status}），请稍后重试。`);
+        }
+        return response.json();
+    }
+
     async function enhanceAIPrompt() {
         const p = getPromptText(); if(!p) return showToast('请输入需要优化的描述词', true);
         const btn = window.event?.target || document.activeElement;
@@ -6867,6 +6888,7 @@
         if(btn) { btn.innerText = '优化中...'; btn.disabled = true; }
         startAIProgress('GPT 正在优化提示词...');
         try {
+            requireAIBackendRuntime();
             updateAIProgress('正在分析画面需求...', 30);
             const res = await fetch('/api/enhance-prompt', {
                 method: 'POST',
@@ -6874,7 +6896,7 @@
                 body: JSON.stringify({ prompt: p, ratio: getGenerationRatio() })
             });
             updateAIProgress('正在整理商业生图提示词...', 78);
-            const data = await res.json();
+            const data = await readAIResponse(res, '提示词优化');
             if(data.success && data.enhancedPrompt) {
                 setPromptText(data.enhancedPrompt);
                 showToast('已优化提示词');
@@ -6897,7 +6919,7 @@
             await new Promise(resolve => setTimeout(resolve, i < 3 ? 1800 : 3000));
             updateAIProgress('模型正在生成画面...', Math.min(88, 34 + Math.round((i / maxAttempts) * 52)));
             const res = await fetch(`/api/generate-image-status?task_id=${encodeURIComponent(taskId)}`);
-            const data = await res.json().catch(() => ({}));
+            const data = await readAIResponse(res, '生图结果查询');
             if(!res.ok || !data.success) throw new Error(data.message || `查询失败（HTTP ${res.status}）`);
             if(!data.pending && data.imageBase64) {
                 return data;
@@ -6913,6 +6935,7 @@
         if(btn) { btn.innerText = '…'; btn.disabled = true; }
         startAIProgress(`${AI_PROVIDER_LABELS[aiProvider] || 'AI'} 正在生成新图片...`);
         try {
+            requireAIBackendRuntime();
             updateAIProgress('正在提交生成请求...', 22);
             const body = {
                 prompt: p,
@@ -6927,7 +6950,7 @@
             }
             const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             updateAIProgress('模型正在生成画面...', 70);
-            const data = await res.json(); 
+            const data = await readAIResponse(res, '生图');
             if(data.success && data.pending && data.taskId) {
                 updateAIProgress('任务已提交，正在等待结果...', 42);
                 const result = await pollAIImageTask(data.taskId, data.provider || aiProvider);
@@ -6954,6 +6977,7 @@
         startAIProgress('正在读取原图并计算扩展区域...');
         
         try {
+            requireAIBackendRuntime();
             const {w, h} = SIZES[currentRatio];
             const img = new Image(); img.crossOrigin = "anonymous"; img.src = targetLayer.src;
             await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = () => reject(new Error('原图读取失败')); });
@@ -6967,7 +6991,7 @@
                 body: JSON.stringify({ prompt: p, ratio: getGenerationRatio(), baseImage: base64Image, expand, provider: aiProvider })
             });
             updateAIProgress('AI 正在延展背景...', 74);
-            const data = await res.json(); 
+            const data = await readAIResponse(res, '扩图');
             
             if(data.success) { 
                 targetLayer.src = `data:image/jpeg;base64,${data.imageBase64}`; targetLayer.scale = 1; targetLayer.rotation = 0; targetLayer.x = w/2; targetLayer.y = h/2; targetLayer.baseW = w; targetLayer.baseH = h;
