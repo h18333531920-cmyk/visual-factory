@@ -1052,14 +1052,14 @@
   // ==========================================
   async function handleFilesAdded(files) {
     if (currentUser.role === 'viewer' || !files || files.length === 0) return;
-    
+
     let sourceFiles = [];
     let standardImages = [];
 
     Array.from(files).forEach(file => {
       const ext = file.name.split('.').pop().toLowerCase();
       const validImages = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
-      
+
       if (['psd', 'ai', 'eps', 'pdf'].includes(ext)) sourceFiles.push(file);
       else if (file.type.startsWith('image/') || validImages.includes(ext)) standardImages.push(file);
     });
@@ -1183,7 +1183,7 @@
           const preview = pendingPreviewFiles[i];
           const prevExt = preview.file.name.split('.').pop().toLowerCase();
           const prevPath = `covers/${Date.now()}_${Math.random().toString(36).substr(2, 5)}_${i}.${prevExt}`;
-          
+
           const { error: prevUploadError } = await vfSupabaseClient.storage.from('visual-assets').upload(prevPath, preview.file, { upsert: false });
           if(prevUploadError) throw prevUploadError;
           const { data: prevUrlData } = vfSupabaseClient.storage.from('visual-assets').getPublicUrl(prevPath);

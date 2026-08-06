@@ -3054,6 +3054,50 @@
             input.onkeydown = e => { if(e.key === 'Enter') cleanup(input.value.trim() || defaultValue); if(e.key === 'Escape') cleanup(null); };
         });
     }
+    // getDisplayMedia 只能由一次真实点击直接触发。模板保存需先输入名称，若等 await
+    // askText 返回后才发起捕获，浏览器会判定用户手势已失效。这个专用对话框会在
+    // “确定”按钮的同一点击栈中立刻进入原生捕获。
+    function askTextAndCaptureNativePreview(title, defaultValue = '') {
+        return new Promise(resolve => {
+            const overlay = ensureMiniDialog();
+            const titleEl = document.getElementById('mini-dialog-title');
+            const input = document.getElementById('mini-dialog-input');
+            const message = document.getElementById('mini-dialog-message');
+            const ok = document.getElementById('mini-dialog-ok');
+            const cancel = document.getElementById('mini-dialog-cancel');
+            titleEl.innerText = title;
+            message.style.display = 'none';
+            input.style.display = 'block';
+            input.value = defaultValue;
+            overlay.style.display = 'flex';
+            setTimeout(() => { input.focus(); input.select(); }, 30);
+            let finished = false;
+            const cleanup = () => {
+                overlay.style.display = 'none';
+                ok.onclick = null; cancel.onclick = null; input.onkeydown = null;
+            };
+            const confirmAndCapture = () => {
+                if (finished) return;
+                finished = true;
+                const name = input.value.trim() || defaultValue;
+                cleanup();
+                // 这一行必须在 click 回调内同步执行，不能移到 await 之后。
+                const capturePromise = captureNativePreviewDataUrl();
+                resolve({ name, capturePromise });
+            };
+            ok.onclick = confirmAndCapture;
+            cancel.onclick = () => {
+                if (finished) return;
+                finished = true;
+                cleanup();
+                resolve(null);
+            };
+            input.onkeydown = e => {
+                if (e.key === 'Enter') { e.preventDefault(); confirmAndCapture(); }
+                if (e.key === 'Escape') { e.preventDefault(); cancel.click(); }
+            };
+        });
+    }
     function askConfirm(messageText) {
         return new Promise(resolve => {
             const overlay = ensureMiniDialog();
@@ -5214,7 +5258,7 @@
         // 保存模板的预览图与 PNG 导出统一走原生标签页捕获，避免 html2canvas 重新
         // 排版任意字体（尤其是 HT 的空格和问号）。
         if (options.nativeCapture) {
-            try { return await captureNativePreviewDataUrl(); }
+            try { return await (options.capturePromise || captureNativePreviewDataUrl()); }
             catch (error) {
                 showToast('❌ 原生预览捕获失败：' + (error?.message || '请重新保存并选择当前标签页'), true);
                 return null;
@@ -6078,7 +6122,8 @@
     }
     async function saveToPreset() {
         if(layers.length === 0) return showToast('画板为空', true);
-        const name = await askText('命名版式', `版式 ${formatPresetTime()}`); if(!name) return;
+        const saveRequest = await askTextAndCaptureNativePreview('命名版式', `版式 ${formatPresetTime()}`); if(!saveRequest) return;
+        const name = saveRequest.name;
         var elements = JSON.parse(JSON.stringify(layers));
         var tempId = genId('p');
         var preset = { id: tempId, name, size: currentRatio, elements: elements, _pending: true };
@@ -6087,7 +6132,7 @@
         showToast('正在保存到素材库...');
         // 截取预览图，上传到 Supabase
         var requiresNativePreview = true;
-        var previewDataUrl = await capturePreviewForSync({ nativeCapture: true });
+        var previewDataUrl = await capturePreviewForSync({ nativeCapture: true, capturePromise: saveRequest.capturePromise });
         if (!previewDataUrl || previewDataUrl.length < 1500) {
             if (requiresNativePreview) {
                 presetLibrary = presetLibrary.filter(function(item) { return item.id !== tempId; });
@@ -6108,7 +6153,8 @@
         saveCurrentArtboardState();
         const hasAnyLayer = getFixedArtboardPresets().some(preset => (artboards[preset.id]?.layers || []).length > 0);
         if(!hasAnyLayer) return showToast('三块画板都是空的，无法保存套组', true);
-        const name = await askText('命名三画板套组', `套组 ${formatPresetTime()}`); if(!name) return;
+        const saveRequest = await askTextAndCaptureNativePreview('命名三画板套组', `套组 ${formatPresetTime()}`); if(!saveRequest) return;
+        const name = saveRequest.name;
         const packArtboards = {};
         getFixedArtboardPresets().forEach(preset => {
             packArtboards[preset.id] = {
@@ -6124,7 +6170,7 @@
         renderAssetLibrary();
         showToast('正在保存到素材库...');
         var requiresNativePreview = true;
-        var previewDataUrl = await capturePreviewForSync({ nativeCapture: true });
+        var previewDataUrl = await capturePreviewForSync({ nativeCapture: true, capturePromise: saveRequest.capturePromise });
         if (!previewDataUrl || previewDataUrl.length < 1500) {
             if (requiresNativePreview) {
                 presetLibrary = presetLibrary.filter(function(item) { return item.id !== tempId; });
@@ -8321,6 +8367,6 @@
     bootApp();
 
 </script>
-<script src="../../tool-bridge.js?v=20260806-capture-surface-v170"></script>
+<script src="../../tool-bridge.js?v=20260806-save-capture-gesture-v172"></script>
 </body>
 </html>
