@@ -7155,39 +7155,8 @@
         }
     }
     async function extendFromHead() {
-        saveCurrentArtboardState();
-        const headLayers = cloneData(artboards.head?.layers || []);
-        if(headLayers.length === 0) return showToast('头图画布为空，先完成头图再延展。', true);
-        headLayers.forEach(layer => {
-            if(['tag', 'discountTag', 'arc', 'solid'].includes(layer.type)) ensureSharedKey(layer);
-        });
-        artboards.head.layers = cloneData(headLayers);
-        layers = cloneData(headLayers);
-        const templatePack = getExtensionTemplatePack();
-        if(templatePack) {
-            artboards = buildExtendedArtboardsFromTemplatePack(templatePack, headLayers);
-            activeTemplatePackId = templatePack.id;
-        } else {
-            artboards.splash.layers = buildExtendedArtboard('splash', headLayers);
-            artboards.banner.layers = buildExtendedArtboard('banner', headLayers);
-        }
-        activeLayerIds = [];
-        startAIProgress(templatePack ? '正在套用三画板模板，并补全底图...' : '正在生成开屏和 Banner，并补全底图...');
-        try {
-            await outpaintExtendedArtboards(headLayers);
-            showToast(templatePack ? '已按模板延展并完成开屏 / Banner 补图' : '已延展并完成开屏 / Banner 补图');
-        } catch(error) {
-            console.warn('自动补图失败:', error);
-            showToast('已生成三画板，补图失败：' + (error.message || '请稍后重试'), true);
-        } finally {
-            stopAIProgress();
-            saveHistory();
-            overviewMode = true;
-            syncOverviewMode();
-            renderCanvas();
-            renderLayersList();
-            renderProperties();
-        }
+        // 暂停所有延展及补图逻辑，避免用户误触后修改当前画板。
+        showToast('该功能优化中...');
     }
 
     async function exportAssetBackup() {
