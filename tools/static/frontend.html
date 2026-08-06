@@ -55,6 +55,7 @@
         body.vf-native-capture-mode .color-preset-dialog,
         body.vf-native-capture-mode .asset-hover-preview,
         body.vf-native-capture-mode #mini-dialog-overlay,
+        body.vf-native-capture-mode #mini-dialog,
         body.vf-native-capture-mode #toast,
         body.vf-native-capture-mode .new-artboard-menu,
         body.vf-native-capture-mode .resize-dropdown-menu,
@@ -2041,6 +2042,7 @@
             <div class="asset-tabs">
                 <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')" style="white-space:nowrap;">模版 <small id="diy-count-layout">· 0</small></button>
                 <button class="asset-tab" data-asset-tab="component" onclick="switchAssetTab('component')" style="white-space:nowrap;">组件 <small id="diy-count-component">· 0</small></button>
+                <button class="asset-tab" data-asset-tab="recycle" onclick="switchAssetTab('recycle')" title="回收站" aria-label="回收站">🗑 <small id="diy-count-recycle">· 0</small></button>
             </div>
             <div id="diy-subtag-row" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"></div>
             <div class="asset-list" id="asset-list-ui"></div>
@@ -2081,6 +2083,9 @@
             <div class="empty-hint" id="empty-hint" style="display:none"></div>
             <div id="dynamic-layers"></div>
             <div class="safe-guide" id="safe-guide"></div>
+        </div>
+        <div class="layer-context-menu" id="canvas-context-menu">
+            <button type="button" onclick="saveGroupCombo(); closeCanvasContextMenu();">保存组合</button>
         </div>
         <div class="artboard-preview-dock" id="artboard-preview-dock"></div>
         <div class="ai-loading" id="ai-loading">
@@ -2126,6 +2131,7 @@
                 <div class="layer-context-menu" id="layer-context-menu">
                     <button type="button" id="layer-context-add-reference" onclick="addLayerContextReferenceToAI(); closeLayerContextMenu();" hidden>加入生图参考图</button>
                     <button type="button" onclick="centerLayerOnCanvas(); closeLayerContextMenu();">元素画板居中</button>
+                    <button type="button" id="ctx-save-group-btn" onclick="saveGroupCombo(); closeLayerContextMenu();" style="display:none">保存组合</button>
                 </div>
                 <div class="layer-list-resize-handle" id="layer-list-resize-handle" role="separator" aria-label="拖动调整图层列表高度" aria-orientation="horizontal" tabindex="0"></div>
             </div>
@@ -2219,6 +2225,7 @@
     let customFonts = [];
     let layers = []; // 万物皆图层
     let showSafeGuide = false;
+    let groupPresets = []; // 多图层组合
     let overviewMode = false;
     let artboards = ARTBOARD_PRESETS.reduce((acc, preset) => {
         acc[preset.id] = { id: preset.id, label: preset.label, ratio: preset.ratio, layers: [] };
@@ -2255,6 +2262,54 @@
     let tagPresetLibrary = [];
     let logoAssets = [];
     let fontAssets = [];
+    // 回收站只存在于当前网页会话；刷新后会通知父页面清理云端记录。
+    let recycleBin = [];
+    const RECYCLE_BIN_SESSION_KEY = 'vf-static-recycle-bin-v1';
+
+    function saveRecycleBinSession() {
+        try {
+            sessionStorage.setItem(RECYCLE_BIN_SESSION_KEY, JSON.stringify(recycleBin.map(function(entry) {
+                return { cloudId: entry.asset?.cloudId || entry.asset?.id || '', type: entry.type || '' };
+            }).filter(function(entry) { return !!entry.cloudId; })));
+        } catch (_error) {}
+    }
+    function moveAssetToRecycle(type, asset) {
+        if (!asset) return;
+        recycleBin.push({ id: genId('recycle'), type: type, asset: asset, deletedAt: Date.now() });
+        if (type === 'layout') presetLibrary = presetLibrary.filter(function(item) { return item.id !== asset.id; });
+        else if (type === 'tag') tagPresetLibrary = tagPresetLibrary.filter(function(item) { return item.id !== asset.id; });
+        else if (type === 'logo') logoAssets = logoAssets.filter(function(item) { return item.id !== asset.id; });
+        else if (type === 'font') fontAssets = fontAssets.filter(function(item) { return item.id !== asset.id; });
+        else if (type === 'group') groupPresets = groupPresets.filter(function(item) { return item.id !== asset.id; });
+        saveRecycleBinSession();
+        renderAssetLibrary();
+        showToast('已移入回收站；刷新网页后将自动彻底删除');
+    }
+    function restoreAssetFromRecycle(recycleId) {
+        const entry = recycleBin.find(function(item) { return item.id === recycleId; });
+        if (!entry) return;
+        if (entry.type === 'layout') presetLibrary.push(entry.asset);
+        else if (entry.type === 'tag') tagPresetLibrary.push(entry.asset);
+        else if (entry.type === 'logo') logoAssets.push(entry.asset);
+        else if (entry.type === 'font') fontAssets.push(entry.asset);
+        else if (entry.type === 'group') groupPresets.push(entry.asset);
+        recycleBin = recycleBin.filter(function(item) { return item.id !== recycleId; });
+        saveRecycleBinSession();
+        renderAssetLibrary();
+        showToast('已还原');
+    }
+    function purgeRecycleBinAfterReload() {
+        try {
+            const entries = JSON.parse(sessionStorage.getItem(RECYCLE_BIN_SESSION_KEY) || '[]');
+            sessionStorage.removeItem(RECYCLE_BIN_SESSION_KEY);
+            const sourceIds = [...new Set(entries.map(function(entry) { return entry.cloudId; }).filter(Boolean))];
+            if (sourceIds.length) {
+                notifyParent({ type: 'vf:purge-recycle-bin', sourceIds: sourceIds });
+                return true;
+            }
+        } catch (_error) {}
+        return false;
+    }
     let _groupScaleValue = 1;
     let _groupScaleOriginals = null;
     let referenceElements = [];
@@ -2262,6 +2317,7 @@
     let activeTemplatePackId = null;
     // 素材库先返回卡片元数据，再异步返回完整模板。只保留最后一次点击，避免慢响应覆盖新选择。
     let pendingLayoutPresetId = '';
+    let pendingGroupPresetId = '';
     let currentAssetTab = 'layout';
     let draggingLayerId = null;
     let aiProgressTimer = null;
@@ -3033,7 +3089,27 @@
             deleteSelectedLayers();
         }
     });
-    function showToast(msg, isError = false) { const toast = document.getElementById('toast'); toast.innerText = msg; toast.style.background = isError ? 'var(--danger)' : 'var(--text-main)'; toast.style.opacity = 1; toast.style.transform = 'translate(-50%, 0)'; setTimeout(() => { toast.style.opacity = 0; toast.style.transform = 'translate(-50%, -20px)'; }, 2500); }
+    // 原生截取期间，任何页面内提示都会被录进 PNG，因此一律不渲染。
+    function showToast(msg, isError = false) {
+        const toast = document.getElementById('toast');
+        if (!toast) return;
+        if (document.body.classList.contains('vf-native-capture-mode') || toast.dataset.captureSuppressed === '1') {
+            toast.textContent = '';
+            toast.style.display = 'none';
+            toast.style.opacity = '0';
+            return;
+        }
+        toast.style.display = '';
+        toast.innerText = msg;
+        toast.style.background = isError ? 'var(--danger)' : 'var(--text-main)';
+        toast.style.opacity = 1;
+        toast.style.transform = 'translate(-50%, 0)';
+        setTimeout(() => {
+            if (toast.dataset.captureSuppressed === '1') return;
+            toast.style.opacity = 0;
+            toast.style.transform = 'translate(-50%, -20px)';
+        }, 2500);
+    }
     function formatPresetTime() {
         const d = new Date();
         const pad = n => String(n).padStart(2, '0');
@@ -4670,7 +4746,7 @@
             li.oncontextmenu = (e) => {
                 e.preventDefault();
                 if (li._clickTimer) { clearTimeout(li._clickTimer); li._clickTimer = null; }
-                // 右键同时选中该图层
+                // 右键同时选中该图层（不改变已有 multi-select）
                 if (!activeLayerIds.includes(l.id)) {
                     activeLayerIds = [l.id];
                     renderCanvas(); renderLayersList(); renderProperties();
@@ -4679,6 +4755,9 @@
                 var menu = document.getElementById('layer-context-menu');
                 if (!menu) return;
                 updateLayerContextReferenceAction(l);
+                // 多选时显示"保存组合"按钮
+                var saveGroupBtn = document.getElementById('ctx-save-group-btn');
+                if (saveGroupBtn) saveGroupBtn.style.display = activeLayerIds.length >= 2 ? '' : 'none';
                 menu.style.left = e.clientX + 'px';
                 menu.style.top = e.clientY + 'px';
                 menu.classList.add('open');
@@ -4776,7 +4855,14 @@
         if (!e.target.closest('.layer-context-menu') && !e.target.closest('.layer-item')) {
             closeLayerContextMenu();
         }
+        if (!e.target.closest('#canvas-context-menu')) {
+            closeCanvasContextMenu();
+        }
     });
+    function closeCanvasContextMenu() {
+        var menu = document.getElementById('canvas-context-menu');
+        if (menu) menu.classList.remove('open');
+    }
     function deleteSelectedLayers() { preservePaneScroll(() => { const ids = new Set(activeLayerIds); layers = layers.filter(l => !ids.has(l.id)); activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); showToast('已删除选中图层'); }); }
     async function clearCurrentArtboardLayers() {
         if(layers.length === 0) return showToast('当前画板没有可清空的图层', true);
@@ -5149,6 +5235,7 @@
         return Math.round(val||0) + '';
     }
     document.getElementById('canvas-wrapper').addEventListener('mousedown', e => {
+        if (e.button === 2) return; // 右键不改变选中状态，留给 contextmenu 处理
         hasDragged = false;
         // 双击文字图层 → 进入编辑
         var wrap = e.target.closest('.layer-base');
@@ -5195,23 +5282,30 @@
             renderCanvas(); renderLayersList(); renderProperties();
         } else { exitTextEdit(); activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); }
     });
-    document.getElementById('canvas-wrapper').addEventListener('contextmenu', e => {
-        const wrap = e.target.closest('.layer-base');
-        if(!wrap) return;
-        const layer = layers.find(item => item.id === wrap.dataset.id);
-        if(!layer?.src || (layer.type !== 'image' && layer.type !== 'logo')) return;
-        e.preventDefault();
-        _contextMenuLayerId = layer.id;
-        if(!activeLayerIds.includes(layer.id)) {
-            activeLayerIds = [layer.id];
-            renderCanvas(); renderLayersList(); renderProperties();
+    // 画布右键菜单
+    document.getElementById('canvas-wrapper').addEventListener('contextmenu', function(e) {
+        var wrap = e.target.closest('.layer-base');
+        // 多选时 → 保存组合
+        if (activeLayerIds.length >= 2) {
+            e.preventDefault();
+            var cm = document.getElementById('canvas-context-menu');
+            if (cm) { cm.style.left = e.clientX + 'px'; cm.style.top = e.clientY + 'px'; cm.classList.add('open'); }
+            return;
         }
-        const menu = document.getElementById('layer-context-menu');
-        if(!menu) return;
-        updateLayerContextReferenceAction(layer);
-        menu.style.left = e.clientX + 'px';
-        menu.style.top = e.clientY + 'px';
-        menu.classList.add('open');
+        // 单选图片/logo → 设为AI参考
+        if (wrap) {
+            var layer = layers.find(function(item) { return item.id === wrap.dataset.id; });
+            if (layer?.src && (layer.type === 'image' || layer.type === 'logo')) {
+                e.preventDefault();
+                _contextMenuLayerId = layer.id;
+                if (!activeLayerIds.includes(layer.id)) {
+                    activeLayerIds = [layer.id];
+                    renderCanvas(); renderLayersList(); renderProperties();
+                }
+                var lm = document.getElementById('layer-context-menu');
+                if (lm) { updateLayerContextReferenceAction(layer); lm.style.left = e.clientX + 'px'; lm.style.top = e.clientY + 'px'; lm.classList.add('open'); }
+            }
+        }
     });
     // 点击画板外侧灰色背景 → 取消选择
     (function(){
@@ -5258,7 +5352,8 @@
     function refreshSaveActiveAssetButton() {
         const btn = document.getElementById('canvas-save-btn');
         if(!btn) return;
-        btn.textContent = currentAssetTab === 'component' ? (diySelectedSubtag === '字体' ? '上传字体' : '上传组件') : '保存模版';
+        btn.textContent = currentAssetTab === 'component' ? (diySelectedSubtag === '字体' ? '上传字体' : '上传组件') : (currentAssetTab === 'recycle' ? '回收站' : '保存模版');
+        btn.disabled = currentAssetTab === 'recycle';
     }
     function toggleAddMenu(e) { e.stopPropagation(); document.getElementById('add-menu')?.classList.toggle('open'); }
     function closeAddMenu() { document.getElementById('add-menu')?.classList.remove('open'); }
@@ -5392,7 +5487,9 @@
         if (safeGuide) safeGuide.style.display = 'none';
         try {
             // 立即发起授权请求，确保模板命名对话框的“确定”点击仍可作为用户手势使用。
-            const blob = await captureNativeArtboardBlob(1);
+            // 预览只用于资产库卡片：最长边限制为 480px，降低同步和加载体积，
+            // 不改变模板实际画板尺寸或正式 PNG 导出尺寸。
+            const blob = await captureNativeArtboardBlob(getTemplatePreviewCaptureScale());
             return await blobToDataUrl(blob);
         } finally {
             if (!wasCaptureMode) document.body.classList.remove('vf-native-capture-mode');
@@ -5527,7 +5624,7 @@
             if (event.data.status === 'done' && event.data.sourceId) {
                 var tempId = event.data.tempId || '';
                 var finalName = event.data.finalName || '';
-                [presetLibrary, tagPresetLibrary, logoAssets, fontAssets].forEach(function(arr) {
+                [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
                     for (var i = arr.length - 1; i >= 0; i--) {
                         if (arr[i]._pending && (arr[i].id === tempId || arr[i].name === (event.data.originalName || ''))) {
                             arr[i].cloudId = event.data.sourceId;
@@ -5548,13 +5645,18 @@
             var pendingTags = tagPresetLibrary.filter(function(p) { return p._pending; });
             var pendingLogos = logoAssets.filter(function(l) { return l._pending; });
             var pendingFonts = fontAssets.filter(function(f) { return f._pending; });
+            var pendingGroups = groupPresets.filter(function(g) { return g._pending; });
             var templates = event.data.templates || [];
-            presetLibrary = []; tagPresetLibrary = []; logoAssets = []; fontAssets = [];
+            var recycledCloudIds = new Set(recycleBin.map(function(entry) { return entry.asset?.cloudId || entry.asset?.id; }).filter(Boolean));
+            presetLibrary = []; tagPresetLibrary = []; logoAssets = []; fontAssets = []; groupPresets = [];
             templates.forEach(function(ct) {
+                if (recycledCloudIds.has(ct.id)) return;
                 if (ct.templateType === 'font') {
                     fontAssets.push({ id: ct.id, cloudId: ct.id, name: ct.name, _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
                 } else if (ct.templateType === 'tagcombo') {
                     tagPresetLibrary.push({ id: ct.id, cloudId: ct.id, name: ct.name, elements: [], _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
+                } else if (ct.templateType === 'groupcombo') {
+                    groupPresets.push({ id: ct.id, cloudId: ct.id, name: ct.name, elements: [], _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
                 } else if (ct.templateType === 'logo') {
                     logoAssets.push({ id: ct.id, cloudId: ct.id, name: ct.name, src: '', _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
                 } else if (ct.templateType === 'pack') {
@@ -5568,6 +5670,7 @@
             tagPresetLibrary.push.apply(tagPresetLibrary, pendingTags);
             logoAssets.push.apply(logoAssets, pendingLogos);
             fontAssets.push.apply(fontAssets, pendingFonts);
+            groupPresets.push.apply(groupPresets, pendingGroups);
             renderAssetLibrary();
             // 后台预加载云端字体
             setTimeout(function() { preloadCloudFonts(); }, 2000);
@@ -5576,7 +5679,7 @@
             var pid = event.data.id;
             var pUrl = event.data.previewUrl || '';
             if (pUrl) {
-                [presetLibrary, tagPresetLibrary, logoAssets, fontAssets].forEach(function(arr) {
+                [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
                     var item = arr.find(function(x) { return x.cloudId === pid; });
                     if (item) item.previewUrl = pUrl;
                 });
@@ -5587,7 +5690,7 @@
             var tid = event.data.id;
             var tdata = event.data.data || {};
             var loadedRequestedPresetId = '';
-            [presetLibrary, tagPresetLibrary, logoAssets, fontAssets].forEach(function(arr) {
+            [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
                 var item = arr.find(function(x) { return x.cloudId === tid; });
                 if (!item) return;
                 item._lazy = false;
@@ -5607,12 +5710,18 @@
                     item.fontData = tdata.data;
                 }
                 if (pendingLayoutPresetId && item.id === pendingLayoutPresetId) loadedRequestedPresetId = item.id;
+                if (pendingGroupPresetId && item.id === pendingGroupPresetId) loadedRequestedPresetId = item.id;
             });
             renderAssetLibrary();
             if (loadedRequestedPresetId) {
+                var isGroup = pendingGroupPresetId === loadedRequestedPresetId;
                 pendingLayoutPresetId = '';
+                pendingGroupPresetId = '';
                 // 等卡片数据更新后再应用，保证连续点击时只应用最后选中的模板。
-                requestAnimationFrame(function() { applyLayoutPreset(loadedRequestedPresetId); });
+                requestAnimationFrame(function() {
+                    if (isGroup) { applyGroupCombo(loadedRequestedPresetId); }
+                    else { applyLayoutPreset(loadedRequestedPresetId); }
+                });
             }
         } else if (event.data.type === 'vf:apply-template') {
             var d = event.data.data || {};
@@ -5646,6 +5755,13 @@
                 markNewlyAddedLayers(tagLayers);
                 saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                 showToast('已应用标签组：' + (d.name || ''));
+            } else if (d.schema === 'vf-group-combo/v1' && d.elements) {
+                var groupLayers = cloneLayersForInsert(d.elements, true);
+                layers.push.apply(layers, groupLayers);
+                activeLayerIds = groupLayers.map(function(l) { return l.id; });
+                markNewlyAddedLayers(groupLayers);
+                saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+                showToast('已应用组合：' + (d.name || ''));
             } else if (d.schema === 'vf-logo-asset/v1' && d.src) {
                 if (typeof addLayer === 'function') addLayer('logo', { src: d.src });
                 showToast('已添加Logo：' + (d.name || ''));
@@ -5661,8 +5777,11 @@
             tagPresetLibrary = tagPresetLibrary.filter(function(p) { return !isDeletedAsset(p); });
             logoAssets = logoAssets.filter(function(l) { return !isDeletedAsset(l); });
             fontAssets = fontAssets.filter(function(f) { return !isDeletedAsset(f); });
+            groupPresets = groupPresets.filter(function(g) { return !isDeletedAsset(g); });
             renderAssetLibrary();
             // 重新向服务端读取一次，确保删除发生在 DIY 页面未激活期间时也能同步。
+            refreshAssetLibrary();
+        } else if (event.data.type === 'vf:recycle-purged') {
             refreshAssetLibrary();
         }
     });
@@ -5743,7 +5862,7 @@
     var diySelectedSubtag = '全部'; // 真正选中的分类，影响保存时的 tag2
     var DIY_SUBTAGS = {
         layout: ['全部', '社媒物料', 'C端物料'],
-        component: ['全部', '标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材']
+        component: ['全部', '标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材', '组合']
     };
     function getColorPaletteCards() {
         if(!cloudColorPaletteSnapshot.loaded) return [];
@@ -5771,7 +5890,7 @@
                 });
             });
         } else if (currentAssetTab === 'component') {
-            tagPresetLibrary.concat(logoAssets).forEach(function(item) {
+            tagPresetLibrary.concat(logoAssets).concat(groupPresets).forEach(function(item) {
                 var itemTag = item.subTag || item._subTag || '';
                 if (!itemTag && item.tags && Array.isArray(item.tags)) {
                     var tt = item.tags;
@@ -5781,6 +5900,7 @@
                     else if (tt.includes('LOGO')) itemTag = 'LOGO';
                     else if (tt.includes('KIKI')) itemTag = 'KIKI';
                     else if (tt.includes('字体')) itemTag = '字体';
+                    else if (tt.includes('组合')) itemTag = '组合';
                     else if (tt.includes('其他素材')) itemTag = '其他素材';
                 }
                 counts['全部']++;
@@ -5805,7 +5925,8 @@
     }
     function renderAssetLibrary() {
         var cl = document.getElementById('diy-count-layout'); if (cl) cl.textContent = '· ' + presetLibrary.length;
-        var cc = document.getElementById('diy-count-component'); if (cc) cc.textContent = '· ' + (tagPresetLibrary.length + logoAssets.length);
+        var cc = document.getElementById('diy-count-component'); if (cc) cc.textContent = '· ' + (tagPresetLibrary.length + logoAssets.length + groupPresets.length);
+        var cr = document.getElementById('diy-count-recycle'); if (cr) cr.textContent = '· ' + recycleBin.length;
         renderDiySubtags();
         const list = document.getElementById('asset-list-ui'); if(!list) return;
         list.innerHTML = '';
@@ -5835,16 +5956,29 @@
                     else if (t.includes('LOGO')) itemTag = 'LOGO';
                     else if (t.includes('KIKI')) itemTag = 'KIKI';
                     else if (t.includes('字体')) itemTag = '字体';
+                    else if (t.includes('组合')) itemTag = '组合';
                     else if (t.includes('其他素材')) itemTag = '其他素材';
                 }
                 return itemTag === diySubtagFilter;
             };
             var filteredTags = tagPresetLibrary.filter(filterFn);
             var filteredLogos = logoAssets.filter(filterFn);
-            var totalComp = filteredTags.length + filteredLogos.length;
+            var filteredGroups = groupPresets.filter(filterFn);
+            var totalComp = filteredTags.length + filteredLogos.length + filteredGroups.length;
             if(totalComp === 0) { list.innerHTML = '<div class="asset-empty">暂无组件</div>'; return; }
             filteredTags.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, asset: p, type: 'tag', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
             filteredLogos.forEach(l => list.appendChild(createAssetItem({ title: l.name, meta: '点击添加到画布', asset: l, type: 'logo', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
+            filteredGroups.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个图层`, asset: p, type: 'group', onApply: () => applyGroupCombo(p.id), onDelete: () => deleteGroupCombo(p.id) })));
+        } else if(currentAssetTab === 'recycle') {
+            if (!recycleBin.length) { list.innerHTML = '<div class="asset-empty">回收站为空</div>'; return; }
+            recycleBin.forEach(function(entry) {
+                var meta = '右键还原 · 刷新网页后自动删除';
+                list.appendChild(createAssetItem({
+                    title: entry.asset?.name || '未命名资产', meta: meta, asset: entry.asset, type: entry.type,
+                    img: entry.asset?.src || entry.asset?.previewUrl || '',
+                    onRestore: function() { restoreAssetFromRecycle(entry.id); }
+                }));
+            });
         }
     }
     function createColorPaletteAssetItem(palette) {
@@ -5866,11 +6000,14 @@
         item.append(preview, kind, info);
         return item;
     }
-    function createAssetItem({ title, meta, type, asset, img, current = false, onApply, onDelete }) {
-        const item = document.createElement('div'); item.className = `asset-item ${current ? 'current' : ''} ${type === 'font' ? 'font-asset-card' : ''} ${type === 'layout' ? 'template-preview-card' : ''}`;
+    function createAssetItem({ title, meta, type, asset, img, current = false, onApply, onDelete, onRestore }) {
+        // 尺寸 hover 仅属于模板（单画板版式 / 多画板套组），组件卡片不添加该样式。
+        const isTemplateAsset = type === 'layout' || type === 'pack';
+        const item = document.createElement('div'); item.className = `asset-item ${current ? 'current' : ''} ${type === 'font' ? 'font-asset-card' : ''} ${isTemplateAsset ? 'template-preview-card' : ''}`;
         const canUseAsAIReference = type === 'reference' || (type === 'logo' && getLogoAssetType(asset) === 'image' && !!asset?.src);
         item.onclick = () => {
-            if(item._didReferenceDrag) return;
+            if(item._isDragging) return;
+            if (onRestore) return;
             try {
                 const result = onApply?.();
                 if(result?.catch) result.catch(err => showToast(err.message || '操作失败', true));
@@ -5878,29 +6015,49 @@
                 showToast(err.message || '操作失败', true);
             }
         };
+        if (onRestore) {
+            item.classList.add('recycle-asset-item');
+            item.title = '右键还原';
+            item.addEventListener('contextmenu', function(event) {
+                event.preventDefault();
+                onRestore();
+            });
+        }
         if(canUseAsAIReference) {
             item.classList.add('reference-element');
             item.draggable = true;
             item.addEventListener('dragstart', e => {
                 e.dataTransfer.effectAllowed = 'copy';
-                item._didReferenceDrag = true;
+                item._isDragging = true;
                 createAIReferenceDrag(e, { name: title || asset?.name, mimeType: asset?.mimeType, src: asset?.src || img }, title || '参考元素');
             });
-            item.addEventListener('dragend', () => { setTimeout(() => { item._didReferenceDrag = false; }, 0); });
+            item.addEventListener('dragend', () => { item._isDragging = false; });
+        } else if(type === 'reference') {
+            item.classList.add('reference-element');
+            item.draggable = true;
+            item.addEventListener('dragstart', e => {
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData('application/x-vf-reference-element', JSON.stringify(asset));
+                e.dataTransfer.setData('text/plain', asset.name || '参考元素');
+            });
         }
         const thumb = document.createElement('div');
         thumb.className = `asset-thumb ${type === 'logo' ? 'logo-thumb' : ''} ${type === 'reference' ? 'reference-thumb' : ''} ${type === 'reference' && asset?.category === 'background' ? 'reference-bg-thumb' : ''}`;
         renderAssetPreview(thumb, { type, asset, img });
-        if(type === 'layout') {
+        if(type === 'layout' || type === 'pack') {
             const canvasInfo = getTemplatePreviewCanvasInfo(asset);
-            if(canvasInfo) {
-                const hoverInfo = document.createElement('div');
-                hoverInfo.className = 'asset-template-hover-info';
-                hoverInfo.innerHTML = `<span class="asset-template-hover-ratio">${escapeHtml(canvasInfo.ratio)}</span><span class="asset-template-hover-size">${escapeHtml(canvasInfo.width + ' × ' + canvasInfo.height + ' px')}</span>`;
-                thumb.appendChild(hoverInfo);
-            }
+            const hoverInfo = document.createElement('div');
+            hoverInfo.className = 'asset-template-hover-info';
+            hoverInfo.innerHTML = canvasInfo
+                ? `<span class="asset-template-hover-ratio">${escapeHtml(canvasInfo.ratio)}</span><span class="asset-template-hover-size">${escapeHtml(canvasInfo.width + ' × ' + canvasInfo.height + ' px')}</span>`
+                : '<span class="asset-template-hover-ratio">—</span><span class="asset-template-hover-size">读取真实画板尺寸中…</span>';
+            thumb.appendChild(hoverInfo);
+            // 云端卡片只先取缩略图；hover 时再读取 JSON 的 canvasW/canvasH。
+            item.addEventListener('mouseenter', function() {
+                if (asset?._lazy && asset?.cloudId) notifyParent({ type: 'vf:request-template-data', id: asset.cloudId });
+            }, { once: true });
         }
-        var isRenameable = ['layout', 'pack', 'tag', 'logo', 'font'].indexOf(type) !== -1;
+        var isRenameable = ['layout', 'pack', 'tag', 'logo', 'font', 'group'].indexOf(type) !== -1;
         const info = document.createElement('div');
         info.className = 'asset-info';
         info.innerHTML = `<div class="asset-name">${escapeHtml(title)}</div><div class="asset-meta">${escapeHtml(meta || '')}</div>`;
@@ -5997,10 +6154,10 @@
     function getTemplatePreviewCanvasInfo(template = {}) {
         const declaredRatio = String(template.size || '').trim();
         const declaredSize = SIZES[declaredRatio];
-        // previewW/previewH 是预览 PNG 的像素尺寸。预览以 2 倍密度生成，不能当作
-        // 模板画板尺寸；完整 JSON 到达前不显示尺寸，避免 1080 被错误标成 2160。
-        const width = Math.round(Number(template.canvasW) || Number(declaredSize?.w) || 0);
-        const height = Math.round(Number(template.canvasH) || Number(declaredSize?.h) || 0);
+        // 优先用 JSON 中的真实画布尺寸
+        var width = Math.round(Number(template.canvasW) || Number(declaredSize?.w) || 0);
+        var height = Math.round(Number(template.canvasH) || Number(declaredSize?.h) || 0);
+        // 无真实尺寸时，不显示（避免用预览图尺寸误导）
         if(width < 1 || height < 1) return null;
         const divisor = greatestCommonDivisor(width, height);
         return { width, height, ratio: `${Math.round(width / divisor)}:${Math.round(height / divisor)}` };
@@ -6160,6 +6317,36 @@
         viewport.appendChild(canvas);
         return viewport;
     }
+    async function captureGroupPreview(elements) {
+        // 按组合实际大小裁剪预览，只显示组合内的图层
+        var bounds = getGroupBounds(elements);
+        if (!bounds) return null;
+        var padding = 48;
+        var stageW = Math.max(120, bounds.w + padding * 2);
+        var stageH = Math.max(80, bounds.h + padding * 2);
+        var maxDim = 480;
+        var scale = Math.min(1, maxDim / Math.max(stageW, stageH));
+        // 创建离屏容器
+        var container = document.createElement('div');
+        container.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + stageW + 'px;height:' + stageH + 'px;overflow:hidden;background:#FFFFFF;z-index:-1;';
+        document.body.appendChild(container);
+        try {
+            elements.slice().sort(function(a, b) { return (a.zIndex || 0) - (b.zIndex || 0); }).forEach(function(layer) {
+                var cloned = cloneData(layer);
+                cloned.x = (Number(cloned.x) || 0) - bounds.x1 + padding;
+                cloned.y = (Number(cloned.y) || 0) - bounds.y1 + padding;
+                container.appendChild(createLayerElement(cloned, { active: false, interactive: false, idPrefix: 'gprev_' + genId('gp') + '_' }));
+            });
+            await new Promise(function(r) { setTimeout(r, 200); });
+            if (typeof html2canvas !== 'function') return null;
+            var cvs = await html2canvas(container, { backgroundColor: '#FFFFFF', scale: scale, useCORS: true, allowTaint: true, logging: false });
+            return cvs.toDataURL('image/png');
+        } catch(e) {
+            return null;
+        } finally {
+            if (container.parentNode) container.parentNode.removeChild(container);
+        }
+    }
     function createPackHoverPreview(pack) {
         const wrap = document.createElement('div');
         wrap.className = 'asset-pack-hover';
@@ -6244,11 +6431,7 @@
     async function deleteLayoutPreset(id) {
         if(!await askConfirm('删除这个版式预设？')) return;
         var preset = presetLibrary.find(function(p) { return p.id === id; });
-        if (preset && preset.cloudId) {
-            notifyParent({ type: 'vf:delete-template', sourceId: preset.cloudId });
-        }
-        presetLibrary = presetLibrary.filter(p => p.id !== id);
-        renderAssetLibrary(); showToast('已删除');
+        moveAssetToRecycle('layout', preset);
     }
     async function saveToPreset() {
         if(layers.length === 0) return showToast('画板为空', true);
@@ -6373,9 +6556,52 @@
     async function deleteTagComboPreset(id) {
         if(!await askConfirm('删除这个标签组合？')) return;
         var preset = tagPresetLibrary.find(function(p) { return p.id === id; });
-        if (preset && preset.cloudId) { notifyParent({ type: 'vf:delete-template', sourceId: preset.cloudId }); }
-        tagPresetLibrary = tagPresetLibrary.filter(p => p.id !== id);
-        renderAssetLibrary(); showToast('已删除');
+        moveAssetToRecycle('tag', preset);
+    }
+    // ===== 多图层组合 =====
+    async function saveGroupCombo() {
+        var selected = activeLayerIds.map(function(id) { return layers.find(function(l) { return l.id === id; }); }).filter(Boolean);
+        if (selected.length < 2) return showToast('请至少选择两个图层', true);
+        var name = await askText('命名组合', '组合 ' + formatPresetTime());
+        if (!name) return;
+        var elements = JSON.parse(JSON.stringify(selected));
+        var tempId = genId('gp');
+        var preset = { id: tempId, name: name, elements: elements, _pending: true, subTag: '组合' };
+        groupPresets.push(preset);
+        renderAssetLibrary();
+        showToast('正在保存到素材库...');
+        // 按组合实际范围裁剪预览图
+        var previewDataUrl = await captureGroupPreview(elements);
+        if (!previewDataUrl || previewDataUrl.length < 1500) {
+            previewDataUrl = generatePlaceholderPreview(name, '组合');
+        }
+        preset.previewUrl = previewDataUrl;
+        renderAssetLibrary();
+        notifyParent({ type: 'vf:save-template', templateType: 'groupcombo', name: name, data: { elements: elements }, previewDataUrl: previewDataUrl || '', tempId: tempId, subTag: '组合' });
+    }
+    function applyGroupCombo(id) {
+        var p = groupPresets.find(function(x) { return x.id === id; });
+        if (!p || !p.elements) return;
+        if (p._lazy) {
+            pendingGroupPresetId = id;
+            showToast('正在加载组合内容，请稍候…');
+            notifyParent({ type: 'vf:request-template-data', id: p.cloudId || p.id });
+            return;
+        }
+        pendingGroupPresetId = '';
+        saveHistory(true);
+        var newLayers = cloneLayersForInsert(p.elements, true);
+        layers.push.apply(layers, newLayers);
+        activeLayerIds = newLayers.map(function(l) { return l.id; });
+        markNewlyAddedLayers(newLayers);
+        saveHistory();
+        renderCanvas(); renderLayersList(); renderProperties();
+        showToast('已应用组合：' + p.name);
+    }
+    async function deleteGroupCombo(id) {
+        if (!await askConfirm('删除这个组合？')) return;
+        var preset = groupPresets.find(function(p) { return p.id === id; });
+        moveAssetToRecycle('group', preset);
     }
     function getLogoAssetType(logo) {
         // 根据素材的 subTag/tags 推断正确的图层类型
@@ -6420,9 +6646,7 @@
         askConfirm('删除这个 Logo 素材？').then(ok => {
             if(!ok) return;
             var logo = logoAssets.find(function(l) { return l.id === id; });
-            if (logo && logo.cloudId) { notifyParent({ type: 'vf:delete-template', sourceId: logo.cloudId }); }
-            logoAssets = logoAssets.filter(l => l.id !== id);
-            renderAssetLibrary(); showToast('已删除');
+            moveAssetToRecycle('logo', logo);
         });
     }
 
@@ -6498,20 +6722,8 @@
         askConfirm('删除这个字体素材？').then(function(ok) {
             if (!ok) return;
             var fontAsset = fontAssets.find(function(f) { return f.id === id; });
-            if (fontAsset && fontAsset.cloudId) {
-                notifyParent({ type: 'vf:delete-template', sourceId: fontAsset.cloudId });
-            }
-            if (fontAsset && fontAsset._installed && fontAsset.fontFamilyId) {
-                try {
-                    document.fonts.forEach(function(f) {
-                        if (f.family === cssFontFamily(fontAsset.fontFamilyId)) document.fonts.delete(f);
-                    });
-                } catch(e) {}
-                customFonts = customFonts.filter(function(f) { return f._cloudId !== fontAsset.cloudId; });
-            }
-            fontAssets = fontAssets.filter(function(f) { return f.id !== id; });
-            renderAssetLibrary(); renderProperties(); renderCanvas();
-            showToast('已删除');
+            moveAssetToRecycle('font', fontAsset);
+            renderProperties(); renderCanvas();
         });
     }
 
@@ -6519,20 +6731,9 @@
         askConfirm('删除字体「' + familyName + '」及其所有字重？').then(function(ok) {
             if (!ok) return;
             var ids = new Set((assets || []).map(function(asset) { return asset.id; }));
-            (assets || []).forEach(function(asset) {
-                if (asset.cloudId) notifyParent({ type: 'vf:delete-template', sourceId: asset.cloudId });
-                if (asset._installed && asset.fontFamilyId) {
-                    try {
-                        document.fonts.forEach(function(font) {
-                            if (font.family === cssFontFamily(asset.fontFamilyId)) document.fonts.delete(font);
-                        });
-                    } catch(e) {}
-                    customFonts = customFonts.filter(function(font) { return font._cloudId !== asset.cloudId; });
-                }
-            });
+            (assets || []).forEach(function(asset) { moveAssetToRecycle('font', asset); });
             fontAssets = fontAssets.filter(function(asset) { return !ids.has(asset.id); });
             renderAssetLibrary(); renderProperties(); renderCanvas();
-            showToast('已删除');
         });
     }
 
@@ -7835,6 +8036,11 @@
         const height = Number(currentSize.h) || Number(preset.h) || 1080;
         return { width, height, outWidth: Math.round(width * scale), outHeight: Math.round(height * scale) };
     }
+    function getTemplatePreviewCaptureScale() {
+        const size = getCurrentExportSize(1);
+        const maxPreviewEdge = 480;
+        return Math.min(1, maxPreviewEdge / Math.max(size.width, size.height));
+    }
     function nextFrame() {
         return new Promise(function(resolve) { requestAnimationFrame(function() { requestAnimationFrame(resolve); }); });
     }
@@ -7872,10 +8078,18 @@
         }
         const target = getCurrentExportSize(scale);
         if ((target.outWidth * target.outHeight) > SAFE_CANVAS_PX) throw new Error('导出尺寸超出浏览器安全上限');
-        // 当前标签页捕获会记录页面像素；系统共享选择框本身已足够提示，
-        // 不能再在画板上显示 toast，否则会被录进最终 PNG。
+        // 当前标签页捕获会记录页面像素。除了 CSS 隐藏外，直接清空并停用
+        // toast，杜绝上一轮提示或异步提示在采帧时进入模板预览图。
         const toast = document.getElementById('toast');
+        const oldToastState = toast ? {
+            display: toast.style.display,
+            opacity: toast.style.opacity,
+            transform: toast.style.transform
+        } : null;
         if (toast) {
+            toast.dataset.captureSuppressed = '1';
+            toast.textContent = '';
+            toast.style.display = 'none';
             toast.style.opacity = '0';
             toast.style.transform = 'translate(-50%, -20px)';
         }
@@ -7941,6 +8155,13 @@
                 video.srcObject = null;
             }
             if (stream) stream.getTracks().forEach(function(track) { track.stop(); });
+            if (toast) {
+                delete toast.dataset.captureSuppressed;
+                toast.textContent = '';
+                toast.style.display = oldToastState.display;
+                toast.style.opacity = oldToastState.opacity;
+                toast.style.transform = oldToastState.transform;
+            }
         }
     }
     // 供模板保存桥接层使用：它可在有用户授权时取得与导出相同的原生像素 PNG。
@@ -8432,8 +8653,8 @@
         await loadFontsFromDB();
         await loadReferenceElementsFromDB();
         await loadSharedAssetsFromCloud();
-        // 从素材库（Supabase）加载模板/标签组/Logo
-        notifyParent({ type: 'vf:request-templates' });
+        // 刷新后先清理上一会话移入回收站的云端资产；收到完成消息后再加载清单。
+        if (!purgeRecycleBinAfterReload()) notifyParent({ type: 'vf:request-templates' });
         setupCanvasDropImport();
         setupLayerDropImport();
         setupLayerListResize();
@@ -8497,6 +8718,6 @@
     bootApp();
 
 </script>
-<script src="../../tool-bridge.js?v=20260806-save-capture-gesture-v172"></script>
+<script src="../../tool-bridge.js?v=20260806-recycle-bin-v174"></script>
 </body>
 </html>

@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260806-save-capture-gesture-v172';
+  const TOOL_UI_VERSION = '20260806-template-not-components-v178';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -153,7 +153,7 @@
       tag1: ['模版', '组件'],
       tag2ByTag1: {
         '模版': ['社媒物料', 'C端物料'],
-        '组件': ['标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材', '字体']
+        '组件': ['标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材', '字体', '组合']
       }
     }
   };
@@ -2036,6 +2036,7 @@
     });
     renderLibraryInspector();
     void signVisibleLibraryUrls(visibleItems);
+    visibleItems.forEach(function(item) { void hydrateLibraryTemplateDimension(item); });
   }
 
   async function loadRecoveredPlatformLibrary() {
@@ -2301,7 +2302,10 @@
     const sourceLabel = kind === 'template'
       ? (state.lang === 'zh' ? '模板文件' : 'Template')
       : (state.lang === 'zh' ? '源文件' : 'Source');
-    const templateSizeInfo = kind === 'template' ? libraryPreviewDimensionInfo(preview) : null;
+    // 组件也以 JSON 模板形式存储，但不属于“模板预览图”：只有模版类才显示尺寸 hover。
+    const isTemplateArtwork = kind === 'template' && !tags.includes('组件');
+    // 缩略图会被压缩；hover 只能显示模板 JSON 内记录的真实画板尺寸。
+    const templateSizeInfo = isTemplateArtwork ? libraryTemplateDimensionInfo(item) : null;
     const quickUse = kind === 'gallery'
       ? `<button type="button" data-action="use-static">${state.lang === 'zh' ? '静态' : 'Static'}</button><button type="button" data-action="use-dynamic">${state.lang === 'zh' ? '动态' : 'Motion'}</button>`
       : kind === 'template'
@@ -2325,11 +2329,11 @@
         </article>`;
     }
     return `
-      <article class="library-card ${kind === 'template' ? 'template-preview-card' : ''} ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
+      <article class="library-card ${isTemplateArtwork ? 'template-preview-card' : ''} ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
         <div class="library-thumb-wrap">
           <div class="multi-check"></div>
           <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded')" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
-          ${templateSizeInfo ? `<div class="library-template-size-hover"><span class="library-template-size-ratio">${escapeHtml(templateSizeInfo.ratio)}</span><span class="library-template-size-pixels">${escapeHtml(templateSizeInfo.pixels)}</span></div>` : ''}
+          ${isTemplateArtwork ? `<div class="library-template-size-hover" data-template-size-source="${escapeAttr(source.id)}"><span class="library-template-size-ratio">${escapeHtml(templateSizeInfo?.ratio || '—')}</span><span class="library-template-size-pixels">${escapeHtml(templateSizeInfo?.pixels || '读取真实画板尺寸中…')}</span></div>` : ''}
           <div class="library-card-icons">
             <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
             <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}">↓</button>
@@ -2351,14 +2355,57 @@
     `;
   }
 
-  function libraryPreviewDimensionInfo(preview) {
-    const width = Math.round(Number(preview?.width) || 0);
-    const height = Math.round(Number(preview?.height) || 0);
+  function libraryTemplateDimensionInfo(item) {
+    const source = item?.source || {};
+    const width = Math.round(Number(source.canvasW) || 0);
+    const height = Math.round(Number(source.canvasH) || 0);
     if (width < 1 || height < 1) return null;
     let a = width, b = height;
     while (b) { const remainder = a % b; a = b; b = remainder; }
     const divisor = a || 1;
     return { ratio: `${width / divisor}:${height / divisor}`, pixels: `${width} × ${height} px` };
+  }
+
+  async function hydrateLibraryTemplateDimension(item) {
+    if (!item?.source || libraryKindOfSource(item.source) !== 'template' || visibleLibraryTags(item.source).includes('组件')) return;
+    const source = item.source;
+    if (libraryTemplateDimensionInfo(item) || source._templateDimensionLoading) return;
+    source._templateDimensionLoading = true;
+    try {
+      const snapshot = await loadLibraryTemplateSnapshot(item);
+      const snapshotSize = templateSnapshotCanvasSize(snapshot);
+      const width = snapshotSize.width;
+      const height = snapshotSize.height;
+      if (width < 1 || height < 1) return;
+      source.canvasW = width;
+      source.canvasH = height;
+      const info = libraryTemplateDimensionInfo(item);
+      document.querySelectorAll('[data-template-size-source="' + CSS.escape(String(source.id)) + '"]').forEach(function(overlay) {
+        overlay.innerHTML = '<span class="library-template-size-ratio">' + escapeHtml(info.ratio) + '</span><span class="library-template-size-pixels">' + escapeHtml(info.pixels) + '</span>';
+      });
+    } catch (_error) {
+      // 不得回退到缩略图尺寸，避免把 400px 缩略图误标成模板尺寸。
+    } finally {
+      source._templateDimensionLoading = false;
+    }
+  }
+
+  function templateSnapshotCanvasSize(snapshot) {
+    const directWidth = Math.round(Number(snapshot?.canvasW) || 0);
+    const directHeight = Math.round(Number(snapshot?.canvasH) || 0);
+    if (directWidth > 0 && directHeight > 0) return { width: directWidth, height: directHeight };
+    const editor = snapshot?.editorState || {};
+    const currentId = editor.currentArtboardId;
+    const custom = (editor.artboardPresets || []).find(function(board) { return board.id === currentId; });
+    if (custom?.w && custom?.h) return { width: Math.round(custom.w), height: Math.round(custom.h) };
+    const ratio = editor.currentRatio || editor.artboards?.[currentId]?.ratio || '';
+    const sizes = {
+      head: [750, 500], splash: [750, 1626], banner: [1396, 424],
+      '1:1': [1080, 1080], '3:4': [1080, 1440], '4:3': [1440, 1080],
+      '16:9': [1920, 1080], '9:16': [1080, 1920], '3:3.75': [1080, 1350]
+    };
+    const pair = sizes[ratio];
+    return pair ? { width: pair[0], height: pair[1] } : { width: 0, height: 0 };
   }
 
   function wireLibraryCards() {
@@ -5384,6 +5431,10 @@ function libraryTagsForForm(formData, kind) {
         await handleDeleteTemplate(msg, sourceWindow);
         refreshLibraryIfOpen();
         break;
+      case 'vf:purge-recycle-bin':
+        await handlePurgeRecycleBin(msg, sourceWindow);
+        refreshLibraryIfOpen();
+        break;
       case 'vf:request-templates':
         handleFetchTemplates(sourceWindow);
         break;
@@ -5438,12 +5489,12 @@ function libraryTagsForForm(formData, kind) {
         finalName = candidate;
       }
       // 构建 JSON 数据
-      var schemaMap = { pack: 'vf-template-pack/v1', layout: 'vf-layout-preset/v1', tagcombo: 'vf-tag-combo/v1', logo: 'vf-logo-asset/v1', font: 'vf-font-asset/v1' };
+      var schemaMap = { pack: 'vf-template-pack/v1', layout: 'vf-layout-preset/v1', tagcombo: 'vf-tag-combo/v1', logo: 'vf-logo-asset/v1', font: 'vf-font-asset/v1', groupcombo: 'vf-group-combo/v1' };
       var schemaName = schemaMap[msg.templateType] || 'vf-layout-preset/v1';
       var jsonData = { schema: schemaName, name: finalName, exportedAt: new Date().toISOString() };
       if (msg.templateType === 'pack') {
         jsonData.artboards = msg.data.artboards;
-      } else if (msg.templateType === 'tagcombo') {
+      } else if (msg.templateType === 'tagcombo' || msg.templateType === 'groupcombo') {
         jsonData.elements = msg.data.elements || [];
       } else if (msg.templateType === 'logo') {
         jsonData.src = msg.data.src || '';
@@ -5487,7 +5538,8 @@ function libraryTagsForForm(formData, kind) {
         full: ['模版', msg.subTag || '社媒物料'],
         tagcombo: ['组件', msg.subTag || '标签'],
         logo: ['组件', msg.subTag || 'LOGO'],
-        font: ['组件', msg.subTag || '字体']
+        font: ['组件', msg.subTag || '字体'],
+        groupcombo: ['组件', msg.subTag || '组合']
       };
       var tagsToUse = tagMap[msg.templateType] || ['模版', '社媒物料'];
       var sourceInsert = await state.supabase.from('vf_source_files').insert([{
@@ -5524,7 +5576,8 @@ function libraryTagsForForm(formData, kind) {
         country_id: null, activity_id: null, category_id: null,
         source_path: sourcePath, source_filename: finalName + '.json',
         source_mime_type: 'application/json', source_size_bytes: jsonBlob.size,
-        source_ext: 'json', uploaded_by: userId, created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+        source_ext: 'json', uploaded_by: userId, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        canvasW: jsonData.canvasW || 0, canvasH: jsonData.canvasH || 0
       });
       if (previewBlob) {
         state.libraryPreviews.push({
@@ -5576,6 +5629,14 @@ function libraryTagsForForm(formData, kind) {
     }
   }
 
+  async function handlePurgeRecycleBin(msg, sourceWindow) {
+    var ids = Array.from(new Set((msg.sourceIds || []).filter(Boolean)));
+    for (var i = 0; i < ids.length; i += 1) {
+      await handleDeleteTemplate({ sourceId: ids[i] }, sourceWindow);
+    }
+    try { sourceWindow.postMessage({ type: 'vf:recycle-purged' }, location.origin); } catch (_error) {}
+  }
+
   async function handleFetchTemplates(sourceWindow) {
     if (state.localPreview || !state.supabase) {
       try { sourceWindow.postMessage({ type: 'vf:templates-loaded', templates: [] }, location.origin); } catch (e) {}
@@ -5617,6 +5678,7 @@ function libraryTagsForForm(formData, kind) {
         var t = s.tags || [];
         var templateType = 'layout';
         if (t.includes('字体') && t.includes('组件')) templateType = 'font';
+        else if (t.includes('组合') && t.includes('组件')) templateType = 'groupcombo';
         else if ((t.includes('标签') && t.includes('组件')) || t.includes('标签组')) templateType = 'tagcombo';
         else if (t.includes('LOGO') || t.includes('Logo') || t.includes('背景') || t.includes('KIKI') || t.includes('其他素材') || t.includes('品牌圆弧')) templateType = 'logo';
         else if (t.includes('社媒物料') || t.includes('C端物料') || t.includes('模版') || t.includes('版式') || t.includes('套组') || t.includes('静态模板')) templateType = 'layout';
@@ -5689,6 +5751,15 @@ function libraryTagsForForm(formData, kind) {
         var { data: blob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(src.source_path);
         if (blob) {
           var json = JSON.parse(await blob.text());
+          // 通过「保存模板」生成的项目快照把画板信息嵌在 editorState 中；
+          // 下发给 DIY 卡片前标准化到 canvasW/canvasH，hover 不会再误读预览图尺寸。
+          if (!json.canvasW || !json.canvasH) {
+            var realSize = templateSnapshotCanvasSize(json);
+            if (realSize.width && realSize.height) {
+              json.canvasW = realSize.width;
+              json.canvasH = realSize.height;
+            }
+          }
           sourceWindow.postMessage({ type: 'vf:template-data', id: src.id, data: json }, location.origin);
         }
       }
