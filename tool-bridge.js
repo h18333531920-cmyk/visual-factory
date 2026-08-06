@@ -241,45 +241,7 @@
       var cw = wrap.offsetWidth, ch = wrap.offsetHeight;
       clone.style.cssText = 'position:fixed;left:-9999px;top:0;transform:none;width:' + cw + 'px;height:' + ch + 'px;z-index:-1;overflow:hidden;background:#FFFFFF;';
       document.body.appendChild(clone);
-      // html2canvas 会在存在 letter-spacing 时把文本拆成单个字符绘制，
-      // 这会破坏阿拉伯语的连写。仅在预览副本中归零字距，并明确 RTL 方向；
-      // 编辑画板和导出数据均不受影响。
-      clone.querySelectorAll('.layer-text-wrapper, .layer-tag-wrapper').forEach(function (node) {
-        var text = node.textContent || '';
-        var hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
-        var isRtl = hasArabic || node.dir === 'rtl' || node.getAttribute('lang') === 'ar' || getComputedStyle(node).direction === 'rtl';
-        if (!isRtl) return;
-        node.setAttribute('dir', 'rtl');
-        node.setAttribute('lang', 'ar');
-        node.style.direction = 'rtl';
-        node.style.unicodeBidi = 'plaintext';
-        node.style.letterSpacing = '0px';
-        node.querySelectorAll('.layer-text-content').forEach(function (content) {
-          content.setAttribute('dir', 'rtl');
-          content.style.direction = 'rtl';
-          content.style.unicodeBidi = 'plaintext';
-          content.style.letterSpacing = '0px';
-        });
-      });
-      // 截图引擎在处理末尾问号时不会完全保留浏览器的标点留白。
-      // 仅在截图副本内补一个 hair space：阿拉伯字仍作为完整文本运行绘制，
-      // 英文问号也会与编辑画布保持相同的细小视觉间距；原模板文案不被改动。
-      var rtlTextNodes = [];
-      var textWalker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
-      while (textWalker.nextNode()) rtlTextNodes.push(textWalker.currentNode);
-      rtlTextNodes.forEach(function (textNode) {
-        var parent = textNode.parentElement;
-        if (!parent) return;
-        if (parent.closest('[dir="rtl"], [lang="ar"]')) {
-          textNode.nodeValue = textNode.nodeValue.replace(/([\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])([؟?])/g, '$1\u200A$2');
-        } else {
-          // html2canvas 在带字距的文本中可能忽略普通 ASCII 空格；预览副本
-          // 使用不换行空格，让词间距与画布一致，再补齐末尾问号的细微留白。
-          textNode.nodeValue = textNode.nodeValue
-            .replace(/([A-Za-z0-9])\s+([A-Za-z0-9])/g, '$1\u00A0$2')
-            .replace(/([A-Za-z0-9])([?？])/g, '$1\u200A$2');
-        }
-      });
+      preserveStaticTextSpacingForCapture(clone);
       // 把克隆体中的背景图替换为 <img>
       clone.querySelectorAll('.layer-image-div').forEach(function(div) {
         var bg = div.style.backgroundImage;
@@ -293,8 +255,11 @@
         }
       });
       await new Promise(function(r) { setTimeout(r, 200); });
+      // 资产库只需缩略图预览，不能把 1080 画板固定导成 2160 的 2 倍大图。
+      // 限制最长边为 768px，且绝不放大原画板，兼顾卡片清晰度与上传/加载体积。
+      const previewScale = Math.min(1, 768 / Math.max(cw, ch));
       const canvas = await html2canvas(clone, {
-        scale: 2,
+        scale: previewScale,
         width: cw,
         height: ch,
         useCORS: true,
@@ -304,7 +269,19 @@
         imageTimeout: 0
       });
       document.body.removeChild(clone);
-      return canvas.toDataURL('image/png');
+      // 生成缩略图：最大 400px 宽/高，JPEG 格式大幅减小体积
+      var thumbW = canvas.width, thumbH = canvas.height;
+      var maxDim = 400;
+      if (thumbW > maxDim || thumbH > maxDim) {
+        var ratio = Math.min(maxDim / thumbW, maxDim / thumbH);
+        thumbW = Math.round(thumbW * ratio);
+        thumbH = Math.round(thumbH * ratio);
+      }
+      var thumb = document.createElement('canvas');
+      thumb.width = thumbW; thumb.height = thumbH;
+      var tctx = thumb.getContext('2d');
+      tctx.drawImage(canvas, 0, 0, thumbW, thumbH);
+      return thumb.toDataURL('image/jpeg', 0.85);
     } finally {
       if (safeGuide) safeGuide.style.display = oldGuideDisplay;
       if (typeof syncSafeGuide === 'function') syncSafeGuide();
@@ -315,6 +292,149 @@
         if (typeof renderProperties === 'function') renderProperties();
       }
     }
+  }
+
+  async function rasterizeNativeFontTextForCapture(clone) {
+    if (typeof window.VF_RASTERIZE_CAPTURE_TEXT !== 'function') return;
+    try {
+      await window.VF_RASTERIZE_CAPTURE_TEXT(clone);
+    } catch (error) {
+      // 发生意外时回退到通用 html2canvas 路径，不能阻断模板保存。
+      console.warn('Native font capture fallback:', error);
+    }
+  }
+
+  function preserveStaticTextSpacingForCapture(clone) {
+    clone.querySelectorAll('.layer-text-wrapper').forEach(function(wrapper) {
+      var _ff = getComputedStyle(wrapper).fontFamily || '';
+      if (/ht[_\s-]*heliopolis/i.test(_ff) || /dela[_\s-]*gothic/i.test(_ff)) {
+        freezeHTTextLayoutForCapture(wrapper);
+        return;
+      }
+      wrapper.style.letterSpacing = '0px';
+      wrapper.style.wordSpacing = 'normal';
+      wrapper.querySelectorAll('.layer-text-content').forEach(function(content) {
+        const rawText = content.textContent || '';
+        const isRtl = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(rawText)
+          || getComputedStyle(wrapper).direction === 'rtl';
+        if (isRtl) {
+          // 让离屏渲染器按完整的 RTL 文本段落排版，不能逐字倒序绘制。
+          wrapper.setAttribute('dir', 'rtl');
+          wrapper.setAttribute('lang', 'ar');
+          wrapper.style.direction = 'rtl';
+          wrapper.style.unicodeBidi = 'plaintext';
+          content.setAttribute('dir', 'rtl');
+          content.style.direction = 'rtl';
+          content.style.unicodeBidi = 'plaintext';
+        }
+        content.style.letterSpacing = '0px';
+        content.style.wordSpacing = 'normal';
+        const textNodes = [];
+        const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) textNodes.push(walker.currentNode);
+        textNodes.forEach(function(textNode) {
+          const value = textNode.nodeValue || '';
+          if (!/[?？؟\s]/.test(value)) return;
+          const fragment = document.createDocumentFragment();
+          value.split(/([?？؟])/).forEach(function(part) {
+            if (!part) return;
+            if (part === '?' || part === '？' || part === '؟') {
+              const mark = document.createElement('span');
+              mark.textContent = part;
+              mark.style.cssText = 'display:inline-block;letter-spacing:0!important;' + (isRtl ? 'margin-right:4px;' : 'margin-left:4px;');
+              fragment.appendChild(mark);
+            } else {
+              // html2canvas 会把普通 ASCII 空格按字符拆分并可能漏画；不换行空格
+              // 保留相同的视觉宽度，且会被它作为真实字形稳定输出。
+              fragment.appendChild(document.createTextNode(part.replace(/[ \t]+/g, '\u00A0')));
+            }
+          });
+          textNode.parentNode.replaceChild(fragment, textNode);
+        });
+      });
+    });
+  }
+
+  // 将 HT 字体的每个可见词元固定在浏览器已计算的原生坐标上。这样 html2canvas
+  // 不会参与词间距、问号和 kerning 的重新测量，导出布局与编辑器 DOM 保持一致。
+  function freezeHTTextLayoutForCapture(wrapper) {
+    const content = wrapper.querySelector('.layer-text-content');
+    if (!content || !content.textContent) return;
+    const contentRect = content.getBoundingClientRect();
+    const width = Math.max(1, content.offsetWidth || contentRect.width);
+    const height = Math.max(1, content.offsetHeight || contentRect.height);
+    const sourceNodes = [];
+    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) sourceNodes.push(walker.currentNode);
+    const tokens = [];
+    sourceNodes.forEach(function(node) {
+      const value = node.nodeValue || '';
+      const matcher = /[^\s?\uFF1F\u061F]+|[?\uFF1F\u061F]/g;
+      let match;
+      while ((match = matcher.exec(value))) {
+        const range = document.createRange();
+        range.setStart(node, match.index);
+        range.setEnd(node, match.index + match[0].length);
+        const rect = range.getBoundingClientRect();
+        if (rect.width || rect.height) tokens.push({ text: match[0], left: rect.left - contentRect.left, top: rect.top - contentRect.top });
+      }
+    });
+    if (!tokens.length) return;
+    content.replaceChildren();
+    content.style.position = 'relative';
+    content.style.display = 'block';
+    content.style.width = width + 'px';
+    content.style.height = height + 'px';
+    content.style.whiteSpace = 'normal';
+    tokens.forEach(function(token) {
+      const item = document.createElement('span');
+      item.textContent = token.text;
+      item.style.cssText = 'position:absolute;display:block;left:' + token.left + 'px;top:' + token.top + 'px;white-space:pre;font:inherit;line-height:inherit;letter-spacing:inherit;word-spacing:normal;color:inherit;direction:inherit;unicode-bidi:inherit;';
+      content.appendChild(item);
+    });
+  }
+
+  function preserveHTTextSpacingForCapture(content, wrapper, isRtl) {
+    const spaceWidth = measureNativeSpaceWidthForCapture(wrapper);
+    const textNodes = [];
+    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    textNodes.forEach(function(textNode) {
+      const value = textNode.nodeValue || '';
+      if (!/[\t ?\uFF1F\u061F]/.test(value)) return;
+      const fragment = document.createDocumentFragment();
+      value.split(/([ \t]+|[?\uFF1F\u061F])/).forEach(function(part) {
+        if (!part) return;
+        if (/^[ \t]+$/.test(part)) {
+          const gap = document.createElement('span');
+          gap.setAttribute('aria-hidden', 'true');
+          gap.style.cssText = 'display:inline-block;width:' + (spaceWidth * part.length) + 'px;height:1px;vertical-align:baseline;';
+          fragment.appendChild(gap);
+        } else if (/^[?\uFF1F\u061F]$/.test(part)) {
+          const mark = document.createElement('span');
+          mark.textContent = part;
+          const punctuationGap = Math.max(2, spaceWidth * 0.3);
+          mark.style.cssText = 'display:inline-block;letter-spacing:0!important;' + (isRtl ? 'margin-right:' : 'margin-left:') + punctuationGap + 'px;';
+          fragment.appendChild(mark);
+        } else {
+          fragment.appendChild(document.createTextNode(part));
+        }
+      });
+      textNode.parentNode.replaceChild(fragment, textNode);
+    });
+  }
+
+  function measureNativeSpaceWidthForCapture(wrapper) {
+    const style = getComputedStyle(wrapper);
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:fixed;left:-99999px;top:0;visibility:hidden;white-space:pre;font-family:' + style.fontFamily + ';font-size:' + style.fontSize + ';font-weight:' + style.fontWeight + ';font-style:' + style.fontStyle + ';letter-spacing:0;word-spacing:normal;line-height:1;';
+    document.body.appendChild(probe);
+    probe.textContent = 'AA';
+    const compactWidth = probe.getBoundingClientRect().width;
+    probe.textContent = 'A A';
+    const spacedWidth = probe.getBoundingClientRect().width;
+    probe.remove();
+    return Math.max(1, spacedWidth - compactWidth);
   }
 
   async function importStaticProject(snapshot) {

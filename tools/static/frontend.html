@@ -41,6 +41,16 @@
         .canvas-actions button.save-template-btn:hover { background: #059669; }
 
         .canvas-wrapper { position: absolute; left: 50%; top: 50%; background: #FFFFFF; box-shadow: none; overflow: hidden; transform-origin: center center; }
+        /* 当前标签页原生 PNG 捕获时只临时放大画板的实际渲染区域；最终文件尺寸不变。 */
+        body.vf-native-capture-mode { padding:0 !important; background:#e9ecef !important; }
+        body.vf-native-capture-mode .workspace-tabs,
+        body.vf-native-capture-mode .asset-pane,
+        body.vf-native-capture-mode .asset-pane-collapse-toggle,
+        body.vf-native-capture-mode .asset-pane-collapse-handle,
+        body.vf-native-capture-mode .right-pane,
+        body.vf-native-capture-mode .canvas-toolbar { display:none !important; }
+        body.vf-native-capture-mode .editor-layout { width:100vw !important; max-width:none !important; height:100vh !important; gap:0 !important; }
+        body.vf-native-capture-mode .left-pane { width:100% !important; height:100% !important; border-radius:0 !important; }
         .left-pane.drag-file-over .canvas-wrapper { box-shadow: 0 0 0 3px rgba(16,17,20,0.18), 0 20px 60px rgba(16,17,20,0.10); }
         .left-pane.drag-file-over .empty-hint { color: #101114; background: rgba(255,255,255,0.92); }
         .artboard-preview-dock { position: absolute; inset: 74px 28px 28px; z-index: 16; display: none; align-items: center; justify-content: center; gap: 24px; pointer-events: auto; }
@@ -1372,6 +1382,10 @@
         .left-pane .toolbar-more-menu button:hover {
             background: rgba(16, 19, 24, 0.06);
         }
+        .left-pane .toolbar-more-menu button.is-on {
+            background: #ecfdf5;
+            color: #059669;
+        }
 
         .export-dropdown-wrap { position: relative; }
         .export-dropdown-menu {
@@ -1428,6 +1442,10 @@
         .export-dropdown-menu button.export-scale-option.is-default { font-weight:820; }
         .export-dropdown-menu button.export-scale-option:disabled { opacity: .35; cursor: not-allowed; }
         .export-dropdown-menu button.export-scale-option:disabled:hover { background:#fff; }
+        .export-native-png, .export-native-pdf { width:100%; min-height:42px; margin:1px 0 8px; border:0; border-radius:10px; background:#f3f5f7; color:#25282d; font-size:14px; font-weight:760; cursor:pointer; }
+        .export-native-png { background:#202226; color:#fff; }
+        .export-native-png:hover { background:#353a41; }
+        .export-native-pdf:hover { background:#e8ecf0; }
         .export-dropdown-menu .export-dim {
             color:#858b94;
             font-size:12px;
@@ -1440,6 +1458,85 @@
             color: #ef4444;
             font-weight: 700;
         }
+
+        /* 修改尺寸下拉菜单 */
+        .resize-menu-wrap { position: relative; }
+        .resize-dropdown-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 10px);
+            z-index: 60;
+            min-width: 180px;
+            padding: 8px;
+            border: 1px solid rgba(16, 19, 24, 0.10);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 20px 48px rgba(16, 19, 24, 0.14);
+            backdrop-filter: blur(16px);
+        }
+        .resize-dropdown-menu.open { display: block; }
+        .resize-dropdown-menu .resize-section-label {
+            display: block;
+            padding: 8px 12px 4px;
+            color: #94a3b8;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .resize-dropdown-menu button {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            min-width: 0;
+            height: 36px;
+            padding: 0 12px;
+            border: 0 !important;
+            border-radius: 12px !important;
+            background: transparent !important;
+            color: #282c32 !important;
+            font-size: 13px !important;
+            font-weight: 680 !important;
+            cursor: pointer;
+            gap: 10px;
+        }
+        .resize-dropdown-menu button:hover { background: #f1f5f9 !important; }
+        .resize-dropdown-menu button.is-current { color: #059669 !important; font-weight: 800 !important; }
+        .resize-dropdown-menu button.is-current::after { content: '✓'; font-size: 11px; }
+        .resize-dim { color: #94a3b8; font-size: 11px; font-weight: 500; white-space: nowrap; }
+
+        /* 图层右键菜单 */
+        .layer-context-menu {
+            display: none;
+            position: fixed;
+            z-index: 200;
+            min-width: 144px;
+            padding: 6px;
+            border: 1px solid rgba(16, 19, 24, 0.10);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.97);
+            box-shadow: 0 16px 40px rgba(16, 19, 24, 0.16);
+            backdrop-filter: blur(14px);
+        }
+        .layer-context-menu.open { display: block; }
+        .layer-context-menu button {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            height: 34px;
+            padding: 0 12px;
+            border: 0;
+            border-radius: 10px;
+            background: transparent;
+            color: #282c32;
+            font-size: 13px;
+            font-weight: 680;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .layer-context-menu button:hover { background: #f1f5f9; }
 
         .custom-board-menu-item {
             display: none !important;
@@ -1852,6 +1949,15 @@
             <button class="close-btn" onclick="document.getElementById('settings-modal').style.display='none'">×</button>
         </div>
         <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
+            <div class="card-title"><div class="card-title-wrap">字体上传</div></div>
+            <button type="button" id="settings-font-drop-zone" onclick="document.getElementById('font-upload').click()" style="width:100%;min-height:112px;padding:16px;border:1px dashed #cfd4da;border-radius:12px;background:#fafbfc;color:#59606a;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;transition:background .16s ease,border-color .16s ease,color .16s ease;">
+                <span style="font-size:26px;line-height:1;">Aa</span>
+                <strong style="font-size:15px;color:#34383e;">拖拽字体文件到这里上传</strong>
+                <span style="font-size:12px;">或点击选择多个 .ttf / .otf / .ttc / .woff / .woff2 文件</span>
+            </button>
+            <div style="font-size:12px; color:var(--text-sub); line-height:1.6; margin-top:9px;">上传后会自动按字体家族合并字重，并同步到当前的字体列表。</div>
+        </div>
+        <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
             <div class="card-title"><div class="card-title-wrap">资产备份与迁移</div></div>
             <div style="display:flex; gap:10px;">
                 <button class="btn btn-outline" onclick="exportAssetBackup()">导出资产备份</button>
@@ -1902,6 +2008,7 @@
             <button type="button" onclick="createPresetArtboard('3:4'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:8px;--icon-h:11px;"></span>3:4</button>
             <button type="button" onclick="createPresetArtboard('2:3'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:7px;--icon-h:12px;"></span>2:3</button>
             <button type="button" onclick="createPresetArtboard('9:16'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:7px;--icon-h:13px;"></span>9:16</button>
+            <button type="button" onclick="createPresetArtboard('3:3.75'); closeNewArtboardMenu();"><span class="new-board-icon" style="--icon-w:8px;--icon-h:10px;"></span>3:3.75</button>
         </div>
     </div>
 </div>
@@ -1929,6 +2036,10 @@
         <div class="canvas-toolbar">
             <div class="canvas-actions">
                 <button type="button" class="save-template-btn" onclick="saveActiveAsset()" id="canvas-save-btn">保存模版</button>
+                <div class="resize-menu-wrap">
+                    <button type="button" onclick="toggleResizeMenu(event)">修改尺寸 ⌄</button>
+                    <div class="resize-dropdown-menu" id="resize-dropdown-menu"></div>
+                </div>
                 <button type="button" class="primary" onclick="extendFromHead()">一键延展</button>
                 <div class="export-dropdown-wrap">
                     <button type="button" class="primary" onclick="toggleExportMenu(event)">导出 ⌄</button>
@@ -1991,6 +2102,9 @@
                     </div>
                 </div>
                 <div class="layer-list" id="layer-list-ui"></div>
+                <div class="layer-context-menu" id="layer-context-menu">
+                    <button type="button" onclick="centerLayerOnCanvas(); closeLayerContextMenu();">元素画板居中</button>
+                </div>
                 <div class="layer-list-resize-handle" id="layer-list-resize-handle" role="separator" aria-label="拖动调整图层列表高度" aria-orientation="horizontal" tabindex="0"></div>
             </div>
 
@@ -2040,6 +2154,9 @@
     </div>
 </div>
 
+<!-- HT Heliopolis 的导出不能交给 Canvas 重新排版；此库只用于读取已上传字体的轮廓。 -->
+<script src="https://unpkg.com/@pdf-lib/fontkit/dist/fontkit.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
 <script>
     /* ================= 全局状态与常量 ================= */
     const ARTBOARD_PRESETS = [
@@ -2059,7 +2176,8 @@
         '1:1': { label: '1:1', w: 1080, h: 1080 },
         '3:4': { label: '3:4', w: 900, h: 1200 },
         '2:3': { label: '2:3', w: 1000, h: 1500 },
-        '9:16': { label: '9:16', w: 1080, h: 1920 }
+        '9:16': { label: '9:16', w: 1080, h: 1920 },
+        '3:3.75': { label: '3:3.75', w: 1080, h: 1350 }
     };
     const SIZES = {
         head: { w: 750, h: 500 },
@@ -2069,14 +2187,16 @@
         '3:4': { w: 1080, h: 1440 },
         '4:3': { w: 1440, h: 1080 },
         '16:9': { w: 1920, h: 1080 },
-        '9:16': { w: 1080, h: 1920 }
+        '9:16': { w: 1080, h: 1920 },
+        '3:3.75': { w: 1080, h: 1350 }
     };
     let currentArtboardId = 'head';
     let currentRatio = 'head'; let currentScale = 1;
-    let activeLayerIds = []; 
-    let customFonts = []; 
+    let activeLayerIds = [];
+    let _contextMenuLayerId = null;
+    let customFonts = [];
     let layers = []; // 万物皆图层
-    let showSafeGuide = true;
+    let showSafeGuide = false;
     let overviewMode = false;
     let artboards = ARTBOARD_PRESETS.reduce((acc, preset) => {
         acc[preset.id] = { id: preset.id, label: preset.label, ratio: preset.ratio, layers: [] };
@@ -2790,12 +2910,12 @@
     window.getArtboardSnapshot = getArtboardSnapshot;
     window.importArtboardSnapshot = importArtboardSnapshot;
 
-    function saveHistory() {
+    function saveHistory(force) {
         if(isRestoring) return;
         saveCurrentArtboardState();
         const state = { currentArtboardId, artboardPresets: cloneData(getCustomArtboardPresets()), artboards: cloneData(artboards) };
         const stateText = JSON.stringify(state);
-        if(historyIdx >= 0 && JSON.stringify(historyStack[historyIdx]) === stateText) { updateHistoryButtons(); return; }
+        if(!force && historyIdx >= 0 && JSON.stringify(historyStack[historyIdx]) === stateText) { updateHistoryButtons(); return; }
         historyStack = historyStack.slice(0, historyIdx + 1);
         historyStack.push(state);
         if(historyStack.length > 80) historyStack.shift();
@@ -3587,7 +3707,10 @@
         guide.style.right = margin + 'px';
         guide.style.bottom = margin + 'px';
         guide.style.display = showSafeGuide ? 'block' : 'none';
-        if(toggle) toggle.classList.toggle('primary', showSafeGuide);
+        if(toggle) {
+            toggle.classList.toggle('is-on', showSafeGuide);
+            toggle.textContent = showSafeGuide ? '安全区 ✓' : '安全区';
+        }
     }
     function toggleSafeGuide() {
         showSafeGuide = !showSafeGuide;
@@ -3600,6 +3723,7 @@
         if(pane) requestAnimationFrame(() => { pane.scrollTop = y; });
     }
     function getLayerName(l) {
+        if(l.customName) return l.customName;
         if(l.type === 'solid') return '色块';
         if(l.type === 'arc') return '圆弧';
         if(l.type === 'text') return '文本';
@@ -4044,7 +4168,8 @@
     function resizeCanvas() {
         const wrap = document.getElementById('canvas-wrapper'); const pane = document.getElementById('left-pane'); const {w, h} = SIZES[currentRatio];
         wrap.style.width = w + 'px'; wrap.style.height = h + 'px';
-        const scale = Math.min((pane.clientWidth - 160) / w, (pane.clientHeight - 160) / h);
+        const capturePadding = document.body.classList.contains('vf-native-capture-mode') ? 20 : 160;
+        const scale = Math.min((pane.clientWidth - capturePadding) / w, (pane.clientHeight - capturePadding) / h);
         currentScale = scale; wrap.style.transform = `translate(-50%, -50%) scale(${scale})`;
         syncSafeGuide();
     }
@@ -4409,13 +4534,58 @@
             li.ondragend = () => { draggingLayerId = null; li.classList.remove('dragging'); };
             li.ondragover = e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
             li.ondrop = e => { e.preventDefault(); reorderLayerByDrop(draggingLayerId, l.id); };
+            li._clickTimer = null;
             li.onclick = (e) => {
-                if(!e.target.closest('button')) {
+                if(e.target.closest('button')) return;
+                if (li._clickTimer) { clearTimeout(li._clickTimer); li._clickTimer = null; return; }
+                li._clickTimer = setTimeout(() => {
+                    li._clickTimer = null;
                     preservePaneScroll(() => {
                         if(e.shiftKey) { if(activeLayerIds.includes(l.id)) activeLayerIds = activeLayerIds.filter(x => x !== l.id); else activeLayerIds.push(l.id); } else { activeLayerIds = [l.id]; }
                         renderCanvas(); renderLayersList(); renderProperties();
                     });
+                }, 280);
+            };
+            li.oncontextmenu = (e) => {
+                e.preventDefault();
+                if (li._clickTimer) { clearTimeout(li._clickTimer); li._clickTimer = null; }
+                // 右键同时选中该图层
+                if (!activeLayerIds.includes(l.id)) {
+                    activeLayerIds = [l.id];
+                    renderCanvas(); renderLayersList(); renderProperties();
                 }
+                _contextMenuLayerId = l.id;
+                var menu = document.getElementById('layer-context-menu');
+                if (!menu) return;
+                menu.style.left = e.clientX + 'px';
+                menu.style.top = e.clientY + 'px';
+                menu.classList.add('open');
+            };
+            li.ondblclick = (e) => {
+                if(e.target.closest('button')) return;
+                if (li._clickTimer) { clearTimeout(li._clickTimer); li._clickTimer = null; }
+                var nameSpan = li.querySelector('.layer-name-text');
+                if (!nameSpan) return;
+                var input = document.createElement('input');
+                input.type = 'text';
+                input.value = getLayerName(l);
+                input.className = 'layer-name-input';
+                input.style.cssText = 'flex:1; min-width:0; border:none; outline:none; background:rgba(0,0,0,0.04); border-radius:4px; padding:2px 6px; font-size:12px; font-weight:680; color:var(--text-main); font-family:inherit;';
+                nameSpan.replaceWith(input);
+                input.focus();
+                input.select();
+                var commit = function() {
+                    var val = input.value.trim();
+                    if (val === getLayerName(l)) return;
+                    l.customName = val || null;
+                    renderLayersList();
+                    saveHistory();
+                };
+                input.onblur = commit;
+                input.onkeydown = function(ev) {
+                    if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+                    if (ev.key === 'Escape') { input.value = ''; input.blur(); }
+                };
             };
             var thumb = getLayerThumb(l);
             var eyeIcon = hidden ? ICON_EYE_OFF : ICON_EYE_ON;
@@ -4424,7 +4594,7 @@
             li.innerHTML = `<div style="display:flex; align-items:center; gap:8px; min-width:0; flex:1;">
                 <span class="drag-handle" style="flex-shrink:0;">⋮⋮</span>
                 <div class="layer-thumb">${thumb}</div>
-                <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;">${getLayerName(l)}</span>
+                <span class="layer-name-text" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;">${getLayerName(l)}</span>
             </div>
             <div class="layer-actions">
                 <button class="l-btn${eyeCls}" title="${hidden ? '显示图层' : '隐藏图层'}" onclick="event.stopPropagation();toggleLayerVisible('${l.id}')">${eyeIcon}</button>
@@ -4451,6 +4621,26 @@
     }
 
     function deleteLayer(id) { preservePaneScroll(() => { layers = layers.filter(l => l.id !== id); activeLayerIds = activeLayerIds.filter(x => x !== id); renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); }); }
+    function closeLayerContextMenu() {
+        document.getElementById('layer-context-menu')?.classList.remove('open');
+    }
+    function centerLayerOnCanvas() {
+        if (!_contextMenuLayerId) return;
+        var layer = layers.find(function(l) { return l.id === _contextMenuLayerId; });
+        if (!layer) return;
+        var size = SIZES[currentRatio] || { w: 1080, h: 1080 };
+        saveHistory();
+        layer.x = size.w / 2;
+        layer.y = size.h / 2;
+        saveHistory();
+        renderCanvas(); renderLayersList(); renderProperties();
+        showToast('已居中');
+    }
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.layer-context-menu') && !e.target.closest('.layer-item')) {
+            closeLayerContextMenu();
+        }
+    });
     function deleteSelectedLayers() { preservePaneScroll(() => { const ids = new Set(activeLayerIds); layers = layers.filter(l => !ids.has(l.id)); activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); showToast('已删除选中图层'); }); }
     async function clearCurrentArtboardLayers() {
         if(layers.length === 0) return showToast('当前画板没有可清空的图层', true);
@@ -4869,6 +5059,21 @@
             renderCanvas(); renderLayersList(); renderProperties();
         } else { exitTextEdit(); activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); }
     });
+    // 点击画板外侧灰色背景 → 取消选择
+    (function(){
+        var pane = document.getElementById('left-pane');
+        pane.addEventListener('mousedown', function(e) {
+            if (e.target === pane || e.target.classList.contains('left-pane')) {
+                exitTextEdit();
+                if (activeLayerIds.length > 0) {
+                    activeLayerIds = [];
+                    renderCanvas();
+                    renderLayersList();
+                    renderProperties();
+                }
+            }
+        });
+    })();
     window.addEventListener('mousemove', e => {
         if(isDragging && activeLayerIds.length > 0) {
             hasDragged = true; let dx = (e.clientX - dragStartX) / currentScale; let dy = (e.clientY - dragStartY) / currentScale;
@@ -4911,7 +5116,7 @@
     function closeToolbarMore() {
         document.getElementById('toolbar-more-menu')?.classList.remove('open');
     }
-    document.addEventListener('click', e => { if(!e.target.closest('.toolbar-more-wrap')) closeToolbarMore(); if(!e.target.closest('.export-dropdown-wrap')) closeExportMenu(); });
+    document.addEventListener('click', e => { if(!e.target.closest('.toolbar-more-wrap')) closeToolbarMore(); if(!e.target.closest('.export-dropdown-wrap')) closeExportMenu(); if(!e.target.closest('.resize-menu-wrap')) closeResizeMenu(); });
     document.addEventListener('click', e => { if(!e.target.closest('.new-artboard-menu-wrap')) closeNewArtboardMenu(); });
     // ===== 模版同步到素材库 =====
     function notifyParent(msg) {
@@ -5338,7 +5543,7 @@
     var diySelectedSubtag = '全部'; // 真正选中的分类，影响保存时的 tag2
     var DIY_SUBTAGS = {
         layout: ['全部', '社媒物料', 'C端物料'],
-        component: ['全部', '标签', '背景', '品牌圆弧', '配色', 'LOGO', 'KIKI', '其他素材', '字体']
+        component: ['全部', '标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材']
     };
     function getColorPaletteCards() {
         if(!cloudColorPaletteSnapshot.loaded) return [];
@@ -5381,14 +5586,6 @@
                 counts['全部']++;
                 if (counts[itemTag] !== undefined) counts[itemTag]++;
             });
-            // 字体的每个字重是一份文件，但在资产库中属于同一个字体家族。
-            groupFontAssetsByFamily(fontAssets).forEach(function() {
-                counts['全部']++;
-                counts['字体']++;
-            });
-            const colorCount = getColorPaletteCards().length;
-            counts['全部'] += colorCount;
-            counts['配色'] += colorCount;
         }
         row.innerHTML = tags.map(function(t) {
             var isFilterActive = diySubtagFilter === t;
@@ -5403,7 +5600,7 @@
 
     function renderAssetLibrary() {
         var cl = document.getElementById('diy-count-layout'); if (cl) cl.textContent = '· ' + presetLibrary.length;
-        var cc = document.getElementById('diy-count-component'); if (cc) cc.textContent = '· ' + (tagPresetLibrary.length + logoAssets.length + groupFontAssetsByFamily(fontAssets).length + getColorPaletteCards().length);
+        var cc = document.getElementById('diy-count-component'); if (cc) cc.textContent = '· ' + (tagPresetLibrary.length + logoAssets.length);
         renderDiySubtags();
         const list = document.getElementById('asset-list-ui'); if(!list) return;
         list.innerHTML = '';
@@ -5439,19 +5636,10 @@
             };
             var filteredTags = tagPresetLibrary.filter(filterFn);
             var filteredLogos = logoAssets.filter(filterFn);
-            var filteredFonts = fontAssets.filter(filterFn);
-            var fontFamilies = groupFontAssetsByFamily(filteredFonts);
-            var paletteCards = diySubtagFilter === '配色' ? getColorPaletteCards() : [];
-            var totalComp = filteredTags.length + filteredLogos.length + fontFamilies.length + paletteCards.length;
-            if(totalComp === 0) { list.innerHTML = '<div class="asset-empty">' + (diySubtagFilter === '配色' ? '暂无已同步的配色方案' : '暂无组件') + '</div>'; return; }
-            paletteCards.forEach(function(palette) { list.appendChild(createColorPaletteAssetItem(palette)); });
+            var totalComp = filteredTags.length + filteredLogos.length;
+            if(totalComp === 0) { list.innerHTML = '<div class="asset-empty">暂无组件</div>'; return; }
             filteredTags.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, asset: p, type: 'tag', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
             filteredLogos.forEach(l => list.appendChild(createAssetItem({ title: l.name, meta: '点击添加到画布', asset: l, type: 'logo', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
-            fontFamilies.forEach(function(family) {
-                var meta = family.assets.length > 1 ? (family.assets.length + ' 个字重') : (family.previewAsset.fontWeightLabel || '常规');
-                meta += family.installed ? ' · ✅ 已安装' : ' · 点击安装字体';
-                list.appendChild(createAssetItem({ title: family.familyName, meta: meta, asset: family.previewAsset, type: 'font', onApply: function() { return applyFontFamilyAssets(family.assets, family.familyName); }, onDelete: function() { return deleteFontFamilyAssets(family.assets, family.familyName); } }));
-            });
         }
     }
     function createColorPaletteAssetItem(palette) {
@@ -5536,8 +5724,10 @@
     function getTemplatePreviewCanvasInfo(template = {}) {
         const declaredRatio = String(template.size || '').trim();
         const declaredSize = SIZES[declaredRatio];
-        const width = Math.round(Number(template.canvasW) || Number(template.previewW) || Number(declaredSize?.w) || 0);
-        const height = Math.round(Number(template.canvasH) || Number(template.previewH) || Number(declaredSize?.h) || 0);
+        // previewW/previewH 是预览 PNG 的像素尺寸。预览以 2 倍密度生成，不能当作
+        // 模板画板尺寸；完整 JSON 到达前不显示尺寸，避免 1080 被错误标成 2160。
+        const width = Math.round(Number(template.canvasW) || Number(declaredSize?.w) || 0);
+        const height = Math.round(Number(template.canvasH) || Number(declaredSize?.h) || 0);
         if(width < 1 || height < 1) return null;
         const divisor = greatestCommonDivisor(width, height);
         return { width, height, ratio: `${Math.round(width / divisor)}:${Math.round(height / divisor)}` };
@@ -5748,8 +5938,8 @@
         }
         pendingLayoutPresetId = '';
         if(p.kind === 'pack') return applyTemplatePack(p);
-        // 先保存当前状态，确保 Ctrl+Z 能回到应用模板前的状态
-        saveHistory();
+        // 先保存当前状态，确保 Ctrl+Z 能回到应用模板前的状态（force 避免去重跳过）
+        saveHistory(true);
         // 模板必须优先恢复实际保存尺寸；缺失元数据的旧模板安全回退到 1:1。
         restoreTemplateCanvas(p);
         // 模板切换必须完整替换画板。保留上一模板的图片/Logo/圆环会造成组件叠加，
@@ -5757,9 +5947,8 @@
         const newLayers = adaptPresetElementsToCurrent(p.elements, p.size);
         newLayers.forEach(function(layer) { layer._templateLayer = true; });
         layers = newLayers;
-        activeLayerIds = newLayers.filter(l => l.type !== 'image').map(l => l.id);
-        if(activeLayerIds.length === 0) activeLayerIds = newLayers.map(l => l.id);
-        saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast('已切换到该模板');
+        activeLayerIds = [];
+        saveHistory(true); renderCanvas(); renderLayersList(); renderProperties(); showToast('已切换到该模板');
     }
     async function deleteLayoutPreset(id) {
         if(!await askConfirm('删除这个版式预设？')) return;
@@ -5815,7 +6004,7 @@
         notifyParent({ type: 'vf:save-template', templateType: 'pack', name: name, data: { artboards: packArtboards }, previewDataUrl: previewDataUrl || '', tempId: tempId });
     }
     function applyTemplatePack(pack) {
-        saveHistory();
+        saveHistory(true);
         saveCurrentArtboardState();
         const nextArtboards = normalizeArtboardSnapshot(pack.artboards || {});
         Object.keys(nextArtboards).forEach(function(boardId) {
@@ -5826,7 +6015,7 @@
         currentArtboardId = getFixedArtboardPresets().find(preset => (artboards[preset.id]?.layers || []).length > 0)?.id || 'head';
         loadArtboard(currentArtboardId, false);
         activeLayerIds = [];
-        saveHistory();
+        saveHistory(true);
         renderCanvas(); renderLayersList(); renderProperties(); renderAssetLibrary();
         showToast('已应用三画板套组');
     }
@@ -5847,12 +6036,12 @@
     }
     function applyTagComboPreset(id) {
         const p = tagPresetLibrary.find(x => x.id === id); if(!p) return;
-        saveHistory();
+        saveHistory(true);
         var newLayers = cloneLayersForInsert(p.elements, true);
-        // 如果画板上有选中的标签组件，替换它：新组件继承被替换组件的坐标、缩放、旋转等
-        var selectedTags = layers.filter(function(l) { return activeLayerIds.includes(l.id) && (l.type === 'tag' || l.type === 'discountTag'); });
-        if (selectedTags.length > 0) {
-            var inherited = selectedTags[0];
+        // 如果画板上有选中的图层，替换它：新组件继承被替换组件的坐标、缩放、旋转等
+        var selectedAny = layers.filter(function(l) { return activeLayerIds.includes(l.id); });
+        if (selectedAny.length > 0) {
+            var inherited = selectedAny[0];
             newLayers.forEach(function(nl, i) {
                 nl.x = inherited.x;
                 nl.y = inherited.y;
@@ -5864,11 +6053,11 @@
                     nl.tagPaddingX = inherited.tagPaddingX;
                 }
             });
-            // 删除被替换的选中组件
+            // 删除被替换的选中图层
             layers = layers.filter(function(l) { return !activeLayerIds.includes(l.id); });
         }
         layers.push(...newLayers); activeLayerIds = newLayers.map(l => l.id); markNewlyAddedLayers(newLayers);
-        saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast(selectedTags.length > 0 ? '已替换标签组件' : '标签组合已应用');
+        saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast(selectedAny.length > 0 ? '已替换' : '组件已应用');
     }
     async function deleteTagComboPreset(id) {
         if(!await askConfirm('删除这个标签组合？')) return;
@@ -5877,21 +6066,44 @@
         tagPresetLibrary = tagPresetLibrary.filter(p => p.id !== id);
         renderAssetLibrary(); showToast('已删除');
     }
+    function getLogoAssetType(logo) {
+        // 根据素材的 subTag/tags 推断正确的图层类型
+        var subTag = logo.subTag || logo._subTag || '';
+        if (!subTag && logo.tags && Array.isArray(logo.tags)) {
+            var t = logo.tags;
+            if (t.includes('LOGO')) subTag = 'LOGO';
+            else if (t.includes('背景')) subTag = '背景';
+            else if (t.includes('KIKI')) subTag = 'KIKI';
+            else if (t.includes('其他素材')) subTag = '其他素材';
+            else if (t.includes('标签')) subTag = '标签';
+            else if (t.includes('品牌圆弧')) subTag = '品牌圆弧';
+        }
+        // 只有明确标记为 LOGO 的才用 logo 类型，背景/KIKI/其他素材用 image
+        if (subTag === 'LOGO') return 'logo';
+        if (subTag === '背景' || subTag === 'KIKI' || subTag === '其他素材') return 'image';
+        // 老数据没有 subTag，默认当作 logo（兼容旧行为）
+        return 'logo';
+    }
     async function addLogoFromAsset(id) {
         const logo = logoAssets.find(l => l.id === id); if(!logo) return;
-        // 如果画板上有选中的 logo 或 image 层，替换它
-        var selectedImg = layers.find(function(l) { return activeLayerIds.includes(l.id) && (l.type === 'logo' || l.type === 'image'); });
+        var assetType = getLogoAssetType(logo);
+        // 如果画板上有选中的可替换图层，替换它
+        var selectedImg = layers.find(function(l) { return activeLayerIds.includes(l.id) && (l.type === 'logo' || l.type === 'image' || l.type === 'solid'); });
         if (selectedImg) {
             saveHistory();
             selectedImg.src = logo.src;
-            selectedImg.type = 'logo';
-            selectedImg.fitMode = 'contain';
-            saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast('已替换 Logo');
+            selectedImg.type = assetType;
+            selectedImg.fitMode = assetType === 'logo' ? 'contain' : 'cover';
+            // 清理 solid 特有属性
+            delete selectedImg.color;
+            delete selectedImg.role;
+            saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast('已替换');
             return;
         }
         const size = await readImageSize(logo.src);
-        const targetW = 260; const targetH = Math.max(60, targetW * size.h / size.w);
-        addLayer('logo', { src: logo.src, baseW: targetW, baseH: targetH });
+        var targetW = assetType === 'logo' ? 260 : Math.min(size.w, 800);
+        var targetH = Math.max(60, targetW * size.h / size.w);
+        addLayer(assetType, { src: logo.src, baseW: targetW, baseH: targetH, fitMode: assetType === 'logo' ? 'contain' : 'cover' });
     }
     function deleteLogoAsset(id) {
         askConfirm('删除这个 Logo 素材？').then(ok => {
@@ -6800,55 +7012,86 @@
     window.confirmFontUpload = async function() {
         if (!pendingFontUploadFiles.length || !document.getElementById('font-license-check')?.checked) return;
         var files = pendingFontUploadFiles.slice();
-        closeFontUploadModal();
-        await addFontFiles(files);
+        var button = document.getElementById('font-upload-confirm');
+        if (button) {
+            button.disabled = true;
+            button.style.opacity = '.7';
+            button.textContent = '正在上传…';
+        }
+        // 大字体读取和 FontFace 注册可能需要数秒；保留弹窗和明确状态，
+        // 避免用户点击确认后误以为没有触发上传。
+        showToast('正在安装并上传字体…');
+        try {
+            var result = await addFontFiles(files);
+            if (result && (result.installedCount > 0 || result.syncedExistingCount > 0)) closeFontUploadModal();
+        } finally {
+            if (button && document.getElementById('font-upload-modal').style.display === 'flex') {
+                button.textContent = '确认上传';
+                refreshFontUploadConfirm();
+            }
+        }
     };
     async function addFontFiles(inputFiles) {
         const files = Array.from(inputFiles || []).filter(file => /\.(ttf|otf|woff2?)$/i.test(file.name || ''));
         if(!files.length) { showToast('请选择 TTF、OTF、WOFF 或 WOFF2 字体文件', true); return; }
-        let installedCount = 0, skippedCount = 0, failedCount = 0;
+        let installedCount = 0, syncedExistingCount = 0, skippedCount = 0, failedCount = 0;
+        const failures = [];
         for(const file of files) {
             const name = file.name.replace(/\.[^/.]+$/, '');
-            if(customFonts.some(font => font.name === name)) { skippedCount++; continue; }
+            const existingFont = customFonts.find(function(font) { return font.name === name; });
+            if(existingFont) {
+                // 早期版本只把字体装入 IndexedDB，资产库被移除后这些字体没有云端记录。
+                // 重新选择同一文件时应补传已有的原始数据，不能再直接当作“重复”跳过。
+                const normalizedExisting = normalizeCustomFontAsset(existingFont);
+                if (queueFontForCloud(normalizedExisting, file.name, name)) syncedExistingCount++;
+                else skippedCount++;
+                continue;
+            }
             try {
                 const dataUrl = await readFontFile(file);
                 const fontData = normalizeCustomFontAsset({ name, data: dataUrl, fileName: file.name });
                 if(!await registerFontAsset(fontData)) throw new Error('字体解析失败');
                 await saveFontToDB(fontData);
                 installedCount++;
-                // 在字体子标签下同步上传到素材库
-                if (diySelectedSubtag === '字体') {
-                    var fontTempId = genId('font_asset');
-                    fontAssets.push({
-                        id: fontTempId, name: fontData.familyName || name, fontFamilyName: fontData.familyName,
-                        fontFamilyId: fontData.familyId, fontWeight: fontData.weight, fontWeightLabel: fontData.weightLabel,
-                        fontFileName: file.name, fontData: dataUrl, _installed: true, _pending: true, subTag: '字体'
-                    });
-                    notifyParent({
-                        type: 'vf:save-font',
-                        templateType: 'font',
-                        name: name,
-                        familyName: fontData.familyName,
-                        familyId: fontData.familyId,
-                        weight: fontData.weight,
-                        weightLabel: fontData.weightLabel,
-                        fileName: file.name,
-                        data: dataUrl,
-                        subTag: '字体',
-                        previewDataUrl: generateFontAssetPreview(name, fontData.familyName, fontData.weight),
-                        tempId: fontTempId
-                    });
-                }
+                queueFontForCloud(fontData, file.name, name);
             } catch(error) {
                 failedCount++;
+                failures.push((file.name || '字体文件') + '：' + (error?.message || '解析失败'));
             }
         }
-        if(installedCount) {
+        if(installedCount || syncedExistingCount) {
             queueSharedAssetSave();
             renderCanvas(); renderProperties(); renderSettings(); saveHistory();
         }
-        const results = [installedCount ? `已安装 ${installedCount} 个` : '', skippedCount ? `跳过 ${skippedCount} 个重复文件` : '', failedCount ? `${failedCount} 个解析失败` : ''].filter(Boolean).join('，');
+        const results = [installedCount ? `已安装 ${installedCount} 个` : '', syncedExistingCount ? `正在补传 ${syncedExistingCount} 个本地字体` : '', skippedCount ? `跳过 ${skippedCount} 个已同步文件` : '', failedCount ? `${failedCount} 个解析失败` : ''].filter(Boolean).join('，');
         showToast(results || '没有可安装的字体', failedCount > 0 && !installedCount);
+        if (failedCount && failures.length) console.warn('字体上传失败：', failures.join('；'));
+        return { installedCount, syncedExistingCount, skippedCount, failedCount, failures };
+    }
+    function queueFontForCloud(font, fileName, fallbackName) {
+        const normalized = normalizeCustomFontAsset(font || {});
+        if (!normalized.data) return false;
+        const sameFont = fontAssets.some(function(asset) {
+            return asset.fontFamilyId === normalized.familyId && Number(asset.fontWeight || 400) === Number(normalized.weight || 400)
+                && (asset.cloudId || asset._pending);
+        });
+        if (sameFont) return false;
+        const fontTempId = genId('font_asset');
+        fontAssets.push({
+            id: fontTempId, name: normalized.familyName || fallbackName, fontFamilyName: normalized.familyName,
+            fontFamilyId: normalized.familyId, fontWeight: normalized.weight, fontWeightLabel: normalized.weightLabel,
+            fontFileName: fileName || normalized.fileName || (fallbackName + '.ttf'), fontData: normalized.data,
+            _installed: true, _pending: true, subTag: '字体'
+        });
+        notifyParent({
+            type: 'vf:save-font', templateType: 'font', name: fallbackName || normalized.name,
+            familyName: normalized.familyName, familyId: normalized.familyId,
+            weight: normalized.weight, weightLabel: normalized.weightLabel,
+            fileName: fileName || normalized.fileName || (fallbackName + '.ttf'), data: normalized.data,
+            subTag: '字体', previewDataUrl: generateFontAssetPreview(fallbackName || normalized.name, normalized.familyName, normalized.weight),
+            tempId: fontTempId
+        });
+        return true;
     }
     document.getElementById('font-upload').addEventListener('change', event => {
         openFontUploadModal(event.target.files, document.getElementById('font-upload-modal').style.display === 'flex');
@@ -6858,6 +7101,33 @@
     ['dragenter', 'dragover'].forEach(function(type) { fontModalDropZone?.addEventListener(type, function(event) { if(isFileDragEvent(event)) { event.preventDefault(); fontModalDropZone.style.borderColor = '#111827'; } }); });
     ['dragleave', 'dragend'].forEach(function(type) { fontModalDropZone?.addEventListener(type, function() { fontModalDropZone.style.borderColor = ''; }); });
     fontModalDropZone?.addEventListener('drop', function(event) { if(isFileDragEvent(event)) { event.preventDefault(); fontModalDropZone.style.borderColor = ''; openFontUploadModal(event.dataTransfer.files, true); } });
+    // 字体不再依赖资产库的「字体」分组；全局设置中的入口同样先进入确认弹窗，
+    // 因而多文件拖入、版权确认、安装与云端同步都与原上传流程完全一致。
+    var settingsFontDropZone = document.getElementById('settings-font-drop-zone');
+    ['dragenter', 'dragover'].forEach(function(type) {
+        settingsFontDropZone?.addEventListener(type, function(event) {
+            if (!isFileDragEvent(event)) return;
+            event.preventDefault();
+            settingsFontDropZone.style.borderColor = '#111827';
+            settingsFontDropZone.style.background = '#f0f2f5';
+            settingsFontDropZone.style.color = '#111827';
+        });
+    });
+    ['dragleave', 'dragend'].forEach(function(type) {
+        settingsFontDropZone?.addEventListener(type, function() {
+            settingsFontDropZone.style.borderColor = '';
+            settingsFontDropZone.style.background = '';
+            settingsFontDropZone.style.color = '';
+        });
+    });
+    settingsFontDropZone?.addEventListener('drop', function(event) {
+        if (!isFileDragEvent(event)) return;
+        event.preventDefault();
+        settingsFontDropZone.style.borderColor = '';
+        settingsFontDropZone.style.background = '';
+        settingsFontDropZone.style.color = '';
+        openFontUploadModal(event.dataTransfer.files, false);
+    });
 
     /* ================= AI 图形引擎集成 ================= */
     async function enhanceAIPrompt() {
@@ -6988,6 +7258,59 @@
     }
 
     const SAFE_CANVAS_PX = 67108864; // ~67M 像素，浏览器 canvas 安全上限（约 8192×8192）
+    // ===== 修改画板尺寸 =====
+    function toggleResizeMenu(e) {
+        e?.stopPropagation();
+        buildResizeMenu();
+        document.getElementById('resize-dropdown-menu')?.classList.toggle('open');
+    }
+    function closeResizeMenu() {
+        document.getElementById('resize-dropdown-menu')?.classList.remove('open');
+    }
+    function buildResizeMenu() {
+        var menu = document.getElementById('resize-dropdown-menu');
+        if (!menu) return;
+        var html = '';
+        // 自定义尺寸
+        var customBoards = getCustomArtboardPresets();
+        if (customBoards.length > 0) {
+            html += '<span class="resize-section-label">自定义尺寸</span>';
+            customBoards.forEach(function(preset) {
+                var size = SIZES[preset.ratio] || { w: preset.w, h: preset.h };
+                var isCurrent = currentRatio === preset.ratio;
+                html += '<button class="' + (isCurrent ? 'is-current' : '') + '" onclick="changeArtboardSize(\'' + preset.ratio + '\'); closeResizeMenu();">'
+                    + escapeHtml(preset.label)
+                    + '<span class="resize-dim">' + size.w + '×' + size.h + '</span>'
+                    + '</button>';
+            });
+            html += '<div style="height:1px; background:#e5e7eb; margin:4px 8px;"></div>';
+        }
+        // 预设尺寸
+        html += '<span class="resize-section-label">预设尺寸</span>';
+        Object.keys(NEW_ARTBOARD_PRESETS).forEach(function(key) {
+            var p = NEW_ARTBOARD_PRESETS[key];
+            var isCurrent = currentRatio === key;
+            html += '<button class="' + (isCurrent ? 'is-current' : '') + '" onclick="changeArtboardSize(\'' + key + '\'); closeResizeMenu();">'
+                + escapeHtml(p.label)
+                + '<span class="resize-dim">' + p.w + '×' + p.h + '</span>'
+                + '</button>';
+        });
+        menu.innerHTML = html;
+    }
+    function changeArtboardSize(ratio) {
+        if (currentRatio === ratio) return;
+        var newSize = SIZES[ratio] || NEW_ARTBOARD_PRESETS[ratio] || { w: 1080, h: 1080 };
+        // 确保 SIZES 中有该尺寸（预设尺寸可能尚未注册）
+        if (!SIZES[ratio]) SIZES[ratio] = { w: newSize.w, h: newSize.h };
+        saveHistory(true);
+        // 只改画布尺寸，图层位置和大小保持不变
+        currentRatio = ratio;
+        syncRatioNav();
+        resizeCanvas();
+        saveHistory(true);
+        renderCanvas(); renderLayersList(); renderProperties();
+        showToast('已切换至 ' + (NEW_ARTBOARD_PRESETS[ratio]?.label || ratio));
+    }
     function toggleExportMenu(e) {
         e?.stopPropagation();
         buildExportMenu();
@@ -7008,6 +7331,8 @@
         var scales = [0.5, 1, 1.5, 2, 3];
         var labels = { '0.5': '0.5倍', '1': '1倍（原图）', '1.5': '1.5倍', '2': '2倍', '3': '3倍' };
         var html = '<div class="export-menu-body">'
+            + '<button type="button" class="export-native-png" onclick="exportNativeCapturePNG(1); closeExportMenu();">原生 PNG 导出（HT 推荐）</button>'
+            + '<button type="button" class="export-native-pdf" onclick="exportNativePDF(); closeExportMenu();">导出 PDF（保留原生文字）</button>'
             + '<div class="export-scale-list">';
         scales.forEach(function(s) {
             var outW = Math.round(w * s);
@@ -7022,6 +7347,68 @@
                 + '</button>';
         });
         menu.innerHTML = html + '</div></div>';
+    }
+    function exportNativeCapturePNG(scale) {
+        scale = scale || 1;
+        if (layers.length === 0) return showToast('画板为空，无法导出', true);
+        const oldActive = [...activeLayerIds];
+        const safeGuide = document.getElementById('safe-guide');
+        const oldGuideDisplay = safeGuide ? safeGuide.style.display : '';
+        const wasCaptureMode = document.body.classList.contains('vf-native-capture-mode');
+        document.body.classList.add('vf-native-capture-mode');
+        // 所有界面状态都在调用 getDisplayMedia 之前同步清除；浏览器截到的是干净画板。
+        activeLayerIds = [];
+        resizeCanvas(); renderCanvas(); renderLayersList(); renderProperties();
+        if (safeGuide) safeGuide.style.display = 'none';
+        // 不要在这里显示导出遮罩：遮罩本身会被当前标签页捕获进 PNG。
+        const capture = captureNativeArtboardBlob(scale);
+        Promise.resolve(capture).then(function(blob) {
+            downloadBlob(blob, `GCC_${getArtboardPreset(currentArtboardId).label}_${Date.now()}.png`);
+            showToast('✅ 原生 PNG 导出成功（保留浏览器文字排版）');
+        }).catch(function(error) {
+            console.error('原生 PNG 导出失败：', error);
+            showToast('❌ 原生 PNG 导出失败：' + (error?.message || '未知错误'), true);
+        }).finally(function() {
+            if (!wasCaptureMode) document.body.classList.remove('vf-native-capture-mode');
+            if (safeGuide) safeGuide.style.display = oldGuideDisplay;
+            activeLayerIds = oldActive;
+            resizeCanvas(); renderCanvas(); renderLayersList(); renderProperties(); syncSafeGuide();
+        });
+    }
+    function getNativePrintStyles() {
+        const inline = Array.from(document.querySelectorAll('style')).map(function(style) { return style.textContent || ''; }).join('\n');
+        const links = Array.from(document.querySelectorAll('link[rel="stylesheet"][href]')).map(function(link) {
+            return '<link rel="stylesheet" href="' + link.href.replace(/"/g, '&quot;') + '">';
+        }).join('');
+        return links + '<style>' + inline + '</style>';
+    }
+    async function exportNativePDF() {
+        const wrap = document.getElementById('canvas-wrapper');
+        if (!wrap) return;
+        const preset = getArtboardPreset(currentArtboardId);
+        const currentSize = SIZES[currentRatio] || preset;
+        const width = Number(currentSize.w) || Number(preset.w) || 1080;
+        const height = Number(currentSize.h) || Number(preset.h) || 1080;
+        // 必须在点击事件同步阶段打开，避免被浏览器当作弹窗拦截。
+        const printWindow = window.open('', '_blank', 'width=1200,height=900');
+        if (!printWindow) {
+            showToast('请允许浏览器打开 PDF 导出窗口', true);
+            return;
+        }
+        const clone = wrap.cloneNode(true);
+        clone.id = 'native-pdf-artboard';
+        clone.style.cssText = 'position:relative;left:0;top:0;width:' + width + 'px;height:' + height + 'px;transform:none;overflow:hidden;margin:0;background:#fff;';
+        clone.querySelectorAll('.selected').forEach(function(node) { node.classList.remove('selected'); });
+        clone.querySelectorAll('#safe-guide,.selection-box,.resize-handle,.rotate-handle,.layer-toolbar').forEach(function(node) { node.remove(); });
+        const printableCSS = '<style>'
+            + '@page{size:' + width + 'px ' + height + 'px;margin:0}'
+            + 'html,body{width:' + width + 'px!important;height:' + height + 'px!important;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important}'
+            + '#native-pdf-artboard{break-inside:avoid;page-break-inside:avoid}'
+            + '</style>';
+        printWindow.document.open();
+        printWindow.document.write('<!doctype html><html><head><base href="' + document.baseURI.replace(/"/g, '&quot;') + '"><meta charset="utf-8">' + getNativePrintStyles() + printableCSS + '</head><body>' + clone.outerHTML + '<script>Promise.all([document.fonts&&document.fonts.ready||Promise.resolve(),Promise.all(Array.from(document.images).map(function(i){return i.complete?Promise.resolve():new Promise(function(r){i.onload=i.onerror=r})}))]).then(function(){setTimeout(function(){window.focus();window.print()},450)})<\\/script></body></html>');
+        printWindow.document.close();
+        showToast('已打开原生 PDF 导出窗口，请选择“存储为 PDF”');
     }
     async function renderCurrentArtboardBlob(scale = 3) {
         const wrap = document.getElementById('canvas-wrapper');
@@ -7041,18 +7428,585 @@
         clone.style.cssText = `position:fixed;left:-99999px;top:0;width:${width}px;height:${height}px;transform:none;z-index:-1;overflow:hidden;background:#FFFFFF;pointer-events:none;`;
         document.body.appendChild(clone);
         try {
+            const usesHTHeliopolis = hasHTHeliopolisTextLayer();
+            // 主路径：直接用 OpenType 的 glyph outline 合成文本，不能让 html2canvas
+            // 重新排版 HT。只有取不到原生 Range 坐标时，才尝试 SVG 文字图片后备。
+            // 已验证 Fontkit/SVG 的本地 OTF 路径在当前浏览器导出环境会生成空白图。
+            // 不允许未验证的转换链路继续隐藏原文字：导出先稳定回退为浏览器文字。
+            let nativeTextJobs = [];
+            let nativeTextVector = null;
+            // SVG foreignObject 在部分浏览器无法嵌入本地上传的 OTF，失败时会生成空白
+            // 图片。它不能作为导出后备：路径不可用时保留 html2canvas 的原始文字，
+            // 绝不能把所有文字替换成空白图层。
+            const nativeTextRasterized = false;
+            const htExportMode = !usesHTHeliopolis ? 'standard'
+                : nativeTextVector ? 'outline'
+                : nativeTextRasterized ? 'native-image'
+                : 'legacy-fallback';
+            // 专用坐标采集只是高保真增强，绝不能成为 PNG 导出的单点失败条件。
+            // 个别模板把 HT 用在标签等复合组件中，不会产生普通文本图层坐标；
+            // 此时回退到原有的离屏冻结排版，而不是中止整个导出。
+            if (usesHTHeliopolis && !nativeTextRasterized && !nativeTextJobs.length) {
+                console.warn('未读取到 HT 普通文本坐标，使用离屏排版冻结导出');
+                preserveExportTextSpacingForCapture(clone);
+            } else if (!usesHTHeliopolis) {
+                preserveExportTextSpacingForCapture(clone);
+            }
             await waitForImagesIn(clone);
             await new Promise(r => setTimeout(r, 300));
             // 允许被跨域图片污染的 canvas 会在 toBlob 时被浏览器拒绝读取，最终导致导出失败。
             // useCORS 会优先加载可安全导出的远程图片；不支持 CORS 的资源不会破坏整张导出图。
             const canvas = await html2canvas(clone, { scale: safeScale, width, height, useCORS: true, allowTaint: false, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 0 });
+            if (nativeTextVector) {
+                const context = canvas.getContext('2d');
+                context.drawImage(nativeTextVector.image, 0, 0, canvas.width, canvas.height);
+                URL.revokeObjectURL(nativeTextVector.url);
+            }
             const blob = await new Promise((resolve, reject) => canvas.toBlob(result => result ? resolve(result) : reject(new Error('无法生成 PNG 文件')), 'image/png'));
+            // 诊断字段不影响 Blob 下载；用于明确告诉用户本次到底走了哪条 HT 路径。
+            blob.vfHTExportMode = htExportMode;
             return blob;
         } finally {
             clone.remove();
             if(safeGuide) safeGuide.style.display = oldGuideDisplay;
             syncSafeGuide();
         }
+    }
+    function getCustomFontAssetsForCss(fontFamily, preferredWeight) {
+        const family = String(fontFamily || '').replace(/["']/g, '');
+        const weight = Number(preferredWeight) || 400;
+        return customFonts.map(normalizeCustomFontAsset).filter(function(font) {
+            // 页面最终 CSS 往往是生成的 CF_* familyId，而模板数据可能仍是字体名称；
+            // 两种情况都必须识别，不能再从文件名是否包含 HT 推断。
+            return !!font.data && (family.indexOf(font.familyId) !== -1 || family.indexOf(font.familyName) !== -1);
+        }).sort(function(a, b) {
+            return Math.abs(Number(a.weight || 400) - weight) - Math.abs(Number(b.weight || 400) - weight);
+        });
+    }
+    function hasHTHeliopolisTextLayer() {
+        // 函数名保留以兼容现有调用；实际语义是“当前文字是否使用可转换路径的自定义字体”。
+        const renderedWithCustomFont = Array.from(document.querySelectorAll('#canvas-wrapper .layer-text-wrapper')).some(function(node) {
+            try {
+                const style = getComputedStyle(node);
+                return getCustomFontAssetsForCss(style.fontFamily, style.fontWeight).length > 0;
+            } catch (_error) { return false; }
+        });
+        if (renderedWithCustomFont) return true;
+        return layers.some(function(layer) {
+            return layer?.type === 'text' && getCustomFontAssetsForCss(layer.font, layer.fontWeight).length > 0;
+        });
+    }
+    function getCurrentExportSize(scale) {
+        const preset = getArtboardPreset(currentArtboardId);
+        const currentSize = SIZES[currentRatio] || preset;
+        const width = Number(currentSize.w) || Number(preset.w) || 1080;
+        const height = Number(currentSize.h) || Number(preset.h) || 1080;
+        return { width, height, outWidth: Math.round(width * scale), outHeight: Math.round(height * scale) };
+    }
+    function nextFrame() {
+        return new Promise(function(resolve) { requestAnimationFrame(function() { requestAnimationFrame(resolve); }); });
+    }
+    function getArtboardCaptureRect(wrap) {
+        let rect = wrap.getBoundingClientRect();
+        let left = rect.left;
+        let top = rect.top;
+        let width = rect.width;
+        let height = rect.height;
+        let owner = window;
+        // 静态编辑器嵌在主应用 iframe 中；共享“当前标签页”得到的是顶层视口，
+        // 因而要把 iframe 内的画板坐标换算到顶层视口坐标。
+        try {
+            while (owner !== owner.top && owner.frameElement) {
+                const frameRect = owner.frameElement.getBoundingClientRect();
+                const ratioX = frameRect.width / Math.max(1, owner.innerWidth);
+                const ratioY = frameRect.height / Math.max(1, owner.innerHeight);
+                left = frameRect.left + left * ratioX;
+                top = frameRect.top + top * ratioY;
+                width *= ratioX;
+                height *= ratioY;
+                owner = owner.parent;
+            }
+            return { left, top, width, height, viewportWidth: owner.innerWidth, viewportHeight: owner.innerHeight };
+        } catch (_error) {
+            return { left, top, width, height, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
+        }
+    }
+    // Canvas 的 fillText 会重新计算部分字体的 glyph advance；HT Heliopolis 恰好会在
+    // 空格和问号处出现偏差。这个路径不再让 Canvas 排版文字，而是采集浏览器已经
+    // 完成排版的标签页像素，再裁切画板并编码成 PNG。
+    async function captureNativeArtboardBlob(scale) {
+        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+            throw new Error('当前浏览器不支持原生 PNG 捕获，请使用最新版 Chrome 或 Edge');
+        }
+        const target = getCurrentExportSize(scale);
+        if ((target.outWidth * target.outHeight) > SAFE_CANVAS_PX) throw new Error('导出尺寸超出浏览器安全上限');
+        showToast('请在浏览器窗口中选择“当前标签页”，然后点击共享以生成原生排版 PNG');
+        let stream;
+        let video;
+        try {
+            // 必须直接由导出按钮触发；浏览器会保留一次明确的用户授权，网页无法绕过。
+            stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { displaySurface: 'browser' },
+                audio: false,
+                preferCurrentTab: true,
+                selfBrowserSurface: 'include',
+                surfaceSwitching: 'exclude'
+            });
+            // 浏览器的共享确认完成后，隐藏操作提示，避免它被裁入画板。
+            const toast = document.getElementById('toast');
+            if (toast) {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translate(-50%, -20px)';
+            }
+            const track = stream.getVideoTracks()[0];
+            if (!track) throw new Error('没有获取到可用的画面');
+            const surface = track.getSettings ? track.getSettings().displaySurface : '';
+            if (surface && surface !== 'browser') throw new Error('请在系统窗口中选择“当前标签页”，不要选择整个屏幕或窗口');
+            video = document.createElement('video');
+            video.muted = true;
+            video.playsInline = true;
+            video.srcObject = stream;
+            await video.play();
+            if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+                await new Promise(function(resolve, reject) {
+                    video.onloadeddata = resolve;
+                    video.onerror = function() { reject(new Error('无法读取共享画面')); };
+                });
+            }
+            // 清掉选择框后再取帧，保证 PNG 里没有编辑状态的虚线框。
+            await nextFrame();
+            const wrap = document.getElementById('canvas-wrapper');
+            const rect = wrap && getArtboardCaptureRect(wrap);
+            if (!rect || rect.width < 2 || rect.height < 2) throw new Error('未找到可导出的画板');
+            const scaleX = video.videoWidth / rect.viewportWidth;
+            const scaleY = video.videoHeight / rect.viewportHeight;
+            const sx = Math.max(0, Math.round(rect.left * scaleX));
+            const sy = Math.max(0, Math.round(rect.top * scaleY));
+            const sw = Math.round(rect.width * scaleX);
+            const sh = Math.round(rect.height * scaleY);
+            if (sx + sw > video.videoWidth + 2 || sy + sh > video.videoHeight + 2) {
+                throw new Error('共享画面与当前标签页不一致，请重新选择“当前标签页”');
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = target.outWidth;
+            canvas.height = target.outHeight;
+            const ctx = canvas.getContext('2d', { alpha: false });
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+            const blob = await new Promise(function(resolve, reject) {
+                canvas.toBlob(function(result) { result ? resolve(result) : reject(new Error('无法生成 PNG 文件')); }, 'image/png');
+            });
+            return blob;
+        } catch (error) {
+            if (error && error.name === 'NotAllowedError') throw new Error('未授予共享权限，已取消原生 PNG 导出');
+            throw error;
+        } finally {
+            if (video) {
+                video.pause();
+                video.srcObject = null;
+            }
+            if (stream) stream.getTracks().forEach(function(track) { track.stop(); });
+        }
+    }
+    // 供模板保存桥接层使用：它可在有用户授权时取得与导出相同的原生像素 PNG。
+    window.VF_CAPTURE_NATIVE_ARTBOARD_BLOB = captureNativeArtboardBlob;
+    function collectHTTextPaintJobs(sourceRoot, clone, logicalWidth, logicalHeight) {
+        if (!sourceRoot || !clone) return [];
+        const rootRect = sourceRoot.getBoundingClientRect();
+        // canvas-wrapper 在编辑界面按 currentScale 缩放；Range 返回的是屏幕坐标，
+        // 导出画布使用画板逻辑坐标，故在这里还原缩放比例。
+        const scaleX = rootRect.width / Math.max(1, Number(logicalWidth) || rootRect.width);
+        const scaleY = rootRect.height / Math.max(1, Number(logicalHeight) || rootRect.height);
+        const jobs = [];
+        const sourceWrappers = Array.from(sourceRoot.querySelectorAll('.layer-text-wrapper'));
+        const cloneWrappers = Array.from(clone.querySelectorAll('.layer-text-wrapper'));
+        sourceWrappers.forEach(function(wrapper, wrapperIndex) {
+            const style = getComputedStyle(wrapper);
+            if (!getCustomFontAssetsForCss(style.fontFamily, style.fontWeight).length) return;
+            const content = wrapper.querySelector('.layer-text-content');
+            if (!content || !content.textContent) return;
+            const nodes = [];
+            const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+            while (walker.nextNode()) nodes.push(walker.currentNode);
+            nodes.forEach(function(node) {
+                const value = node.nodeValue || '';
+                // 保留完整词形（维护字距/kerning），但让空格与问号完全服从 DOM 给出的坐标。
+                const matcher = /[^\s?\uFF1F\u061F]+|[?\uFF1F\u061F]/g;
+                let match;
+                while ((match = matcher.exec(value)) !== null) {
+                    const range = document.createRange();
+                    range.setStart(node, match.index);
+                    range.setEnd(node, match.index + match[0].length);
+                    const rect = range.getBoundingClientRect();
+                    if (!rect.width && !rect.height) continue;
+                    jobs.push({
+                        text: match[0],
+                        wrapperIndex: wrapperIndex,
+                        x: (rect.left - rootRect.left) / Math.max(scaleX, 0.0001),
+                        y: (rect.top - rootRect.top) / Math.max(scaleY, 0.0001),
+                        height: rect.height / Math.max(scaleY, 0.0001),
+                        fontFamily: style.fontFamily,
+                        fontWeight: style.fontWeight,
+                        fontStyle: style.fontStyle,
+                        direction: style.direction,
+                        // getBoundingClientRect() 的坐标已由画板缩放换算回逻辑像素，
+                        // 字号也必须做同样换算；否则路径字形会以屏幕缩放后的半号绘制。
+                        fontSize: (parseFloat(style.fontSize) || 16) / Math.max(scaleX, 0.0001),
+                        color: style.color,
+                        letterSpacing: parseFloat(style.letterSpacing) || 0
+                    });
+                }
+            });
+            // 这里绝不能提前隐藏离屏副本。某些 OTF 的 path 解析可能失败；只有在
+            // 实际像素预检成功后才隐藏，避免导出得到“背景正常、文字全消失”的 PNG。
+        });
+        return jobs;
+    }
+    const outlineFontCache = new Map();
+    async function getOutlineFontForJob(job) {
+        const candidates = getCustomFontAssetsForCss(job.fontFamily, job.fontWeight);
+        const asset = candidates[0];
+        if (!asset) throw new Error('未找到当前 HT 字重的原始字体文件');
+        const key = asset.name + '|' + asset.weight + '|' + String(asset.data).length;
+        if (outlineFontCache.has(key)) return outlineFontCache.get(key);
+        const buffer = await fetch(asset.data).then(function(response) {
+            if (!response.ok) throw new Error('字体文件读取失败');
+            return response.arrayBuffer();
+        });
+        // fontkit 支持 CFF OpenType、复杂 GPOS/GSUB 布局及字形路径；HT 的 OTF
+        // 由它优先解析。它不依赖浏览器对字体文本的 Canvas 排版。
+        try {
+            if (window.fontkit && typeof window.fontkit.create === 'function') {
+                let fontkitFont = window.fontkit.create(buffer);
+                if (fontkitFont && Array.isArray(fontkitFont.fonts)) fontkitFont = fontkitFont.fonts[0];
+                if (fontkitFont && typeof fontkitFont.layout === 'function') {
+                    const result = { engine: 'fontkit', font: fontkitFont };
+                    outlineFontCache.set(key, result);
+                    return result;
+                }
+            }
+        } catch (fontkitError) {
+            console.warn('fontkit 解析失败，尝试 OpenType 备用解析：', fontkitError);
+        }
+        try {
+            if (!window.opentype || typeof window.opentype.parse !== 'function') throw new Error('字体轮廓库未加载');
+            const result = { engine: 'opentype', font: window.opentype.parse(buffer) };
+            outlineFontCache.set(key, result);
+            return result;
+        } catch (_error) {
+            throw new Error('该 HT 字体无法读取轮廓');
+        }
+    }
+    async function paintHTTextJobs(canvas, jobs, density) {
+        const context = canvas.getContext('2d');
+        context.save();
+        context.scale(density, density);
+        try {
+            for (const job of jobs) {
+                const outline = await getOutlineFontForJob(job);
+                const font = outline.font;
+                const units = Math.max(1, Number(font.unitsPerEm || 1000));
+                const unitScale = job.fontSize / units;
+                const ascent = Number(font.ascent ?? font.ascender ?? Math.round(units * 0.8));
+                const baseline = job.y + ascent * unitScale;
+                context.fillStyle = job.color;
+                if (outline.engine === 'fontkit') {
+                    // layout() 先应用字距、连字及 OpenType 定位，再依次绘制实际 glyph path。
+                    const run = font.layout(job.text);
+                    let penX = job.x;
+                    (run.glyphs || []).forEach(function(glyph, index) {
+                        const pos = (run.positions || [])[index] || {};
+                        const drawPath = glyph?.path?.toFunction?.();
+                        if (!drawPath) return;
+                        context.save();
+                        context.translate(penX + (Number(pos.xOffset) || 0) * unitScale, baseline - (Number(pos.yOffset) || 0) * unitScale);
+                        context.scale(unitScale, -unitScale);
+                        // html2canvas 刚完成背景/图片绘制，Canvas 的当前 path 可能仍保留
+                        // 一个画板级矩形。必须清空它，否则 glyph.fill() 会把整张画布覆盖。
+                        context.beginPath();
+                        drawPath(context);
+                        context.fill();
+                        context.restore();
+                        penX += (Number(pos.xAdvance) || 0) * unitScale;
+                    });
+                } else {
+                    const path = font.getPath(job.text, job.x, baseline, job.fontSize, { kerning: true });
+                    path.fill = job.color;
+                    path.stroke = null;
+                    path.draw(context);
+                }
+            }
+        } finally {
+            context.restore();
+        }
+    }
+    async function canPaintHTTextJobs(jobs, width, height, density) {
+        if (!jobs.length) return false;
+        const probe = document.createElement('canvas');
+        probe.width = Math.max(1, Math.ceil(width * density));
+        probe.height = Math.max(1, Math.ceil(height * density));
+        await paintHTTextJobs(probe, jobs, density);
+        // 逐行稀疏采样足以确认路径是否真的落下像素；文字路径不会填满整张画板。
+        const pixels = probe.getContext('2d').getImageData(0, 0, probe.width, probe.height).data;
+        for (let i = 3; i < pixels.length; i += 16) if (pixels[i] !== 0) return true;
+        return false;
+    }
+    function hideCloneTextJobs(clone, jobs) {
+        const cloneWrappers = Array.from(clone.querySelectorAll('.layer-text-wrapper'));
+        jobs.forEach(function(job) {
+            if (cloneWrappers[job.wrapperIndex]) cloneWrappers[job.wrapperIndex].style.visibility = 'hidden';
+        });
+    }
+    function svgNumber(value) {
+        const number = Number(value);
+        return Number.isFinite(number) ? String(Math.round(number * 1000) / 1000) : '0';
+    }
+    function escapeSvgText(value) {
+        return String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    async function createHTTextSvgImage(jobs, width, height) {
+        const faces = new Map();
+        const texts = [];
+        for (const job of jobs) {
+            const asset = getCustomFontAssetsForCss(job.fontFamily, job.fontWeight)[0];
+            if (!asset) return null;
+            const family = asset.familyId;
+            const faceKey = family + '|' + asset.weight;
+            if (!faces.has(faceKey)) {
+                faces.set(faceKey, '@font-face{font-family:"' + family + '";src:url("' + asset.data + '");font-weight:' + Number(asset.weight || 400) + ';font-style:normal;}');
+            }
+            // 每段文字的位置取自浏览器 Range；SVG 只负责把这段原生字体栅格化，
+            // 因而不会再计算词间空格或问号的 advance。
+            texts.push('<text x="' + svgNumber(job.x) + '" y="' + svgNumber(job.y) + '" fill="' + String(job.color).replace(/"/g, '') + '" font-family="' + family + '" font-size="' + svgNumber(job.fontSize) + '" font-weight="' + String(job.fontWeight).replace(/"/g, '') + '" font-style="' + String(job.fontStyle).replace(/"/g, '') + '" dominant-baseline="text-before-edge" direction="' + (job.direction === 'rtl' ? 'rtl' : 'ltr') + '" unicode-bidi="plaintext">' + escapeSvgText(job.text) + '</text>');
+        }
+        if (!texts.length) return null;
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '"><style><![CDATA[' + Array.from(faces.values()).join('') + ']]></style>' + texts.join('') + '</svg>';
+        const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+        return new Promise(function(resolve) {
+            const image = new Image();
+            image.onload = function() {
+                // Image.onload 只表示 SVG 被解码，不表示其中的路径真的能被浏览器绘制。
+                // 必须先落到透明探针画布检测 alpha；否则会错误隐藏原文字并导出空白。
+                try {
+                    const probe = document.createElement('canvas');
+                    probe.width = Math.max(1, Math.ceil(width));
+                    probe.height = Math.max(1, Math.ceil(height));
+                    const context = probe.getContext('2d');
+                    context.drawImage(image, 0, 0, probe.width, probe.height);
+                    const pixels = context.getImageData(0, 0, probe.width, probe.height).data;
+                    for (let i = 3; i < pixels.length; i += 4) {
+                        if (pixels[i] !== 0) return resolve({ image: image, url: url });
+                    }
+                } catch (_error) { /* 走原生文字回退 */ }
+                URL.revokeObjectURL(url);
+                resolve(null);
+            };
+            image.onerror = function() { URL.revokeObjectURL(url); resolve(null); };
+            image.src = url;
+        });
+    }
+    // HT Heliopolis 在浏览器原生 DOM 中排版正确，但 html2canvas 会把文字交给 Canvas
+    // 重新测量，导致空格及问号的 glyph advance 失真。只在离屏副本中把该字体的
+    // 文本保留为浏览器原生排版生成的位图，主画板和保存的数据不发生任何修改。
+    window.VF_RASTERIZE_CAPTURE_TEXT = rasterizeCaptureOnlyFonts;
+    async function rasterizeCaptureOnlyFonts(clone) {
+        const candidates = Array.from(clone.querySelectorAll('.layer-text-wrapper .layer-text-content'));
+        const results = await Promise.all(candidates.map(function(content) {
+            const wrapper = content.closest('.layer-text-wrapper');
+            if (!wrapper || !getCustomFontAssetsForCss(getComputedStyle(wrapper).fontFamily, getComputedStyle(wrapper).fontWeight).length) return Promise.resolve(false);
+            return rasterizeNativeTextLayer(content, wrapper);
+        }));
+        return results.some(Boolean);
+    }
+    function rasterizeNativeTextLayer(content, wrapper) {
+        const width = Math.max(1, Math.ceil(content.offsetWidth || wrapper.offsetWidth || 1));
+        const height = Math.max(1, Math.ceil(content.offsetHeight || wrapper.offsetHeight || 1));
+        const wrapperStyle = getComputedStyle(wrapper);
+        const contentStyle = getComputedStyle(content);
+        const family = String(wrapperStyle.fontFamily || '');
+        const fontKey = family.replace(/["']/g, '');
+        const fontSources = getCustomFontAssetsForCss(fontKey, wrapperStyle.fontWeight);
+        if (!fontSources.length) return Promise.resolve(false);
+        const fontCss = fontSources.map(function(font) {
+            return '@font-face{font-family:"' + escapeCaptureText(font.familyId) + '";src:url("' + font.data + '");font-weight:' + Number(font.weight || 400) + ';font-style:normal;}';
+        }).join('');
+        const direction = wrapperStyle.direction === 'rtl' ? 'rtl' : 'ltr';
+        const style = [
+            'display:block', 'box-sizing:border-box', 'margin:0', 'padding:0',
+            'width:' + width + 'px', 'height:' + height + 'px', 'overflow:hidden',
+            'font-family:' + family, 'font-size:' + wrapperStyle.fontSize,
+            'font-weight:' + wrapperStyle.fontWeight, 'font-style:' + wrapperStyle.fontStyle,
+            'line-height:' + wrapperStyle.lineHeight, 'letter-spacing:' + wrapperStyle.letterSpacing,
+            'word-spacing:' + wrapperStyle.wordSpacing, 'color:' + wrapperStyle.color,
+            'text-align:' + wrapperStyle.textAlign, 'direction:' + direction,
+            'unicode-bidi:plaintext', 'white-space:' + contentStyle.whiteSpace,
+            'font-kerning:normal', 'font-feature-settings:"kern" 1'
+        ].join(';');
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '">'
+            + '<style><![CDATA[' + fontCss + ']]></style>'
+            + '<foreignObject x="0" y="0" width="100%" height="100%">'
+            + '<div xmlns="http://www.w3.org/1999/xhtml" style="' + escapeCaptureText(style) + '">' + content.innerHTML + '</div>'
+            + '</foreignObject></svg>';
+        return new Promise(function(resolve) {
+            const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            const image = new Image();
+            image.onload = function() {
+                try {
+                    const density = 4;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width * density;
+                    canvas.height = height * density;
+                    const context = canvas.getContext('2d');
+                    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                    const replacement = document.createElement('img');
+                    replacement.src = canvas.toDataURL('image/png');
+                    replacement.alt = '';
+                    replacement.style.cssText = 'display:block;width:100%;height:100%;object-fit:fill;';
+                    content.replaceChildren(replacement);
+                    content.setAttribute('data-vf-native-text-raster', 'true');
+                    resolve(true);
+                } catch (_error) {
+                    resolve(false);
+                } finally {
+                    URL.revokeObjectURL(svgUrl);
+                }
+            };
+            image.onerror = function() { URL.revokeObjectURL(svgUrl); resolve(false); };
+            image.src = svgUrl;
+        });
+    }
+    function escapeCaptureText(value) {
+        return String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    // html2canvas 对带自定义字距的文字会拆分字符，普通英文空格与句尾问号
+    // 可能被错误压缩。只处理离屏导出副本，绝不改变编辑器中的文本或模板数据。
+    function preserveExportTextSpacingForCapture(clone) {
+        clone.querySelectorAll('.layer-text-wrapper').forEach(function(wrapper) {
+            var _ffExp = getComputedStyle(wrapper).fontFamily || '';
+            if (/ht[_\s-]*heliopolis/i.test(_ffExp) || /dela[_\s-]*gothic/i.test(_ffExp)) {
+                freezeHTTextLayoutForExport(wrapper);
+                return;
+            }
+            wrapper.style.letterSpacing = '0px';
+            wrapper.style.wordSpacing = 'normal';
+            wrapper.querySelectorAll('.layer-text-content').forEach(function(content) {
+                const rawText = content.textContent || '';
+                const isRtl = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(rawText)
+                    || getComputedStyle(wrapper).direction === 'rtl';
+                if (isRtl) {
+                    wrapper.setAttribute('dir', 'rtl');
+                    wrapper.setAttribute('lang', 'ar');
+                    wrapper.style.direction = 'rtl';
+                    wrapper.style.unicodeBidi = 'plaintext';
+                    content.setAttribute('dir', 'rtl');
+                    content.style.direction = 'rtl';
+                    content.style.unicodeBidi = 'plaintext';
+                }
+                content.style.letterSpacing = '0px';
+                content.style.wordSpacing = 'normal';
+                const textNodes = [];
+                const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+                while (walker.nextNode()) textNodes.push(walker.currentNode);
+                textNodes.forEach(function(textNode) {
+                    const value = textNode.nodeValue || '';
+                    if (!/[?？؟\s]/.test(value)) return;
+                    const fragment = document.createDocumentFragment();
+                    value.split(/([?？؟])/).forEach(function(part) {
+                        if (!part) return;
+                        if (part === '?' || part === '？' || part === '؟') {
+                            const mark = document.createElement('span');
+                            mark.textContent = part;
+                            mark.style.cssText = 'display:inline-block;letter-spacing:0!important;' + (isRtl ? 'margin-right:4px;' : 'margin-left:4px;');
+                            fragment.appendChild(mark);
+                        } else {
+                            fragment.appendChild(document.createTextNode(part.replace(/[ \t]+/g, '\u00A0')));
+                        }
+                    });
+                    textNode.parentNode.replaceChild(fragment, textNode);
+                });
+            });
+        });
+    }
+    function freezeHTTextLayoutForExport(wrapper) {
+        const content = wrapper.querySelector('.layer-text-content');
+        if (!content || !content.textContent) return;
+        const contentRect = content.getBoundingClientRect();
+        const width = Math.max(1, content.offsetWidth || contentRect.width);
+        const height = Math.max(1, content.offsetHeight || contentRect.height);
+        const sourceNodes = [];
+        const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) sourceNodes.push(walker.currentNode);
+        const tokens = [];
+        sourceNodes.forEach(function(node) {
+            const value = node.nodeValue || '';
+            const matcher = /[^\s?\uFF1F\u061F]+|[?\uFF1F\u061F]/g;
+            let match;
+            while ((match = matcher.exec(value))) {
+                const range = document.createRange();
+                range.setStart(node, match.index);
+                range.setEnd(node, match.index + match[0].length);
+                const rect = range.getBoundingClientRect();
+                if (rect.width || rect.height) tokens.push({ text: match[0], left: rect.left - contentRect.left, top: rect.top - contentRect.top });
+            }
+        });
+        if (!tokens.length) return;
+        content.replaceChildren();
+        content.style.position = 'relative';
+        content.style.display = 'block';
+        content.style.width = width + 'px';
+        content.style.height = height + 'px';
+        content.style.whiteSpace = 'normal';
+        tokens.forEach(function(token) {
+            const item = document.createElement('span');
+            item.textContent = token.text;
+            item.style.cssText = 'position:absolute;display:block;left:' + token.left + 'px;top:' + token.top + 'px;white-space:pre;font:inherit;line-height:inherit;letter-spacing:inherit;word-spacing:normal;color:inherit;direction:inherit;unicode-bidi:inherit;';
+            content.appendChild(item);
+        });
+    }
+    function preserveHTTextSpacingForExport(content, wrapper, isRtl) {
+        const spaceWidth = measureNativeExportSpaceWidth(wrapper);
+        const textNodes = [];
+        const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) textNodes.push(walker.currentNode);
+        textNodes.forEach(function(textNode) {
+            const value = textNode.nodeValue || '';
+            if (!/[\t ?\uFF1F\u061F]/.test(value)) return;
+            const fragment = document.createDocumentFragment();
+            value.split(/([ \t]+|[?\uFF1F\u061F])/).forEach(function(part) {
+                if (!part) return;
+                if (/^[ \t]+$/.test(part)) {
+                    const gap = document.createElement('span');
+                    gap.setAttribute('aria-hidden', 'true');
+                    gap.style.cssText = 'display:inline-block;width:' + (spaceWidth * part.length) + 'px;height:1px;vertical-align:baseline;';
+                    fragment.appendChild(gap);
+                } else if (/^[?\uFF1F\u061F]$/.test(part)) {
+                    const mark = document.createElement('span');
+                    mark.textContent = part;
+                    const punctuationGap = Math.max(2, spaceWidth * 0.3);
+                    mark.style.cssText = 'display:inline-block;letter-spacing:0!important;' + (isRtl ? 'margin-right:' : 'margin-left:') + punctuationGap + 'px;';
+                    fragment.appendChild(mark);
+                } else {
+                    fragment.appendChild(document.createTextNode(part));
+                }
+            });
+            textNode.parentNode.replaceChild(fragment, textNode);
+        });
+    }
+    function measureNativeExportSpaceWidth(wrapper) {
+        const style = getComputedStyle(wrapper);
+        const probe = document.createElement('span');
+        probe.style.cssText = 'position:fixed;left:-99999px;top:0;visibility:hidden;white-space:pre;font-family:' + style.fontFamily + ';font-size:' + style.fontSize + ';font-weight:' + style.fontWeight + ';font-style:' + style.fontStyle + ';letter-spacing:0;word-spacing:normal;line-height:1;';
+        document.body.appendChild(probe);
+        probe.textContent = 'AA';
+        const compactWidth = probe.getBoundingClientRect().width;
+        probe.textContent = 'A A';
+        const spacedWidth = probe.getBoundingClientRect().width;
+        probe.remove();
+        return Math.max(1, spacedWidth - compactWidth);
     }
     function downloadBlob(blob, filename) {
         if(!blob) throw new Error('empty blob');
@@ -7067,21 +8021,39 @@
     async function exportPNG(scale) {
         scale = scale || 3;
         if(layers.length === 0) return showToast('画板为空，无法导出', true);
-        await document.fonts.ready;
+        const requiresNativeCapture = hasHTHeliopolisTextLayer();
         const oldActive = [...activeLayerIds];
         const overlay = document.getElementById('export-overlay');
+        const safeGuide = document.getElementById('safe-guide');
+        const oldGuideDisplay = safeGuide ? safeGuide.style.display : '';
         activeLayerIds = [];
         renderCanvas(); renderLayersList(); renderProperties();
+        if (safeGuide) safeGuide.style.display = 'none';
+        await document.fonts.ready;
         overlay.style.display = 'flex';
         try {
-            const blob = await renderCurrentArtboardBlob(scale);
+            let blob;
+            if (requiresNativeCapture) {
+                try {
+                    blob = await renderCurrentArtboardBlob(scale);
+                } catch (rasterError) {
+                    console.error('HT 高清文字合成失败：', rasterError);
+                    // 不能丢弃底层原因；OTF 解析、路径转换和脚本加载的处理方式不同。
+                    throw new Error('HT 字体路径转换失败：' + (rasterError?.message || '未知错误'));
+                }
+            } else {
+                blob = await renderCurrentArtboardBlob(scale);
+            }
             downloadBlob(blob, `GCC_${getArtboardPreset(currentArtboardId).label}_${Date.now()}.png`);
-            showToast('✅ ' + scale + '倍 PNG 导出成功');
+            const htModeLabel = { outline: '字体轮廓', 'native-image': '原生文字图片', 'legacy-fallback': '旧文字回退' };
+            showToast('✅ ' + scale + '倍 PNG 导出成功' + (requiresNativeCapture ? '（HT：' + (htModeLabel[blob.vfHTExportMode] || '未识别') + '）' : ''));
         } catch (e) {
             console.error('PNG 导出失败:', e);
             showToast('❌ 导出失败：' + (e?.message || '未知错误'), true);
         } finally {
             overlay.style.display = 'none';
+            if (safeGuide) safeGuide.style.display = oldGuideDisplay;
+            syncSafeGuide();
             activeLayerIds = oldActive;
             renderCanvas(); renderLayersList(); renderProperties();
         }
@@ -7187,6 +8159,6 @@
     bootApp();
 
 </script>
-<script src="../../tool-bridge.js?v=20260805-palette-arc-marker-v117"></script>
+<script src="../../tool-bridge.js?v=20260806-native-tab-png-v159"></script>
 </body>
 </html>

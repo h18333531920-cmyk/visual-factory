@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260805-palette-shadow-default-v122';
+  const TOOL_UI_VERSION = '20260806-resize-layer-fixes-v160';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -5565,10 +5565,22 @@ function libraryTagsForForm(formData, kind) {
         templates.push({ id: s.id, name: s.title, templateType: templateType, tags: t, previewW: dims.w || 0, previewH: dims.h || 0 });
       }
       sourceWindow.postMessage({ type: 'vf:templates-loaded', templates: templates }, location.origin);
-      // 后台逐个下载预览图（转 data URL）+ JSON 并推送
+      // 后台逐个下载 JSON + 预览图。尺寸信息先随 JSON 到达，不能先把 2 倍预览图
+      // 的像素尺寸误当作画板尺寸展示给静态 DIY。
       for (var j = 0; j < (sources || []).length; j++) {
         var src = sources[j];
-        // 下载预览图
+        // 下载 JSON 数据（字体文件较大，跳过预加载，用户点击时才按需下载）
+        var srcTags = src.tags || [];
+        if (!(srcTags.includes('字体') && srcTags.includes('组件'))) {
+          try {
+            var { data: blob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(src.source_path);
+            if (blob) {
+              var json = JSON.parse(await blob.text());
+              sourceWindow.postMessage({ type: 'vf:template-data', id: src.id, data: json }, location.origin);
+            }
+          } catch (e) {}
+        }
+        // JSON 的尺寸元数据推送后，再下载预览图。
         var previewPath = previewMap[src.id];
         var previewDataUrl = '';
         if (previewPath) {
@@ -5588,17 +5600,7 @@ function libraryTagsForForm(formData, kind) {
             } catch(e) {}
           }
         }
-        if (previewDataUrl) {
-          sourceWindow.postMessage({ type: 'vf:template-preview', id: src.id, previewUrl: previewDataUrl }, location.origin);
-        }
-        // 下载 JSON 数据（字体文件较大，跳过预加载，用户点击时才按需下载）
-        if (t.includes('字体') && t.includes('组件')) continue;
-        try {
-          var { data: blob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(src.source_path);
-          if (!blob) continue;
-          var json = JSON.parse(await blob.text());
-          sourceWindow.postMessage({ type: 'vf:template-data', id: src.id, data: json }, location.origin);
-        } catch (e) {}
+        if (previewDataUrl) sourceWindow.postMessage({ type: 'vf:template-preview', id: src.id, previewUrl: previewDataUrl }, location.origin);
       }
     } catch (error) {
       try { sourceWindow.postMessage({ type: 'vf:templates-loaded', templates: [], error: error.message }, location.origin); } catch (e) {}
