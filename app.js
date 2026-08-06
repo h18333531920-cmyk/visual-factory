@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260806-resize-layer-fixes-v160';
+  const TOOL_UI_VERSION = '20260806-template-image-upload-v165';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -995,10 +995,11 @@
                 </div>
               </div>
               <div class="library-drop-zone" data-upload-mode="template" data-drop-input="library-template-input">
-                <input name="template_file" id="library-template-input" type="file" accept=".json">
+                <input name="template_file" id="library-template-input" type="file" accept=".json,image/jpeg,image/png,image/webp">
                 <span>${state.lang === 'zh' ? '模板文件' : 'Template file'}</span>
-                <strong>${state.lang === 'zh' ? '拖拽 JSON 模板到这里' : 'Drop JSON template here'}</strong>
+                <strong>${state.lang === 'zh' ? '拖拽 JSON 或 JPG / PNG / WEBP 到这里' : 'Drop JSON or JPG / PNG / WEBP here'}</strong>
                 <small data-file-summary>${state.lang === 'zh' ? '未选择文件' : 'No file selected'}</small>
+                <div class="drop-thumb-strip" data-thumb-strip style="display:none;"></div>
               </div>
             </div>
             <div class="library-upload-footer">
@@ -1814,6 +1815,19 @@
           preview_path: '', preview_filename: source.title + '.font-card',
           preview_mime_type: 'font/card', preview_size_bytes: 0,
           width: 960, height: 520, sort_order: 10, created_at: source.created_at || ''
+        });
+      }
+      // 图片类模板没有预览记录时，用源文件自身当预览
+      var isImageTemplate = tags.includes('vf:kind:template') && IMAGE_EXTENSIONS.includes(fileExt(source.source_filename || ''));
+      if (isImageTemplate && !previewedSourceIds.has(source.id)) {
+        previews.push({
+          id: 'img-preview-' + source.id,
+          source_file_id: source.id,
+          preview_path: source.source_path || '',
+          preview_filename: source.source_filename || '',
+          preview_mime_type: source.source_mime_type || 'image/png',
+          preview_size_bytes: source.source_size_bytes || 0,
+          width: 0, height: 0, sort_order: 10, created_at: source.created_at || ''
         });
       }
     });
@@ -4054,18 +4068,46 @@
     const title = formData.get('title').trim();
     const sourceId = crypto.randomUUID();
     const userId = state.session.user.id;
-    const sourcePath = `${userId}/templates/${sourceId}/${safeStorageName(templateFile.name)}`;
-    const upload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, templateFile, { upsert: false, contentType: templateFile.type || 'application/json' });
+    const isImage = templateFile.type.startsWith('image/');
+    const ext = (templateFile.name.split('.').pop() || 'json').toLowerCase();
+    const sourcePath = `${userId}/sources/${sourceId}/${safeStorageName(templateFile.name)}`;
+    const upload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, templateFile, { upsert: false, contentType: templateFile.type || 'application/octet-stream' });
     if (upload.error) throw upload.error;
     const tags = libraryTagsForForm(formData, 'template');
     tags.push('vf:kind:template');
     const { error } = await state.supabase.from('vf_source_files').insert([{
       id: sourceId, title, tags,
-      source_path: sourcePath, source_filename: templateFile.name, source_mime_type: templateFile.type || 'application/json',
-      source_size_bytes: templateFile.size, source_ext: 'json', uploaded_by: userId,
+      source_path: sourcePath, source_filename: templateFile.name, source_mime_type: templateFile.type || 'application/octet-stream',
+      source_size_bytes: templateFile.size, source_ext: isImage ? ext : 'json', uploaded_by: userId,
       visibility: formData.get('visibility') || 'all'
     }]);
     if (error) throw error;
+    // 图片模板：生成缩略图并创建预览记录
+    if (isImage) {
+      var thumbBlob = null;
+      try {
+        thumbBlob = await generateThumbnail(templateFile, 400);
+      } catch (e) { console.warn('Thumbnail generation failed:', e); }
+      var dimensions = { width: 0, height: 0 };
+      try { dimensions = await readImageDimensions(templateFile); } catch (e) {}
+      var previewPath = '';
+      if (thumbBlob) {
+        previewPath = `${userId}/sources/${sourceId}/_thumb.jpg`;
+        var thumbUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(previewPath, thumbBlob, { upsert: true, contentType: 'image/jpeg' });
+        if (thumbUpload.error) { console.warn('Thumbnail upload failed:', thumbUpload.error); previewPath = ''; }
+      }
+      var previewId = crypto.randomUUID();
+      var { error: previewError } = await state.supabase.from('vf_asset_previews').insert([{
+        id: previewId, source_file_id: sourceId,
+        preview_path: previewPath || sourcePath,
+        preview_filename: templateFile.name,
+        preview_mime_type: thumbBlob ? 'image/jpeg' : templateFile.type,
+        preview_size_bytes: thumbBlob ? thumbBlob.size : templateFile.size,
+        width: dimensions.width || 0, height: dimensions.height || 0,
+        sort_order: 10
+      }]);
+      if (previewError) console.warn('Preview insert failed:', previewError);
+    }
     void logAssetEvent('upload', { source: { id: sourceId, title: title, source_filename: templateFile.name } });
   }
 

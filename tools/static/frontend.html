@@ -2019,7 +2019,7 @@
 <div class="module-card asset-library-card">
             <div class="card-title">
                 <div class="card-title-wrap">资产库</div>
-
+                <button type="button" class="btn-icon" id="refresh-asset-btn" onclick="refreshAssetLibrary()" title="刷新资产库" style="padding:2px 6px;font-size:13px;">↻</button>
             </div>
             <div class="asset-tabs">
                 <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')" style="white-space:nowrap;">模版 <small id="diy-count-layout">· 0</small></button>
@@ -5197,7 +5197,16 @@
         return drawLayers().then(function() { return canvas.toDataURL('image/png'); });
     }
 
-    async function capturePreviewForSync() {
+    async function capturePreviewForSync(options = {}) {
+        // 保存模板的预览图与 PNG 导出统一走原生标签页捕获，避免 html2canvas 重新
+        // 排版任意字体（尤其是 HT 的空格和问号）。
+        if (options.nativeCapture) {
+            try { return await captureNativePreviewDataUrl(); }
+            catch (error) {
+                showToast('❌ 原生预览捕获失败：' + (error?.message || '请重新保存并选择当前标签页'), true);
+                return null;
+            }
+        }
         // 直接使用 DIY 自带的截图函数，和顶部"保存到模版库"用的是同一个
         if (typeof window.VF_EXPORT_TEMPLATE_ASSET === 'function') {
             try {
@@ -5209,6 +5218,34 @@
             try { return await window.captureStaticPreviewDataUrl(); } catch(e) {}
         }
         return null;
+    }
+    function blobToDataUrl(blob) {
+        return new Promise(function(resolve, reject) {
+            const reader = new FileReader();
+            reader.onload = function() { resolve(String(reader.result || '')); };
+            reader.onerror = function() { reject(new Error('预览图片读取失败')); };
+            reader.readAsDataURL(blob);
+        });
+    }
+    async function captureNativePreviewDataUrl() {
+        const oldActive = [...activeLayerIds];
+        const safeGuide = document.getElementById('safe-guide');
+        const oldGuideDisplay = safeGuide ? safeGuide.style.display : '';
+        const wasCaptureMode = document.body.classList.contains('vf-native-capture-mode');
+        document.body.classList.add('vf-native-capture-mode');
+        activeLayerIds = [];
+        resizeCanvas(); renderCanvas(); renderLayersList(); renderProperties();
+        if (safeGuide) safeGuide.style.display = 'none';
+        try {
+            // 立即发起授权请求，确保模板命名对话框的“确定”点击仍可作为用户手势使用。
+            const blob = await captureNativeArtboardBlob(1);
+            return await blobToDataUrl(blob);
+        } finally {
+            if (!wasCaptureMode) document.body.classList.remove('vf-native-capture-mode');
+            if (safeGuide) safeGuide.style.display = oldGuideDisplay;
+            activeLayerIds = oldActive;
+            resizeCanvas(); renderCanvas(); renderLayersList(); renderProperties(); syncSafeGuide();
+        }
     }
 
     function parseArtboardSize(ratio) {
@@ -5598,6 +5635,11 @@
         }).join('');
     }
 
+    function refreshAssetLibrary() {
+        var btn = document.getElementById('refresh-asset-btn');
+        if (btn) { btn.style.transform = 'rotate(360deg)'; btn.style.transition = 'transform 0.6s ease'; setTimeout(function() { btn.style.transform = ''; btn.style.transition = ''; }, 600); }
+        notifyParent({ type: 'vf:request-templates' });
+    }
     function renderAssetLibrary() {
         var cl = document.getElementById('diy-count-layout'); if (cl) cl.textContent = '· ' + presetLibrary.length;
         var cc = document.getElementById('diy-count-component'); if (cc) cc.textContent = '· ' + (tagPresetLibrary.length + logoAssets.length);
@@ -5969,8 +6011,17 @@
         renderAssetLibrary();
         showToast('正在保存到素材库...');
         // 截取预览图，上传到 Supabase
-        var previewDataUrl = await capturePreviewForSync();
-        if (!previewDataUrl || previewDataUrl.length < 1500) previewDataUrl = generatePlaceholderPreview(name, '版式');
+        var requiresNativePreview = true;
+        var previewDataUrl = await capturePreviewForSync({ nativeCapture: true });
+        if (!previewDataUrl || previewDataUrl.length < 1500) {
+            if (requiresNativePreview) {
+                presetLibrary = presetLibrary.filter(function(item) { return item.id !== tempId; });
+                renderAssetLibrary();
+                showToast('未生成原生预览图，已取消保存；请重新保存并选择当前标签页', true);
+                return;
+            }
+            previewDataUrl = generatePlaceholderPreview(name, '版式');
+        }
         preset.previewUrl = previewDataUrl;
         renderAssetLibrary();
         var subTag = (diySelectedSubtag && diySelectedSubtag !== '全部') ? diySelectedSubtag : '社媒物料';
@@ -5997,8 +6048,17 @@
         activeTemplatePackId = pack.id;
         renderAssetLibrary();
         showToast('正在保存到素材库...');
-        var previewDataUrl = await capturePreviewForSync();
-        if (!previewDataUrl || previewDataUrl.length < 1500) previewDataUrl = generatePlaceholderPreview(name, '套组');
+        var requiresNativePreview = true;
+        var previewDataUrl = await capturePreviewForSync({ nativeCapture: true });
+        if (!previewDataUrl || previewDataUrl.length < 1500) {
+            if (requiresNativePreview) {
+                presetLibrary = presetLibrary.filter(function(item) { return item.id !== tempId; });
+                renderAssetLibrary();
+                showToast('未生成原生预览图，已取消保存；请重新保存并选择当前标签页', true);
+                return;
+            }
+            previewDataUrl = generatePlaceholderPreview(name, '套组');
+        }
         pack.previewUrl = previewDataUrl;
         renderAssetLibrary();
         notifyParent({ type: 'vf:save-template', templateType: 'pack', name: name, data: { artboards: packArtboards }, previewDataUrl: previewDataUrl || '', tempId: tempId });
@@ -8022,6 +8082,12 @@
         scale = scale || 3;
         if(layers.length === 0) return showToast('画板为空，无法导出', true);
         const requiresNativeCapture = hasHTHeliopolisTextLayer();
+        // 只要画板使用上传的 HT 字体，就不能再走 html2canvas 的普通 PNG 路径。
+        // 从原有倍率菜单点击也会直接进入当前标签页捕获，避免用户误选旧回退导出。
+        if (requiresNativeCapture) {
+            exportNativeCapturePNG(scale);
+            return;
+        }
         const oldActive = [...activeLayerIds];
         const overlay = document.getElementById('export-overlay');
         const safeGuide = document.getElementById('safe-guide');
@@ -8159,6 +8225,6 @@
     bootApp();
 
 </script>
-<script src="../../tool-bridge.js?v=20260806-native-tab-png-v159"></script>
+<script src="../../tool-bridge.js?v=20260806-native-template-preview-v164"></script>
 </body>
 </html>
