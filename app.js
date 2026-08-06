@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260806-template-image-upload-v165';
+  const TOOL_UI_VERSION = '20260806-lazy-template-rename-v171';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -229,7 +229,7 @@
       'login-view', 'app-shell', 'login-form', 'login-email', 'login-password',
       'login-message', 'local-preview-actions', 'nav-list', 'lang-toggle',
       'sign-out-btn', 'route-kicker', 'route-title', 'content', 'user-chip',
-      'save-project-btn', 'save-template-btn', 'project-modal', 'project-form', 'project-title-input',
+      'project-modal', 'project-form', 'project-title-input',
       'project-save-note', 'project-modal-message', 'close-project-modal',
       'cancel-project-modal'
     ].forEach(id => {
@@ -245,8 +245,6 @@
     els.loginForm.addEventListener('submit', handleLogin);
     els.signOutBtn.addEventListener('click', signOut);
     els.langToggle.addEventListener('click', toggleLanguage);
-    els.saveProjectBtn.addEventListener('click', openProjectModal);
-    els.saveTemplateBtn.addEventListener('click', saveStaticTemplateToLibrary);
     els.projectForm.addEventListener('submit', saveProject);
     els.closeProjectModal.addEventListener('click', closeProjectModal);
     els.cancelProjectModal.addEventListener('click', closeProjectModal);
@@ -564,8 +562,6 @@
     const route = ROUTES.find(item => item.id === state.route);
     els.routeKicker.textContent = state.emergencyMode ? 'Emergency Mode' : state.localPreview ? 'Local Preview' : 'gccdesign.app';
     els.routeTitle.textContent = t(route.title);
-    els.saveProjectBtn.hidden = !['static', 'dynamic'].includes(state.route);
-    els.saveTemplateBtn.hidden = state.route !== 'static';
     if (state.route === 'home') renderCreativeHome();
     if (state.route === 'library') { state.libraryDataLoaded = false; renderLibrary(); }
     if (state.route === 'static') renderTool('static');
@@ -4267,6 +4263,21 @@ function libraryTagsForForm(formData, kind) {
     }
     mount.appendChild(frame);
     state.activeFrame = frame;
+    // 静态 DIY iframe 会被保留在内存中。每次重新打开时重新下发云端清单，
+    // 使素材库中刚删除的背景、Logo 等组件不会继续显示旧缓存。
+    if (type === 'static') {
+      const syncStaticAssets = function() {
+        handleFetchTemplates(frame.contentWindow);
+      };
+      if (frame.dataset.staticAssetsReady === '1') {
+        setTimeout(syncStaticAssets, 0);
+      } else {
+        frame.addEventListener('load', function() {
+          frame.dataset.staticAssetsReady = '1';
+          syncStaticAssets();
+        }, { once: true });
+      }
+    }
   }
 
   async function renderProjects() {
@@ -5376,6 +5387,12 @@ function libraryTagsForForm(formData, kind) {
       case 'vf:request-templates':
         handleFetchTemplates(sourceWindow);
         break;
+      case 'vf:request-template-data':
+        handleFetchSingleTemplate(msg.id, sourceWindow);
+        break;
+      case 'vf:rename-template':
+        handleRenameTemplate(msg.id, msg.name, sourceWindow);
+        break;
       case 'vf:save-font':
         await handleSaveTemplate(msg, sourceWindow);
         refreshLibraryIfOpen();
@@ -5607,46 +5624,89 @@ function libraryTagsForForm(formData, kind) {
         templates.push({ id: s.id, name: s.title, templateType: templateType, tags: t, previewW: dims.w || 0, previewH: dims.h || 0 });
       }
       sourceWindow.postMessage({ type: 'vf:templates-loaded', templates: templates }, location.origin);
-      // 后台逐个下载 JSON + 预览图。尺寸信息先随 JSON 到达，不能先把 2 倍预览图
-      // 的像素尺寸误当作画板尺寸展示给静态 DIY。
+      // 把 previewMap 缓存下来供 on-demand JSON 下载使用
+      _templatePreviewMap = previewMap;
+      // 预览图并行批量下载（每批 6 个并发）
+      var previewTasks = [];
       for (var j = 0; j < (sources || []).length; j++) {
-        var src = sources[j];
-        // 下载 JSON 数据（字体文件较大，跳过预加载，用户点击时才按需下载）
-        var srcTags = src.tags || [];
-        if (!(srcTags.includes('字体') && srcTags.includes('组件'))) {
-          try {
-            var { data: blob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(src.source_path);
-            if (blob) {
-              var json = JSON.parse(await blob.text());
-              sourceWindow.postMessage({ type: 'vf:template-data', id: src.id, data: json }, location.origin);
-            }
-          } catch (e) {}
-        }
-        // JSON 的尺寸元数据推送后，再下载预览图。
-        var previewPath = previewMap[src.id];
-        var previewDataUrl = '';
-        if (previewPath) {
-          if (state.libraryPreviewUrls && state.libraryPreviewUrls[previewPath]) {
-            previewDataUrl = state.libraryPreviewUrls[previewPath];
-          } else {
+        (function(src) {
+          var previewPath = previewMap[src.id];
+          if (!previewPath) return;
+          previewTasks.push((async function() {
             try {
               var { data: pBlob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(previewPath);
               if (pBlob) {
-                previewDataUrl = await new Promise(function(resolve) {
+                var previewDataUrl = await new Promise(function(resolve) {
                   var reader = new FileReader();
                   reader.onload = function() { resolve(reader.result); };
                   reader.onerror = function() { resolve(''); };
                   reader.readAsDataURL(pBlob);
                 });
+                sourceWindow.postMessage({ type: 'vf:template-preview', id: src.id, previewUrl: previewDataUrl }, location.origin);
               }
             } catch(e) {}
-          }
-        }
-        if (previewDataUrl) sourceWindow.postMessage({ type: 'vf:template-preview', id: src.id, previewUrl: previewDataUrl }, location.origin);
+          })());
+        })(sources[j]);
+      }
+      // 分批并发执行，避免同时 50+ 个请求打爆浏览器
+      var BATCH = 6;
+      for (var k = 0; k < previewTasks.length; k += BATCH) {
+        await Promise.all(previewTasks.slice(k, k + BATCH));
       }
     } catch (error) {
       try { sourceWindow.postMessage({ type: 'vf:templates-loaded', templates: [], error: error.message }, location.origin); } catch (e) {}
     }
+  }
+  var _templatePreviewMap = {};
+
+  async function handleRenameTemplate(id, name, sourceWindow) {
+    if (state.localPreview || !state.supabase || !id || !name) return;
+    try {
+      var { error } = await state.supabase.from('vf_source_files').update({ title: name.trim() }).eq('id', id);
+      if (error) throw error;
+      // 通知前端刷新
+      try { sourceWindow.postMessage({ type: 'vf:template-renamed', id: id, name: name.trim() }, location.origin); } catch (e) {}
+    } catch (e) { console.warn('Rename template failed:', e); }
+  }
+
+  async function handleFetchSingleTemplate(id, sourceWindow) {
+    if (state.localPreview || !state.supabase) return;
+    try {
+      // 查找该模板的 source 记录
+      var { data: sources, error } = await state.supabase.from('vf_source_files')
+        .select('id, title, tags, source_path')
+        .eq('id', id).limit(1);
+      if (error || !sources || !sources.length) return;
+      var src = sources[0];
+      var srcExt = (src.source_path || '').split('.').pop().toLowerCase();
+      var IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp'];
+      if (IMAGE_EXTS.includes(srcExt)) {
+        // 图片模版：构造合成 JSON
+        var imgData = { schema: 'vf-layout-preset/v1', name: src.title || '图片模板', size: '1:1', canvasW: 1080, canvasH: 1080, elements: [], isImageTemplate: true };
+        sourceWindow.postMessage({ type: 'vf:template-data', id: src.id, data: imgData }, location.origin);
+      } else {
+        // JSON 模版：下载源文件
+        var { data: blob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(src.source_path);
+        if (blob) {
+          var json = JSON.parse(await blob.text());
+          sourceWindow.postMessage({ type: 'vf:template-data', id: src.id, data: json }, location.origin);
+        }
+      }
+      // 下载预览图
+      var previewPath = _templatePreviewMap[src.id];
+      if (previewPath) {
+        var { data: pBlob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(previewPath);
+        if (pBlob) {
+          var reader = new FileReader();
+          var previewDataUrl = await new Promise(function(resolve) {
+            reader.onload = function() { resolve(reader.result); };
+            reader.onerror = function() { resolve(''); };
+            reader.readAsDataURL(pBlob);
+          });
+          sourceWindow.postMessage({ type: 'vf:template-preview', id: src.id, previewUrl: previewDataUrl }, location.origin);
+        }
+      }
+    } catch (e) { console.warn('Fetch single template failed:', e); }
   }
 
   async function handleSaveSharedAssets(msg, sourceWindow, replyOrigin) {

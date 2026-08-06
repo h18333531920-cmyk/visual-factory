@@ -49,6 +49,23 @@
         body.vf-native-capture-mode .asset-pane-collapse-handle,
         body.vf-native-capture-mode .right-pane,
         body.vf-native-capture-mode .canvas-toolbar { display:none !important; }
+        /* 原生截屏前只保留画板本身。所有网页内部的弹窗、菜单和悬浮反馈都不能
+           覆盖到画板上；浏览器/操作系统级窗口不受网页 CSS 控制。 */
+        body.vf-native-capture-mode .modal-overlay,
+        body.vf-native-capture-mode .color-preset-dialog,
+        body.vf-native-capture-mode .asset-hover-preview,
+        body.vf-native-capture-mode #mini-dialog-overlay,
+        body.vf-native-capture-mode #toast,
+        body.vf-native-capture-mode .new-artboard-menu,
+        body.vf-native-capture-mode .resize-dropdown-menu,
+        body.vf-native-capture-mode .export-dropdown-menu,
+        body.vf-native-capture-mode .toolbar-more-menu,
+        body.vf-native-capture-mode .add-menu,
+        body.vf-native-capture-mode .layer-context-menu,
+        body.vf-native-capture-mode .ai-dropdown,
+        body.vf-native-capture-mode .ai-loading,
+        body.vf-native-capture-mode .asset-library-drop-overlay { display:none !important; }
+        body.vf-native-capture-mode #canvas-wrapper { z-index:2147483000 !important; isolation:isolate; }
         body.vf-native-capture-mode .editor-layout { width:100vw !important; max-width:none !important; height:100vh !important; gap:0 !important; }
         body.vf-native-capture-mode .left-pane { width:100% !important; height:100% !important; border-radius:0 !important; }
         .left-pane.drag-file-over .canvas-wrapper { box-shadow: 0 0 0 3px rgba(16,17,20,0.18), 0 20px 60px rgba(16,17,20,0.10); }
@@ -1442,10 +1459,6 @@
         .export-dropdown-menu button.export-scale-option.is-default { font-weight:820; }
         .export-dropdown-menu button.export-scale-option:disabled { opacity: .35; cursor: not-allowed; }
         .export-dropdown-menu button.export-scale-option:disabled:hover { background:#fff; }
-        .export-native-png, .export-native-pdf { width:100%; min-height:42px; margin:1px 0 8px; border:0; border-radius:10px; background:#f3f5f7; color:#25282d; font-size:14px; font-weight:760; cursor:pointer; }
-        .export-native-png { background:#202226; color:#fff; }
-        .export-native-png:hover { background:#353a41; }
-        .export-native-pdf:hover { background:#e8ecf0; }
         .export-dropdown-menu .export-dim {
             color:#858b94;
             font-size:12px;
@@ -2057,7 +2070,7 @@
         </div>
 
         <div class="canvas-wrapper" id="canvas-wrapper">
-            <div class="empty-hint" id="empty-hint">暂无背景，请生成或导入图片</div>
+            <div class="empty-hint" id="empty-hint" style="display:none"></div>
             <div id="dynamic-layers"></div>
             <div class="safe-guide" id="safe-guide"></div>
         </div>
@@ -4492,7 +4505,7 @@
         const container = document.getElementById('dynamic-layers'); container.innerHTML = '';
         const hintEl = document.getElementById('empty-hint');
         const visibleLayers = layers.filter(function(l) { return l.visible !== false; });
-        hintEl.style.display = visibleLayers.length > 0 ? 'none' : 'flex';
+        if (hintEl) hintEl.style.display = 'none'; // 不再显示空白提示
         visibleLayers.sort((a,b) => a.zIndex - b.zIndex).forEach(l => {
             container.appendChild(createLayerElement(l, { active: activeLayerIds.includes(l.id), interactive: true }));
         });
@@ -5437,6 +5450,7 @@
                 var item = arr.find(function(x) { return x.cloudId === tid; });
                 if (!item) return;
                 item._lazy = false;
+                if (tdata.isImageTemplate) item.isImageTemplate = true;
                 if (tdata.elements) item.elements = tdata.elements;
                 if (tdata.artboards) item.artboards = tdata.artboards;
                 if (tdata.size) item.size = tdata.size;
@@ -5497,10 +5511,18 @@
             }
         } else if (event.data.type === 'vf:template-deleted') {
             var sid = event.data.sourceId;
-            presetLibrary = presetLibrary.filter(function(p) { return p.cloudId !== sid; });
-            tagPresetLibrary = tagPresetLibrary.filter(function(p) { return p.cloudId !== sid; });
-            logoAssets = logoAssets.filter(function(l) { return l.cloudId !== sid; });
+            // 素材库删除时，组件可能仍处于 pending 状态或只保存了 cloudId。
+            // 两种 ID 都必须清理，不能遗留已经删除的背景缩略图。
+            var isDeletedAsset = function(item) {
+                return item && (item.cloudId === sid || item.id === sid || item.sourceId === sid);
+            };
+            presetLibrary = presetLibrary.filter(function(p) { return !isDeletedAsset(p); });
+            tagPresetLibrary = tagPresetLibrary.filter(function(p) { return !isDeletedAsset(p); });
+            logoAssets = logoAssets.filter(function(l) { return !isDeletedAsset(l); });
+            fontAssets = fontAssets.filter(function(f) { return !isDeletedAsset(f); });
             renderAssetLibrary();
+            // 重新向服务端读取一次，确保删除发生在 DIY 页面未激活期间时也能同步。
+            refreshAssetLibrary();
         }
     });
 
@@ -5734,9 +5756,31 @@
                 thumb.appendChild(hoverInfo);
             }
         }
+        var isRenameable = ['layout', 'pack', 'tag', 'logo', 'font'].indexOf(type) !== -1;
         const info = document.createElement('div');
         info.className = 'asset-info';
         info.innerHTML = `<div class="asset-name">${escapeHtml(title)}</div><div class="asset-meta">${escapeHtml(meta || '')}</div>`;
+        if (isRenameable) {
+            item.oncontextmenu = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var nameDiv = item.querySelector('.asset-name');
+                if (!nameDiv) return;
+                var oldName = (asset?.name || nameDiv.textContent || '').trim();
+                var input = document.createElement('input');
+                input.type = 'text';
+                input.value = oldName;
+                input.style.cssText = 'width:100%;border:1px solid #0d9488;outline:none;border-radius:4px;padding:2px 6px;font-size:12px;font-weight:680;color:var(--text-main);font-family:inherit;background:#fff;';
+                nameDiv.replaceWith(input);
+                input.focus();
+                input.select();
+                input.onblur = function() { commitRename(input, nameDiv, asset, oldName); };
+                input.onkeydown = function(ev) {
+                    if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+                    if (ev.key === 'Escape') { input.value = oldName; input.blur(); }
+                };
+            };
+        }
         const actions = document.createElement('div');
         actions.className = 'asset-actions';
         if(onDelete) {
@@ -5762,6 +5806,19 @@
             item.appendChild(actions);
         }
         return item;
+    }
+    function commitRename(input, nameDiv, asset, oldName) {
+        var newName = input.value.trim();
+        if (!newName || newName === oldName) { input.replaceWith(nameDiv); return; }
+        // 更新本地
+        if (asset) asset.name = newName;
+        nameDiv.textContent = newName;
+        input.replaceWith(nameDiv);
+        // 同步云端：只对模版/组件/字体等有 cloudId 的资产
+        var cloudId = asset?.cloudId;
+        if (cloudId) {
+            notifyParent({ type: 'vf:rename-template', id: cloudId, name: newName });
+        }
     }
     function getTemplatePreviewCanvasInfo(template = {}) {
         const declaredRatio = String(template.size || '').trim();
@@ -5976,6 +6033,8 @@
         if (p._lazy) {
             pendingLayoutPresetId = id;
             showToast('正在加载模板内容，请稍候…');
+            // 按需请求该模板的数据（不再预加载所有）
+            notifyParent({ type: 'vf:request-template-data', id: p.cloudId || p.id });
             return;
         }
         pendingLayoutPresetId = '';
@@ -5984,6 +6043,22 @@
         saveHistory(true);
         // 模板必须优先恢复实际保存尺寸；缺失元数据的旧模板安全回退到 1:1。
         restoreTemplateCanvas(p);
+        // 图片模版：用预览图创建单图层背景
+        if (p.isImageTemplate) {
+            var imgSrc = p.previewUrl || '';
+            var size = SIZES[currentRatio] || { w: 1080, h: 1080 };
+            layers = [{
+                id: genId('image'), type: 'image',
+                x: size.w / 2, y: size.h / 2,
+                zIndex: 1, scale: 1, rotation: 0, flipX: false,
+                baseW: size.w, baseH: size.h,
+                src: imgSrc, fitMode: 'cover',
+                visible: true, locked: false, _templateLayer: true
+            }];
+            activeLayerIds = [];
+            saveHistory(true); renderCanvas(); renderLayersList(); renderProperties(); showToast('已应用图片模板');
+            return;
+        }
         // 模板切换必须完整替换画板。保留上一模板的图片/Logo/圆环会造成组件叠加，
         // 并可能被新模板背景遮住，表现为随机消失。
         const newLayers = adaptPresetElementsToCurrent(p.elements, p.size);
@@ -7414,10 +7489,7 @@
         var h = Number(currentSize.h) || Number(preset.h) || 1080;
         var scales = [0.5, 1, 1.5, 2, 3];
         var labels = { '0.5': '0.5倍', '1': '1倍（原图）', '1.5': '1.5倍', '2': '2倍', '3': '3倍' };
-        var html = '<div class="export-menu-body">'
-            + '<button type="button" class="export-native-png" onclick="exportNativeCapturePNG(1); closeExportMenu();">原生 PNG 导出（HT 推荐）</button>'
-            + '<button type="button" class="export-native-pdf" onclick="exportNativePDF(); closeExportMenu();">导出 PDF（保留原生文字）</button>'
-            + '<div class="export-scale-list">';
+        var html = '<div class="export-menu-body"><div class="export-scale-list">';
         scales.forEach(function(s) {
             var outW = Math.round(w * s);
             var outH = Math.round(h * s);
@@ -7624,7 +7696,13 @@
         }
         const target = getCurrentExportSize(scale);
         if ((target.outWidth * target.outHeight) > SAFE_CANVAS_PX) throw new Error('导出尺寸超出浏览器安全上限');
-        showToast('请在浏览器窗口中选择“当前标签页”，然后点击共享以生成原生排版 PNG');
+        // 当前标签页捕获会记录页面像素；系统共享选择框本身已足够提示，
+        // 不能再在画板上显示 toast，否则会被录进最终 PNG。
+        const toast = document.getElementById('toast');
+        if (toast) {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translate(-50%, -20px)';
+        }
         let stream;
         let video;
         try {
@@ -7636,12 +7714,6 @@
                 selfBrowserSurface: 'include',
                 surfaceSwitching: 'exclude'
             });
-            // 浏览器的共享确认完成后，隐藏操作提示，避免它被裁入画板。
-            const toast = document.getElementById('toast');
-            if (toast) {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translate(-50%, -20px)';
-            }
             const track = stream.getVideoTracks()[0];
             if (!track) throw new Error('没有获取到可用的画面');
             const surface = track.getSettings ? track.getSettings().displaySurface : '';
@@ -8249,6 +8321,6 @@
     bootApp();
 
 </script>
-<script src="../../tool-bridge.js?v=20260806-native-template-preview-v164"></script>
+<script src="../../tool-bridge.js?v=20260806-capture-surface-v170"></script>
 </body>
 </html>
