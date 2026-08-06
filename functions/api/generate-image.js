@@ -1,6 +1,29 @@
 import { getBearerToken, getUserFromToken, json, requireCloudflareEnv } from '../_shared.js';
 import { generateWithOpenAI, generateWithOpenAIReference, generateWithVolc, generateWithVolcReference, hasLK888, hasOpenAI, hasVolcImage, requireAI, submitLK888ImageReferenceTask } from '../_ai.js';
 
+function isRegionUnsupportedError(error) {
+  return /country,?\s*region,?\s*or\s*territory\s*not\s*supported|country.*region.*territory.*not\s*supported/i.test(String(error?.message || error));
+}
+
+async function generateWithProvider(env, provider, prompt, ratio, referenceImages) {
+  if (provider === 'openai') {
+    if (hasLK888(env) && referenceImages.length) {
+      const task = await submitLK888ImageReferenceTask(env, prompt, ratio, referenceImages);
+      if (task.imageBase64) return { imageBase64: task.imageBase64 };
+      return { pending: true, taskId: task.taskId };
+    }
+    const imageBase64 = referenceImages.length
+      ? await generateWithOpenAIReference(env, prompt, ratio, referenceImages)
+      : await generateWithOpenAI(env, prompt, ratio);
+    return { imageBase64 };
+  }
+
+  const imageBase64 = referenceImages.length
+    ? await generateWithVolcReference(env, prompt, ratio, referenceImages)
+    : await generateWithVolc(env, prompt, ratio);
+  return { imageBase64 };
+}
+
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
     return json({ success: false, message: 'Method not allowed' }, 405);
@@ -27,21 +50,33 @@ export async function onRequest({ request, env }) {
       throw new Error('火山生图未配置：请设置 VOLC_API_KEY + ENDPOINT_ID。');
     }
 
-    if (provider === 'openai' && hasLK888(env) && referenceImages.length) {
-      const task = await submitLK888ImageReferenceTask(env, body.prompt, body.ratio, referenceImages);
-      if (task.imageBase64) return json({ success: true, provider, imageBase64: task.imageBase64 });
-      return json({ success: true, provider, pending: true, taskId: task.taskId });
+    try {
+      const result = await generateWithProvider(env, provider, body.prompt, body.ratio, referenceImages);
+      if (result.pending) return json({ success: true, provider, pending: true, taskId: result.taskId });
+      return json({ success: true, provider, imageBase64: result.imageBase64 });
+    } catch (error) {
+      // A direct OpenAI image request can be unavailable in some regions. Keep the
+      // public endpoint stable and use the already-configured Volc image provider.
+      if (provider === 'openai' && hasVolcImage(env) && isRegionUnsupportedError(error)) {
+        const result = await generateWithProvider(env, 'volc', body.prompt, body.ratio, referenceImages);
+        if (result.pending) return json({
+          success: true,
+          provider: 'volc',
+          requestedProvider: 'openai',
+          pending: true,
+          taskId: result.taskId,
+          warning: 'GPT 图片服务暂不支持当前地区，已切换到火山大模型。'
+        });
+        return json({
+          success: true,
+          provider: 'volc',
+          requestedProvider: 'openai',
+          imageBase64: result.imageBase64,
+          warning: 'GPT 图片服务暂不支持当前地区，已切换到火山大模型。'
+        });
+      }
+      throw error;
     }
-
-    const imageBase64 = provider === 'openai'
-      ? referenceImages.length
-        ? await generateWithOpenAIReference(env, body.prompt, body.ratio, referenceImages)
-        : await generateWithOpenAI(env, body.prompt, body.ratio)
-      : referenceImages.length
-        ? await generateWithVolcReference(env, body.prompt, body.ratio, referenceImages)
-        : await generateWithVolc(env, body.prompt, body.ratio);
-
-    return json({ success: true, provider, imageBase64 });
   } catch (error) {
     const message = error.message || 'AI 生图失败。';
     const status = /未配置/i.test(message) ? 503 : /Unauthorized|Invalid session/i.test(message) ? 401 : 500;
