@@ -833,7 +833,7 @@
       const readOnlyAttr = !canEdit ? 'readonly class="brand-input readonly-input"' : 'class="brand-input"';
 
       let mediaHTML = '';
-      if (imgData.coverUrl) { mediaHTML = `<img src="${imgData.coverUrl}" loading="lazy" ${isTemplatePreview ? `onload="updateLibraryTemplateCardSize(this, '${imgData.id}')"` : ''}>`; }
+      if (imgData.coverUrl) { mediaHTML = `<img src="${imgData.coverUrl}" loading="lazy" ${isTemplatePreview ? `onload="updateLibraryTemplateCardSize(this, '${imgData.id}')" data-src-url="${imgData.url || ''}"` : ''}>`; }
       else if (imgData.libType === 'assets') { mediaHTML = `<img src="${imgData.url}" loading="lazy">`; } 
       else {
           mediaHTML = `
@@ -867,10 +867,21 @@
     return { ratio: (width / divisor) + ':' + (height / divisor), pixels: width + ' × ' + height + ' px' };
   }
   window.updateLibraryTemplateCardSize = function(image, id) {
-    var info = getLibraryPreviewSizeInfo(image && image.naturalWidth, image && image.naturalHeight);
     var overlay = document.getElementById('library-template-size-' + id);
-    if(!overlay || !info) return;
-    overlay.innerHTML = '<span class="library-template-size-ratio">' + info.ratio + '</span><span class="library-template-size-pixels">' + info.pixels + '</span>';
+    if(!overlay) return;
+    function showSize(w, h) {
+      var info = getLibraryPreviewSizeInfo(w, h);
+      if(!info) { overlay.innerHTML = ''; return; }
+      overlay.innerHTML = '<span class="library-template-size-ratio">' + info.ratio + '</span><span class="library-template-size-pixels">' + info.pixels + '</span>';
+    }
+    // 先用预览图快速展示，再尝试用源文件获取真实尺寸
+    showSize(image.naturalWidth, image.naturalHeight);
+    var srcUrl = image.dataset && image.dataset.srcUrl;
+    if (srcUrl && srcUrl !== image.src) {
+      var probe = new Image();
+      probe.onload = function() { showSize(probe.naturalWidth, probe.naturalHeight); };
+      probe.src = srcUrl;
+    }
   };
 
   // === 详情弹窗 ===

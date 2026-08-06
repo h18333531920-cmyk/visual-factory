@@ -2318,6 +2318,8 @@
     // 素材库先返回卡片元数据，再异步返回完整模板。只保留最后一次点击，避免慢响应覆盖新选择。
     let pendingLayoutPresetId = '';
     let pendingGroupPresetId = '';
+    let pendingTagPresetId = '';
+    let pendingLogoAssetId = '';
     let currentAssetTab = 'layout';
     let draggingLayerId = null;
     let aiProgressTimer = null;
@@ -5711,15 +5713,23 @@
                 }
                 if (pendingLayoutPresetId && item.id === pendingLayoutPresetId) loadedRequestedPresetId = item.id;
                 if (pendingGroupPresetId && item.id === pendingGroupPresetId) loadedRequestedPresetId = item.id;
+                if (pendingTagPresetId && item.id === pendingTagPresetId) loadedRequestedPresetId = item.id;
+                if (pendingLogoAssetId && item.id === pendingLogoAssetId) loadedRequestedPresetId = item.id;
             });
             renderAssetLibrary();
             if (loadedRequestedPresetId) {
                 var isGroup = pendingGroupPresetId === loadedRequestedPresetId;
+                var isTag = pendingTagPresetId === loadedRequestedPresetId;
+                var isLogo = pendingLogoAssetId === loadedRequestedPresetId;
                 pendingLayoutPresetId = '';
                 pendingGroupPresetId = '';
+                pendingTagPresetId = '';
+                pendingLogoAssetId = '';
                 // 等卡片数据更新后再应用，保证连续点击时只应用最后选中的模板。
                 requestAnimationFrame(function() {
                     if (isGroup) { applyGroupCombo(loadedRequestedPresetId); }
+                    else if (isTag) { applyTagComboPreset(loadedRequestedPresetId); }
+                    else if (isLogo) { addLogoFromAsset(loadedRequestedPresetId); }
                     else { applyLayoutPreset(loadedRequestedPresetId); }
                 });
             }
@@ -6530,6 +6540,14 @@
     }
     function applyTagComboPreset(id) {
         const p = tagPresetLibrary.find(x => x.id === id); if(!p) return;
+        // 懒加载卡片此时只有缩略图和名称；若先删除旧图层再套用空 elements，
+        // 画板上的素材就会“消失”。必须先拿到完整组件，再执行替换。
+        if (p._lazy) {
+            pendingTagPresetId = id;
+            showToast('正在加载组件内容，请稍候…');
+            notifyParent({ type: 'vf:request-template-data', id: p.cloudId || p.id });
+            return;
+        }
         saveHistory(true);
         var newLayers = cloneLayersForInsert(p.elements, true);
         // 如果画板上有选中的图层，替换它：新组件继承被替换组件的坐标、缩放、旋转等
@@ -6623,13 +6641,30 @@
     }
     async function addLogoFromAsset(id) {
         const logo = logoAssets.find(l => l.id === id); if(!logo) return;
+        // 云端组件初始仅有缩略图，src 尚未下载。先取完整资源，不能把选中图层的
+        // src 直接写成空字符串。
+        if (logo._lazy || !logo.src) {
+            pendingLogoAssetId = id;
+            showToast('正在加载素材内容，请稍候…');
+            notifyParent({ type: 'vf:request-template-data', id: logo.cloudId || logo.id });
+            return;
+        }
         var assetType = getLogoAssetType(logo);
+        let sourceImage;
+        try {
+            sourceImage = await loadImageElement(logo.src);
+        } catch (error) {
+            showToast('素材读取失败，未替换当前图层', true);
+            return;
+        }
         // 如果画板上有选中的可替换图层，替换它
         var selectedImg = layers.find(function(l) { return activeLayerIds.includes(l.id) && (l.type === 'logo' || l.type === 'image' || l.type === 'solid'); });
         if (selectedImg) {
             saveHistory();
             selectedImg.src = logo.src;
             selectedImg.type = assetType;
+            selectedImg.originalW = sourceImage.naturalWidth || sourceImage.width;
+            selectedImg.originalH = sourceImage.naturalHeight || sourceImage.height;
             selectedImg.fitMode = assetType === 'logo' ? 'contain' : 'cover';
             // 清理 solid 特有属性
             delete selectedImg.color;
@@ -6637,7 +6672,7 @@
             saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast('已替换');
             return;
         }
-        const size = await readImageSize(logo.src);
+        const size = { w: sourceImage.naturalWidth || sourceImage.width, h: sourceImage.naturalHeight || sourceImage.height };
         var targetW = assetType === 'logo' ? 260 : Math.min(size.w, 800);
         var targetH = Math.max(60, targetW * size.h / size.w);
         addLayer(assetType, { src: logo.src, baseW: targetW, baseH: targetH, fitMode: assetType === 'logo' ? 'contain' : 'cover' });
