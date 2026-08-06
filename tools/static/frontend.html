@@ -1521,7 +1521,8 @@
         .resize-dim { color: #94a3b8; font-size: 11px; font-weight: 500; white-space: nowrap; }
 
         /* 图层右键菜单 */
-        .layer-context-menu {
+        .layer-context-menu,
+        .asset-context-menu {
             display: none;
             position: fixed;
             z-index: 200;
@@ -1533,8 +1534,10 @@
             box-shadow: 0 16px 40px rgba(16, 19, 24, 0.16);
             backdrop-filter: blur(14px);
         }
-        .layer-context-menu.open { display: block; }
-        .layer-context-menu button {
+        .layer-context-menu.open,
+        .asset-context-menu.open { display: block; }
+        .layer-context-menu button,
+        .asset-context-menu button {
             display: flex;
             align-items: center;
             width: 100%;
@@ -1549,7 +1552,8 @@
             cursor: pointer;
             white-space: nowrap;
         }
-        .layer-context-menu button:hover { background: #f1f5f9; }
+        .layer-context-menu button:hover,
+        .asset-context-menu button:hover { background: #f1f5f9; }
 
         .custom-board-menu-item {
             display: none !important;
@@ -2044,6 +2048,10 @@
         </div>
         <div class="asset-library-drop-overlay" id="asset-library-drop-overlay" aria-hidden="true"><div class="asset-library-drop-content"><span class="asset-library-drop-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3"></path><path d="m7 8 5-5 5 5"></path><path d="M4 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"></path></svg></span><span>释放以添加资产</span></div></div>
     </div>
+    <div class="asset-context-menu" id="asset-context-menu">
+        <button type="button" onclick="addAssetContextReferenceToAI(); closeAssetContextMenu();">加入生图参考图</button>
+        <button type="button" id="asset-context-rename" onclick="renameAssetContextItem(); closeAssetContextMenu();" hidden>重命名素材</button>
+    </div>
     <label class="asset-pane-collapse-handle" for="asset-pane-collapse-toggle" title="折叠资产库" aria-label="折叠或展开资产库"></label>
 <div class="left-pane" id="left-pane">
         <div class="canvas-toolbar">
@@ -2116,6 +2124,7 @@
                 </div>
                 <div class="layer-list" id="layer-list-ui"></div>
                 <div class="layer-context-menu" id="layer-context-menu">
+                    <button type="button" id="layer-context-add-reference" onclick="addLayerContextReferenceToAI(); closeLayerContextMenu();" hidden>加入生图参考图</button>
                     <button type="button" onclick="centerLayerOnCanvas(); closeLayerContextMenu();">元素画板居中</button>
                 </div>
                 <div class="layer-list-resize-handle" id="layer-list-resize-handle" role="separator" aria-label="拖动调整图层列表高度" aria-orientation="horizontal" tabindex="0"></div>
@@ -2230,6 +2239,9 @@
     let aiFeatureMode = 'generate';
     let aiProvider = 'openai';
     const AI_REFERENCE_LIMIT = 8;
+    const AI_REFERENCE_DRAG_MIME = 'application/x-vf-ai-reference';
+    const aiReferenceDragPayloads = new Map();
+    let assetContextTarget = null;
     const REFERENCE_ELEMENT_CATEGORIES = { food: '食物', background: '背景' };
     // 扁平风格 SVG 图标
     const ICON_EYE_ON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -3560,6 +3572,12 @@
             card.addEventListener('dragleave', () => card.classList.remove('drop-target'));
             card.addEventListener('drop', e => {
                 e.preventDefault();
+                const referenceSource = getDraggedAIReference(e);
+                const referenceElement = getDraggedReferenceElement(e);
+                if(referenceSource || referenceElement) {
+                    addReferenceElementToAI(referenceSource || referenceElement).catch(err => showToast(err.message || '参考图读取失败', true));
+                    return;
+                }
                 const from = dragIndex >= 0 ? dragIndex : Number(e.dataTransfer.getData('text/plain'));
                 const to = Number(card.dataset.aiRefIndex);
                 moveAIReferenceImage(from, to);
@@ -3594,17 +3612,55 @@
         showToast(validItems.length > picked.length ? `已添加 ${picked.length} 张，最多 ${AI_REFERENCE_LIMIT} 张` : message);
         return true;
     }
+    function getAIReferenceSource(item, fallbackName = '图像') {
+        const src = item?.src || item?.imageUrl || item?.url || item?.previewUrl || '';
+        if(!src) return null;
+        return {
+            name: item?.name || item?.customName || fallbackName,
+            mimeType: item?.mimeType || '',
+            src
+        };
+    }
+    function createAIReferenceDrag(event, item, fallbackName) {
+        const source = getAIReferenceSource(item, fallbackName);
+        if(!source || !event?.dataTransfer) return false;
+        const token = genId('ai_ref_drag');
+        aiReferenceDragPayloads.set(token, source);
+        event.dataTransfer.setData(AI_REFERENCE_DRAG_MIME, token);
+        event.dataTransfer.setData('text/plain', source.name || '参考图');
+        setTimeout(() => aiReferenceDragPayloads.delete(token), 60000);
+        return true;
+    }
+    function getDraggedAIReference(e) {
+        const token = e.dataTransfer?.getData(AI_REFERENCE_DRAG_MIME);
+        return token ? aiReferenceDragPayloads.get(token) || null : null;
+    }
+    async function readAIReferenceUrl(src) {
+        if(String(src || '').startsWith('data:')) return src;
+        const response = await fetch(src, { mode: 'cors' });
+        if(!response.ok) throw new Error('参考图读取失败');
+        const blob = await response.blob();
+        if(!blob.type?.startsWith('image/')) throw new Error('仅支持图片作为生图参考');
+        return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = event => resolve(event.target.result);
+            reader.onerror = () => reject(new Error('参考图读取失败'));
+            reader.readAsDataURL(blob);
+        });
+    }
     async function normalizeReferenceElementForAI(item) {
-        if(!item?.src) return null;
-        const isSvg = String(item.mimeType || '').includes('svg') || String(item.src || '').startsWith('data:image/svg');
-        if(!isSvg) return item;
-        const img = await loadImageElement(item.src);
+        const source = getAIReferenceSource(item);
+        if(!source) return null;
+        const src = await readAIReferenceUrl(source.src);
+        const isSvg = String(source.mimeType || '').includes('svg') || String(src || '').startsWith('data:image/svg');
+        if(!isSvg) return { ...source, src };
+        const img = await loadImageElement(src);
         const canvas = document.createElement('canvas');
         canvas.width = img.naturalWidth || img.width || 320;
         canvas.height = img.naturalHeight || img.height || 210;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        return { ...item, mimeType: 'image/png', src: canvas.toDataURL('image/png') };
+        return { ...source, mimeType: 'image/png', src: canvas.toDataURL('image/png') };
     }
     async function addReferenceElementToAI(item) {
         const normalized = await normalizeReferenceElementForAI(item);
@@ -3676,7 +3732,8 @@
         ['dragenter', 'dragover'].forEach(type => {
             strip.addEventListener(type, e => {
                 const hasReference = Array.from(e.dataTransfer?.types || []).includes('application/x-vf-reference-element');
-                if(!isFileDragEvent(e) && !hasReference) return;
+                const hasImageSource = Array.from(e.dataTransfer?.types || []).includes(AI_REFERENCE_DRAG_MIME);
+                if(!isFileDragEvent(e) && !hasReference && !hasImageSource) return;
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'copy';
                 strip.classList.add('drag-over');
@@ -3690,11 +3747,12 @@
         });
         strip.addEventListener('drop', e => {
             const referenceElement = getDraggedReferenceElement(e);
-            if(!isFileDragEvent(e) && !referenceElement) return;
+            const referenceSource = getDraggedAIReference(e);
+            if(!isFileDragEvent(e) && !referenceElement && !referenceSource) return;
             e.preventDefault();
             strip.classList.remove('drag-over');
-            if(referenceElement) {
-                addReferenceElementToAI(referenceElement).catch(err => showToast(err.message || '参考元素添加失败', true));
+            if(referenceElement || referenceSource) {
+                addReferenceElementToAI(referenceSource || referenceElement).catch(err => showToast(err.message || '参考图读取失败', true));
             } else {
                 addAIReferenceFiles(e.dataTransfer.files).catch(err => showToast(err.message || '参考图读取失败', true));
             }
@@ -4587,7 +4645,13 @@
             const li = document.createElement('div');
             li.className = `layer-item ${activeLayerIds.includes(l.id) ? 'active' : ''} ${hidden ? 'hidden-layer' : ''}`;
             li.draggable = true; li.dataset.id = l.id;
-            li.ondragstart = e => { draggingLayerId = l.id; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; };
+            li.ondragstart = e => {
+                draggingLayerId = l.id;
+                li.classList.add('dragging');
+                const isImageLayer = l.type === 'image' || l.type === 'logo';
+                if(isImageLayer) createAIReferenceDrag(e, { name: getLayerName(l), src: l.src }, getLayerName(l));
+                e.dataTransfer.effectAllowed = isImageLayer ? 'copyMove' : 'move';
+            };
             li.ondragend = () => { draggingLayerId = null; li.classList.remove('dragging'); };
             li.ondragover = e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
             li.ondrop = e => { e.preventDefault(); reorderLayerByDrop(draggingLayerId, l.id); };
@@ -4614,6 +4678,7 @@
                 _contextMenuLayerId = l.id;
                 var menu = document.getElementById('layer-context-menu');
                 if (!menu) return;
+                updateLayerContextReferenceAction(l);
                 menu.style.left = e.clientX + 'px';
                 menu.style.top = e.clientY + 'px';
                 menu.classList.add('open');
@@ -4680,6 +4745,20 @@
     function deleteLayer(id) { preservePaneScroll(() => { layers = layers.filter(l => l.id !== id); activeLayerIds = activeLayerIds.filter(x => x !== id); renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); }); }
     function closeLayerContextMenu() {
         document.getElementById('layer-context-menu')?.classList.remove('open');
+    }
+    function updateLayerContextReferenceAction(layer) {
+        const button = document.getElementById('layer-context-add-reference');
+        if(!button) return;
+        button.hidden = !layer?.src || (layer.type !== 'image' && layer.type !== 'logo');
+    }
+    function addLayerContextReferenceToAI() {
+        const layer = layers.find(function(item) { return item.id === _contextMenuLayerId; });
+        if(!layer?.src || (layer.type !== 'image' && layer.type !== 'logo')) {
+            showToast('请选择一张图片图层', true);
+            return;
+        }
+        addReferenceElementToAI({ name: getLayerName(layer), src: layer.src })
+            .catch(err => showToast(err.message || '参考图读取失败', true));
     }
     function centerLayerOnCanvas() {
         if (!_contextMenuLayerId) return;
@@ -5115,6 +5194,24 @@
             dragData = activeLayerIds.map(selId => ({ id: selId, ix: layers.find(x => x.id === selId).x, iy: layers.find(x => x.id === selId).y }));
             renderCanvas(); renderLayersList(); renderProperties();
         } else { exitTextEdit(); activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); }
+    });
+    document.getElementById('canvas-wrapper').addEventListener('contextmenu', e => {
+        const wrap = e.target.closest('.layer-base');
+        if(!wrap) return;
+        const layer = layers.find(item => item.id === wrap.dataset.id);
+        if(!layer?.src || (layer.type !== 'image' && layer.type !== 'logo')) return;
+        e.preventDefault();
+        _contextMenuLayerId = layer.id;
+        if(!activeLayerIds.includes(layer.id)) {
+            activeLayerIds = [layer.id];
+            renderCanvas(); renderLayersList(); renderProperties();
+        }
+        const menu = document.getElementById('layer-context-menu');
+        if(!menu) return;
+        updateLayerContextReferenceAction(layer);
+        menu.style.left = e.clientX + 'px';
+        menu.style.top = e.clientY + 'px';
+        menu.classList.add('open');
     });
     // 点击画板外侧灰色背景 → 取消选择
     (function(){
@@ -5771,7 +5868,9 @@
     }
     function createAssetItem({ title, meta, type, asset, img, current = false, onApply, onDelete }) {
         const item = document.createElement('div'); item.className = `asset-item ${current ? 'current' : ''} ${type === 'font' ? 'font-asset-card' : ''} ${type === 'layout' ? 'template-preview-card' : ''}`;
+        const canUseAsAIReference = type === 'reference' || (type === 'logo' && getLogoAssetType(asset) === 'image' && !!asset?.src);
         item.onclick = () => {
+            if(item._didReferenceDrag) return;
             try {
                 const result = onApply?.();
                 if(result?.catch) result.catch(err => showToast(err.message || '操作失败', true));
@@ -5779,14 +5878,15 @@
                 showToast(err.message || '操作失败', true);
             }
         };
-        if(type === 'reference') {
+        if(canUseAsAIReference) {
             item.classList.add('reference-element');
             item.draggable = true;
             item.addEventListener('dragstart', e => {
                 e.dataTransfer.effectAllowed = 'copy';
-                e.dataTransfer.setData('application/x-vf-reference-element', JSON.stringify(asset));
-                e.dataTransfer.setData('text/plain', asset.name || '参考元素');
+                item._didReferenceDrag = true;
+                createAIReferenceDrag(e, { name: title || asset?.name, mimeType: asset?.mimeType, src: asset?.src || img }, title || '参考元素');
             });
+            item.addEventListener('dragend', () => { setTimeout(() => { item._didReferenceDrag = false; }, 0); });
         }
         const thumb = document.createElement('div');
         thumb.className = `asset-thumb ${type === 'logo' ? 'logo-thumb' : ''} ${type === 'reference' ? 'reference-thumb' : ''} ${type === 'reference' && asset?.category === 'background' ? 'reference-bg-thumb' : ''}`;
@@ -5804,26 +5904,14 @@
         const info = document.createElement('div');
         info.className = 'asset-info';
         info.innerHTML = `<div class="asset-name">${escapeHtml(title)}</div><div class="asset-meta">${escapeHtml(meta || '')}</div>`;
-        if (isRenameable) {
+        if (canUseAsAIReference) {
             item.oncontextmenu = function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                var nameDiv = item.querySelector('.asset-name');
-                if (!nameDiv) return;
-                var oldName = (asset?.name || nameDiv.textContent || '').trim();
-                var input = document.createElement('input');
-                input.type = 'text';
-                input.value = oldName;
-                input.style.cssText = 'width:100%;border:1px solid #0d9488;outline:none;border-radius:4px;padding:2px 6px;font-size:12px;font-weight:680;color:var(--text-main);font-family:inherit;background:#fff;';
-                nameDiv.replaceWith(input);
-                input.focus();
-                input.select();
-                input.onblur = function() { commitRename(input, nameDiv, asset, oldName); };
-                input.onkeydown = function(ev) {
-                    if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
-                    if (ev.key === 'Escape') { input.value = oldName; input.blur(); }
-                };
+                openAssetContextMenu(e, { item, asset, title, renameable: isRenameable });
             };
+        } else if (isRenameable) {
+            item.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); beginAssetRename(item, asset); };
         }
         const actions = document.createElement('div');
         actions.className = 'asset-actions';
@@ -5851,6 +5939,48 @@
         }
         return item;
     }
+    function beginAssetRename(item, asset) {
+        const nameDiv = item?.querySelector('.asset-name');
+        if(!nameDiv) return;
+        const oldName = (asset?.name || nameDiv.textContent || '').trim();
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = oldName;
+        input.style.cssText = 'width:100%;border:1px solid #0d9488;outline:none;border-radius:4px;padding:2px 6px;font-size:12px;font-weight:680;color:var(--text-main);font-family:inherit;background:#fff;';
+        nameDiv.replaceWith(input);
+        input.focus();
+        input.select();
+        input.onblur = function() { commitRename(input, nameDiv, asset, oldName); };
+        input.onkeydown = function(event) {
+            if(event.key === 'Enter') { event.preventDefault(); input.blur(); }
+            if(event.key === 'Escape') { input.value = oldName; input.blur(); }
+        };
+    }
+    function openAssetContextMenu(event, target) {
+        assetContextTarget = target;
+        const menu = document.getElementById('asset-context-menu');
+        if(!menu) return;
+        const renameButton = document.getElementById('asset-context-rename');
+        if(renameButton) renameButton.hidden = !target?.renameable;
+        menu.style.left = event.clientX + 'px';
+        menu.style.top = event.clientY + 'px';
+        menu.classList.add('open');
+    }
+    function closeAssetContextMenu() {
+        document.getElementById('asset-context-menu')?.classList.remove('open');
+    }
+    function addAssetContextReferenceToAI() {
+        const target = assetContextTarget;
+        const source = getAIReferenceSource(target?.asset, target?.title || '参考元素');
+        if(!source) return showToast('该素材没有可用图片', true);
+        addReferenceElementToAI(source).catch(err => showToast(err.message || '参考图读取失败', true));
+    }
+    function renameAssetContextItem() {
+        if(assetContextTarget?.renameable) beginAssetRename(assetContextTarget.item, assetContextTarget.asset);
+    }
+    document.addEventListener('click', function(event) {
+        if(!event.target.closest('.asset-context-menu') && !event.target.closest('.asset-item')) closeAssetContextMenu();
+    });
     function commitRename(input, nameDiv, asset, oldName) {
         var newName = input.value.trim();
         if (!newName || newName === oldName) { input.replaceWith(nameDiv); return; }
