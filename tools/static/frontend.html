@@ -1746,23 +1746,24 @@
         .asset-item.palette-asset-card .asset-name span { display:block; }
         .asset-item.palette-asset-card .asset-meta { margin-top:4px; color:#737a84; font-size:10px; line-height:1.35; word-break:break-all; }
 
-        /* Preserve each preview's natural aspect ratio and pack cards like a material-library masonry feed. */
+        /* Keep the library in a fixed two-column feed so overflow always moves downward. */
         #asset-list-ui:not(:has(.reference-filter)) {
-            display: block;
+            display: grid;
             width: 100%;
             max-width: 100%;
-            columns: 2;
-            column-gap: 10px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-auto-flow: row;
+            align-content: start;
+            columns: unset;
             overflow-x: hidden;
             overflow-y: auto;
         }
         #asset-list-ui:not(:has(.reference-filter)) .asset-item {
-            display: inline-block;
+            display: block;
             width: 100%;
             max-width: 100%;
-            margin: 0 0 10px;
-            break-inside: avoid;
-            vertical-align: top;
+            margin: 0;
+            break-inside: auto;
         }
         #asset-list-ui:not(:has(.reference-filter)) .asset-thumb,
         #asset-list-ui:not(:has(.reference-filter)) .asset-thumb img {
