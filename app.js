@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260806-extend-pause-v180';
+  const TOOL_UI_VERSION = '20260807-remove-component-upload-button-v214';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -5441,6 +5441,9 @@ function libraryTagsForForm(formData, kind) {
       case 'vf:request-template-data':
         handleFetchSingleTemplate(msg.id, sourceWindow);
         break;
+      case 'vf:request-template-metadata':
+        handleFetchTemplateMetadata(msg.id, sourceWindow);
+        break;
       case 'vf:rename-template':
         handleRenameTemplate(msg.id, msg.name, sourceWindow);
         break;
@@ -5494,6 +5497,10 @@ function libraryTagsForForm(formData, kind) {
       var jsonData = { schema: schemaName, name: finalName, exportedAt: new Date().toISOString() };
       if (msg.templateType === 'pack') {
         jsonData.artboards = msg.data.artboards;
+        jsonData.artboardPresets = msg.data.artboardPresets || [];
+        jsonData.linkedArtboardGroupId = msg.data.linkedArtboardGroupId || '';
+        jsonData.linkedArtboardIds = msg.data.linkedArtboardIds || [];
+        jsonData.linked = !!jsonData.linkedArtboardIds.length;
       } else if (msg.templateType === 'tagcombo' || msg.templateType === 'groupcombo') {
         jsonData.elements = msg.data.elements || [];
       } else if (msg.templateType === 'logo') {
@@ -5534,7 +5541,7 @@ function libraryTagsForForm(formData, kind) {
       // 按新标签结构分配 tag1/tag2
       var tagMap = {
         layout: ['模版', msg.subTag || '社媒物料'],
-        pack: ['模版', msg.subTag || '社媒物料'],
+        pack: ['模版', msg.subTag || '社媒物料', '套组'],
         full: ['模版', msg.subTag || '社媒物料'],
         tagcombo: ['组件', msg.subTag || '标签'],
         logo: ['组件', msg.subTag || 'LOGO'],
@@ -5643,12 +5650,23 @@ function libraryTagsForForm(formData, kind) {
       return;
     }
     try {
+      // 同时拉取 template 和 source 类型的资产，确保素材库里上传的背景图也能在 DIY 里显示
       var { data: sources, error } = await state.supabase.from('vf_source_files')
         .select('id, title, tags, source_path')
-        .contains('tags', ['vf:kind:template'])
+        .or('tags.cs.{vf:kind:template},tags.cs.{vf:kind:source}')
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(500);
       if (error) throw error;
+      // DIY 只接收模板库条目及明确标记为组件的 source 条目。
+      // 案例库同样使用 vf:kind:source，不能只按该标记直接混入 DIY。
+      sources = (sources || []).filter(function(source) {
+        var tags = source.tags || [];
+        var isCaseAsset = tags.includes('案例库') || tags.includes('案例') || tags.includes('案例素材');
+        var isTemplateAsset = tags.includes('vf:kind:template');
+        var isDiyComponent = ['组件', '标签', '背景', '品牌圆弧', 'LOGO', 'Logo', 'KIKI', '其他素材', '字体', '组合']
+          .some(function(tag) { return tags.includes(tag); });
+        return !isCaseAsset && (isTemplateAsset || isDiyComponent);
+      });
       // 查询所有预览图
       var sourceIds = (sources || []).map(function(s) { return s.id; });
       var previewMap = {};
@@ -5681,11 +5699,25 @@ function libraryTagsForForm(formData, kind) {
         else if (t.includes('组合') && t.includes('组件')) templateType = 'groupcombo';
         else if ((t.includes('标签') && t.includes('组件')) || t.includes('标签组')) templateType = 'tagcombo';
         else if (t.includes('LOGO') || t.includes('Logo') || t.includes('背景') || t.includes('KIKI') || t.includes('其他素材') || t.includes('品牌圆弧')) templateType = 'logo';
-        else if (t.includes('社媒物料') || t.includes('C端物料') || t.includes('模版') || t.includes('版式') || t.includes('套组') || t.includes('静态模板')) templateType = 'layout';
+        else if (t.includes('套组')) templateType = 'pack';
+        else if (t.includes('社媒物料') || t.includes('C端物料') || t.includes('模版') || t.includes('版式') || t.includes('静态模板')) templateType = 'layout';
         var dims = previewDims[s.id] || {};
         templates.push({ id: s.id, name: s.title, templateType: templateType, tags: t, previewW: dims.w || 0, previewH: dims.h || 0 });
       }
       sourceWindow.postMessage({ type: 'vf:templates-loaded', templates: templates }, location.origin);
+      // 尺寸信息在列表出现后马上预取。悬停时只展示已到达的数据，不能再把网络请求
+      // 放到 mouseenter 里，否则每次移入卡片都会出现可感知的等待。
+      var metadataTemplateIds = templates.filter(function(template) {
+        return template.templateType === 'layout' || template.templateType === 'pack';
+      }).map(function(template) { return template.id; });
+      (async function preloadTemplateMetadata() {
+        var METADATA_BATCH = 3;
+        for (var metadataIndex = 0; metadataIndex < metadataTemplateIds.length; metadataIndex += METADATA_BATCH) {
+          await Promise.all(metadataTemplateIds.slice(metadataIndex, metadataIndex + METADATA_BATCH).map(function(templateId) {
+            return handleFetchTemplateMetadata(templateId, sourceWindow);
+          }));
+        }
+      })();
       // 把 previewMap 缓存下来供 on-demand JSON 下载使用
       _templatePreviewMap = previewMap;
       // 预览图并行批量下载（每批 6 个并发）
@@ -5720,6 +5752,69 @@ function libraryTagsForForm(formData, kind) {
     }
   }
   var _templatePreviewMap = {};
+  var _templateMetadataCache = {};
+
+  async function handleFetchTemplateMetadata(id, sourceWindow) {
+    if (state.localPreview || !state.supabase || !id) return;
+    try {
+      var cached = _templateMetadataCache[id];
+      if (cached) {
+        sourceWindow.postMessage({ type: 'vf:template-metadata', id: id, data: cached }, location.origin);
+        return;
+      }
+      // 复用主列表已经取得的 source_path，避免在预取几十张卡片时额外并发数据库查询。
+      // 这也是此前 metadata 偶发 Failed to fetch、卡片停在“0 个尺寸”的根源之一。
+      var source = (state.librarySources || []).find(function(item) { return item.id === id && item.source_path; });
+      if (!source) {
+        var { data: sources, error } = await state.supabase.from('vf_source_files')
+          .select('id, source_path').eq('id', id).limit(1);
+        if (error || !sources || !sources.length) throw (error || new Error('模板源文件不存在'));
+        source = sources[0];
+      }
+      var blob = null;
+      var downloadError = null;
+      for (var attempt = 0; attempt < 3 && !blob; attempt += 1) {
+        var result = await state.supabase.storage.from(LIBRARY_BUCKET).download(source.source_path);
+        blob = result.data;
+        downloadError = result.error;
+        if (!blob && attempt < 2) await new Promise(function(resolve) { setTimeout(resolve, 350 * (attempt + 1)); });
+      }
+      if (downloadError || !blob) throw (downloadError || new Error('模板元数据下载失败'));
+      var snapshot = JSON.parse(await blob.text());
+      var metadata;
+      if (snapshot.schema === 'vf-template-pack/v1') {
+        var presets = (snapshot.artboardPresets || []).map(function(preset) {
+          return { id: preset.id, label: preset.label, ratio: preset.ratio, w: preset.w, h: preset.h };
+        });
+        var artboards = {};
+        Object.keys(snapshot.artboards || {}).forEach(function(boardId) {
+          var board = snapshot.artboards[boardId] || {};
+          // 轻量元数据也要携带每张副本的真实宽高。不能只下发 ratio，
+          // 因为同一 ratio 名称在不同模板中的自定义画板可能是不同尺寸。
+          var matchingPreset = presets.find(function(preset) { return preset.id === boardId; }) || {};
+          artboards[boardId] = {
+            id: board.id || boardId,
+            label: board.label || matchingPreset.label || '',
+            ratio: board.ratio || matchingPreset.ratio || boardId,
+            w: Number(board.w) || Number(matchingPreset.w) || 0,
+            h: Number(board.h) || Number(matchingPreset.h) || 0
+          };
+        });
+        // [] 在 JS 中是真值，但对套组而言并不是有效 ID 列表；此时必须由快照
+        // 里的真实画板键补全，避免卡片错误显示 0 个画板。
+        var snapshotIds = Array.isArray(snapshot.linkedArtboardIds) ? snapshot.linkedArtboardIds.filter(Boolean) : [];
+        metadata = { artboardPresets: presets, linkedArtboardIds: snapshotIds.length ? snapshotIds : Object.keys(artboards), artboards: artboards };
+      } else {
+        var canvasSize = templateSnapshotCanvasSize(snapshot);
+        metadata = { size: snapshot.size || '', canvasW: canvasSize.width || 0, canvasH: canvasSize.height || 0 };
+      }
+      _templateMetadataCache[id] = metadata;
+      sourceWindow.postMessage({ type: 'vf:template-metadata', id: id, data: metadata }, location.origin);
+    } catch (error) {
+      console.warn('Fetch template metadata failed:', error);
+      try { sourceWindow.postMessage({ type: 'vf:template-metadata-error', id: id }, location.origin); } catch (e) {}
+    }
+  }
 
   async function handleRenameTemplate(id, name, sourceWindow) {
     if (state.localPreview || !state.supabase || !id || !name) return;

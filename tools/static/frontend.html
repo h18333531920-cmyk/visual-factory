@@ -65,7 +65,8 @@
         body.vf-native-capture-mode .layer-context-menu,
         body.vf-native-capture-mode .ai-dropdown,
         body.vf-native-capture-mode .ai-loading,
-        body.vf-native-capture-mode .asset-library-drop-overlay { display:none !important; }
+        body.vf-native-capture-mode .asset-library-drop-overlay,
+        body.vf-native-capture-mode .linked-artboard-dock { display:none !important; }
         body.vf-native-capture-mode #canvas-wrapper { z-index:2147483000 !important; isolation:isolate; }
         body.vf-native-capture-mode .editor-layout { width:100vw !important; max-width:none !important; height:100vh !important; gap:0 !important; }
         body.vf-native-capture-mode .left-pane { width:100% !important; height:100% !important; border-radius:0 !important; }
@@ -74,6 +75,29 @@
         .artboard-preview-dock { position: absolute; inset: 74px 28px 28px; z-index: 16; display: none; align-items: center; justify-content: center; gap: 24px; pointer-events: auto; }
         .left-pane.overview-mode .artboard-preview-dock { display: flex; }
         .left-pane.overview-mode .canvas-wrapper { opacity: 0; pointer-events: none; }
+        .linked-artboard-dock { position:absolute; z-index:25; left:22px; right:22px; bottom:18px; min-height:108px; display:none; align-items:center; gap:15px; padding:10px 48px 10px 14px; overflow:visible; border:1px solid rgba(16,24,40,.12); border-radius:14px; background:rgba(255,255,255,.94); box-shadow:0 12px 34px rgba(16,24,40,.12); backdrop-filter:blur(12px); transition:min-height .18s ease, padding .18s ease, background-color .18s ease; }
+        .linked-artboard-dock.show { display:flex; }
+        /* 收起时只保留一个小把手，不再显示整条横向容器。 */
+        .linked-artboard-dock.collapsed { left:50%; right:auto; bottom:18px; width:54px; min-height:0; height:26px; padding:0; overflow:visible; justify-content:center; border:0; border-radius:999px; background:transparent; box-shadow:none; transform:translateX(-50%); }
+        .linked-artboard-dock.collapsed > :not(.linked-artboard-dock-toggle) { display:none; }
+        /* 展开后的把手从面板顶部中央露出，视觉上与底部侧栏折叠把手保持一致。 */
+        .linked-artboard-dock-toggle { position:absolute; z-index:5; top:-15px; left:50%; right:auto; width:52px; height:27px; padding:0; border:1px solid rgba(16,24,40,.12); border-bottom:0; border-radius:12px 12px 0 0; background:rgba(255,255,255,.98); color:#667085; cursor:pointer; font-size:17px; font-weight:900; line-height:22px; transform:translateX(-50%); transition:background-color .16s ease,color .16s ease; }
+        .linked-artboard-dock-toggle:hover { color:var(--primary); background:#f4f7ff; }
+        .linked-artboard-dock.collapsed .linked-artboard-dock-toggle { position:static; width:38px; height:24px; border:1px solid rgba(16,24,40,.12); border-radius:999px; font-size:16px; line-height:20px; background:rgba(255,255,255,.98); box-shadow:0 4px 12px rgba(16,24,40,.10); transform:none; }
+        .linked-artboard-card { position:relative; flex:0 0 auto; padding:0; overflow:visible; border:0; border-radius:0; background:transparent; cursor:pointer; }
+        .linked-artboard-card .linked-artboard-mini { overflow:hidden; margin:0 auto; border:2px solid transparent; border-radius:8px; background:#fff; box-sizing:content-box; }
+        .linked-artboard-card.active .linked-artboard-mini { border-color:var(--primary); box-shadow:0 0 0 2px rgba(37,99,235,.14); }
+        .linked-artboard-card .linked-artboard-mini > div { transform-origin:top left; pointer-events:none; }
+        .linked-artboard-card .linked-artboard-size-label { display:flex; width:100%; margin-top:5px; overflow:visible; color:#4b5563; background:transparent; font-size:11px; font-weight:850; line-height:13px; text-align:center; align-items:center; flex-direction:column; white-space:nowrap; }
+        .linked-artboard-card .linked-artboard-ratio-label { color:#1f2937; }
+        .linked-artboard-card .linked-artboard-pixels-label { color:#6b7280; font-size:10px; font-weight:760; }
+        .linked-artboard-remove { position:absolute; z-index:3; top:3px; right:3px; width:18px; height:18px; padding:0; border:0; border-radius:999px; color:#4b5563; background:rgba(255,255,255,.94); box-shadow:0 1px 4px rgba(15,23,42,.16); cursor:pointer; font-size:15px; line-height:18px; opacity:0; transition:opacity .16s ease,background-color .16s ease,color .16s ease; }
+        .linked-artboard-card:hover .linked-artboard-remove, .linked-artboard-card.active .linked-artboard-remove { opacity:1; }
+        .linked-artboard-remove:hover { color:#fff; background:#e5484d; }
+        .linked-artboard-add { flex:0 0 56px; width:56px; height:56px; border:1px dashed #9ca3af; border-radius:9px; background:#fff; color:#5f6772; font-size:28px; line-height:1; cursor:pointer; }
+        .linked-artboard-add:hover { border-color:var(--primary); color:var(--primary); background:#f6f8ff; }
+        .linked-artboard-add.is-disabled { border-color:#d5dbe5; color:#98a2b3; background:#fafafa; }
+        .linked-artboard-add.is-disabled:hover { border-color:#d5dbe5; color:#98a2b3; background:#fafafa; }
         .artboard-preview-card { width: auto; min-height: 112px; border: 1px solid rgba(16,17,20,0.18); border-radius: 8px; background: rgba(255,255,255,0.86); padding: 10px; cursor: pointer; box-shadow: 0 10px 28px rgba(16,17,20,0.08); }
         .artboard-preview-card.active { border-color: var(--text-main); box-shadow: 0 0 0 2px var(--text-main), 0 12px 30px rgba(16,17,20,0.12); }
         .artboard-preview-title { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 850; color: var(--text-main); margin-bottom: 7px; }
@@ -268,8 +292,8 @@
         .asset-tab.active { background: var(--text-main); border-color: var(--text-main); color: #FFFFFF; }
         .filter-capsule { border: 1px solid var(--border); background: #FFFFFF; border-radius: 999px; font-size: 11px; font-weight: 800; cursor: pointer; color: var(--text-sub); padding: 4px 10px; box-shadow: none; }
         .filter-capsule.active { background: #0b0d12; border-color: #0b0d12; color: #fff; }
-        .asset-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-height: 260px; overflow-y: auto; padding: 0 4px 4px 0; align-items: start; }
-        .asset-item { position: relative; min-width: 0; cursor: pointer; border-radius: 8px; overflow: hidden; }
+        .asset-list { display: block; column-count: 2; column-gap: 10px; max-height: 260px; overflow-y: auto; overflow-x: hidden; padding: 0 4px 4px 0; }
+        .asset-item { position: relative; display: inline-block; width: 100%; min-width: 0; margin: 0 0 10px; break-inside: avoid; cursor: pointer; border-radius: 8px; overflow: visible; }
         .asset-item:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(15,23,42,0.12); }
         .asset-item.current { box-shadow: 0 0 0 2px var(--primary); }
         .asset-thumb { width: 100%; border-radius: 0; background: transparent; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -280,10 +304,14 @@
         .asset-thumb.logo-thumb { background-color: #f7f8f6; background-image: linear-gradient(45deg, #e3e5e1 25%, transparent 25%), linear-gradient(-45deg, #e3e5e1 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e3e5e1 75%), linear-gradient(-45deg, transparent 75%, #e3e5e1 75%); background-size: 14px 14px; background-position: 0 0, 0 7px, 7px -7px, -7px 0; }
         .asset-preview-stage { position: relative; overflow: hidden; background: #FFFFFF; }
         .asset-preview-canvas { position: absolute; left: 0; top: 0; transform-origin: top left; overflow: hidden; background: #FFFFFF; }
-        .asset-pack-hover { display: none; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; padding-top: 2px; }
+        .asset-pack-hover { display: none; grid-template-columns: 1fr; gap: 4px; padding: 6px 0 0; }
         .asset-item:hover .asset-pack-hover { display: grid; }
-        .asset-pack-mini { min-width: 0; }
-        .asset-pack-mini-label { font-size: 9px; font-weight: 850; color: var(--text-sub); margin-bottom: 3px; text-align: center; }
+        .asset-pack-mini { min-width: 0; min-height: 38px; padding: 5px 7px; border-radius: 7px; background: #f7f8fa; display: grid; grid-template-columns: 28px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 7px; }
+        .asset-pack-size-icon { grid-row: 1 / span 2; width: 28px; height: 24px; display: flex; align-items: center; justify-content: center; color: #6a88f7; }
+        .asset-pack-size-icon i { display: block; border: 1.5px solid currentColor; border-radius: 2px; box-sizing: border-box; }
+        .asset-pack-mini-label { max-width: 100%; overflow: hidden; font-size: 10px; font-weight: 850; color: var(--text-main); text-align: left; white-space: nowrap; text-overflow: ellipsis; }
+        .asset-pack-mini-size { max-width: 100%; overflow: hidden; font-size: 9px; font-weight: 700; color: var(--text-sub); text-align: left; white-space: nowrap; text-overflow: ellipsis; }
+        .asset-pack-loading-note { grid-column: 1 / -1; padding: 9px 6px; color: var(--text-sub); background: #f7f8fa; border-radius: 7px; font-size: 10px; font-weight: 700; text-align: center; }
         .asset-info { min-width: 0; padding-right: 18px; }
         .asset-name { font-size: 12px; font-weight: 800; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .asset-meta { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
@@ -292,6 +320,12 @@
         .asset-action { width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 999px; background: rgba(255,255,255,0.92); cursor: pointer; font-size: 12px; color: var(--text-sub); padding: 0; }
         .asset-action:hover { color: var(--danger); }
         .asset-status { position: absolute; top: 12px; left: 12px; background: #0b0d12; color: #fff; border-radius: 999px; padding: 3px 7px; font-size: 9px; font-weight: 850; }
+        /* 多画板套组标识：只覆盖在套组模板预览图的左上角，用两个叠放画板表达“集合”。 */
+        .asset-pack-summary { position:absolute; z-index:4; top:7px; left:7px; height:25px; display:inline-flex; align-items:center; overflow:hidden; border:1px solid rgba(17,24,39,.12); border-radius:8px; color:#1f2937; background:rgba(255,255,255,.94); box-shadow:0 2px 8px rgba(15,23,42,.13); pointer-events:none; }
+        .asset-pack-badge { width:25px; height:25px; display: inline-flex; align-items: center; justify-content: center; color: #1f2937; }
+        .asset-pack-badge svg { width: 15px; height: 15px; display: block; }
+        .asset-pack-count { min-width:20px; height:16px; display:inline-flex; align-items:center; justify-content:center; padding:0 6px 0 4px; border-left:1px solid rgba(17,24,39,.12); font-size:11px; font-weight:850; line-height:1; }
+        .asset-item.current .asset-pack-summary { top:29px; }
         .asset-empty { grid-column: 1 / -1; color: var(--text-sub); font-size: 12px; text-align: center; padding: 14px 8px; border: 1px dashed var(--border); border-radius: 10px; background: #FFFFFF; }
         .asset-hover-preview { position: fixed; z-index: 900; width: 465px; padding: 16px; border: 1px solid rgba(16,17,20,0.12); border-radius: 18px; background: rgba(255,255,255,0.96); box-shadow: 0 24px 64px rgba(16,17,20,0.18); opacity: 0; transform: translateY(6px) scale(0.98); transition: opacity 0.14s ease, transform 0.14s ease; pointer-events: none; backdrop-filter: blur(10px); }
         .asset-hover-preview.show { opacity: 1; transform: translateY(0) scale(1); }
@@ -1648,7 +1682,7 @@
         }
         .asset-pane .asset-library-card {
             height: 100%; padding: 18px 14px; border: 0; border-radius: 0;
-            display: flex; flex-direction: column; box-shadow: none;
+            display: flex; flex-direction: column; box-shadow: none; overflow: hidden;
         }
         .asset-pane .card-title { padding: 0 4px; margin-bottom: 14px; }
 
@@ -1722,7 +1756,7 @@
         #diy-subtag-row { padding: 0 2px; margin-bottom: 9px !important; }
         .filter-capsule { padding: 4px 9px; border-color: var(--border); border-radius: 5px; font-size: 11px; box-shadow: none; }
         .filter-capsule.active { background: #30343a; border-color: #30343a; box-shadow: none; }
-        .asset-list { flex: 1; max-height: none; gap: 10px; padding: 2px 4px 18px 2px; }
+        .asset-list { flex: 1; max-height: none; gap: 10px; padding: 2px 4px 18px 2px; overflow-y: auto; overflow-x: hidden; min-height: 0; }
         .asset-item { border: 1px solid transparent; border-radius: 8px; background: #fff; }
         .asset-item:hover, .asset-item.current { border-color: var(--border-strong); box-shadow: 0 5px 14px rgba(32,33,36,.10); }
         .asset-thumb { border: 1px solid var(--border); border-radius: 8px; background: #f7f8f9; }
@@ -1753,19 +1787,29 @@
         .asset-item.palette-asset-card .asset-name span { display:block; }
         .asset-item.palette-asset-card .asset-meta { margin-top:4px; color:#737a84; font-size:10px; line-height:1.35; word-break:break-all; }
 
-        /* Preserve each preview's natural aspect ratio and pack cards like a material-library masonry feed. */
+        /* 两列瀑布流：列由 JS 分配，避免 CSS column 在固定高度滚动容器内生成隐藏的横向列。 */
         #asset-list-ui:not(:has(.reference-filter)) {
-            display: block;
-            columns: 2;
-            column-gap: 10px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            align-items: start;
+            gap: 10px;
+            column-count: auto;
+            column-gap: normal;
             overflow-y: auto;
+            overflow-x: hidden;
+        }
+        #asset-list-ui:not(:has(.reference-filter)) .asset-masonry-column {
+            display: flex;
+            min-width: 0;
+            flex-direction: column;
+            gap: 10px;
         }
         #asset-list-ui:not(:has(.reference-filter)) .asset-item {
-            display: inline-block;
+            display: block;
             width: 100%;
-            margin: 0 0 10px;
-            break-inside: avoid;
-            vertical-align: top;
+            min-width: 0;
+            margin: 0;
+            break-inside: auto;
         }
         #asset-list-ui:not(:has(.reference-filter)) .asset-thumb,
         #asset-list-ui:not(:has(.reference-filter)) .asset-thumb img {
@@ -2088,6 +2132,7 @@
             <button type="button" onclick="saveGroupCombo(); closeCanvasContextMenu();">保存组合</button>
         </div>
         <div class="artboard-preview-dock" id="artboard-preview-dock"></div>
+        <div class="linked-artboard-dock" id="linked-artboard-dock" aria-label="关联画板集合"></div>
         <div class="ai-loading" id="ai-loading">
             <div class="ai-row">
                 <div class="ai-spinner"></div>
@@ -2231,6 +2276,11 @@
         acc[preset.id] = { id: preset.id, label: preset.label, ratio: preset.ratio, layers: [] };
         return acc;
     }, {});
+    // 关联画板集合：复制画板后保留各自尺寸，但图层内容作为一个共享集合同步。
+    let linkedArtboardGroupId = '';
+    let linkedArtboardIds = [];
+    // 副本管理面板默认只露出一个底部把手，避免第一次打开模板就压缩编辑画布。
+    let linkedArtboardDockExpanded = false;
 
     let tagColorPresets = [{ id: 'c1', name: '品牌绿', bg: '#00D06C', text: '#FFFFFF', shadow: '#111827', shadowOpacity: 1 }, { id: 'c2', name: '警示红', bg: '#EF4444', text: '#FFFFFF', shadow: '#450a0a', shadowOpacity: 1 }];
     let arcColorPresets = [{ id: 'a1', name: '经典黄绿', cIn: '#FFCC00', cOut: '#00D06C' }, { id: 'a2', name: '极简黑白', cIn: '#111827', cOut: '#E5E7EB' }];
@@ -2714,6 +2764,15 @@
         showToast(`最多只能新建 ${MAX_CUSTOM_ARTBOARDS} 个画板`, true);
         return false;
     }
+    function canCreateLinkedArtboardCopy() {
+        // 副本上限属于当前关联集合，而不是整个编辑会话内遗留的所有自定义画板。
+        const currentSetCount = linkedArtboardIds.filter(function(id) {
+            return !!artboards[id] && artboards[id].linkedGroupId === linkedArtboardGroupId;
+        }).length;
+        if (currentSetCount < MAX_CUSTOM_ARTBOARDS) return true;
+        showToast(`当前套组最多只能有 ${MAX_CUSTOM_ARTBOARDS} 个画板`, true);
+        return false;
+    }
     function nextArtboardLabel(baseLabel) {
         const existingLabels = new Set(getCustomArtboardPresets().map(p => p.label));
         if(!existingLabels.has(baseLabel)) return baseLabel;
@@ -2757,9 +2816,9 @@
         widthInput.value = ''; heightInput.value = '';
         closeNewArtboardMenu(); saveHistory(); showToast(`已新建 ${w} × ${h} 画板`);
     }
-    function createCustomArtboardPreset({ id = genId('custom_board'), label = '自定义', w = 1080, h = 1080 } = {}, switchTo = true) {
+    function createCustomArtboardPreset({ id = genId('custom_board'), label = '自定义', w = 1080, h = 1080 } = {}, switchTo = true, options = {}) {
         const existing = ARTBOARD_PRESETS.find(p => p.id === id);
-        if(!existing && !canCreateCustomArtboard()) return '';
+        if(!existing && !options.skipLimit && !canCreateCustomArtboard()) return '';
         const safeW = Math.max(64, Math.min(6000, Math.round(Number(w) || 1080)));
         const safeH = Math.max(64, Math.min(6000, Math.round(Number(h) || 1080)));
         const safeLabel = String(label || '自定义').trim().slice(0, 16) || '自定义';
@@ -2789,7 +2848,11 @@
         const safeH = Math.max(64, Math.min(6000, Math.round(Number(h) || oldSize.h)));
         const sx = safeW / Math.max(1, oldSize.w);
         const sy = safeH / Math.max(1, oldSize.h);
+        // 普通组件保持原来的相对位置与比例，统一缩放后在新画板中居中；
+        // 背景层单独 cover 填满，不能随非等比尺寸被拉伸或留下白边。
         const uniform = Math.min(sx, sy);
+        const offsetX = (safeW - oldSize.w * uniform) / 2;
+        const offsetY = (safeH - oldSize.h * uniform) / 2;
         const safeLabel = String(label || preset.label || '自定义').trim().slice(0, 16) || '自定义';
         preset.label = safeLabel;
         preset.w = safeW;
@@ -2801,17 +2864,19 @@
             board.ratio = preset.ratio;
             board.layers = (board.layers || []).map(layer => {
                 const next = cloneData(layer);
-                next.x = (Number(next.x) || oldSize.w / 2) * sx;
-                next.y = (Number(next.y) || oldSize.h / 2) * sy;
-                if(next.type === 'solid' || next.role === 'extended-background') {
+                const isFullBackground = next.type === 'solid' || next.role === 'extended-background'
+                    || (next.type === 'image' && (Number(next.baseW) || 0) >= oldSize.w * 0.92 && (Number(next.baseH) || 0) >= oldSize.h * 0.92);
+                next.x = offsetX + (Number(next.x) || oldSize.w / 2) * uniform;
+                next.y = offsetY + (Number(next.y) || oldSize.h / 2) * uniform;
+                if(isFullBackground) {
                     next.x = safeW / 2;
                     next.y = safeH / 2;
                     next.baseW = safeW;
                     next.baseH = safeH;
                     next.scale = 1;
                 } else if(next.type === 'image') {
-                    next.baseW = Math.max(1, Math.round((Number(next.baseW) || oldSize.w) * sx));
-                    next.baseH = Math.max(1, Math.round((Number(next.baseH) || oldSize.h) * sy));
+                    next.baseW = Math.max(1, Math.round((Number(next.baseW) || oldSize.w) * uniform));
+                    next.baseH = Math.max(1, Math.round((Number(next.baseH) || oldSize.h) * uniform));
                 } else if(next.type === 'logo') {
                     next.baseW = Math.max(1, Math.round((Number(next.baseW) || 260) * uniform));
                     next.baseH = Math.max(1, Math.round((Number(next.baseH) || 160) * uniform));
@@ -2854,6 +2919,25 @@
         });
         renderCustomArtboardControls();
     }
+    function restorePackArtboardPresets(pack = {}) {
+        const savedPresets = pack.artboardPresets || [];
+        restoreCustomArtboardPresets(savedPresets);
+        // 旧套组曾出现“画板快照有 5 张，但预设数组只保存了 2 张”的数据。
+        // 恢复时必须以 artboards 为准补全缺失画板，否则 normalize 会直接丢掉那几张。
+        const presetsById = new Map(savedPresets.map(function(preset) { return [preset.id, preset]; }));
+        Object.keys(pack.artboards || {}).forEach(function(boardId) {
+            if (FIXED_ARTBOARD_IDS.includes(boardId) || getArtboardPreset(boardId)?.id === boardId) return;
+            const board = pack.artboards[boardId] || {};
+            const saved = presetsById.get(boardId) || savedPresets.find(function(preset) { return preset.ratio === board.ratio; }) || {};
+            const declared = SIZES[board.ratio] || {};
+            createCustomArtboardPreset({
+                id: boardId,
+                label: board.label || saved.label || '画板',
+                w: board.w || saved.w || declared.w || 1080,
+                h: board.h || saved.h || declared.h || 1080
+            }, false, { skipLimit:true });
+        });
+    }
     async function deleteCustomArtboard(id) {
         if (!isCustomArtboardId(id)) return;
         if (!await askConfirm('删除这个自定义画板？画板上的图层也会被删除。')) return;
@@ -2882,6 +2966,7 @@
                 id: preset.id,
                 label: preset.label,
                 ratio: incoming.ratio || preset.ratio,
+                linkedGroupId: incoming.linkedGroupId || '',
                 layers: cloneData(incoming.layers || [])
             };
             return acc;
@@ -2895,8 +2980,137 @@
         }
         artboards[currentArtboardId].ratio = currentRatio;
         artboards[currentArtboardId].layers = cloneData(layers);
+        syncLinkedArtboardContents();
     }
-    function loadArtboard(id, saveCurrent = true) {
+
+    function isLinkedArtboard(id) {
+        return !!linkedArtboardGroupId && linkedArtboardIds.includes(id) && artboards[id]?.linkedGroupId === linkedArtboardGroupId;
+    }
+    function prepareLinkedLayers(sourceLayers) {
+        return cloneData(sourceLayers || []).map(function(layer) {
+            // 不同画板保留同一个逻辑图层 ID，保证编辑后的全部内容能准确同步。
+            if (!layer.sharedKey) layer.sharedKey = 'linked_' + layer.id;
+            return layer;
+        });
+    }
+    function syncLinkedArtboardContents() {
+        if (!isLinkedArtboard(currentArtboardId)) return;
+        const sharedLayers = prepareLinkedLayers(layers);
+        layers = cloneData(sharedLayers);
+        linkedArtboardIds.forEach(function(id) {
+            if (id === currentArtboardId || !artboards[id] || artboards[id].linkedGroupId !== linkedArtboardGroupId) return;
+            // 内容（文案、颜色、图片、标签样式）跨副本同步；每张画板自己的几何布局
+            // 则必须保留，否则把竖版改尺寸会覆盖回横版/方版的坐标。
+            const ownLayers = artboards[id].layers || [];
+            const ownByKey = new Map(ownLayers.map(function(layer) { return [layer.sharedKey || ('linked_' + layer.id), layer]; }));
+            artboards[id].layers = sharedLayers.map(function(shared) {
+                const own = ownByKey.get(shared.sharedKey || ('linked_' + shared.id));
+                if (!own) return cloneData(shared);
+                const merged = Object.assign({}, cloneData(shared));
+                ['x','y','zIndex','scale','rotation','baseW','baseH','maxWidth','textBoxHeight','rIn','wIn','wOut'].forEach(function(key) {
+                    if (own[key] !== undefined) merged[key] = own[key];
+                });
+                return merged;
+            });
+        });
+    }
+    function commitLinkedReplacement(replacedLayer, replacementLayers) {
+        if (!isLinkedArtboard(currentArtboardId) || !replacedLayer || !replacementLayers?.length) return;
+        const sharedKey = replacedLayer.sharedKey || ('linked_' + replacedLayer.id);
+        const first = replacementLayers[0];
+        if (!first.sharedKey) first.sharedKey = sharedKey;
+        linkedArtboardIds.forEach(function(boardId) {
+            if (boardId === currentArtboardId || !isLinkedArtboard(boardId)) return;
+            const board = artboards[boardId];
+            const old = (board.layers || []).find(function(layer) { return (layer.sharedKey || ('linked_' + layer.id)) === sharedKey; });
+            const next = cloneData(first);
+            // 不同尺寸副本只保留它自己的布局几何，替换内容本身（src/类型/样式）完全同步。
+            if (old) ['x','y','zIndex','scale','rotation','baseW','baseH','maxWidth','textBoxHeight','rIn','wIn','wOut'].forEach(function(key) {
+                if (old[key] !== undefined) next[key] = old[key];
+            });
+            const rest = replacementLayers.slice(1).map(cloneData);
+            board.layers = (board.layers || []).filter(function(layer) { return (layer.sharedKey || ('linked_' + layer.id)) !== sharedKey; });
+            board.layers.push(next, ...rest);
+        });
+    }
+    function leaveLinkedArtboardGroup() {
+        if (!isLinkedArtboard(currentArtboardId)) return;
+        if (artboards[currentArtboardId]) artboards[currentArtboardId].linkedGroupId = '';
+        linkedArtboardGroupId = '';
+        linkedArtboardIds = [];
+        renderLinkedArtboardDock();
+    }
+    function linkedArtboardSize(id) {
+        const board = artboards[id];
+        const preset = getArtboardPreset(id);
+        // 关联副本的尺寸以自身保存的 ratio 为准，不能回退到最初固定画板的 750×500 等预设。
+        return SIZES[board?.ratio] || SIZES[preset?.ratio] || preset || { w:1080, h:1080 };
+    }
+    // 关联画板会复用同一批背景、Logo 和图片。旧格式把相同的 base64 图片随每个
+    // 副本重复存进 JSON；这里改为资源表 + 图层引用，显著减少套组下载体积。
+    function compactLinkedArtboardsForStorage(sourceArtboards) {
+        const assetSources = {};
+        const sourceIds = new Map();
+        let index = 0;
+        const artboardsForStorage = cloneData(sourceArtboards || {});
+        Object.keys(artboardsForStorage).forEach(function(boardId) {
+            (artboardsForStorage[boardId].layers || []).forEach(function(layer) {
+                if (!layer?.src || typeof layer.src !== 'string') return;
+                let assetRef = sourceIds.get(layer.src);
+                if (!assetRef) {
+                    assetRef = 'asset_' + (++index);
+                    sourceIds.set(layer.src, assetRef);
+                    assetSources[assetRef] = layer.src;
+                }
+                layer.assetRef = assetRef;
+                delete layer.src;
+            });
+        });
+        return { artboards: artboardsForStorage, assetSources: assetSources };
+    }
+    function hydrateLinkedArtboardsFromStorage(sourceArtboards, assetSources) {
+        const hydrated = cloneData(sourceArtboards || {});
+        const assets = assetSources || {};
+        Object.keys(hydrated).forEach(function(boardId) {
+            (hydrated[boardId].layers || []).forEach(function(layer) {
+                if (!layer?.src && layer?.assetRef && assets[layer.assetRef]) layer.src = assets[layer.assetRef];
+                delete layer.assetRef;
+            });
+        });
+        return hydrated;
+    }
+    function createLinkedArtboardCopy() {
+        saveCurrentArtboardState();
+        const sourceId = currentArtboardId;
+        const sourcePreset = getArtboardPreset(sourceId);
+        const sourceSize = SIZES[currentRatio] || linkedArtboardSize(sourceId);
+        if (!canCreateLinkedArtboardCopy()) return;
+        if (!isLinkedArtboard(sourceId)) {
+            linkedArtboardGroupId = genId('linked_set');
+            // 固定画板本身可能临时使用了 1:1 等尺寸，不能再把它当作 750×500 读取。
+            // 首次创建时将当前画布固化成关联集合的第一张独立画板，后续每张都有自己的尺寸记录。
+            const primaryId = createCustomArtboardPreset({
+                id: genId('linked_board'),
+                label: nextArtboardLabel(sourcePreset?.label || '画板'),
+                w: sourceSize.w, h: sourceSize.h
+            }, false, { skipLimit:true });
+            if (!primaryId) { linkedArtboardGroupId = ''; return; }
+            artboards[primaryId] = { id:primaryId, label:getArtboardPreset(primaryId)?.label || '画板', ratio:getArtboardPreset(primaryId)?.ratio || primaryId, linkedGroupId:linkedArtboardGroupId, layers:prepareLinkedLayers(layers) };
+            linkedArtboardIds = [primaryId];
+        }
+        const nextNumber = linkedArtboardIds.length + 1;
+        const id = createCustomArtboardPreset({
+            id: genId('linked_board'), label: (sourcePreset?.label || '画板') + ' 副本 ' + nextNumber,
+            w: sourceSize.w, h: sourceSize.h
+        }, false, { skipLimit:true });
+        if (!id) return;
+        artboards[id] = { id:id, label:(getArtboardPreset(id)?.label || '副本 ' + nextNumber), ratio:getArtboardPreset(id)?.ratio || id, linkedGroupId:linkedArtboardGroupId, layers:prepareLinkedLayers(layers) };
+        linkedArtboardIds.push(id);
+        renderLinkedArtboardDock();
+        switchArtboard(id);
+        showToast('已创建关联画板副本');
+    }
+    function loadArtboard(id, saveCurrent = true, options = {}) {
         if(!artboards[id]) return;
         if(saveCurrent) saveCurrentArtboardState();
         const preset = getArtboardPreset(id);
@@ -2910,7 +3124,7 @@
         renderCanvas();
         renderLayersList();
         renderProperties();
-        renderAssetLibrary();
+        if (!options.skipAssetLibrary) renderAssetLibrary();
     }
     function switchArtboard(id) {
         const wasOverview = overviewMode;
@@ -2930,51 +3144,18 @@
         });
     }
     function renderCustomArtboardControls() {
+        // 顶部只保留“新建画板”入口。画板副本的切换与删除统一由底部缩略图面板负责，
+        // 不能再在这里复制一套会残留旧套组状态的标签按钮。
         document.querySelectorAll('.custom-artboard-tab, .custom-ratio-tab').forEach(el => el.remove());
-        const topAnchor = document.querySelector('.add-custom-artboard-tab');
-        const ratioAnchor = document.querySelector('.add-custom-ratio-tab');
-        const fixedPackTabs = activeTemplatePackId
-            ? getFixedArtboardPresets().filter(preset => (artboards[preset.id]?.layers || []).length > 0)
-            : [];
-        [...fixedPackTabs, ...getCustomArtboardPresets()].forEach(preset => {
-            var isCustom = isCustomArtboardId(preset.id);
-            const topBtn = document.createElement('button');
-            topBtn.type = 'button';
-            topBtn.className = 'artboard-tab custom-artboard-tab';
-            topBtn.dataset.artboard = preset.id;
-            topBtn.textContent = getArtboardTopLabel(preset);
-            topBtn.onclick = () => switchArtboard(preset.id);
-            if (isCustom) {
-                var delTop = document.createElement('span');
-                delTop.textContent = ' ×';
-                delTop.style.cssText = 'color:#94a3b8;font-size:10px;cursor:pointer;';
-                delTop.onclick = function(e) { e.stopPropagation(); deleteCustomArtboard(preset.id); };
-                topBtn.appendChild(delTop);
-            }
-            topAnchor?.parentNode?.appendChild(topBtn);
-
-            const ratioBtn = document.createElement('button');
-            ratioBtn.type = 'button';
-            ratioBtn.className = 'custom-ratio-tab';
-            ratioBtn.dataset.artboard = preset.id;
-            ratioBtn.textContent = preset.label;
-            if (isCustom) {
-                var delRatio = document.createElement('span');
-                delRatio.textContent = ' ×';
-                delRatio.style.cssText = 'color:#94a3b8;font-size:10px;cursor:pointer;';
-                delRatio.onclick = function(e) { e.stopPropagation(); deleteCustomArtboard(preset.id); };
-                ratioBtn.appendChild(delRatio);
-            }
-            ratioBtn.onclick = () => switchArtboard(preset.id);
-            ratioAnchor?.parentNode?.insertBefore(ratioBtn, ratioAnchor);
-        });
     }
     function getArtboardSnapshot() {
         saveCurrentArtboardState();
         return {
             currentArtboardId,
             artboardPresets: cloneData(getCustomArtboardPresets()),
-            artboards: cloneData(artboards)
+            artboards: cloneData(artboards),
+            linkedArtboardGroupId,
+            linkedArtboardIds: cloneData(linkedArtboardIds)
         };
     }
     function importArtboardSnapshot(snapshot = {}) {
@@ -2988,6 +3169,11 @@
             });
             currentArtboardId = 'head';
         }
+        linkedArtboardGroupId = snapshot.linkedArtboardGroupId || '';
+        linkedArtboardIds = (snapshot.linkedArtboardIds || []).filter(function(id) { return !!artboards[id]; });
+        if (!linkedArtboardIds.length && linkedArtboardGroupId) {
+            linkedArtboardIds = Object.keys(artboards).filter(function(id) { return artboards[id].linkedGroupId === linkedArtboardGroupId; });
+        }
         loadArtboard(currentArtboardId, false);
     }
     window.getArtboardSnapshot = getArtboardSnapshot;
@@ -2996,7 +3182,7 @@
     function saveHistory(force) {
         if(isRestoring) return;
         saveCurrentArtboardState();
-        const state = { currentArtboardId, artboardPresets: cloneData(getCustomArtboardPresets()), artboards: cloneData(artboards) };
+        const state = { currentArtboardId, artboardPresets: cloneData(getCustomArtboardPresets()), artboards: cloneData(artboards), linkedArtboardGroupId, linkedArtboardIds: cloneData(linkedArtboardIds) };
         const stateText = JSON.stringify(state);
         if(!force && historyIdx >= 0 && JSON.stringify(historyStack[historyIdx]) === stateText) { updateHistoryButtons(); return; }
         historyStack = historyStack.slice(0, historyIdx + 1);
@@ -3011,6 +3197,9 @@
         restoreCustomArtboardPresets(state.artboardPresets || []);
         if(state.artboards) {
             artboards = normalizeArtboardSnapshot(state.artboards);
+            linkedArtboardGroupId = state.linkedArtboardGroupId || '';
+            linkedArtboardIds = (state.linkedArtboardIds || []).filter(function(id) { return !!artboards[id]; });
+            if (!linkedArtboardIds.length && linkedArtboardGroupId) linkedArtboardIds = Object.keys(artboards).filter(function(id) { return artboards[id].linkedGroupId === linkedArtboardGroupId; });
             currentArtboardId = artboards[state.currentArtboardId] ? state.currentArtboardId : 'head';
             var board = artboards[currentArtboardId];
             currentRatio = (board && board.ratio) || getArtboardPreset(currentArtboardId).ratio;
@@ -3020,6 +3209,8 @@
             currentRatio = state.ratio || 'head';
             layers = cloneData(state.layers || []);
             artboards = normalizeArtboardSnapshot({ head: { layers } });
+            linkedArtboardGroupId = '';
+            linkedArtboardIds = [];
         }
         activeLayerIds = activeLayerIds.filter(id => layers.some(l => l.id === id));
         syncArtboardTabs();
@@ -4362,7 +4553,9 @@
         const wrap = document.getElementById('canvas-wrapper'); const pane = document.getElementById('left-pane'); const {w, h} = SIZES[currentRatio];
         wrap.style.width = w + 'px'; wrap.style.height = h + 'px';
         const capturePadding = document.body.classList.contains('vf-native-capture-mode') ? 20 : 160;
-        const scale = Math.min((pane.clientWidth - capturePadding) / w, (pane.clientHeight - capturePadding) / h);
+        const linkedDock = document.getElementById('linked-artboard-dock');
+        const dockSpace = !document.body.classList.contains('vf-native-capture-mode') && linkedDock?.classList.contains('show') ? (linkedDock.classList.contains('collapsed') ? 46 : 114) : 0;
+        const scale = Math.min((pane.clientWidth - capturePadding) / w, (pane.clientHeight - capturePadding - dockSpace) / h);
         currentScale = scale; wrap.style.transform = `translate(-50%, -50%) scale(${scale})`;
         syncSafeGuide();
     }
@@ -4714,6 +4907,106 @@
             });
             dock.appendChild(card);
         });
+        renderLinkedArtboardDock();
+    }
+    async function deleteLinkedArtboardCopy(id) {
+        const ids = linkedArtboardIds.filter(function(boardId) { return isLinkedArtboard(boardId); });
+        if (!ids.includes(id)) return;
+        if (ids.length <= 1) {
+            showToast('关联集合至少保留一张画板', true);
+            return;
+        }
+        const preset = getArtboardPreset(id);
+        if (!await askConfirm('删除“' + (preset?.label || '该副本') + '”？此副本的尺寸和布局将被移除。')) return;
+        saveCurrentArtboardState();
+        const nextId = ids.find(function(boardId) { return boardId !== id; });
+        linkedArtboardIds = ids.filter(function(boardId) { return boardId !== id; });
+        if (id === currentArtboardId) loadArtboard(nextId, false, { skipAssetLibrary:true });
+        delete artboards[id];
+        const presetIndex = ARTBOARD_PRESETS.findIndex(function(item) { return item.id === id; });
+        if (presetIndex >= 0) ARTBOARD_PRESETS.splice(presetIndex, 1);
+        delete SIZES[id];
+        renderLinkedArtboardDock();
+        saveHistory(true);
+        showToast('已删除画板副本');
+    }
+    function renderLinkedArtboardDock() {
+        const dock = document.getElementById('linked-artboard-dock');
+        if (!dock) return;
+        dock.innerHTML = '';
+        dock.classList.add('show');
+        dock.classList.toggle('collapsed', !linkedArtboardDockExpanded);
+        const ids = isLinkedArtboard(currentArtboardId) ? linkedArtboardIds.filter(function(id) { return isLinkedArtboard(id); }) : [];
+        ids.forEach(function(id, index) {
+            const preset = getArtboardPreset(id);
+            const size = linkedArtboardSize(id);
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'linked-artboard-card' + (id === currentArtboardId ? ' active' : '');
+            card.title = '切换到 ' + (preset?.label || ('副本 ' + (index + 1)));
+            card.onclick = function() { switchArtboard(id); };
+            const mini = document.createElement('div');
+            mini.className = 'linked-artboard-mini';
+            const scale = Math.min(82 / Math.max(1, size.w), 70 / Math.max(1, size.h));
+            const viewportW = Math.max(26, Math.round(size.w * scale));
+            const viewportH = Math.max(26, Math.round(size.h * scale));
+            // 尺寸文案放在预览框外的底部。竖版缩略图本身较窄时仍给文字留出可读宽度。
+            const cardW = Math.max(68, viewportW + 4);
+            card.style.width = cardW + 'px';
+            card.style.height = (viewportH + 36) + 'px';
+            const stage = document.createElement('div');
+            stage.style.cssText = 'width:' + size.w + 'px;height:' + size.h + 'px;position:relative;overflow:hidden;background:#fff;transform:scale(' + scale + ');';
+            (artboards[id]?.layers || []).slice().sort(function(a,b) { return (a.zIndex || 0) - (b.zIndex || 0); }).forEach(function(layer) {
+                stage.appendChild(createLayerElement(layer, { active:false, interactive:false, idPrefix:'linked_preview_' + id + '_' }));
+            });
+            mini.appendChild(stage);
+            mini.style.width = viewportW + 'px';
+            mini.style.height = viewportH + 'px';
+            const label = document.createElement('span');
+            label.className = 'linked-artboard-size-label';
+            const divisor = (function gcd(a, b) { return b ? gcd(b, a % b) : (a || 1); })(Math.round(size.w), Math.round(size.h));
+            const ratioLabel = document.createElement('span');
+            ratioLabel.className = 'linked-artboard-ratio-label';
+            ratioLabel.textContent = (Math.round(size.w) / divisor) + ':' + (Math.round(size.h) / divisor);
+            const pixelsLabel = document.createElement('span');
+            pixelsLabel.className = 'linked-artboard-pixels-label';
+            pixelsLabel.textContent = size.w + '×' + size.h;
+            label.append(ratioLabel, pixelsLabel);
+            card.appendChild(mini); card.appendChild(label);
+            if (ids.length > 1) {
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'linked-artboard-remove';
+                remove.title = '删除此副本';
+                remove.setAttribute('aria-label', '删除此副本');
+                remove.textContent = '×';
+                remove.onclick = function(event) { event.preventDefault(); event.stopPropagation(); deleteLinkedArtboardCopy(id); };
+                card.appendChild(remove);
+            }
+            dock.appendChild(card);
+        });
+        const add = document.createElement('button');
+        add.type = 'button'; add.className = 'linked-artboard-add';
+        add.title = '副本管理功能开发中'; add.setAttribute('aria-label', '副本管理功能开发中');
+        add.setAttribute('aria-disabled', 'true');
+        add.classList.add('is-disabled');
+        add.textContent = '+';
+        // 先暂停新增副本入口，保留原有实现以便后续继续开发。
+        add.onclick = function() { showToast('副本管理功能开发中…'); };
+        dock.appendChild(add);
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'linked-artboard-dock-toggle';
+        toggle.title = linkedArtboardDockExpanded ? '收起副本管理' : '展开副本管理';
+        toggle.setAttribute('aria-label', toggle.title);
+        toggle.textContent = linkedArtboardDockExpanded ? '⌄' : '⌃';
+        toggle.onclick = function(event) {
+            event.preventDefault(); event.stopPropagation();
+            linkedArtboardDockExpanded = !linkedArtboardDockExpanded;
+            renderLinkedArtboardDock();
+        };
+        dock.appendChild(toggle);
+        requestAnimationFrame(resizeCanvas);
     }
 
     function renderLayersList() {
@@ -4897,6 +5190,33 @@
                 scale: Number(l.scale) || 1
             };
         })};
+        _groupScaleValue = 1;
+    }
+    // 从组件库插入的组合在被选中时，需要使用组合本身的视觉包围盒作为缩放锚点。
+    // 不能依赖画板中心：组合内部若包含大背景、图片或文字，简单平均图层坐标会让
+    // 第一次拖动统一缩放时看起来整体跳回画板中间。
+    function seedInsertedGroupScaleOriginals(insertedLayers) {
+        var sel = (insertedLayers || []).filter(Boolean);
+        if (sel.length < 2) { _groupScaleOriginals = null; _groupScaleValue = 1; return; }
+        var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+        sel.forEach(function(layer) {
+            var scale = Math.abs(Number(layer.scale) || 1);
+            var w = Math.max(0, Number(layer.baseW) || Number(layer.maxWidth) || 0) * scale;
+            var h = Math.max(0, Number(layer.baseH) || 0) * scale;
+            var x = Number(layer.x) || 0;
+            var y = Number(layer.y) || 0;
+            x1 = Math.min(x1, x - w / 2); y1 = Math.min(y1, y - h / 2);
+            x2 = Math.max(x2, x + w / 2); y2 = Math.max(y2, y + h / 2);
+        });
+        var cx = Number.isFinite(x1) && Number.isFinite(x2) ? (x1 + x2) / 2 : 0;
+        var cy = Number.isFinite(y1) && Number.isFinite(y2) ? (y1 + y2) / 2 : 0;
+        _groupScaleOriginals = {
+            cx: cx, cy: cy,
+            _selKey: sel.map(function(layer) { return layer.id; }).sort().join(','),
+            layers: sel.map(function(layer) {
+                return { id: layer.id, x: Number(layer.x) || 0, y: Number(layer.y) || 0, scale: Number(layer.scale) || 1 };
+            })
+        };
         _groupScaleValue = 1;
     }
     function applyGroupScale(newValue) {
@@ -5354,7 +5674,9 @@
     function refreshSaveActiveAssetButton() {
         const btn = document.getElementById('canvas-save-btn');
         if(!btn) return;
-        btn.textContent = currentAssetTab === 'component' ? (diySelectedSubtag === '字体' ? '上传字体' : '上传组件') : (currentAssetTab === 'recycle' ? '回收站' : '保存模版');
+        // 组件（包括字体）的上传改由“更多/设置”中的入口负责，画板右上角不再重复显示上传组件按钮。
+        btn.style.display = currentAssetTab === 'component' ? 'none' : '';
+        btn.textContent = currentAssetTab === 'recycle' ? '回收站' : '保存模版';
         btn.disabled = currentAssetTab === 'recycle';
     }
     function toggleAddMenu(e) { e.stopPropagation(); document.getElementById('add-menu')?.classList.toggle('open'); }
@@ -5687,6 +6009,41 @@
                 });
                 renderAssetLibrary();
             }
+        } else if (event.data.type === 'vf:template-metadata') {
+            // hover 只取得尺寸描述，不取得图层与图片数据，避免预览造成编辑器卡顿。
+            var metaId = event.data.id;
+            var packMeta = event.data.data || {};
+            var packItem = presetLibrary.find(function(item) { return item.cloudId === metaId || item.id === metaId; });
+            if (packItem) {
+                if (packItem.kind === 'pack') {
+                    packItem.artboardPresets = packMeta.artboardPresets || [];
+                    packItem.linkedArtboardIds = packMeta.linkedArtboardIds || [];
+                    packItem.artboards = packMeta.artboards || {};
+                } else {
+                    packItem.size = packMeta.size || packItem.size || '';
+                    packItem.canvasW = packMeta.canvasW || 0;
+                    packItem.canvasH = packMeta.canvasH || 0;
+                }
+                packItem._metadataLoaded = true;
+                packItem._metadataLoading = false;
+                renderAssetLibrary();
+            }
+        } else if (event.data.type === 'vf:template-metadata-error') {
+            // 预取阶段网络偶发失败时允许自动重试，不能把卡片永久锁在“读取中/0 个画板”。
+            var failedMetaId = event.data.id;
+            var failedPack = presetLibrary.find(function(item) { return item.cloudId === failedMetaId || item.id === failedMetaId; });
+            if (failedPack && !failedPack._metadataLoaded) {
+                failedPack._metadataLoading = false;
+                failedPack._metadataRetries = Number(failedPack._metadataRetries || 0) + 1;
+                if (failedPack._metadataRetries <= 2 && failedPack.cloudId) {
+                    setTimeout(function() {
+                        if (!failedPack._metadataLoaded && !failedPack._metadataLoading) {
+                            failedPack._metadataLoading = true;
+                            notifyParent({ type: 'vf:request-template-metadata', id: failedPack.cloudId });
+                        }
+                    }, 700 * failedPack._metadataRetries);
+                }
+            }
         } else if (event.data.type === 'vf:template-data') {
             // 后台到达的完整 JSON 数据，更新对应模板
             var tid = event.data.id;
@@ -5699,6 +6056,10 @@
                 if (tdata.isImageTemplate) item.isImageTemplate = true;
                 if (tdata.elements) item.elements = tdata.elements;
                 if (tdata.artboards) item.artboards = tdata.artboards;
+                if (tdata.artboardPresets) item.artboardPresets = tdata.artboardPresets;
+                if (tdata.linkedArtboardGroupId) item.linkedArtboardGroupId = tdata.linkedArtboardGroupId;
+                if (tdata.linkedArtboardIds) item.linkedArtboardIds = tdata.linkedArtboardIds;
+                if (tdata.linked) item.linked = true;
                 if (tdata.size) item.size = tdata.size;
                 if (tdata.canvasW) item.canvasW = tdata.canvasW;
                 if (tdata.canvasH) item.canvasH = tdata.canvasH;
@@ -5736,6 +6097,9 @@
         } else if (event.data.type === 'vf:apply-template') {
             var d = event.data.data || {};
             if (d.schema === 'vf-layout-preset/v1' && d.elements) {
+                // 套用独立模板时，新模板开启自己的延展集合；面板保留，但旧副本不能跟随过来。
+                leaveLinkedArtboardGroup();
+                activeTemplatePackId = null;
                 restoreTemplateCanvas(d);
                 // 套用模板是一次原子替换：不能保留上一张模板的图片、Logo 或圆环，
                 // 否则连续点击时会发生叠加或被新背景遮住。
@@ -5747,22 +6111,27 @@
                 showToast('已应用版式：' + (d.name || ''));
             } else if (d.schema === 'vf-template-pack/v1' && d.artboards) {
                 saveCurrentArtboardState();
+                restorePackArtboardPresets(d);
                 var nextArtboards = normalizeArtboardSnapshot(d.artboards || {});
                 Object.keys(nextArtboards).forEach(function(boardId) {
                     nextArtboards[boardId].layers.forEach(function(layer) { layer._templateLayer = true; });
                 });
                 artboards = nextArtboards;
                 activeTemplatePackId = event.data.sourceId || '';
-                currentArtboardId = getFixedArtboardPresets().find(function(preset) { return (artboards[preset.id]?.layers || []).length > 0; })?.id || 'head';
-                loadArtboard(currentArtboardId, false);
+                linkedArtboardGroupId = d.linkedArtboardGroupId || '';
+                linkedArtboardIds = (d.linkedArtboardIds || []).filter(function(id) { return !!artboards[id]; });
+                if (!linkedArtboardIds.length && linkedArtboardGroupId) linkedArtboardIds = Object.keys(artboards).filter(function(id) { return artboards[id].linkedGroupId === linkedArtboardGroupId; });
+                currentArtboardId = linkedArtboardIds[0] || getFixedArtboardPresets().find(function(preset) { return (artboards[preset.id]?.layers || []).length > 0; })?.id || 'head';
+                loadArtboard(currentArtboardId, false, { skipAssetLibrary:true });
                 activeLayerIds = [];
-                saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); renderAssetLibrary();
+                saveHistory(); renderAssetLibrary();
                 showToast('已应用套组：' + (d.name || ''));
             } else if (d.schema === 'vf-tag-combo/v1' && d.elements) {
                 var tagLayers = cloneLayersForInsert(d.elements, true);
                 layers.push.apply(layers, tagLayers);
                 activeLayerIds = tagLayers.map(function(l) { return l.id; });
                 markNewlyAddedLayers(tagLayers);
+                seedInsertedGroupScaleOriginals(tagLayers);
                 saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                 showToast('已应用标签组：' + (d.name || ''));
             } else if (d.schema === 'vf-group-combo/v1' && d.elements) {
@@ -5770,6 +6139,7 @@
                 layers.push.apply(layers, groupLayers);
                 activeLayerIds = groupLayers.map(function(l) { return l.id; });
                 markNewlyAddedLayers(groupLayers);
+                seedInsertedGroupScaleOriginals(groupLayers);
                 saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                 showToast('已应用组合：' + (d.name || ''));
             } else if (d.schema === 'vf-logo-asset/v1' && d.src) {
@@ -5940,6 +6310,38 @@
         renderDiySubtags();
         const list = document.getElementById('asset-list-ui'); if(!list) return;
         list.innerHTML = '';
+        // 使用真实的两列容器来实现瀑布流。CSS multi-column 在此滚动区域会把后续项排到
+        // 看不见的横向列里，导致“背景 · 41”却只能看到少量卡片。
+        var masonryColumns = [];
+        var masonryOrder = 0;
+        var masonryFrame = 0;
+        function appendAssetItem(item) {
+            if (!masonryColumns.length) { list.appendChild(item); return; }
+            item.dataset.masonryOrder = String(masonryOrder++);
+            var target = masonryColumns[0].scrollHeight <= masonryColumns[1].scrollHeight ? masonryColumns[0] : masonryColumns[1];
+            target.appendChild(item);
+            item.querySelectorAll('img').forEach(function(image) {
+                if (!image.complete) image.addEventListener('load', rebalanceMasonry, { once: true });
+            });
+        }
+        function rebalanceMasonry() {
+            if (masonryFrame || !masonryColumns.length) return;
+            masonryFrame = requestAnimationFrame(function() {
+                masonryFrame = 0;
+                var allItems = Array.from(masonryColumns[0].children).concat(Array.from(masonryColumns[1].children))
+                    .sort(function(a, b) { return Number(a.dataset.masonryOrder) - Number(b.dataset.masonryOrder); });
+                masonryColumns[0].replaceChildren();
+                masonryColumns[1].replaceChildren();
+                allItems.forEach(function(item) {
+                    var target = masonryColumns[0].scrollHeight <= masonryColumns[1].scrollHeight ? masonryColumns[0] : masonryColumns[1];
+                    target.appendChild(item);
+                });
+            });
+        }
+        if (currentAssetTab === 'layout' || currentAssetTab === 'component') {
+            masonryColumns = [document.createElement('div'), document.createElement('div')];
+            masonryColumns.forEach(function(column) { column.className = 'asset-masonry-column'; list.appendChild(column); });
+        }
         if(currentAssetTab === 'layout') {
             const items = presetLibrary.filter(function(p) {
                 if (diySubtagFilter === '全部') return true;
@@ -5949,8 +6351,9 @@
             if(items.length === 0) { list.innerHTML = '<div class=”asset-empty”>暂无版式</div>'; return; }
             items.forEach(p => {
                 const isPack = p.kind === 'pack';
-                const meta = isPack ? `三画板套组 · ${getFixedArtboardPresets().map(item => p.artboards?.[item.id]?.layers?.length || 0).join('/')} 图层` : `${p.size} · ${p.elements?.length || 0} 图层`;
-                list.appendChild(createAssetItem({ title: p.name, meta, asset: p, type: isPack ? 'pack' : 'layout', current: isPack && p.id === activeTemplatePackId, onApply: () => applyLayoutPreset(p.id), onDelete: () => deleteLayoutPreset(p.id) }));
+                const packCount = p.linkedArtboardIds?.length || (p.artboards ? Object.keys(p.artboards).length : 0);
+                const meta = isPack ? `${p.linked ? '关联画板' : '多画板'} · ${packCount || 0} 个尺寸` : `${p.size} · ${p.elements?.length || 0} 图层`;
+                appendAssetItem(createAssetItem({ title: p.name, meta, asset: p, type: isPack ? 'pack' : 'layout', current: isPack && p.id === activeTemplatePackId, onApply: () => applyLayoutPreset(p.id), onDelete: () => deleteLayoutPreset(p.id) }));
             });
         } else if(currentAssetTab === 'component') {
             // 按 sub-tag 筛选
@@ -5976,9 +6379,9 @@
             var filteredGroups = groupPresets.filter(filterFn);
             var totalComp = filteredTags.length + filteredLogos.length + filteredGroups.length;
             if(totalComp === 0) { list.innerHTML = '<div class="asset-empty">暂无组件</div>'; return; }
-            filteredTags.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, asset: p, type: 'tag', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
-            filteredLogos.forEach(l => list.appendChild(createAssetItem({ title: l.name, meta: '点击添加到画布', asset: l, type: 'logo', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
-            filteredGroups.forEach(p => list.appendChild(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个图层`, asset: p, type: 'group', onApply: () => applyGroupCombo(p.id), onDelete: () => deleteGroupCombo(p.id) })));
+            filteredTags.forEach(p => appendAssetItem(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, asset: p, type: 'tag', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
+            filteredLogos.forEach(l => appendAssetItem(createAssetItem({ title: l.name, meta: '点击添加到画布', asset: l, type: 'logo', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
+            filteredGroups.forEach(p => appendAssetItem(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个图层`, asset: p, type: 'group', onApply: () => applyGroupCombo(p.id), onDelete: () => deleteGroupCombo(p.id) })));
         } else if(currentAssetTab === 'recycle') {
             if (!recycleBin.length) { list.innerHTML = '<div class="asset-empty">回收站为空</div>'; return; }
             recycleBin.forEach(function(entry) {
@@ -6054,17 +6457,26 @@
         const thumb = document.createElement('div');
         thumb.className = `asset-thumb ${type === 'logo' ? 'logo-thumb' : ''} ${type === 'reference' ? 'reference-thumb' : ''} ${type === 'reference' && asset?.category === 'background' ? 'reference-bg-thumb' : ''}`;
         renderAssetPreview(thumb, { type, asset, img });
+        let packHover = null;
         if(type === 'layout' || type === 'pack') {
             const canvasInfo = getTemplatePreviewCanvasInfo(asset);
-            const hoverInfo = document.createElement('div');
-            hoverInfo.className = 'asset-template-hover-info';
-            hoverInfo.innerHTML = canvasInfo
-                ? `<span class="asset-template-hover-ratio">${escapeHtml(canvasInfo.ratio)}</span><span class="asset-template-hover-size">${escapeHtml(canvasInfo.width + ' × ' + canvasInfo.height + ' px')}</span>`
-                : '<span class="asset-template-hover-ratio">—</span><span class="asset-template-hover-size">读取真实画板尺寸中…</span>';
-            thumb.appendChild(hoverInfo);
-            // 云端卡片只先取缩略图；hover 时再读取 JSON 的 canvasW/canvasH。
+            if (type === 'pack') {
+                // 尺寸清单放在图片下方，不能遮挡真实预览图。
+                packHover = createPackHoverPreview(asset);
+            } else {
+                const hoverInfo = document.createElement('div');
+                hoverInfo.className = 'asset-template-hover-info';
+                hoverInfo.innerHTML = canvasInfo
+                    ? `<span class="asset-template-hover-ratio">${escapeHtml(canvasInfo.ratio)}</span><span class="asset-template-hover-size">${escapeHtml(canvasInfo.width + ' × ' + canvasInfo.height + ' px')}</span>`
+                    : '<span class="asset-template-hover-ratio">—</span><span class="asset-template-hover-size">读取真实画板尺寸中…</span>';
+                thumb.appendChild(hoverInfo);
+            }
+            // hover 仅请求尺寸元数据；完整图层与图片仍只在点击模板后读取。
             item.addEventListener('mouseenter', function() {
-                if (asset?._lazy && asset?.cloudId) notifyParent({ type: 'vf:request-template-data', id: asset.cloudId });
+                if (!asset?._metadataLoaded && !asset?._metadataLoading && asset?.cloudId) {
+                    asset._metadataLoading = true;
+                    notifyParent({ type: 'vf:request-template-metadata', id: asset.cloudId });
+                }
             }, { once: true });
         }
         var isRenameable = ['layout', 'pack', 'tag', 'logo', 'font', 'group'].indexOf(type) !== -1;
@@ -6093,7 +6505,24 @@
             item.appendChild(badge);
         }
         item.appendChild(thumb);
-        if(type === 'pack') item.appendChild(createPackHoverPreview(asset));
+        if (type === 'pack') {
+            const summary = document.createElement('span');
+            summary.className = 'asset-pack-summary';
+            summary.title = '多画板模板集合';
+            summary.setAttribute('aria-label', '多画板模板集合');
+            const badge = document.createElement('span');
+            badge.className = 'asset-pack-badge';
+            badge.innerHTML = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="7" y="3" width="9" height="11" rx="1.5" stroke="currentColor" stroke-width="1.8"></rect><path d="M4 7.5V15a2 2 0 0 0 2 2h6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>';
+            const count = document.createElement('span');
+            count.className = 'asset-pack-count';
+            const boardCount = (asset?.linkedArtboardIds || []).length || Object.keys(asset?.artboards || {}).length;
+            count.textContent = String(boardCount || 0);
+            count.title = '包含 ' + (boardCount || 0) + ' 个画板';
+            count.setAttribute('aria-label', count.title);
+            summary.append(badge, count);
+            item.appendChild(summary);
+        }
+        if (packHover) item.appendChild(packHover);
         item.appendChild(info);
         if(onDelete) {
             if (type === 'font') {
@@ -6360,15 +6789,53 @@
     function createPackHoverPreview(pack) {
         const wrap = document.createElement('div');
         wrap.className = 'asset-pack-hover';
-        getFixedArtboardPresets().forEach(preset => {
+        const savedPresets = pack?.artboardPresets || [];
+        // 兼容早期快照：部分套组写入了完整 artboards，但 linkedArtboardIds 是空数组。
+        // 空数组不能视作有效集合，应回退到实际保存的画板键。
+        const declaredLinkedIds = Array.isArray(pack?.linkedArtboardIds) ? pack.linkedArtboardIds : [];
+        const linkedIds = declaredLinkedIds.length ? declaredLinkedIds : Object.keys(pack?.artboards || {});
+        // 套组 hover 只显示尺寸信息，绝不创建各副本的图层缩略图；后者会让每次 hover
+        // 都重复解码图片与字体，副本数量多时非常卡顿。
+        const ids = linkedIds.length ? linkedIds : [];
+        if (!ids.length) {
+            const note = document.createElement('div');
+            note.className = 'asset-pack-loading-note';
+            note.textContent = '关联尺寸将在打开模板后显示';
+            wrap.appendChild(note);
+            return wrap;
+        }
+        ids.forEach(function(boardId) {
+            const board = pack?.artboards?.[boardId] || {};
+            const saved = savedPresets.find(function(preset) { return preset.id === boardId; });
+            const local = getArtboardPreset(boardId);
+            const ratio = board.ratio || saved?.ratio || local?.ratio || boardId;
+            // 预览卡必须使用该副本随模板保存的实际宽高。SIZES 是当前编辑器的
+            // 临时预设表，切换过其他模板后可能被同名 ratio 覆盖，不能作为首选。
+            const declared = SIZES[ratio] || {};
+            const size = {
+                w: Number(board.w) || Number(saved?.w) || Number(declared.w) || 1080,
+                h: Number(board.h) || Number(saved?.h) || Number(declared.h) || 1080
+            };
             const mini = document.createElement('div');
             mini.className = 'asset-pack-mini';
+            const w = Math.max(1, Number(size.w) || 1080);
+            const h = Math.max(1, Number(size.h) || 1080);
+            const scale = Math.min(19 / w, 15 / h);
+            const icon = document.createElement('span');
+            icon.className = 'asset-pack-size-icon';
+            const frame = document.createElement('i');
+            frame.style.width = Math.max(5, Math.round(w * scale)) + 'px';
+            frame.style.height = Math.max(5, Math.round(h * scale)) + 'px';
+            icon.appendChild(frame);
             const label = document.createElement('div');
             label.className = 'asset-pack-mini-label';
-            label.textContent = preset.label;
-            mini.appendChild(label);
-            const board = pack?.artboards?.[preset.id];
-            mini.appendChild(createMiniArtboardPreview(board?.layers || [], board?.ratio || preset.ratio, { maxW: 42, maxH: 46 }));
+            const gcd = function(a, b) { while (b) { const n = a % b; a = b; b = n; } return a || 1; };
+            const divisor = gcd(w, h);
+            label.textContent = (w / divisor) + ':' + (h / divisor);
+            const pixels = document.createElement('div');
+            pixels.className = 'asset-pack-mini-size';
+            pixels.textContent = w + '×' + h;
+            mini.append(icon, label, pixels);
             wrap.appendChild(mini);
         });
         return wrap;
@@ -6410,6 +6877,9 @@
         }
         pendingLayoutPresetId = '';
         if(p.kind === 'pack') return applyTemplatePack(p);
+        // 当前套用的是新的独立模板：保留底部入口，但清空上一模板的关联副本集合。
+        leaveLinkedArtboardGroup();
+        activeTemplatePackId = null;
         // 先保存当前状态，确保 Ctrl+Z 能回到应用模板前的状态（force 避免去重跳过）
         saveHistory(true);
         // 模板必须优先恢复实际保存尺寸；缺失元数据的旧模板安全回退到 1:1。
@@ -6444,6 +6914,9 @@
         moveAssetToRecycle('layout', preset);
     }
     async function saveToPreset() {
+        if (linkedArtboardGroupId && linkedArtboardIds.filter(function(id) { return isLinkedArtboard(id); }).length > 1) {
+            return saveLinkedArtboardSet();
+        }
         if(layers.length === 0) return showToast('画板为空', true);
         const saveRequest = await askTextAndCaptureNativePreview('命名版式', `版式 ${formatPresetTime()}`); if(!saveRequest) return;
         const name = saveRequest.name;
@@ -6471,6 +6944,59 @@
         // 保存模板时也必须使用当前实际画布尺寸，而不是仍可能为 head 的固定画板预设。
         var canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
         notifyParent({ type: 'vf:save-template', templateType: 'layout', name: name, data: { size: currentRatio, canvasW: canvasSize.w, canvasH: canvasSize.h, elements: elements }, previewDataUrl: previewDataUrl || '', tempId: tempId, subTag: subTag });
+    }
+    async function saveLinkedArtboardSet() {
+        saveCurrentArtboardState();
+        let boardIds = linkedArtboardIds.filter(function(id) { return isLinkedArtboard(id); });
+        // 即使运行时 ID 数组意外丢失，只要当前画板仍属于该关联组，保存时也必须
+        // 从实际画板恢复完整集合，不能把空数组保存回云端。
+        if (boardIds.length < 2 && linkedArtboardGroupId) {
+            boardIds = Object.keys(artboards).filter(function(id) {
+                return artboards[id]?.linkedGroupId === linkedArtboardGroupId;
+            });
+        }
+        if (boardIds.length < 2) return saveToPreset();
+        const originalId = currentArtboardId;
+        const primaryId = boardIds[0];
+        // 套组的封面始终来自第一张画板，确保素材库预览有稳定的主视觉。
+        if (primaryId !== currentArtboardId) loadArtboard(primaryId, false);
+        const saveRequest = await askTextAndCaptureNativePreview('命名关联画板模板', `关联模板 ${formatPresetTime()}`);
+        if (!saveRequest) {
+            if (originalId !== currentArtboardId) loadArtboard(originalId, false);
+            return;
+        }
+        const name = saveRequest.name;
+        const packArtboards = {};
+        boardIds.forEach(function(id) {
+            const preset = getArtboardPreset(id);
+            const boardSize = linkedArtboardSize(id);
+            packArtboards[id] = {
+                id:id,
+                label:preset?.label || id,
+                ratio:preset?.ratio || id,
+                // 每张副本均保存自己实际尺寸；不要只依赖 artboardPresets，
+                // 否则刷新后缺失预设的副本会被误恢复成其他尺寸。
+                w: boardSize.w,
+                h: boardSize.h,
+                linkedGroupId:linkedArtboardGroupId,
+                layers:cloneData(artboards[id]?.layers || [])
+            };
+        });
+        const tempId = genId('linked_pack');
+        const pack = { id:tempId, kind:'pack', linked:true, linkedArtboardIds:cloneData(boardIds), linkedArtboardGroupId:linkedArtboardGroupId, artboards:packArtboards, name:name, _pending:true };
+        presetLibrary.push(pack); activeTemplatePackId = pack.id;
+        renderAssetLibrary(); showToast('正在保存关联模板到素材库...');
+        const previewDataUrl = await capturePreviewForSync({ nativeCapture:true, capturePromise:saveRequest.capturePromise });
+        if (!previewDataUrl || previewDataUrl.length < 1500) {
+            presetLibrary = presetLibrary.filter(function(item) { return item.id !== tempId; });
+            renderAssetLibrary();
+            if (originalId !== currentArtboardId) loadArtboard(originalId, false);
+            return showToast('未生成原生预览图，已取消保存；请重新保存并选择当前标签页', true);
+        }
+        pack.previewUrl = previewDataUrl;
+        renderAssetLibrary();
+        notifyParent({ type:'vf:save-template', templateType:'pack', name:name, subTag:(diySelectedSubtag && diySelectedSubtag !== '全部') ? diySelectedSubtag : '社媒物料', tempId:tempId, previewDataUrl:previewDataUrl, data:{ artboards:packArtboards, artboardPresets:cloneData(getCustomArtboardPresets()), linkedArtboardGroupId:linkedArtboardGroupId, linkedArtboardIds:cloneData(boardIds) } });
+        if (originalId !== currentArtboardId) loadArtboard(originalId, false);
     }
     async function saveTemplatePack() {
         saveCurrentArtboardState();
@@ -6510,17 +7036,21 @@
     function applyTemplatePack(pack) {
         saveHistory(true);
         saveCurrentArtboardState();
+        restorePackArtboardPresets(pack);
         const nextArtboards = normalizeArtboardSnapshot(pack.artboards || {});
         Object.keys(nextArtboards).forEach(function(boardId) {
             nextArtboards[boardId].layers.forEach(function(layer) { layer._templateLayer = true; });
         });
         artboards = nextArtboards;
         activeTemplatePackId = pack.id;
-        currentArtboardId = getFixedArtboardPresets().find(preset => (artboards[preset.id]?.layers || []).length > 0)?.id || 'head';
-        loadArtboard(currentArtboardId, false);
+        linkedArtboardGroupId = pack.linkedArtboardGroupId || '';
+        linkedArtboardIds = (pack.linkedArtboardIds || []).filter(function(id) { return !!artboards[id]; });
+        if (!linkedArtboardIds.length && linkedArtboardGroupId) linkedArtboardIds = Object.keys(artboards).filter(function(id) { return artboards[id].linkedGroupId === linkedArtboardGroupId; });
+        currentArtboardId = linkedArtboardIds[0] || getFixedArtboardPresets().find(preset => (artboards[preset.id]?.layers || []).length > 0)?.id || 'head';
+        loadArtboard(currentArtboardId, false, { skipAssetLibrary:true });
         activeLayerIds = [];
         saveHistory(true);
-        renderCanvas(); renderLayersList(); renderProperties(); renderAssetLibrary();
+        renderAssetLibrary();
         showToast('已应用三画板套组');
     }
     async function saveTagComboPreset() {
@@ -6560,6 +7090,9 @@
                 nl.rotation = inherited.rotation;
                 nl.scale = inherited.scale;
                 nl.zIndex = inherited.zIndex;
+                // 第一层继承原图层的共享身份，关联画板会把它识别为“同一个素材被替换”，
+                // 而不是把旧素材删掉后在其他副本中新增到默认位置。
+                if (i === 0 && inherited.sharedKey) nl.sharedKey = inherited.sharedKey;
                 if (nl.type === 'tag' || nl.type === 'discountTag') {
                     nl.tagHeight = inherited.tagHeight;
                     nl.tagPaddingX = inherited.tagPaddingX;
@@ -6569,6 +7102,9 @@
             layers = layers.filter(function(l) { return !activeLayerIds.includes(l.id); });
         }
         layers.push(...newLayers); activeLayerIds = newLayers.map(l => l.id); markNewlyAddedLayers(newLayers);
+        // 新插入的标签组合首次缩放必须以组合自身中心为锚点。
+        seedInsertedGroupScaleOriginals(newLayers);
+        if (selectedAny.length > 0) commitLinkedReplacement(selectedAny[0], newLayers);
         saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast(selectedAny.length > 0 ? '已替换' : '组件已应用');
     }
     async function deleteTagComboPreset(id) {
@@ -6609,12 +7145,29 @@
         pendingGroupPresetId = '';
         saveHistory(true);
         var newLayers = cloneLayersForInsert(p.elements, true);
+        var selectedAny = layers.filter(function(layer) { return activeLayerIds.includes(layer.id); });
+        if (selectedAny.length > 0) {
+            var inherited = selectedAny[0];
+            newLayers.forEach(function(layer, index) {
+                layer.x = inherited.x;
+                layer.y = inherited.y;
+                layer.rotation = inherited.rotation;
+                layer.scale = inherited.scale;
+                layer.zIndex = inherited.zIndex + index;
+                if (index === 0 && inherited.sharedKey) layer.sharedKey = inherited.sharedKey;
+            });
+            layers = layers.filter(function(layer) { return !activeLayerIds.includes(layer.id); });
+        }
         layers.push.apply(layers, newLayers);
         activeLayerIds = newLayers.map(function(l) { return l.id; });
         markNewlyAddedLayers(newLayers);
+        // 组合内的各图层保持它们插入后的相对位置；先锁定组合中心，避免统一缩放
+        // 的第一帧退回到画板中心。
+        seedInsertedGroupScaleOriginals(newLayers);
+        if (selectedAny.length > 0) commitLinkedReplacement(selectedAny[0], newLayers);
         saveHistory();
         renderCanvas(); renderLayersList(); renderProperties();
-        showToast('已应用组合：' + p.name);
+        showToast(selectedAny.length > 0 ? '已替换为组合：' + p.name : '已应用组合：' + p.name);
     }
     async function deleteGroupCombo(id) {
         if (!await askConfirm('删除这个组合？')) return;
@@ -6669,6 +7222,7 @@
             // 清理 solid 特有属性
             delete selectedImg.color;
             delete selectedImg.role;
+            commitLinkedReplacement(selectedImg, [selectedImg]);
             saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast('已替换');
             return;
         }
@@ -7842,6 +8396,17 @@
         var newSize = SIZES[ratio] || NEW_ARTBOARD_PRESETS[ratio] || { w: 1080, h: 1080 };
         // 确保 SIZES 中有该尺寸（预设尺寸可能尚未注册）
         if (!SIZES[ratio]) SIZES[ratio] = { w: newSize.w, h: newSize.h };
+        // 关联集合内的每张画板都保留自己的尺寸 ID；不能把 currentRatio 改成公共预设，
+        // 否则切换缩略图时会重新读取旧尺寸，造成“尺寸被还原”。
+        if (isLinkedArtboard(currentArtboardId) && isCustomArtboardId(currentArtboardId)) {
+            var linkedPreset = getArtboardPreset(currentArtboardId);
+            updateCustomArtboardSize(currentArtboardId, { label: linkedPreset?.label || '画板', w:newSize.w, h:newSize.h });
+            closeResizeMenu();
+            saveHistory(true);
+            renderLinkedArtboardDock();
+            showToast('已更新当前关联画板尺寸：' + newSize.w + '×' + newSize.h);
+            return;
+        }
         saveHistory(true);
         // 只改画布尺寸，图层位置和大小保持不变
         currentRatio = ratio;
