@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260807-remove-component-upload-button-v214';
+  const TOOL_UI_VERSION = '20260807-sync-keyword-presets-v218';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -5894,13 +5894,18 @@ function libraryTagsForForm(formData, kind) {
     }
   }
 
-  // 配色使用和普通素材相同的用户 sources 路径，不再写入受限的共享 static 文件。
+  // 生图关键词与配色使用同一份私有全局预设配置，不会作为素材库卡片展示。
   const PALETTE_CONFIG_TAG = 'vf:internal:palette-config';
   window.VF_SAVE_COLOR_PALETTES = async function (payload) {
-    if (!state.supabase || !state.session?.user?.id) throw new Error('未登录，无法同步配色方案');
+    if (!state.supabase || !state.session?.user?.id) throw new Error('未登录，无法同步全局预设');
     const userId = state.session.user.id;
     const data = payload?.data || payload || {};
-    const jsonText = JSON.stringify({ tagColorPresets: Array.isArray(data.tagColorPresets) ? data.tagColorPresets : [], arcColorPresets: Array.isArray(data.arcColorPresets) ? data.arcColorPresets : [], updatedAt: new Date().toISOString() });
+    const jsonText = JSON.stringify({
+      tagColorPresets: Array.isArray(data.tagColorPresets) ? data.tagColorPresets : [],
+      arcColorPresets: Array.isArray(data.arcColorPresets) ? data.arcColorPresets : [],
+      keywordTags: Array.isArray(data.keywordTags) ? data.keywordTags : [],
+      updatedAt: new Date().toISOString()
+    });
     const existing = await state.supabase.from('vf_source_files').select('id, source_path').eq('uploaded_by', userId).contains('tags', [PALETTE_CONFIG_TAG]).order('updated_at', { ascending: false }).limit(1);
     if (existing.error) throw existing.error;
     const sourceId = existing.data?.[0]?.id || crypto.randomUUID();
@@ -5912,7 +5917,7 @@ function libraryTagsForForm(formData, kind) {
       const update = await state.supabase.from('vf_source_files').update({ updated_at: new Date().toISOString(), source_size_bytes: file.size }).eq('id', sourceId);
       if (update.error) throw update.error;
     } else {
-      const insert = await state.supabase.from('vf_source_files').insert([{ id: sourceId, title: 'DIY 配色方案', tags: [PALETTE_CONFIG_TAG], visibility: 'all', source_path: sourcePath, source_filename: file.name, source_mime_type: 'application/json', source_size_bytes: file.size, source_ext: 'json', uploaded_by: userId }]);
+      const insert = await state.supabase.from('vf_source_files').insert([{ id: sourceId, title: 'DIY 全局预设', tags: [PALETTE_CONFIG_TAG], visibility: 'all', source_path: sourcePath, source_filename: file.name, source_mime_type: 'application/json', source_size_bytes: file.size, source_ext: 'json', uploaded_by: userId }]);
       if (insert.error) throw insert.error;
     }
     return { data: JSON.parse(jsonText) };

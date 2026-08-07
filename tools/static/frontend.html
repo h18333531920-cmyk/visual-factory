@@ -1955,6 +1955,7 @@
 <div class="toast" id="toast">提示信息</div>
 <input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2" multiple style="display:none">
 <input type="file" id="bg-upload" accept="image/png, image/jpeg, image/webp" style="display:none">
+<input type="file" id="replace-image-upload" accept="image/png, image/jpeg, image/webp" style="display:none">
 <input type="file" id="ai-reference-upload" accept="image/png, image/jpeg, image/webp" multiple style="display:none">
 <input type="file" id="logo-upload" accept="image/png, image/jpeg, image/svg+xml" multiple style="display:none">
 <input type="file" id="component-upload" accept="image/png, image/jpeg, image/webp, image/svg+xml" multiple style="display:none">
@@ -2041,7 +2042,8 @@
             <div class="card-title"><div class="card-title-wrap">圆弧色彩预设管理</div></div>
             <div id="settings-arc-preset-list"></div>
             <button class="btn btn-outline" style="margin-top: 12px;" onclick="addArcPreset()">+ 添加新圆弧预设</button>
-            <button class="btn btn-dark" style="margin-top: 10px;" onclick="syncColorPresetsFromSettings()">保存并同步配色方案</button>
+            <button class="btn btn-dark" style="margin-top: 10px;" onclick="syncSettingsPresetsToCloud()">保存并同步全部预设</button>
+            <div style="font-size:12px;color:var(--text-sub);line-height:1.6;margin-top:8px;">会同时保存并同步生图关键词、标签配色和圆弧配色；关键词仅在此窗口管理，不会显示在素材库。</div>
         </div>
     </div>
 </div>
@@ -2175,6 +2177,8 @@
                 <div class="layer-list" id="layer-list-ui"></div>
                 <div class="layer-context-menu" id="layer-context-menu">
                     <button type="button" id="layer-context-add-reference" onclick="addLayerContextReferenceToAI(); closeLayerContextMenu();" hidden>加入生图参考图</button>
+                    <button type="button" id="layer-context-replace-image" onclick="replaceLayerContextImage(); closeLayerContextMenu();" hidden>替换图片</button>
+                    <button type="button" id="layer-context-duplicate-layer" onclick="duplicateLayerContext(); closeLayerContextMenu();" hidden>复制图层</button>
                     <button type="button" onclick="centerLayerOnCanvas(); closeLayerContextMenu();">元素画板居中</button>
                     <button type="button" id="ctx-save-group-btn" onclick="saveGroupCombo(); closeLayerContextMenu();" style="display:none">保存组合</button>
                 </div>
@@ -2216,9 +2220,6 @@
                             </div>
                         </div>
                         <button class="ai-submit-btn" id="ai-submit-btn" type="button" onclick="runSelectedAIAction()" title="开始生成">↑</button>
-                    </div>
-                    <div class="ai-mini-actions">
-                        <button class="btn btn-outline" type="button" onclick="document.getElementById('bg-upload').click()">导入图片图层</button>
                     </div>
                 </div>
             </div>
@@ -2266,7 +2267,9 @@
     let currentArtboardId = 'head';
     let currentRatio = 'head'; let currentScale = 1;
     let activeLayerIds = [];
+    let layerSelectionAnchorId = null;
     let _contextMenuLayerId = null;
+    let _pendingImageReplacementLayerId = null;
     let customFonts = [];
     let layers = []; // 万物皆图层
     let showSafeGuide = false;
@@ -2286,6 +2289,8 @@
     let arcColorPresets = [{ id: 'a1', name: '经典黄绿', cIn: '#FFCC00', cOut: '#00D06C' }, { id: 'a2', name: '极简黑白', cIn: '#111827', cOut: '#E5E7EB' }];
     // 资产库中的配色只能来自已确认的云端快照，绝不把本地默认色伪装成线上资产。
     let cloudColorPaletteSnapshot = { loaded: false, tagColorPresets: [], arcColorPresets: [] };
+    // 生图关键词和配色共用一份私有“全局预设”配置；仅用于设置面板，不渲染成素材库卡片。
+    let cloudKeywordTagsLoaded = false;
     let keywordTags = [
         { id: 'kw_food', name: '美食商业', prompt: '商业美食摄影，食物主体清晰，诱人质感，高级广告光影' },
         { id: 'kw_clean', name: '干净背景', prompt: '干净背景，画面简洁，留出版式和文字空间' },
@@ -2427,7 +2432,7 @@
 
         if(data.tagColorPresets?.length) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
         if(data.arcColorPresets?.length) arcColorPresets = data.arcColorPresets;
-        if(data.keywordTags?.length) keywordTags = data.keywordTags;
+        if(Array.isArray(data.keywordTags) && !cloudKeywordTagsLoaded) keywordTags = data.keywordTags;
         setCloudColorPaletteSnapshot(data);
         referenceElements = mergeById(referenceElements, cloudReferenceElements);
         // presetLibrary / tagPresetLibrary / logoAssets 全部从 Supabase 获取，不在这里合并
@@ -2542,9 +2547,13 @@
             if(window.parent === window || typeof window.parent.VF_LOAD_COLOR_PALETTES !== 'function') return false;
             const loaded = await window.parent.VF_LOAD_COLOR_PALETTES();
             const data = loaded?.data;
-            if(!data || (!Array.isArray(data.tagColorPresets) && !Array.isArray(data.arcColorPresets))) return false;
+            if(!data || (!Array.isArray(data.tagColorPresets) && !Array.isArray(data.arcColorPresets) && !Array.isArray(data.keywordTags))) return false;
             if(Array.isArray(data.tagColorPresets)) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
             if(Array.isArray(data.arcColorPresets)) arcColorPresets = data.arcColorPresets;
+            if(Array.isArray(data.keywordTags)) {
+                keywordTags = data.keywordTags;
+                cloudKeywordTagsLoaded = true;
+            }
             setCloudColorPaletteSnapshot(data);
             return true;
         } catch(error) { console.warn('素材库配色读取失败:', error); return false; }
@@ -4596,8 +4605,19 @@
         showSyncStatus(status);
         notifyParent({ type: 'vf:shared-assets-status', status, message });
     }
+    function buildSettingsPresetCloudData() {
+        return {
+            tagColorPresets: tagColorPresets.filter(item => item?._cloudSaved),
+            arcColorPresets: arcColorPresets.filter(item => item?._cloudSaved),
+            keywordTags: keywordTags.map(tag => ({
+                id: tag?.id || genId('kw'),
+                name: String(tag?.name || '').trim(),
+                prompt: String(tag?.prompt || '').trim()
+            }))
+        };
+    }
     async function saveColorPalettesToCloud(changedType, changedId) {
-        reportColorPaletteSync('uploading', '正在同步配色方案…');
+        reportColorPaletteSync('uploading', '正在保存并同步全部预设…');
         await saveGlobalData();
         clearTimeout(sharedAssetSaveTimer);
         try {
@@ -4612,29 +4632,27 @@
                 if(changedType === 'arc') savedArcs.push(marked);
                 else savedTags.push(marked);
             }
-            const colorData = { tagColorPresets: savedTags, arcColorPresets: savedArcs };
+            const colorData = { tagColorPresets: savedTags, arcColorPresets: savedArcs, keywordTags: buildSettingsPresetCloudData().keywordTags };
             if(window.parent !== window && typeof window.parent.VF_SAVE_COLOR_PALETTES === 'function') {
                 const saved = await window.parent.VF_SAVE_COLOR_PALETTES({ data: colorData });
                 setCloudColorPaletteSnapshot(saved?.data || colorData);
+                cloudKeywordTagsLoaded = true;
                 renderAssetLibrary();
             } else {
                 await saveSharedAssetsToCloud();
             }
-            reportColorPaletteSync('done', '✅ 配色方案已同步');
+            reportColorPaletteSync('done', '✅ 全部预设已同步');
         } catch(error) {
-            reportColorPaletteSync('error', '❌ 配色方案同步失败');
+            reportColorPaletteSync('error', '❌ 全部预设同步失败');
             throw error;
         }
     }
-    window.syncColorPresetsFromSettings = async function() {
-        reportColorPaletteSync('uploading', '正在同步配色方案…');
+    window.syncSettingsPresetsToCloud = async function() {
+        reportColorPaletteSync('uploading', '正在保存并同步全部预设…');
         await saveGlobalData();
         clearTimeout(sharedAssetSaveTimer);
         try {
-            const colorData = {
-                tagColorPresets: tagColorPresets.filter(item => item?._cloudSaved),
-                arcColorPresets: arcColorPresets.filter(item => item?._cloudSaved)
-            };
+            const colorData = buildSettingsPresetCloudData();
             if(window.parent !== window && typeof window.parent.VF_SAVE_COLOR_PALETTES === 'function') {
                 const saved = await window.parent.VF_SAVE_COLOR_PALETTES({ data: colorData });
                 setCloudColorPaletteSnapshot(saved?.data || colorData);
@@ -4642,13 +4660,16 @@
             } else {
                 await saveSharedAssetsToCloud();
             }
-            reportColorPaletteSync('done', '✅ 配色方案已同步');
-            showToast('✅ 配色方案已上传云端');
+            cloudKeywordTagsLoaded = true;
+            reportColorPaletteSync('done', '✅ 全部预设已同步');
+            showToast('✅ 生图关键词与配色预设已上传云端');
         } catch(error) {
-            reportColorPaletteSync('error', '❌ 配色方案同步失败');
-            showToast('配色云端同步失败：' + (error?.message || '请稍后重试'), true);
+            reportColorPaletteSync('error', '❌ 全部预设同步失败');
+            showToast('预设云端同步失败：' + (error?.message || '请稍后重试'), true);
         }
     };
+    // 兼容旧按钮或旧缓存页面的调用。
+    window.syncColorPresetsFromSettings = window.syncSettingsPresetsToCloud;
     let pendingColorPresetClick = null;
     window.handleColorPresetClick = function(event, type, id) {
         event.stopPropagation();
@@ -4712,6 +4733,26 @@
     };
 
     /* ================= 统一图层添加 ================= */
+    function makeRoomAboveLayerIds(layerIds = []) {
+        const selected = layers.filter(layer => layerIds.includes(layer.id));
+        const maxZ = layers.length > 0 ? Math.max(...layers.map(layer => Number(layer.zIndex) || 0)) : 1;
+        if(selected.length === 0) return maxZ + 1;
+
+        const anchorZ = Math.max(...selected.map(layer => Number(layer.zIndex) || 0));
+        const selectedIds = new Set(selected.map(layer => layer.id));
+        // 给新图层腾出一层：原来位于选中图层上方的元素仍保持在它上方。
+        layers.forEach(layer => {
+            if(!selectedIds.has(layer.id) && (Number(layer.zIndex) || 0) > anchorZ) {
+                layer.zIndex = (Number(layer.zIndex) || 0) + 1;
+            }
+        });
+        return anchorZ + 1;
+    }
+    function getImageInsertZIndex() {
+        // 新增图片应紧贴当前选中的图层上方，而不是总是压在所有图层之上。
+        // 多选时以其中最上方的图层作为锚点；没有选中图层时沿用“添加到最顶层”。
+        return makeRoomAboveLayerIds(activeLayerIds);
+    }
     function addLayer(type, extraData = {}) {
         const {w, h} = SIZES[currentRatio]; 
         const maxZ = layers.length > 0 ? Math.max(...layers.map(l => l.zIndex)) : 1;
@@ -4719,7 +4760,7 @@
         let newL = { id: genId(type), type, x: w/2, y: h/2, scale: 1, locked: false, visible: true };
         
         if (type === 'image') {
-            newL.zIndex = maxZ + 1; newL.rotation = 0; newL.baseW = w; newL.baseH = h; newL.flipX = false;
+            newL.zIndex = getImageInsertZIndex(); newL.rotation = 0; newL.baseW = w; newL.baseH = h; newL.flipX = false;
             Object.assign(newL, extraData);
         } else if (type === 'logo') {
             newL.zIndex = maxZ + 1; newL.rotation = 0; newL.baseW = 260; newL.baseH = 160; newL.flipX = false;
@@ -5009,6 +5050,32 @@
         requestAnimationFrame(resizeCanvas);
     }
 
+    function selectLayerWithModifiers(layerId, event = {}) {
+        const orderedIds = [...layers]
+            .sort((a, b) => (Number(b.zIndex) || 0) - (Number(a.zIndex) || 0))
+            .map(layer => layer.id);
+        if(!orderedIds.includes(layerId)) return;
+
+        // Shift：从上一次点击的锚点到当前图层，连续选中中间所有图层。
+        if(event.shiftKey && layerSelectionAnchorId && orderedIds.includes(layerSelectionAnchorId)) {
+            const from = orderedIds.indexOf(layerSelectionAnchorId);
+            const to = orderedIds.indexOf(layerId);
+            activeLayerIds = orderedIds.slice(Math.min(from, to), Math.max(from, to) + 1);
+            return;
+        }
+
+        // Ctrl（macOS 同时支持 Command）：逐个精确增减选中，不影响其他图层。
+        if(event.ctrlKey || event.metaKey) {
+            if(activeLayerIds.includes(layerId)) activeLayerIds = activeLayerIds.filter(id => id !== layerId);
+            else activeLayerIds = [...activeLayerIds, layerId];
+            layerSelectionAnchorId = layerId;
+            return;
+        }
+
+        activeLayerIds = [layerId];
+        layerSelectionAnchorId = layerId;
+    }
+
     function renderLayersList() {
         const listUI = document.getElementById('layer-list-ui'); listUI.innerHTML = '';
         [...layers].sort((a,b) => b.zIndex - a.zIndex).forEach(l => {
@@ -5033,7 +5100,7 @@
                 li._clickTimer = setTimeout(() => {
                     li._clickTimer = null;
                     preservePaneScroll(() => {
-                        if(e.shiftKey) { if(activeLayerIds.includes(l.id)) activeLayerIds = activeLayerIds.filter(x => x !== l.id); else activeLayerIds.push(l.id); } else { activeLayerIds = [l.id]; }
+                        selectLayerWithModifiers(l.id, e);
                         renderCanvas(); renderLayersList(); renderProperties();
                     });
                 }, 280);
@@ -5044,6 +5111,7 @@
                 // 右键同时选中该图层（不改变已有 multi-select）
                 if (!activeLayerIds.includes(l.id)) {
                     activeLayerIds = [l.id];
+                    layerSelectionAnchorId = l.id;
                     renderCanvas(); renderLayersList(); renderProperties();
                 }
                 _contextMenuLayerId = l.id;
@@ -5122,8 +5190,12 @@
     }
     function updateLayerContextReferenceAction(layer) {
         const button = document.getElementById('layer-context-add-reference');
-        if(!button) return;
-        button.hidden = !layer?.src || (layer.type !== 'image' && layer.type !== 'logo');
+        const replaceButton = document.getElementById('layer-context-replace-image');
+        const duplicateButton = document.getElementById('layer-context-duplicate-layer');
+        const isImageLayer = !!layer?.src && (layer.type === 'image' || layer.type === 'logo');
+        if(button) button.hidden = !isImageLayer;
+        if(replaceButton) replaceButton.hidden = !isImageLayer;
+        if(duplicateButton) duplicateButton.hidden = !isImageLayer;
     }
     function addLayerContextReferenceToAI() {
         const layer = layers.find(function(item) { return item.id === _contextMenuLayerId; });
@@ -5133,6 +5205,31 @@
         }
         addReferenceElementToAI({ name: getLayerName(layer), src: layer.src })
             .catch(err => showToast(err.message || '参考图读取失败', true));
+    }
+    function replaceLayerContextImage() {
+        const layer = layers.find(function(item) { return item.id === _contextMenuLayerId; });
+        if(!layer?.src || (layer.type !== 'image' && layer.type !== 'logo')) {
+            showToast('请选择一张图片或素材图层', true);
+            return;
+        }
+        _pendingImageReplacementLayerId = layer.id;
+        document.getElementById('replace-image-upload')?.click();
+    }
+    function duplicateLayerContext() {
+        const layer = layers.find(function(item) { return item.id === _contextMenuLayerId; });
+        if(!layer?.src || (layer.type !== 'image' && layer.type !== 'logo')) {
+            showToast('请选择一张图片或素材图层', true);
+            return;
+        }
+        const cloned = cloneData(layer);
+        cloned.id = genId(layer.type);
+        cloned.locked = false;
+        cloned.customName = layer.customName ? `${layer.customName} 副本` : null;
+        cloned.zIndex = makeRoomAboveLayerIds([layer.id]);
+        layers.push(cloned);
+        activeLayerIds = [cloned.id];
+        saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+        showToast('已复制图层');
     }
     function centerLayerOnCanvas() {
         if (!_contextMenuLayerId) return;
@@ -5567,7 +5664,7 @@
             if (dblL && dblL.type === 'text' && !dblL.locked) {
                 e.preventDefault();
                 exitTextEdit();
-                if (!activeLayerIds.includes(dblId)) { activeLayerIds = [dblId]; renderCanvas(); renderLayersList(); renderProperties(); }
+                if (!activeLayerIds.includes(dblId)) { activeLayerIds = [dblId]; layerSelectionAnchorId = dblId; renderCanvas(); renderLayersList(); renderProperties(); }
                 textEditLayerId = dblId;
                 var el = document.getElementById(dblId);
                 if (el) {
@@ -5597,12 +5694,11 @@
                 exitTextEdit();
             }
             const id = wrap.dataset.id; const l = layers.find(x => x.id === id); if(!l || l.locked) return;
-            if(e.shiftKey) { if(!activeLayerIds.includes(id)) activeLayerIds.push(id); }
-            else { if(!activeLayerIds.includes(id)) activeLayerIds = [id]; }
+            if(e.shiftKey || e.ctrlKey || e.metaKey || !activeLayerIds.includes(id)) selectLayerWithModifiers(id, e);
             isDragging = true; dragStartX = e.clientX; dragStartY = e.clientY;
             dragData = activeLayerIds.map(selId => ({ id: selId, ix: layers.find(x => x.id === selId).x, iy: layers.find(x => x.id === selId).y }));
             renderCanvas(); renderLayersList(); renderProperties();
-        } else { exitTextEdit(); activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); }
+        } else { exitTextEdit(); activeLayerIds = []; layerSelectionAnchorId = null; renderCanvas(); renderLayersList(); renderProperties(); }
     });
     // 画布右键菜单
     document.getElementById('canvas-wrapper').addEventListener('contextmenu', function(e) {
@@ -5622,6 +5718,7 @@
                 _contextMenuLayerId = layer.id;
                 if (!activeLayerIds.includes(layer.id)) {
                     activeLayerIds = [layer.id];
+                    layerSelectionAnchorId = layer.id;
                     renderCanvas(); renderLayersList(); renderProperties();
                 }
                 var lm = document.getElementById('layer-context-menu');
@@ -7896,6 +7993,35 @@
             };
             reader.readAsDataURL(file);
         }).finally(() => { e.target.value = ''; });
+    });
+
+    document.getElementById('replace-image-upload').addEventListener('change', async e => {
+        const file = e.target.files[0];
+        const targetId = _pendingImageReplacementLayerId;
+        _pendingImageReplacementLayerId = null;
+        e.target.value = '';
+        if(!file || !targetId) return;
+        const target = layers.find(layer => layer.id === targetId);
+        if(!target || (target.type !== 'image' && target.type !== 'logo')) {
+            return showToast('原图层已不存在，未替换图片', true);
+        }
+        try {
+            const src = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = event => resolve(event.target.result);
+                reader.onerror = () => reject(new Error('图片读取失败'));
+                reader.readAsDataURL(file);
+            });
+            const image = await loadImageElement(src);
+            // 只更新图像内容和原图信息，当前位置、显示尺寸、缩放、旋转、层级均不改变。
+            target.src = src;
+            target.originalW = image.naturalWidth || image.width || target.originalW;
+            target.originalH = image.naturalHeight || image.height || target.originalH;
+            saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+            showToast('已替换图片');
+        } catch(error) {
+            showToast(error?.message || '图片替换失败，请换一张图片试试', true);
+        }
     });
 
     document.getElementById('logo-upload').addEventListener('change', e => {
