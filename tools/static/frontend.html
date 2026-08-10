@@ -6170,6 +6170,20 @@
         if (!result?.success && !result?.imageBase64) throw new Error(result?.message || '背景生图失败');
         return 'data:image/png;base64,' + result.imageBase64;
     }
+    function smartRewriteBackgroundFailure(error, brief) {
+        const subject = [brief.background, brief.food].filter(Boolean).join(' + ') || '所需';
+        const detail = String(error?.message || error || '').replace(/\s+/g, ' ').trim();
+        if (/missing_api_key|api key|未配置|authorization/i.test(detail)) {
+            return '未能生成“' + subject + '”背景：测试站尚未配置抹尘 AI 的 LK888_API_KEY。';
+        }
+        if (/billing.*limit|额度|余额|insufficient/i.test(detail)) {
+            return '未能生成“' + subject + '”背景：生图服务额度不足。';
+        }
+        if (/country,? region|territory.*not supported|地区.*不支持/i.test(detail)) {
+            return '未能生成“' + subject + '”背景：当前图片服务不支持此地区。';
+        }
+        return '未能生成“' + subject + '”背景：' + (detail || '生图服务没有返回图片。');
+    }
     async function runSmartRewrite() {
         const input = document.getElementById('smart-rewrite-input');
         const button = document.getElementById('smart-rewrite-submit');
@@ -6199,7 +6213,7 @@
                     if (!bg || !generated) throw new Error('没有得到符合需求的背景图');
                     bg.src = generated; bg.x = size.w / 2; bg.y = size.h / 2; bg.baseW = size.w; bg.baseH = size.h; bg.scale = 1; bg.fitMode = 'cover'; bg.locked = false;
                 } catch (backgroundError) {
-                    throw new Error('未能生成“' + [brief.background, brief.food].filter(Boolean).join(' + ') + '”背景，请检查生图接口后重试');
+                    throw new Error(smartRewriteBackgroundFailure(backgroundError, brief));
                 }
             }
             saveCurrentArtboardState();
