@@ -807,6 +807,7 @@
             <button type="button" data-route="library"><strong>${state.lang === 'zh' ? '超级库' : 'Super Library'}</strong><span>›</span></button>
             <button type="button" data-route="static"><strong>${state.lang === 'zh' ? '静态设计师' : 'Static Designer'}</strong><span>›</span></button>
             <button type="button" data-route="dynamic"><strong>${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'}</strong><span>›</span></button>
+            <button type="button" data-smart-rewrite="true"><strong>${state.lang === 'zh' ? '智能改稿' : 'Smart Rewrite'}</strong><span>›</span></button>
             <button type="button" data-route="request"><strong>${state.lang === 'zh' ? '提需流程' : 'Request Flow'}</strong><span>›</span></button>
           </div>
         </section>
@@ -1170,6 +1171,9 @@
         location.hash = route;
         navigate(route);
       });
+    });
+    document.querySelectorAll('[data-smart-rewrite="true"]').forEach(button => {
+      button.addEventListener('click', () => openSmartRewriteTool());
     });
     document.querySelectorAll('[data-library-kind]').forEach(button => {
       button.addEventListener('click', () => {
@@ -4327,6 +4331,21 @@ function libraryTagsForForm(formData, kind) {
     }
   }
 
+  function openSmartRewriteTool() {
+    location.hash = 'static';
+    navigate('static');
+    const frame = state.toolFrames.static;
+    if (!frame) return;
+    const openModal = function() {
+      frame.contentWindow.postMessage({ type: 'vf:open-smart-rewrite' }, location.origin);
+    };
+    if (frame.dataset.staticAssetsReady === '1') {
+      setTimeout(openModal, 0);
+    } else {
+      frame.addEventListener('load', openModal, { once: true });
+    }
+  }
+
   async function renderProjects() {
     parkActiveToolFrame();
     els.content.innerHTML = `
@@ -5838,8 +5857,17 @@ function libraryTagsForForm(formData, kind) {
       var srcExt = (src.source_path || '').split('.').pop().toLowerCase();
       var IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp'];
       if (IMAGE_EXTS.includes(srcExt)) {
-        // 图片模版：构造合成 JSON
-        var imgData = { schema: 'vf-layout-preset/v1', name: src.title || '图片模板', size: '1:1', canvasW: 1080, canvasH: 1080, elements: [], isImageTemplate: true };
+        // 图片模板/组件必须下发原图数据。缩略图只能用于卡片展示，不能作为画板或智能改稿背景。
+        var imageDataUrl = '';
+        var { data: imageBlob, error: imageError } = await state.supabase.storage.from(LIBRARY_BUCKET).download(src.source_path);
+        if (imageError || !imageBlob) throw (imageError || new Error('图片素材读取失败'));
+        imageDataUrl = await new Promise(function(resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function() { resolve(reader.result || ''); };
+          reader.onerror = function() { reject(new Error('图片素材读取失败')); };
+          reader.readAsDataURL(imageBlob);
+        });
+        var imgData = { schema: 'vf-layout-preset/v1', name: src.title || '图片模板', size: '1:1', canvasW: 1080, canvasH: 1080, elements: [], isImageTemplate: true, src: imageDataUrl };
         sourceWindow.postMessage({ type: 'vf:template-data', id: src.id, data: imgData }, location.origin);
       } else {
         // JSON 模版：下载源文件

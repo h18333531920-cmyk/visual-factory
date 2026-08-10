@@ -276,6 +276,19 @@
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .modal-header h3 { margin: 0; font-size: 16px; font-weight: 800; }
         .close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-sub); }
+        .smart-rewrite-modal { width: min(620px, calc(100vw - 32px)); padding: 0; overflow: hidden; border-radius: 18px; }
+        .smart-rewrite-head { padding: 24px 26px 18px; border-bottom: 1px solid var(--border); }
+        .smart-rewrite-kicker { margin: 0 0 8px; color: #0f9f95; font-size: 11px; font-weight: 850; letter-spacing: .08em; }
+        .smart-rewrite-title { margin: 0; color: var(--text-main); font-size: 21px; line-height: 1.2; font-weight: 850; }
+        .smart-rewrite-subtitle { margin: 8px 0 0; color: var(--text-sub); font-size: 13px; line-height: 1.55; }
+        .smart-rewrite-body { padding: 20px 26px 24px; }
+        .smart-rewrite-input { width: 100%; min-height: 156px; box-sizing: border-box; resize: vertical; border: 1px solid #dce1e8; border-radius: 12px; outline: none; padding: 14px 15px; color: var(--text-main); background: #fbfcfd; font: inherit; font-size: 14px; line-height: 1.65; }
+        .smart-rewrite-input:focus { border-color: #0f9f95; box-shadow: 0 0 0 3px rgba(15,159,149,.10); background: #fff; }
+        .smart-rewrite-guides { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+        .smart-rewrite-guide { border: 1px solid #e1e5ea; border-radius: 999px; padding: 6px 10px; color: #647080; background: #fff; font-size: 11px; font-weight: 700; }
+        .smart-rewrite-note { margin: 14px 0 0; color: #6a7380; font-size: 12px; line-height: 1.6; }
+        .smart-rewrite-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 26px 22px; border-top: 1px solid var(--border); background: #fcfcfc; }
+        .smart-rewrite-actions .btn { min-width: 112px; }
         .custom-board-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .custom-board-grid .input-text { margin-bottom: 0; }
         
@@ -2048,6 +2061,37 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="smart-rewrite-modal" aria-hidden="true">
+    <section class="modal-content smart-rewrite-modal" role="dialog" aria-modal="true" aria-labelledby="smart-rewrite-title">
+        <div class="smart-rewrite-head">
+            <div class="modal-header" style="margin:0;align-items:flex-start;">
+                <div>
+                    <p class="smart-rewrite-kicker">SMART REWRITE</p>
+                    <h3 class="smart-rewrite-title" id="smart-rewrite-title">智能改稿</h3>
+                    <p class="smart-rewrite-subtitle">输入需求，系统会复制一个云端模板并生成新的可编辑画板。</p>
+                </div>
+                <button class="close-btn" type="button" onclick="closeSmartRewrite()" aria-label="关闭">×</button>
+            </div>
+        </div>
+        <div class="smart-rewrite-body">
+            <textarea class="smart-rewrite-input" id="smart-rewrite-input" placeholder="例如：做一张 1:1 社媒图，主标题改为“周末限定套餐”，60% off，免配送，活动时间 06.01-06.15，背景换成绿色餐桌上的汉堡套餐。"></textarea>
+            <div class="smart-rewrite-guides" aria-hidden="true">
+                <span class="smart-rewrite-guide">主标题</span>
+                <span class="smart-rewrite-guide">折扣</span>
+                <span class="smart-rewrite-guide">免配送</span>
+                <span class="smart-rewrite-guide">活动时间</span>
+                <span class="smart-rewrite-guide">优惠码</span>
+                <span class="smart-rewrite-guide">背景</span>
+            </div>
+            <p class="smart-rewrite-note">背景会优先匹配云端素材库；没有合适素材时，才使用当前已配置的生图模型。当前画板不会被覆盖。</p>
+        </div>
+        <div class="smart-rewrite-actions">
+            <button class="btn btn-outline" type="button" onclick="closeSmartRewrite()">取消</button>
+            <button class="btn btn-dark" type="button" id="smart-rewrite-submit" onclick="runSmartRewrite()">生成改稿</button>
+        </div>
+    </section>
+</div>
+
 <div class="workspace-tabs">
     <div class="new-artboard-menu-wrap add-custom-artboard-tab">
         <button type="button" class="new-artboard-trigger" onclick="toggleNewArtboardMenu(event)">新建画板</button>
@@ -2117,6 +2161,7 @@
                 <div class="toolbar-more-wrap">
                     <button type="button" onclick="toggleToolbarMore(event)">更多</button>
                     <div class="toolbar-more-menu" id="toolbar-more-menu">
+                        <button type="button" onclick="openSmartRewrite(); closeToolbarMore();">智能改稿</button>
                         <button type="button" class="custom-board-menu-item" onclick="openCustomArtboardDialog(currentArtboardId); closeToolbarMore();">尺寸</button>
                         <button type="button" onclick="openSettingsModal(); closeToolbarMore();">设置</button>
                         <button type="button" id="safe-guide-toggle" onclick="toggleSafeGuide(); closeToolbarMore();">安全区</button>
@@ -2375,6 +2420,7 @@
     let pendingGroupPresetId = '';
     let pendingTagPresetId = '';
     let pendingLogoAssetId = '';
+    const smartRewriteTemplateResolvers = new Map();
     let currentAssetTab = 'layout';
     let draggingLayerId = null;
     let aiProgressTimer = null;
@@ -5797,6 +5843,301 @@
         try { window.parent.postMessage(msg, parentOrigin); } catch(e) {}
     }
 
+    function closeSmartRewrite() {
+        const modal = document.getElementById('smart-rewrite-modal');
+        if (!modal) return;
+        modal.style.display = 'none';
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    function openSmartRewrite() {
+        const modal = document.getElementById('smart-rewrite-modal');
+        const input = document.getElementById('smart-rewrite-input');
+        if (!modal || !input) return;
+        modal.style.display = 'flex';
+        modal.setAttribute('aria-hidden', 'false');
+        setTimeout(function() { input.focus(); }, 30);
+    }
+    window.closeSmartRewrite = closeSmartRewrite;
+    window.openSmartRewrite = openSmartRewrite;
+
+    function smartRewriteText(value) {
+        return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+    function smartRewriteRatioFromText(text) {
+        const value = String(text || '').replace(/：/g, ':').toLowerCase();
+        const aliases = [
+            ['head', ['头图', '750x500', '750×500']],
+            ['splash', ['开屏', '1000x2168', '1000×2168']],
+            ['banner', ['banner', '横幅', '1396x424', '1396×424']],
+            ['1:1', ['1:1', '1：1', '方图', '方形']],
+            ['16:9', ['16:9', '16：9']],
+            ['3:2', ['3:2', '3：2']],
+            ['4:3', ['4:3', '4：3']],
+            ['3:4', ['3:4', '3：4']],
+            ['2:3', ['2:3', '2：3']],
+            ['9:16', ['9:16', '9：16']]
+        ];
+        const matched = aliases.find(function(entry) { return entry[1].some(function(key) { return value.includes(key); }); });
+        return matched ? matched[0] : '';
+    }
+    function smartRewriteExtractValue(text, patterns) {
+        for (const pattern of patterns) {
+            const match = String(text || '').match(pattern);
+            if (match && match[1]) return smartRewriteText(match[1]);
+        }
+        return '';
+    }
+    function parseSmartRewriteBrief(rawText) {
+        const raw = smartRewriteText(rawText);
+        const title = smartRewriteExtractValue(raw, [
+            /(?:主标题|标题|文案)\s*(?:改为|换成|是|为|：|:)?\s*[“\"']?([^”\"'，,。；;\n]+)[”\"']?/i,
+            /(?:title)\s*(?:to|:|：)\s*[“\"']?([^”\"'，,。；;\n]+)[”\"']?/i
+        ]);
+        const background = smartRewriteExtractValue(raw, [
+            /(?:背景|背景图)\s*(?:改为|换成|是|为|：|:)?\s*[“\"']?([^”\"'，,。；;\n]+)[”\"']?/i,
+            /(?:换成|改成)\s*[“\"']?([^”\"'，,。；;\n]+?)背景/i
+        ]);
+        const discountMatch = raw.match(/(\d{1,3})\s*%\s*(?:off|优惠|折)?/i) || raw.match(/(\d{1,2})\s*折/);
+        const dateRange = smartRewriteExtractValue(raw, [
+            /(?:活动时间|时间|日期)\s*(?:是|为|：|:)?\s*([^，,。；;\n]+)/i,
+            /(\d{1,2}[./月-]\d{1,2}\s*(?:[-~至到]\s*\d{1,2}[./月-]\d{1,2})?)/
+        ]);
+        const coupon = smartRewriteExtractValue(raw, [/(?:优惠码|coupon)\s*(?:是|为|：|:)?\s*([A-Za-z0-9_-]+)/i]);
+        const delivery = /免配送|免费配送|free\s*delivery/i.test(raw) ? 'Free delivery' : '';
+        return {
+            raw,
+            title,
+            background,
+            ratio: smartRewriteRatioFromText(raw),
+            discount: discountMatch ? String(discountMatch[1]) : '',
+            delivery,
+            dateRange,
+            coupon
+        };
+    }
+    function smartTemplateScore(template, brief) {
+        const text = ((template.name || '') + ' ' + (template.tags || []).join(' ')).toLowerCase();
+        let score = template.kind === 'pack' ? 6 : 10;
+        if (brief.ratio && (template.size === brief.ratio || text.includes(brief.ratio))) score += 30;
+        if (/社媒|social|head|头图|1:1|16:9/.test(text)) score += 5;
+        if (brief.raw && (template.tags || []).some(function(tag) { return brief.raw.includes(tag); })) score += 8;
+        if (template.previewUrl) score += 2;
+        return score;
+    }
+    function chooseSmartRewriteTemplate(brief) {
+        return presetLibrary.slice().sort(function(a, b) {
+            return smartTemplateScore(b, brief) - smartTemplateScore(a, brief);
+        })[0] || null;
+    }
+    function requestSmartTemplateData(template) {
+        if (!template?._lazy) return Promise.resolve(template);
+        const id = template.cloudId || template.id;
+        if (!id) return Promise.reject(new Error('模板缺少云端编号'));
+        return new Promise(function(resolve, reject) {
+            const timeout = setTimeout(function() {
+                smartRewriteTemplateResolvers.delete(id);
+                reject(new Error('模板读取超时，请重试'));
+            }, 15000);
+            smartRewriteTemplateResolvers.set(id, {
+                resolve: function(item) { clearTimeout(timeout); resolve(item); },
+                reject: function(error) { clearTimeout(timeout); reject(error); }
+            });
+            notifyParent({ type: 'vf:request-template-data', id });
+        });
+    }
+    function smartTemplateSource(template, brief) {
+        if (template?.kind === 'pack') {
+            const boards = Object.values(template.artboards || {});
+            const preferred = boards.slice().sort(function(a, b) {
+                const aScore = (brief.ratio && a.ratio === brief.ratio ? 20 : 0) + ((a.layers || []).filter(function(layer) { return layer.type === 'text'; }).length * 2);
+                const bScore = (brief.ratio && b.ratio === brief.ratio ? 20 : 0) + ((b.layers || []).filter(function(layer) { return layer.type === 'text'; }).length * 2);
+                return bScore - aScore;
+            })[0];
+            if (!preferred) return null;
+            return { name: template.name, ratio: preferred.ratio, canvasW: preferred.w, canvasH: preferred.h, elements: preferred.layers || [] };
+        }
+        return { name: template?.name, ratio: template?.size, canvasW: template?.canvasW, canvasH: template?.canvasH, elements: template?.elements || [], isImageTemplate: template?.isImageTemplate, previewUrl: template?.previewUrl || '' };
+    }
+    function smartSourceSize(source, brief) {
+        const requested = brief.ratio ? (SIZES[brief.ratio] || NEW_ARTBOARD_PRESETS[brief.ratio]) : null;
+        if (requested) return { ratio: brief.ratio, w: requested.w, h: requested.h };
+        const declared = SIZES[source?.ratio] || NEW_ARTBOARD_PRESETS[source?.ratio];
+        const w = Math.round(Number(source?.canvasW) || Number(declared?.w) || 1080);
+        const h = Math.round(Number(source?.canvasH) || Number(declared?.h) || 1080);
+        return { ratio: source?.ratio || '1:1', w, h };
+    }
+    function adaptSmartLayersToSize(sourceLayers, fromSize, toSize) {
+        const fromW = Math.max(1, Number(fromSize?.w) || Number(toSize?.w) || 1);
+        const fromH = Math.max(1, Number(fromSize?.h) || Number(toSize?.h) || 1);
+        const toW = Math.max(1, Number(toSize?.w) || fromW);
+        const toH = Math.max(1, Number(toSize?.h) || fromH);
+        if (fromW === toW && fromH === toH) return cloneData(sourceLayers || []);
+        const scaleX = toW / fromW;
+        const scaleY = toH / fromH;
+        const uniformScale = Math.min(scaleX, scaleY);
+        return cloneData(sourceLayers || []).map(function(layer) {
+            if (Number.isFinite(Number(layer.x))) layer.x = Number(layer.x) * scaleX;
+            if (Number.isFinite(Number(layer.y))) layer.y = Number(layer.y) * scaleY;
+            if (Number.isFinite(Number(layer.baseW))) layer.baseW = Number(layer.baseW) * scaleX;
+            if (Number.isFinite(Number(layer.baseH))) layer.baseH = Number(layer.baseH) * scaleY;
+            if (Number.isFinite(Number(layer.fontSize))) layer.fontSize = Math.max(8, Number(layer.fontSize) * uniformScale);
+            if (Number.isFinite(Number(layer.maxWidth))) layer.maxWidth = Number(layer.maxWidth) * scaleX;
+            return layer;
+        });
+    }
+    function smartBackgroundScore(item, terms) {
+        const value = ((item.name || '') + ' ' + (item.category || '') + ' ' + (item.tags || []).join(' ')).toLowerCase();
+        const termScore = terms.reduce(function(total, term) { return total + (value.includes(term) ? 8 : 0); }, 0);
+        const isBackground = item.category === 'background' || (item.tags || []).some(function(tag) { return String(tag).toLowerCase() === '背景'; });
+        return termScore + (isBackground ? 4 : 0);
+    }
+    async function smartBackgroundAsset(brief) {
+        if (!brief.background) return null;
+        const terms = smartRewriteText(brief.background).toLowerCase().split(/[\s,，、]+/).filter(function(term) { return term.length > 1; });
+        const candidates = referenceElements.filter(function(item) { return item?.src; })
+            .concat(logoAssets.filter(function(item) {
+                return item && ((item.tags || []).includes('背景') || (item.tags || []).includes('其他素材'));
+            }));
+        const candidate = candidates.sort(function(a, b) {
+            return smartBackgroundScore(b, terms) - smartBackgroundScore(a, terms);
+        })[0] || null;
+        if (!candidate) return null;
+        if ((candidate._lazy || !candidate.src) && candidate.cloudId) {
+            const loaded = await requestSmartTemplateData(candidate);
+            return loaded?.src ? loaded : null;
+        }
+        return candidate.src ? candidate : null;
+    }
+    function smartFindBackgroundLayer(nextLayers, size) {
+        const imageLayers = nextLayers.filter(function(layer) { return layer.type === 'image'; });
+        if (!imageLayers.length) return null;
+        return imageLayers.sort(function(a, b) {
+            const sizeScore = function(layer) {
+                const coverage = ((Number(layer.baseW) || 0) / size.w) * ((Number(layer.baseH) || 0) / size.h);
+                return (layer.role === 'extended-background' ? 100 : 0) + coverage * 10 - (Number(layer.zIndex) || 0) * 0.01;
+            };
+            return sizeScore(b) - sizeScore(a);
+        })[0];
+    }
+    function smartUpdateLayers(sourceLayers, brief, size, backgroundAsset) {
+        const next = cloneData(sourceLayers || []).map(function(layer) {
+            layer.id = genId(layer.type || 'layer');
+            layer._templateLayer = true;
+            return layer;
+        });
+        if (!next.length) return next;
+        const editableText = next.filter(function(layer) { return layer.type === 'text' && !layer.locked; })
+            .sort(function(a, b) { return (Number(b.fontSize) || 0) - (Number(a.fontSize) || 0); });
+        if (brief.title) {
+            if (editableText[0]) {
+                editableText[0].text = brief.title;
+                editableText[0].locked = false;
+            } else {
+                next.push({ id: genId('text'), type: 'text', x: Math.round(size.w * .16), y: Math.round(size.h * .22), zIndex: Math.max.apply(null, next.map(function(layer) { return Number(layer.zIndex) || 0; })) + 1, scale: 1, rotation: 0, text: brief.title, font: 'Arial Black, sans-serif', fontWeight: 900, fontSize: Math.max(44, Math.round(size.w * .08)), lineHeight: .95, letterSpacing: 0, maxWidth: Math.round(size.w * .58), textAlign: 'left', textAlignMode: 'manual', textBoxAnchor: 'center', textCol: '#111827', resizeMode: 'autoWidth', visible: true, locked: false, _templateLayer: true });
+            }
+        }
+        const discountLayer = next.find(function(layer) { return layer.type === 'discountTag' && !layer.locked; });
+        if (discountLayer && brief.discount) {
+            discountLayer.mainText = brief.discount;
+            discountLayer.topText = '%';
+            discountLayer.bottomText = 'off';
+            discountLayer.locked = false;
+        }
+        const tagValues = [brief.delivery, brief.dateRange, brief.coupon ? 'Code ' + brief.coupon : ''].filter(Boolean);
+        const editableTags = next.filter(function(layer) { return layer.type === 'tag' && !layer.locked; });
+        editableTags.slice(0, tagValues.length).forEach(function(layer, index) {
+            layer.text = tagValues[index];
+            layer.locked = false;
+        });
+        if (backgroundAsset) {
+            const background = smartFindBackgroundLayer(next, size);
+            if (background) {
+                background.src = backgroundAsset.src;
+                background.mimeType = backgroundAsset.mimeType || background.mimeType;
+                background.x = size.w / 2;
+                background.y = size.h / 2;
+                background.baseW = size.w;
+                background.baseH = size.h;
+                background.scale = 1;
+                background.rotation = 0;
+                background.fitMode = 'cover';
+                background.locked = false;
+                background.smartBackgroundName = backgroundAsset.name || '';
+            }
+        }
+        return next;
+    }
+    async function smartGenerateBackground(brief, ratio) {
+        if (!brief.background) return '';
+        requireAIBackendRuntime();
+        const res = await fetch('/api/generate-image', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: brief.background, ratio: ratio || '1:1', provider: aiProvider })
+        });
+        const data = await readAIResponse(res, '智能改稿生图');
+        const result = data.success && data.pending && data.taskId ? await pollAIImageTask(data.taskId, data.provider || aiProvider) : data;
+        if (!result?.success && !result?.imageBase64) throw new Error(result?.message || '背景生图失败');
+        return 'data:image/png;base64,' + result.imageBase64;
+    }
+    async function runSmartRewrite() {
+        const input = document.getElementById('smart-rewrite-input');
+        const button = document.getElementById('smart-rewrite-submit');
+        const brief = parseSmartRewriteBrief(input?.value || '');
+        if (!brief.raw) return showToast('请先输入改稿需求', true);
+        if (!canCreateCustomArtboard()) return;
+        const template = chooseSmartRewriteTemplate(brief);
+        if (!template) return showToast('模板库里还没有可用模板', true);
+        const originalText = button?.textContent || '生成改稿';
+        if (button) { button.disabled = true; button.textContent = '正在生成…'; }
+        try {
+            showToast('正在读取云端模板…');
+            const loadedTemplate = await requestSmartTemplateData(template);
+            const source = smartTemplateSource(loadedTemplate, brief);
+            if (!source) throw new Error('模板没有可用画板');
+            const sourceSize = smartSourceSize(source, {});
+            const size = smartSourceSize(source, brief);
+            let sourceLayers = source.elements || [];
+            if (source.isImageTemplate && !sourceLayers.length && source.previewUrl) {
+                sourceLayers = [{ id: genId('image'), type: 'image', x: size.w / 2, y: size.h / 2, zIndex: 1, scale: 1, rotation: 0, flipX: false, baseW: size.w, baseH: size.h, src: source.previewUrl, fitMode: 'cover', visible: true, locked: false }];
+            }
+            if (!sourceLayers.length) throw new Error('该模板缺少可编辑图层');
+            sourceLayers = adaptSmartLayersToSize(sourceLayers, sourceSize, size);
+            const localBackground = await smartBackgroundAsset(brief);
+            const nextLayers = smartUpdateLayers(sourceLayers, brief, size, localBackground);
+            if (brief.background && !localBackground) {
+                try {
+                    showToast('素材库没有匹配背景，正在调用生图…');
+                    const generated = await smartGenerateBackground(brief, size.ratio);
+                    const bg = smartFindBackgroundLayer(nextLayers, size);
+                    if (bg && generated) { bg.src = generated; bg.x = size.w / 2; bg.y = size.h / 2; bg.baseW = size.w; bg.baseH = size.h; bg.scale = 1; bg.fitMode = 'cover'; bg.locked = false; }
+                } catch (backgroundError) {
+                    console.warn('Smart rewrite background fallback failed:', backgroundError);
+                    showToast('没有匹配背景，已保留模板原背景');
+                }
+            }
+            saveCurrentArtboardState();
+            const boardId = genId('smart_board');
+            const boardLabel = nextArtboardLabel('智能改稿');
+            const createdId = createCustomArtboardPreset({ id: boardId, label: boardLabel, w: size.w, h: size.h }, false);
+            if (!createdId) throw new Error('无法创建新的改稿画板');
+            artboards[createdId] = { id: createdId, label: boardLabel, ratio: createdId, layers: nextLayers };
+            activeTemplatePackId = '';
+            linkedArtboardGroupId = '';
+            linkedArtboardIds = [];
+            switchArtboard(createdId);
+            activeLayerIds = nextLayers.filter(function(layer) { return layer.type === 'text' || layer.type === 'tag' || layer.type === 'discountTag'; }).map(function(layer) { return layer.id; });
+            renderCanvas(); renderLayersList(); renderProperties(); renderAssetLibrary();
+            saveHistory(true);
+            closeSmartRewrite();
+            showToast('已生成新的可编辑改稿：' + boardLabel);
+        } catch (error) {
+            showToast(error?.message || '智能改稿失败，请重试', true);
+        } finally {
+            if (button) { button.disabled = false; button.textContent = originalText; }
+        }
+    }
+    window.runSmartRewrite = runSmartRewrite;
+
     function renderPresetPreview(elements, ratio) {
         // 用 Canvas 2D 渲染图层生成预览图
         var size = SIZES[ratio] || SIZES['16:9'] || { w: 1600, h: 900 };
@@ -6041,7 +6382,9 @@
     // 监听父窗口的同步进度回复
     window.addEventListener('message', function(event) {
         if (!event.data || !event.data.type) return;
-        if (event.data.type === 'vf:sync-progress') {
+        if (event.data.type === 'vf:open-smart-rewrite') {
+            openSmartRewrite();
+        } else if (event.data.type === 'vf:sync-progress') {
             if (event.data.status === 'done' && event.data.sourceId) {
                 var tempId = event.data.tempId || '';
                 var finalName = event.data.finalName || '';
@@ -6146,6 +6489,7 @@
             var tid = event.data.id;
             var tdata = event.data.data || {};
             var loadedRequestedPresetId = '';
+            var smartLoadedTemplate = null;
             [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
                 var item = arr.find(function(x) { return x.cloudId === tid; });
                 if (!item) return;
@@ -6173,8 +6517,15 @@
                 if (pendingGroupPresetId && item.id === pendingGroupPresetId) loadedRequestedPresetId = item.id;
                 if (pendingTagPresetId && item.id === pendingTagPresetId) loadedRequestedPresetId = item.id;
                 if (pendingLogoAssetId && item.id === pendingLogoAssetId) loadedRequestedPresetId = item.id;
+                smartLoadedTemplate = item;
             });
             renderAssetLibrary();
+            var smartResolver = smartRewriteTemplateResolvers.get(tid);
+            if (smartResolver) {
+                smartRewriteTemplateResolvers.delete(tid);
+                if (smartLoadedTemplate) smartResolver.resolve(smartLoadedTemplate);
+                else smartResolver.reject(new Error('未找到可用模板数据'));
+            }
             if (loadedRequestedPresetId) {
                 var isGroup = pendingGroupPresetId === loadedRequestedPresetId;
                 var isTag = pendingTagPresetId === loadedRequestedPresetId;
