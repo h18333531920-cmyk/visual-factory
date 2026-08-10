@@ -5939,6 +5939,28 @@
         if (template.previewUrl) score += 2;
         return score;
     }
+    function smartTemplateCopyScore(source, brief) {
+        const width = Math.max(1, Number(source?.canvasW) || Number((SIZES[source?.ratio] || {}).w) || 1080);
+        const height = Math.max(1, Number(source?.canvasH) || Number((SIZES[source?.ratio] || {}).h) || 1080);
+        const textLayers = (source?.elements || []).filter(function(layer) { return layer?.type === 'text'; })
+            .sort(function(a, b) { return (Number(b.fontSize) || 0) - (Number(a.fontSize) || 0); });
+        const title = textLayers[0];
+        let score = 0;
+        if (title) {
+            const titleWidth = Math.max(width * .24, Math.min(width * .72, Number(title.maxWidth) || width * .5));
+            let titleX = Number(title.x);
+            if (!Number.isFinite(titleX)) titleX = width * .5;
+            if (title.textBoxAnchor !== 'center') titleX += title.textAlign === 'right' ? -titleWidth / 2 : titleWidth / 2;
+            const titleY = Number.isFinite(Number(title.y)) ? Number(title.y) : height * .2;
+            const insideCanvas = titleX - titleWidth / 2 > width * .025 && titleX + titleWidth / 2 < width * .975;
+            const inHeadingZone = titleY > height * .06 && titleY < height * .42;
+            score += 42 + (insideCanvas ? 20 : 0) + (inHeadingZone ? 20 : 0);
+            if (titleWidth <= width * .62) score += 12;
+            if (titleX < width * .48 || titleX > width * .52) score += 8;
+        }
+        if ((source?.elements || []).some(function(layer) { return layer?.type === 'discountTag'; })) score += brief.discount ? 12 : 4;
+        return score;
+    }
     function chooseSmartRewriteTemplate(brief) {
         return presetLibrary.slice().sort(function(a, b) {
             return smartTemplateScore(b, brief) - smartTemplateScore(a, brief);
@@ -5948,18 +5970,27 @@
         const candidates = presetLibrary.slice().sort(function(a, b) {
             return smartTemplateScore(b, brief) - smartTemplateScore(a, brief);
         });
-        for (const candidate of candidates) {
+        const ratioCandidates = brief.ratio ? candidates.filter(function(candidate) {
+            const value = ((candidate.size || '') + ' ' + (candidate.name || '') + ' ' + (candidate.tags || []).join(' ')).toLowerCase();
+            return candidate.size === brief.ratio || value.includes(brief.ratio.toLowerCase());
+        }) : candidates;
+        const inspectable = ratioCandidates.length ? ratioCandidates : candidates;
+        let best = null;
+        for (const candidate of inspectable) {
             try {
                 const loaded = await requestSmartTemplateData(candidate);
                 const source = smartTemplateSource(loaded, brief);
                 const hasEditableLayers = source && !source.isImageTemplate && (source.elements || []).some(function(layer) {
                     return ['text', 'tag', 'discountTag', 'image', 'logo', 'arc'].includes(layer.type);
                 });
-                if (hasEditableLayers) return { template: loaded, source: source };
+                if (!hasEditableLayers) continue;
+                const score = smartTemplateScore(candidate, brief) + smartTemplateCopyScore(source, brief);
+                if (!best || score > best.score) best = { template: loaded, source: source, score: score };
             } catch (error) {
                 console.warn('Skipping unreadable smart rewrite template:', candidate?.name, error);
             }
         }
+        if (best) return best;
         throw new Error('模板库中没有可编辑模板，无法安全改写文字和利益点');
     }
     function requestSmartTemplateData(template) {
@@ -6078,6 +6109,33 @@
         const fitted = Math.floor(usableWidth / Math.max(1, characters * .62));
         return Math.max(48, Math.min(Math.round(Number(size.w) * .105), fitted));
     }
+    function smartTitleFontSizeForWidth(title, maxWidth, size) {
+        const characters = Math.max(1, Array.from(String(title || '')).length);
+        const fitted = Math.floor(Math.max(1, maxWidth) / Math.max(1, characters * .62));
+        return Math.max(42, Math.min(Math.round(Number(size.w) * .105), fitted));
+    }
+    function smartTitleLayout(layer, size, title) {
+        const width = Number(size.w) || 1080;
+        const height = Number(size.h) || 1080;
+        const maxWidth = Math.max(width * .32, Math.min(width * .72, Number(layer?.maxWidth) || width * .52));
+        let x = Number(layer?.x);
+        if (!Number.isFinite(x)) x = width * .5;
+        if (layer?.textBoxAnchor !== 'center') x += layer?.textAlign === 'right' ? -maxWidth / 2 : maxWidth / 2;
+        let y = Number(layer?.y);
+        if (!Number.isFinite(y)) y = height * .2;
+        return {
+            x: Math.round(Math.max(maxWidth / 2 + width * .035, Math.min(width - maxWidth / 2 - width * .035, x))),
+            y: Math.round(Math.max(height * .1, Math.min(height * .4, y))),
+            maxWidth: Math.round(maxWidth),
+            fontSize: smartTitleFontSizeForWidth(title, maxWidth, size)
+        };
+    }
+    function smartDelaFont() {
+        const matched = (fontAssets || []).concat(customFonts || []).find(function(font) {
+            return /dela/i.test([font?.fontFamilyName, font?.familyName, font?.name, font?.fontFamilyId].filter(Boolean).join(' '));
+        });
+        return matched?.fontFamilyId ? cssFontFamily(matched.fontFamilyId) : '"Dela Gothic One", "Arial Black", sans-serif';
+    }
     function smartUpdateLayers(sourceLayers, brief, size, backgroundAsset) {
         const next = cloneData(sourceLayers || []).map(function(layer) {
             layer.id = genId(layer.type || 'layer');
@@ -6089,15 +6147,16 @@
             .sort(function(a, b) { return (Number(b.fontSize) || 0) - (Number(a.fontSize) || 0); });
         if (brief.title) {
             if (editableText[0]) {
+                const titleLayout = smartTitleLayout(editableText[0], size, brief.title);
                 editableText[0].text = brief.title;
                 editableText[0].locked = false;
                 editableText[0].visible = true;
-                editableText[0].x = Math.round(size.w * .5);
-                editableText[0].y = Math.round(size.h * .16);
+                editableText[0].x = titleLayout.x;
+                editableText[0].y = titleLayout.y;
                 editableText[0].scale = 1;
                 editableText[0].rotation = 0;
-                editableText[0].fontSize = smartTitleFontSize(brief.title, size);
-                editableText[0].maxWidth = Math.round(size.w * .84);
+                editableText[0].fontSize = titleLayout.fontSize;
+                editableText[0].maxWidth = titleLayout.maxWidth;
                 editableText[0].lineHeight = .96;
                 editableText[0].resizeMode = 'fixed';
                 editableText[0].textBoxAnchor = 'center';
@@ -6130,6 +6189,8 @@
             discountLayer.bottomFontSize = Math.max(Number(discountLayer.bottomFontSize) || 0, Math.round(size.w * .052), 34);
             discountLayer.tagPaddingX = Math.max(Number(discountLayer.tagPaddingX) || 0, 42);
             discountLayer.tagPaddingY = Math.max(Number(discountLayer.tagPaddingY) || 0, 20);
+            discountLayer.font = smartDelaFont();
+            discountLayer.fontWeight = 400;
         }
         const tagValues = [brief.delivery, brief.dateRange, brief.coupon ? 'Code ' + brief.coupon : ''].filter(Boolean);
         const editableTags = next.filter(function(layer) { return layer.type === 'tag'; });
