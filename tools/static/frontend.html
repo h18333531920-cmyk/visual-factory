@@ -6024,22 +6024,37 @@
         const isBackground = item.category === 'background' || (item.tags || []).some(function(tag) { return String(tag).toLowerCase() === '背景'; });
         return termScore + (isBackground ? 4 : 0);
     }
+    function smartBackgroundRequirements(brief) {
+        const background = String(brief.background || '').toLowerCase();
+        const food = String(brief.food || '').toLowerCase();
+        const backgroundTerms = [];
+        const foodTerms = [];
+        if (/绿|green/.test(background)) backgroundTerms.push('绿', 'green');
+        if (/空间|室内|room|space/.test(background)) backgroundTerms.push('空间', '室内', 'room', 'space');
+        if (/汉堡|burger/.test(food)) foodTerms.push('汉堡', 'burger');
+        if (/薯条|fries/.test(food)) foodTerms.push('薯条', 'fries');
+        if (/炸鸡|鸡肉|chicken/.test(food)) foodTerms.push('炸鸡', '鸡肉', 'chicken');
+        return { backgroundTerms: backgroundTerms, foodTerms: foodTerms };
+    }
+    function smartAssetMatchesRequirement(item, terms) {
+        const value = ((item.name || '') + ' ' + (item.category || '') + ' ' + (item.tags || []).join(' ')).toLowerCase();
+        return !terms.length || terms.some(function(term) { return value.includes(term); });
+    }
     async function smartBackgroundAsset(brief) {
         if (!brief.background) return null;
-        const terms = smartRewriteText([brief.background, brief.food].filter(Boolean).join(' ')).toLowerCase().split(/[\s,，、]+/).filter(function(term) { return term.length > 1; });
+        const requirements = smartBackgroundRequirements(brief);
+        const terms = requirements.backgroundTerms.concat(requirements.foodTerms);
         const candidates = referenceElements.filter(function(item) { return item?.src; })
             .concat(logoAssets.filter(function(item) {
                 return item && ((item.tags || []).includes('背景') || (item.tags || []).includes('其他素材'));
-            }));
+            })).filter(function(item) {
+                // 用户同时写了背景和食物时，两项都要命中；任何一项不满足都交给 AI，而不是替换成错误素材。
+                return smartAssetMatchesRequirement(item, requirements.backgroundTerms) && smartAssetMatchesRequirement(item, requirements.foodTerms);
+            });
         const candidate = candidates.sort(function(a, b) {
             return smartBackgroundScore(b, terms) - smartBackgroundScore(a, terms);
         })[0] || null;
-        // 只接受确实命中需求关键词的素材，不能因为它被归类为“背景”就拿来冒充匹配结果。
-        const matchedTerms = candidate ? terms.filter(function(term) {
-            const value = ((candidate.name || '') + ' ' + (candidate.category || '') + ' ' + (candidate.tags || []).join(' ')).toLowerCase();
-            return value.includes(term);
-        }).length : 0;
-        if (!candidate || !matchedTerms) return null;
+        if (!candidate) return null;
         if ((candidate._lazy || !candidate.src) && candidate.cloudId) {
             const loaded = await requestSmartTemplateData(candidate);
             return loaded?.src ? loaded : null;
@@ -6057,6 +6072,12 @@
             return sizeScore(b) - sizeScore(a);
         })[0];
     }
+    function smartTitleFontSize(title, size) {
+        const characters = Math.max(1, Array.from(String(title || '')).length);
+        const usableWidth = Number(size.w) * .84;
+        const fitted = Math.floor(usableWidth / Math.max(1, characters * .62));
+        return Math.max(48, Math.min(Math.round(Number(size.w) * .105), fitted));
+    }
     function smartUpdateLayers(sourceLayers, brief, size, backgroundAsset) {
         const next = cloneData(sourceLayers || []).map(function(layer) {
             layer.id = genId(layer.type || 'layer');
@@ -6071,17 +6092,28 @@
                 editableText[0].text = brief.title;
                 editableText[0].locked = false;
                 editableText[0].visible = true;
+                editableText[0].x = Math.round(size.w * .5);
+                editableText[0].y = Math.round(size.h * .16);
+                editableText[0].scale = 1;
+                editableText[0].rotation = 0;
+                editableText[0].fontSize = smartTitleFontSize(brief.title, size);
+                editableText[0].maxWidth = Math.round(size.w * .84);
+                editableText[0].lineHeight = .96;
+                editableText[0].resizeMode = 'fixed';
+                editableText[0].textBoxAnchor = 'center';
+                editableText[0].textAlign = 'center';
+                editableText[0].textAlignMode = 'manual';
                 // 旧模板的其他活动文案会与新标题冲突；保留品牌文字，其余隐藏。
                 editableText.slice(1).forEach(function(layer) {
                     if (!/keeta|gcc\s*design/i.test(String(layer.text || ''))) layer.visible = false;
                 });
             } else {
-                next.push({ id: genId('text'), type: 'text', x: Math.round(size.w * .16), y: Math.round(size.h * .22), zIndex: Math.max.apply(null, next.map(function(layer) { return Number(layer.zIndex) || 0; })) + 1, scale: 1, rotation: 0, text: brief.title, font: 'Arial Black, sans-serif', fontWeight: 900, fontSize: Math.max(44, Math.round(size.w * .08)), lineHeight: .95, letterSpacing: 0, maxWidth: Math.round(size.w * .58), textAlign: 'left', textAlignMode: 'manual', textBoxAnchor: 'center', textCol: '#111827', resizeMode: 'autoWidth', visible: true, locked: false, _templateLayer: true });
+                next.push({ id: genId('text'), type: 'text', x: Math.round(size.w * .5), y: Math.round(size.h * .16), zIndex: Math.max.apply(null, next.map(function(layer) { return Number(layer.zIndex) || 0; })) + 1, scale: 1, rotation: 0, text: brief.title, font: 'Arial Black, sans-serif', fontWeight: 900, fontSize: smartTitleFontSize(brief.title, size), lineHeight: .96, letterSpacing: 0, maxWidth: Math.round(size.w * .84), textAlign: 'center', textAlignMode: 'manual', textBoxAnchor: 'center', textCol: '#111827', resizeMode: 'fixed', visible: true, locked: false, _templateLayer: true });
             }
         }
         let discountLayer = next.find(function(layer) { return layer.type === 'discountTag'; });
         if (!discountLayer && brief.discount) {
-            discountLayer = { id: genId('discountTag'), type: 'discountTag', x: Math.round(size.w * .30), y: Math.round(size.h * .73), zIndex: Math.max.apply(null, next.map(function(layer) { return Number(layer.zIndex) || 0; })) + 1, scale: 1, rotation: -5, shadowThickness: 12, shadowOpacity: .45, letterSpacing: -3, tagPaddingX: 34, tagPaddingY: 15, tagTextOffsetY: 0, mainFontSize: Math.max(52, Math.round(size.w * .085)), topFontSize: Math.max(28, Math.round(size.w * .048)), bottomFontSize: Math.max(22, Math.round(size.w * .04)), sideGap: 8, sideLineGap: -2, font: 'Arial Black, sans-serif', bgCol: '#F60083', textCol: '#FFFFFF', shadowCol: '#111827', visible: true, locked: false, _templateLayer: true };
+            discountLayer = { id: genId('discountTag'), type: 'discountTag', x: Math.round(size.w * .30), y: Math.round(size.h * .74), zIndex: Math.max.apply(null, next.map(function(layer) { return Number(layer.zIndex) || 0; })) + 1, scale: 1, rotation: -5, shadowThickness: 15, shadowOpacity: .5, letterSpacing: -3, tagPaddingX: 42, tagPaddingY: 20, tagTextOffsetY: 0, mainFontSize: Math.max(88, Math.round(size.w * .12)), topFontSize: Math.max(44, Math.round(size.w * .06)), bottomFontSize: Math.max(34, Math.round(size.w * .052)), sideGap: 10, sideLineGap: -2, font: 'Arial Black, sans-serif', bgCol: '#F60083', textCol: '#FFFFFF', shadowCol: '#111827', visible: true, locked: false, _templateLayer: true };
             next.push(discountLayer);
         }
         if (discountLayer && brief.discount) {
@@ -6090,12 +6122,22 @@
             discountLayer.bottomText = 'off';
             discountLayer.locked = false;
             discountLayer.visible = true;
+            discountLayer.x = Math.round(size.w * .30);
+            discountLayer.y = Math.round(size.h * .74);
+            discountLayer.scale = 1;
+            discountLayer.mainFontSize = Math.max(Number(discountLayer.mainFontSize) || 0, Math.round(size.w * .12), 88);
+            discountLayer.topFontSize = Math.max(Number(discountLayer.topFontSize) || 0, Math.round(size.w * .06), 44);
+            discountLayer.bottomFontSize = Math.max(Number(discountLayer.bottomFontSize) || 0, Math.round(size.w * .052), 34);
+            discountLayer.tagPaddingX = Math.max(Number(discountLayer.tagPaddingX) || 0, 42);
+            discountLayer.tagPaddingY = Math.max(Number(discountLayer.tagPaddingY) || 0, 20);
         }
         const tagValues = [brief.delivery, brief.dateRange, brief.coupon ? 'Code ' + brief.coupon : ''].filter(Boolean);
-        const editableTags = next.filter(function(layer) { return layer.type === 'tag' && !layer.locked; });
+        const editableTags = next.filter(function(layer) { return layer.type === 'tag'; });
+        editableTags.forEach(function(layer) { layer.visible = false; });
         editableTags.slice(0, tagValues.length).forEach(function(layer, index) {
             layer.text = tagValues[index];
             layer.locked = false;
+            layer.visible = true;
         });
         if (backgroundAsset) {
             const background = smartFindBackgroundLayer(next, size);
@@ -6118,7 +6160,7 @@
     async function smartGenerateBackground(brief, ratio) {
         if (!brief.background) return '';
         requireAIBackendRuntime();
-        const prompt = [brief.background, brief.food ? ('主体为' + brief.food) : '', '商业广告背景，画面干净，预留清晰文案空间'].filter(Boolean).join('，');
+        const prompt = [brief.background, brief.food ? ('主视觉必须是' + brief.food) : '', '商业广告背景，画面干净，预留清晰文案空间，不包含任何文字、logo 或水印'].filter(Boolean).join('，');
         const res = await fetch('/api/generate-image', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: prompt, ratio: ratio || '1:1', provider: aiProvider })
@@ -6154,10 +6196,10 @@
                     showToast('素材库没有匹配背景，正在调用生图…');
                     const generated = await smartGenerateBackground(brief, size.ratio);
                     const bg = smartFindBackgroundLayer(nextLayers, size);
-                    if (bg && generated) { bg.src = generated; bg.x = size.w / 2; bg.y = size.h / 2; bg.baseW = size.w; bg.baseH = size.h; bg.scale = 1; bg.fitMode = 'cover'; bg.locked = false; }
+                    if (!bg || !generated) throw new Error('没有得到符合需求的背景图');
+                    bg.src = generated; bg.x = size.w / 2; bg.y = size.h / 2; bg.baseW = size.w; bg.baseH = size.h; bg.scale = 1; bg.fitMode = 'cover'; bg.locked = false;
                 } catch (backgroundError) {
-                    console.warn('Smart rewrite background fallback failed:', backgroundError);
-                    showToast('没有匹配背景，已保留模板原背景');
+                    throw new Error('未能生成“' + [brief.background, brief.food].filter(Boolean).join(' + ') + '”背景，请检查生图接口后重试');
                 }
             }
             saveCurrentArtboardState();
