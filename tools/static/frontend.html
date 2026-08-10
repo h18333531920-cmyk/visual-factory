@@ -6109,10 +6109,32 @@
         const fitted = Math.floor(usableWidth / Math.max(1, characters * .62));
         return Math.max(48, Math.min(Math.round(Number(size.w) * .105), fitted));
     }
+    function smartHeadlineLines(title, maxWidth, size) {
+        const clean = smartRewriteText(title);
+        const words = clean.split(/\s+/).filter(Boolean);
+        if (words.length < 3) return clean;
+        const oneLineChars = Math.max(1, Array.from(clean).length);
+        const oneLineSize = Math.floor(maxWidth / Math.max(1, oneLineChars * .62));
+        let best = null;
+        for (let index = 1; index < words.length; index += 1) {
+            const first = words.slice(0, index).join(' ');
+            const second = words.slice(index).join(' ');
+            const longest = Math.max(Array.from(first).length, Array.from(second).length);
+            const balance = Math.abs(Array.from(first).length - Array.from(second).length);
+            const fitted = Math.floor(maxWidth / Math.max(1, longest * .62));
+            const candidate = { text: first + '\n' + second, fitted: fitted, balance: balance };
+            if (!best || candidate.fitted > best.fitted || (candidate.fitted === best.fitted && candidate.balance < best.balance)) best = candidate;
+        }
+        const twoLineCap = Math.round(Number(size.w) * .132);
+        if (best && Math.min(twoLineCap, best.fitted) >= Math.max(64, oneLineSize * 1.22)) return best.text;
+        return clean;
+    }
     function smartTitleFontSizeForWidth(title, maxWidth, size) {
-        const characters = Math.max(1, Array.from(String(title || '')).length);
-        const fitted = Math.floor(Math.max(1, maxWidth) / Math.max(1, characters * .62));
-        return Math.max(42, Math.min(Math.round(Number(size.w) * .105), fitted));
+        const longestLine = String(title || '').split('\n').reduce(function(longest, line) {
+            return Math.max(longest, Array.from(line).length);
+        }, 1);
+        const fitted = Math.floor(Math.max(1, maxWidth) / Math.max(1, longestLine * .62));
+        return Math.max(42, Math.min(Math.round(Number(size.w) * .132), fitted));
     }
     function smartTitleLayout(layer, size, title) {
         const width = Number(size.w) || 1080;
@@ -6123,11 +6145,13 @@
         if (layer?.textBoxAnchor !== 'center') x += layer?.textAlign === 'right' ? -maxWidth / 2 : maxWidth / 2;
         let y = Number(layer?.y);
         if (!Number.isFinite(y)) y = height * .2;
+        const displayText = smartHeadlineLines(title, maxWidth, size);
         return {
             x: Math.round(Math.max(maxWidth / 2 + width * .035, Math.min(width - maxWidth / 2 - width * .035, x))),
             y: Math.round(Math.max(height * .1, Math.min(height * .4, y))),
             maxWidth: Math.round(maxWidth),
-            fontSize: smartTitleFontSizeForWidth(title, maxWidth, size)
+            fontSize: smartTitleFontSizeForWidth(displayText, maxWidth, size),
+            text: displayText
         };
     }
     function smartDelaFont() {
@@ -6148,7 +6172,7 @@
         if (brief.title) {
             if (editableText[0]) {
                 const titleLayout = smartTitleLayout(editableText[0], size, brief.title);
-                editableText[0].text = brief.title;
+                editableText[0].text = titleLayout.text;
                 editableText[0].locked = false;
                 editableText[0].visible = true;
                 editableText[0].x = titleLayout.x;
