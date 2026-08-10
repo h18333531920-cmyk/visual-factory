@@ -5849,10 +5849,11 @@
         modal.style.display = 'none';
         modal.setAttribute('aria-hidden', 'true');
     }
-    function openSmartRewrite() {
+    function openSmartRewrite(initialBrief = '') {
         const modal = document.getElementById('smart-rewrite-modal');
         const input = document.getElementById('smart-rewrite-input');
         if (!modal || !input) return;
+        if (initialBrief) input.value = String(initialBrief);
         modal.style.display = 'flex';
         modal.setAttribute('aria-hidden', 'false');
         setTimeout(function() { input.focus(); }, 30);
@@ -6383,7 +6384,7 @@
     window.addEventListener('message', function(event) {
         if (!event.data || !event.data.type) return;
         if (event.data.type === 'vf:open-smart-rewrite') {
-            openSmartRewrite();
+            openSmartRewrite(event.data.brief || '');
         } else if (event.data.type === 'vf:sync-progress') {
             if (event.data.status === 'done' && event.data.sourceId) {
                 var tempId = event.data.tempId || '';

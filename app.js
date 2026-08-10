@@ -798,9 +798,9 @@
               <img class="library-hero-kiki" src="./assets/kiki-home.png" alt="" aria-hidden="true">
               <strong>${state.lang === 'zh' ? '你的高效设计伙伴' : 'Your efficient design partner'}</strong>
             </div>
-            <label class="library-hero-command" aria-label="${state.lang === 'zh' ? '搜索素材或发起创作' : 'Search or create'}">
-              <input id="library-hero-search" placeholder="${state.lang === 'zh' ? '输入任务或搜索素材' : 'Enter a task or search assets'}" value="${escapeAttr(state.libraryFilters.query)}">
-              <button type="button" data-route="library" aria-label="${state.lang === 'zh' ? '进入超级库' : 'Open library'}">↑</button>
+            <label class="library-hero-command" aria-label="${state.lang === 'zh' ? '输入智能改稿需求' : 'Enter a smart rewrite brief'}">
+              <input id="library-hero-search" placeholder="${state.lang === 'zh' ? '输入改稿需求：标题、利益点、背景、尺寸' : 'Enter copy, offer, background, or size'}" value="${escapeAttr(state.libraryFilters.query)}">
+              <button type="button" id="library-hero-submit" aria-label="${state.lang === 'zh' ? '开始智能改稿' : 'Start smart rewrite'}">↑</button>
             </label>
           </div>
           <div class="library-module-row">
@@ -1289,13 +1289,15 @@
         if (history) history.hidden = true;
       }, 200);
     });
-    document.getElementById('library-hero-search')?.addEventListener('keydown', event => {
+    const heroSearchInput = document.getElementById('library-hero-search');
+    const openHeroSmartRewrite = function() {
+      openSmartRewriteTool(heroSearchInput?.value.trim() || '');
+    };
+    document.getElementById('library-hero-submit')?.addEventListener('click', openHeroSmartRewrite);
+    heroSearchInput?.addEventListener('keydown', event => {
       if (event.key === 'Enter') {
-        state.libraryFilters.query = event.target.value.trim();
-        const search = document.getElementById('library-search');
-        if (search) search.value = state.libraryFilters.query;
-        state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
-        filterLibraryCardsInPlace();
+        event.preventDefault();
+        openHeroSmartRewrite();
       }
     });
     const filterBtn = document.getElementById('library-filter-btn');
@@ -4331,13 +4333,13 @@ function libraryTagsForForm(formData, kind) {
     }
   }
 
-  function openSmartRewriteTool() {
+  function openSmartRewriteTool(initialBrief = '') {
     location.hash = 'static';
     navigate('static');
     const frame = state.toolFrames.static;
     if (!frame) return;
     const openModal = function() {
-      frame.contentWindow.postMessage({ type: 'vf:open-smart-rewrite' }, location.origin);
+      frame.contentWindow.postMessage({ type: 'vf:open-smart-rewrite', brief: initialBrief }, location.origin);
     };
     if (frame.dataset.staticAssetsReady === '1') {
       setTimeout(openModal, 0);
