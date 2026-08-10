@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260807-sync-keyword-presets-v218';
+  const TOOL_UI_VERSION = '20260810-template-bookmark-member-name-v225';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -5451,6 +5451,10 @@ function libraryTagsForForm(formData, kind) {
         await handleSaveTemplate(msg, sourceWindow);
         refreshLibraryIfOpen();
         break;
+      case 'vf:update-template-bookmark':
+        await handleUpdateTemplateBookmark(msg, sourceWindow);
+        refreshLibraryIfOpen();
+        break;
       case 'vf:fetch-font-binary':
         handleFetchFontBinary(msg, sourceWindow);
         break;
@@ -5492,7 +5496,7 @@ function libraryTagsForForm(formData, kind) {
         finalName = candidate;
       }
       // 构建 JSON 数据
-      var schemaMap = { pack: 'vf-template-pack/v1', layout: 'vf-layout-preset/v1', tagcombo: 'vf-tag-combo/v1', logo: 'vf-logo-asset/v1', font: 'vf-font-asset/v1', groupcombo: 'vf-group-combo/v1' };
+      var schemaMap = { pack: 'vf-template-pack/v1', bookmark: 'vf-template-bookmark/v1', layout: 'vf-layout-preset/v1', tagcombo: 'vf-tag-combo/v1', logo: 'vf-logo-asset/v1', font: 'vf-font-asset/v1', groupcombo: 'vf-group-combo/v1' };
       var schemaName = schemaMap[msg.templateType] || 'vf-layout-preset/v1';
       var jsonData = { schema: schemaName, name: finalName, exportedAt: new Date().toISOString() };
       if (msg.templateType === 'pack') {
@@ -5501,6 +5505,10 @@ function libraryTagsForForm(formData, kind) {
         jsonData.linkedArtboardGroupId = msg.data.linkedArtboardGroupId || '';
         jsonData.linkedArtboardIds = msg.data.linkedArtboardIds || [];
         jsonData.linked = !!jsonData.linkedArtboardIds.length;
+      } else if (msg.templateType === 'bookmark') {
+        // 快捷书签仅保存已有模板的引用，不复制模板图层或画板数据。
+        jsonData.templateRefs = Array.isArray(msg.data?.templateRefs) ? msg.data.templateRefs : [];
+        jsonData.coverTemplateId = msg.data?.coverTemplateId || '';
       } else if (msg.templateType === 'tagcombo' || msg.templateType === 'groupcombo') {
         jsonData.elements = msg.data.elements || [];
       } else if (msg.templateType === 'logo') {
@@ -5542,6 +5550,7 @@ function libraryTagsForForm(formData, kind) {
       var tagMap = {
         layout: ['模版', msg.subTag || '社媒物料'],
         pack: ['模版', msg.subTag || '社媒物料', '套组'],
+        bookmark: ['模版', '模板书签'],
         full: ['模版', msg.subTag || '社媒物料'],
         tagcombo: ['组件', msg.subTag || '标签'],
         logo: ['组件', msg.subTag || 'LOGO'],
@@ -5636,6 +5645,38 @@ function libraryTagsForForm(formData, kind) {
     }
   }
 
+  async function handleUpdateTemplateBookmark(msg, sourceWindow) {
+    if (state.localPreview || !state.supabase || !state.session || !msg.id) {
+      try { sourceWindow.postMessage({ type: 'vf:bookmark-update-error', id: msg.id || '', error: 'Not logged in' }, location.origin); } catch (_error) {}
+      return;
+    }
+    try {
+      var { data: sourceRows, error: sourceError } = await state.supabase.from('vf_source_files')
+        .select('id, source_path').eq('id', msg.id).limit(1);
+      if (sourceError || !sourceRows || !sourceRows.length) throw (sourceError || new Error('模板书签不存在'));
+      var source = sourceRows[0];
+      var refs = Array.isArray(msg.data?.templateRefs) ? msg.data.templateRefs : [];
+      var snapshot = {
+        schema: 'vf-template-bookmark/v1',
+        name: msg.name || '未命名模板套组',
+        exportedAt: new Date().toISOString(),
+        templateRefs: refs,
+        coverTemplateId: msg.data?.coverTemplateId || ''
+      };
+      var blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+      var upload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(source.source_path, blob, { upsert: true, contentType: 'application/json' });
+      if (upload.error) throw upload.error;
+      _templateSnapshotCache[source.source_path] = snapshot;
+      _templateMetadataCache[msg.id] = { templateRefs: refs, coverTemplateId: snapshot.coverTemplateId };
+      try {
+        sourceWindow.postMessage({ type: 'vf:bookmark-updated', id: msg.id, name: snapshot.name, templateRefs: refs, coverTemplateId: snapshot.coverTemplateId }, location.origin);
+      } catch (_error) {}
+    } catch (error) {
+      console.warn('Template bookmark update failed:', error);
+      try { sourceWindow.postMessage({ type: 'vf:bookmark-update-error', id: msg.id, error: error.message || '更新失败' }, location.origin); } catch (_error) {}
+    }
+  }
+
   async function handlePurgeRecycleBin(msg, sourceWindow) {
     var ids = Array.from(new Set((msg.sourceIds || []).filter(Boolean)));
     for (var i = 0; i < ids.length; i += 1) {
@@ -5699,6 +5740,7 @@ function libraryTagsForForm(formData, kind) {
         else if (t.includes('组合') && t.includes('组件')) templateType = 'groupcombo';
         else if ((t.includes('标签') && t.includes('组件')) || t.includes('标签组')) templateType = 'tagcombo';
         else if (t.includes('LOGO') || t.includes('Logo') || t.includes('背景') || t.includes('KIKI') || t.includes('其他素材') || t.includes('品牌圆弧')) templateType = 'logo';
+        else if (t.includes('模板书签')) templateType = 'bookmark';
         else if (t.includes('套组')) templateType = 'pack';
         else if (t.includes('社媒物料') || t.includes('C端物料') || t.includes('模版') || t.includes('版式') || t.includes('静态模板')) templateType = 'layout';
         var dims = previewDims[s.id] || {};
@@ -5708,7 +5750,7 @@ function libraryTagsForForm(formData, kind) {
       // 尺寸信息在列表出现后马上预取。悬停时只展示已到达的数据，不能再把网络请求
       // 放到 mouseenter 里，否则每次移入卡片都会出现可感知的等待。
       var metadataTemplateIds = templates.filter(function(template) {
-        return template.templateType === 'layout' || template.templateType === 'pack';
+        return template.templateType === 'layout' || template.templateType === 'pack' || template.templateType === 'bookmark';
       }).map(function(template) { return template.id; });
       (async function preloadTemplateMetadata() {
         var METADATA_BATCH = 3;
@@ -5782,7 +5824,12 @@ function libraryTagsForForm(formData, kind) {
       if (downloadError || !blob) throw (downloadError || new Error('模板元数据下载失败'));
       var snapshot = JSON.parse(await blob.text());
       var metadata;
-      if (snapshot.schema === 'vf-template-pack/v1') {
+      if (snapshot.schema === 'vf-template-bookmark/v1') {
+        metadata = {
+          templateRefs: Array.isArray(snapshot.templateRefs) ? snapshot.templateRefs : [],
+          coverTemplateId: snapshot.coverTemplateId || ''
+        };
+      } else if (snapshot.schema === 'vf-template-pack/v1') {
         var presets = (snapshot.artboardPresets || []).map(function(preset) {
           return { id: preset.id, label: preset.label, ratio: preset.ratio, w: preset.w, h: preset.h };
         });

@@ -326,6 +326,21 @@
         .asset-pack-badge svg { width: 15px; height: 15px; display: block; }
         .asset-pack-count { min-width:20px; height:16px; display:inline-flex; align-items:center; justify-content:center; padding:0 6px 0 4px; border-left:1px solid rgba(17,24,39,.12); font-size:11px; font-weight:850; line-height:1; }
         .asset-item.current .asset-pack-summary { top:29px; }
+        /* 模板快捷书签与旧套组使用相同的集合角标语言，但两者的数据与打开逻辑完全独立。 */
+        .asset-bookmark-summary { position:absolute; z-index:4; top:7px; left:7px; height:25px; display:inline-flex; align-items:center; overflow:hidden; border:1px solid rgba(17,24,39,.12); border-radius:8px; color:#1f2937; background:rgba(255,255,255,.96); box-shadow:0 2px 8px rgba(15,23,42,.13); pointer-events:none; }
+        .asset-bookmark-summary .asset-pack-badge { color:#2563eb; }
+        .asset-bookmark-summary .asset-pack-count { border-left-color:rgba(37,99,235,.18); }
+        .asset-bookmark-empty { display:flex; align-items:center; justify-content:center; width:100%; height:100%; min-height:72px; color:#94a3b8; font-size:11px; font-weight:750; background:#f8fafc; }
+        .template-bookmark-hover { width:300px; padding:14px; }
+        .template-bookmark-hover-title { font-size:13px; font-weight:850; color:var(--text-main); margin-bottom:9px; }
+        .template-bookmark-hover-note { font-size:10px; color:var(--text-sub); margin-bottom:9px; line-height:1.45; }
+        .template-bookmark-hover-list { display:grid; gap:6px; }
+        .template-bookmark-hover-row { display:grid; grid-template-columns:32px minmax(0,1fr); column-gap:8px; align-items:center; min-height:52px; padding:7px 8px; border-radius:9px; background:#f7f8fa; }
+        .template-bookmark-size-icon { width:32px; height:28px; display:flex; align-items:center; justify-content:center; color:#2563eb; }
+        .template-bookmark-size-icon i { display:block; border:1.5px solid currentColor; border-radius:2px; box-sizing:border-box; }
+        .template-bookmark-member-name { font-size:11px; font-weight:850; color:var(--text-main); line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .template-bookmark-ratio { font-size:11px; font-weight:850; color:var(--text-main); line-height:1.25; }
+        .template-bookmark-size { margin-top:2px; font-size:10px; font-weight:700; color:var(--text-sub); line-height:1.25; }
         .asset-empty { grid-column: 1 / -1; color: var(--text-sub); font-size: 12px; text-align: center; padding: 14px 8px; border: 1px dashed var(--border); border-radius: 10px; background: #FFFFFF; }
         .asset-hover-preview { position: fixed; z-index: 900; width: 465px; padding: 16px; border: 1px solid rgba(16,17,20,0.12); border-radius: 18px; background: rgba(255,255,255,0.96); box-shadow: 0 24px 64px rgba(16,17,20,0.18); opacity: 0; transform: translateY(6px) scale(0.98); transition: opacity 0.14s ease, transform 0.14s ease; pointer-events: none; backdrop-filter: blur(10px); }
         .asset-hover-preview.show { opacity: 1; transform: translateY(0) scale(1); }
@@ -1524,6 +1539,48 @@
             backdrop-filter: blur(16px);
         }
         .resize-dropdown-menu.open { display: block; }
+        .resize-dropdown-menu .resize-inline-custom {
+            margin: 3px 4px 7px;
+            padding: 10px;
+            border-radius: 12px;
+            background: #f7f8fa;
+        }
+        .resize-dropdown-menu .resize-custom-title {
+            margin-bottom: 8px;
+            color: #656b73;
+            font-size: 12px;
+            font-weight: 730;
+        }
+        .resize-dropdown-menu .resize-custom-row { display:flex; align-items:center; gap:6px; }
+        .resize-dropdown-menu .resize-custom-dimensions {
+            height: 34px;
+            flex: 1;
+            min-width: 0;
+            padding: 0 7px;
+            border: 1px solid #dfe2e5;
+            border-radius: 8px;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .resize-dropdown-menu .resize-custom-dimensions:focus-within { border-color:#9198a0; box-shadow:0 0 0 3px rgba(32,34,38,.06); }
+        .resize-dropdown-menu .resize-custom-dimensions input { width:0; min-width:0; flex:1; border:0; outline:0; background:transparent; color:#282c32; font:inherit; font-size:12px; }
+        .resize-dropdown-menu .resize-custom-dimensions input::placeholder { color:#abb1b9; }
+        .resize-dropdown-menu .resize-custom-dimensions span { color:#b0b5bb; font-size:14px; }
+        .resize-dropdown-menu .resize-custom-unit { color:#737982; font-size:12px; font-weight:650; }
+        .resize-dropdown-menu button.resize-custom-apply {
+            width: 42px;
+            min-width: 42px;
+            height: 34px;
+            padding: 0;
+            justify-content: center;
+            border-radius: 8px !important;
+            background: var(--primary) !important;
+            color: #fff !important;
+            font-size: 12px !important;
+        }
+        .resize-dropdown-menu button.resize-custom-apply:hover { background:var(--primary-hover) !important; }
         .resize-dropdown-menu .resize-section-label {
             display: block;
             padding: 8px 12px 4px;
@@ -1589,6 +1646,9 @@
         }
         .layer-context-menu button:hover,
         .asset-context-menu button:hover { background: #f1f5f9; }
+        /* 菜单按钮有 display:flex 的通用样式，必须显式保留 hidden 的优先级。 */
+        .layer-context-menu button[hidden],
+        .asset-context-menu button[hidden] { display: none !important; }
 
         .custom-board-menu-item {
             display: none !important;
@@ -2097,8 +2157,10 @@
         <div class="asset-library-drop-overlay" id="asset-library-drop-overlay" aria-hidden="true"><div class="asset-library-drop-content"><span class="asset-library-drop-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3"></path><path d="m7 8 5-5 5 5"></path><path d="M4 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"></path></svg></span><span>释放以添加资产</span></div></div>
     </div>
     <div class="asset-context-menu" id="asset-context-menu">
-        <button type="button" onclick="addAssetContextReferenceToAI(); closeAssetContextMenu();">加入生图参考图</button>
+        <button type="button" id="asset-context-add-reference" onclick="addAssetContextReferenceToAI(); closeAssetContextMenu();">加入生图参考图</button>
+        <button type="button" id="asset-context-template-bookmark" onclick="openAssetContextTemplateBookmarkEditor(); closeAssetContextMenu();" hidden>模板编组</button>
         <button type="button" id="asset-context-rename" onclick="renameAssetContextItem(); closeAssetContextMenu();" hidden>重命名素材</button>
+        <button type="button" id="asset-context-delete" onclick="deleteAssetContextItem(); closeAssetContextMenu();" hidden>删除</button>
     </div>
     <label class="asset-pane-collapse-handle" for="asset-pane-collapse-toggle" title="折叠资产库" aria-label="折叠或展开资产库"></label>
 <div class="left-pane" id="left-pane">
@@ -2375,6 +2437,7 @@
     let pendingGroupPresetId = '';
     let pendingTagPresetId = '';
     let pendingLogoAssetId = '';
+    let pendingBookmarkAction = null;
     let currentAssetTab = 'layout';
     let draggingLayerId = null;
     let aiProgressTimer = null;
@@ -2971,10 +3034,17 @@
     function normalizeArtboardSnapshot(snapshot = {}) {
         const next = ARTBOARD_PRESETS.reduce((acc, preset) => {
             const incoming = snapshot[preset.id] || {};
+            const incomingSize = incoming.canvasSize;
+            if(incomingSize && incoming.ratio) {
+                const w = Math.round(Number(incomingSize.w));
+                const h = Math.round(Number(incomingSize.h));
+                if(w > 0 && h > 0) SIZES[incoming.ratio] = { w, h };
+            }
             acc[preset.id] = {
                 id: preset.id,
                 label: preset.label,
                 ratio: incoming.ratio || preset.ratio,
+                canvasSize: incomingSize && Number(incomingSize.w) > 0 && Number(incomingSize.h) > 0 ? cloneData(incomingSize) : undefined,
                 linkedGroupId: incoming.linkedGroupId || '',
                 layers: cloneData(incoming.layers || [])
             };
@@ -2988,6 +3058,8 @@
             artboards[currentArtboardId] = { id: preset.id, label: preset.label, ratio: preset.ratio, layers: [] };
         }
         artboards[currentArtboardId].ratio = currentRatio;
+        const currentSize = SIZES[currentRatio];
+        if(currentSize) artboards[currentArtboardId].canvasSize = { w: currentSize.w, h: currentSize.h };
         artboards[currentArtboardId].layers = cloneData(layers);
         syncLinkedArtboardContents();
     }
@@ -3053,7 +3125,7 @@
         const board = artboards[id];
         const preset = getArtboardPreset(id);
         // 关联副本的尺寸以自身保存的 ratio 为准，不能回退到最初固定画板的 750×500 等预设。
-        return SIZES[board?.ratio] || SIZES[preset?.ratio] || preset || { w:1080, h:1080 };
+        return board?.canvasSize || SIZES[board?.ratio] || SIZES[preset?.ratio] || preset || { w:1080, h:1080 };
     }
     // 关联画板会复用同一批背景、Logo 和图片。旧格式把相同的 base64 图片随每个
     // 副本重复存进 JSON；这里改为资源表 + 图层引用，显著减少套组下载体积。
@@ -3124,7 +3196,9 @@
         if(saveCurrent) saveCurrentArtboardState();
         const preset = getArtboardPreset(id);
         currentArtboardId = id;
-        currentRatio = preset.ratio;
+        const board = artboards[id];
+        if(board?.canvasSize && board.ratio) SIZES[board.ratio] = { w: board.canvasSize.w, h: board.canvasSize.h };
+        currentRatio = board?.ratio || preset.ratio;
         layers = cloneData(artboards[id].layers || []);
         activeLayerIds = activeLayerIds.filter(layerId => layers.some(l => l.id === layerId));
         syncArtboardTabs();
@@ -5771,9 +5845,10 @@
     function refreshSaveActiveAssetButton() {
         const btn = document.getElementById('canvas-save-btn');
         if(!btn) return;
-        // 组件（包括字体）的上传改由“更多/设置”中的入口负责，画板右上角不再重复显示上传组件按钮。
-        btn.style.display = currentAssetTab === 'component' ? 'none' : '';
-        btn.textContent = currentAssetTab === 'recycle' ? '回收站' : '保存模版';
+        // 资产库切换仅影响左侧内容，不能改变右上角的主操作。
+        // 组件不再通过这里上传，任何普通分类下均保存当前画板为模板。
+        btn.style.display = '';
+        btn.textContent = '保存模版';
         btn.disabled = currentAssetTab === 'recycle';
     }
     function toggleAddMenu(e) { e.stopPropagation(); document.getElementById('add-menu')?.classList.toggle('open'); }
@@ -6080,6 +6155,8 @@
                     groupPresets.push({ id: ct.id, cloudId: ct.id, name: ct.name, elements: [], _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
                 } else if (ct.templateType === 'logo') {
                     logoAssets.push({ id: ct.id, cloudId: ct.id, name: ct.name, src: '', _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
+                } else if (ct.templateType === 'bookmark') {
+                    presetLibrary.push({ id: ct.id, cloudId: ct.id, kind: 'bookmark', name: ct.name, templateRefs: [], coverTemplateId: '', _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
                 } else if (ct.templateType === 'pack') {
                     presetLibrary.push({ id: ct.id, cloudId: ct.id, kind: 'pack', name: ct.name, artboards: {}, _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
                 } else {
@@ -6112,7 +6189,10 @@
             var packMeta = event.data.data || {};
             var packItem = presetLibrary.find(function(item) { return item.cloudId === metaId || item.id === metaId; });
             if (packItem) {
-                if (packItem.kind === 'pack') {
+                if (packItem.kind === 'bookmark') {
+                    packItem.templateRefs = normalizeTemplateBookmarkRefs(packMeta.templateRefs || []);
+                    packItem.coverTemplateId = packMeta.coverTemplateId || '';
+                } else if (packItem.kind === 'pack') {
                     packItem.artboardPresets = packMeta.artboardPresets || [];
                     packItem.linkedArtboardIds = packMeta.linkedArtboardIds || [];
                     packItem.artboards = packMeta.artboards || {};
@@ -6154,6 +6234,8 @@
                 if (tdata.elements) item.elements = tdata.elements;
                 if (tdata.artboards) item.artboards = tdata.artboards;
                 if (tdata.artboardPresets) item.artboardPresets = tdata.artboardPresets;
+                if (tdata.templateRefs) item.templateRefs = normalizeTemplateBookmarkRefs(tdata.templateRefs);
+                if (tdata.coverTemplateId) item.coverTemplateId = tdata.coverTemplateId;
                 if (tdata.linkedArtboardGroupId) item.linkedArtboardGroupId = tdata.linkedArtboardGroupId;
                 if (tdata.linkedArtboardIds) item.linkedArtboardIds = tdata.linkedArtboardIds;
                 if (tdata.linked) item.linked = true;
@@ -6173,24 +6255,43 @@
                 if (pendingGroupPresetId && item.id === pendingGroupPresetId) loadedRequestedPresetId = item.id;
                 if (pendingTagPresetId && item.id === pendingTagPresetId) loadedRequestedPresetId = item.id;
                 if (pendingLogoAssetId && item.id === pendingLogoAssetId) loadedRequestedPresetId = item.id;
+                if (pendingBookmarkAction && item.id === pendingBookmarkAction.id) loadedRequestedPresetId = item.id;
             });
             renderAssetLibrary();
             if (loadedRequestedPresetId) {
                 var isGroup = pendingGroupPresetId === loadedRequestedPresetId;
                 var isTag = pendingTagPresetId === loadedRequestedPresetId;
                 var isLogo = pendingLogoAssetId === loadedRequestedPresetId;
+                var bookmarkAction = pendingBookmarkAction && pendingBookmarkAction.id === loadedRequestedPresetId ? pendingBookmarkAction : null;
                 pendingLayoutPresetId = '';
                 pendingGroupPresetId = '';
                 pendingTagPresetId = '';
                 pendingLogoAssetId = '';
+                if (bookmarkAction) pendingBookmarkAction = null;
                 // 等卡片数据更新后再应用，保证连续点击时只应用最后选中的模板。
                 requestAnimationFrame(function() {
                     if (isGroup) { applyGroupCombo(loadedRequestedPresetId); }
                     else if (isTag) { applyTagComboPreset(loadedRequestedPresetId); }
                     else if (isLogo) { addLogoFromAsset(loadedRequestedPresetId); }
+                    else if (bookmarkAction?.mode === 'edit') { openTemplateBookmarkEditor(bookmarkAction.asset); }
+                    else if (bookmarkAction?.mode === 'open') { openTemplateBookmarkPicker(loadedRequestedPresetId); }
                     else { applyLayoutPreset(loadedRequestedPresetId); }
                 });
             }
+        } else if (event.data.type === 'vf:bookmark-updated') {
+            var updatedBookmark = presetLibrary.find(function(item) { return item.id === event.data.id || item.cloudId === event.data.id; });
+            if (updatedBookmark) {
+                updatedBookmark.name = event.data.name || updatedBookmark.name;
+                updatedBookmark.templateRefs = normalizeTemplateBookmarkRefs(event.data.templateRefs || []);
+                updatedBookmark.coverTemplateId = event.data.coverTemplateId || '';
+                updatedBookmark._pending = false;
+                renderAssetLibrary();
+            }
+        } else if (event.data.type === 'vf:bookmark-update-error') {
+            var failedBookmark = presetLibrary.find(function(item) { return item.id === event.data.id || item.cloudId === event.data.id; });
+            if (failedBookmark) failedBookmark._pending = false;
+            renderAssetLibrary();
+            showToast('❌ 模板编组更新失败：' + (event.data.error || '请稍后重试'), true);
         } else if (event.data.type === 'vf:apply-template') {
             var d = event.data.data || {};
             if (d.schema === 'vf-layout-preset/v1' && d.elements) {
@@ -6324,16 +6425,10 @@
     // ===== 模版同步结束 =====
 
     async function saveActiveAsset() {
-        if(currentAssetTab === 'layout') return await saveToPreset();
-        if(currentAssetTab === 'component') {
-            if (diySelectedSubtag === '字体') {
-                return document.getElementById('font-upload').click();
-            }
-            if (diySelectedSubtag === '配色') {
-                return showToast('双击右侧编辑区的配色色板即可编辑并同步');
-            }
-            return document.getElementById('logo-upload').click();
-        }
+        if(currentAssetTab === 'recycle') return;
+        // 无论当前浏览模板或组件资产，右上角均保存当前画板为模板；
+        // 上传字体、Logo 等入口不再复用这个按钮。
+        return await saveToPreset();
     }
     var diySubtagFilter = '全部';
     var diySelectedSubtag = '全部'; // 真正选中的分类，影响保存时的 tag2
@@ -6440,17 +6535,22 @@
             masonryColumns.forEach(function(column) { column.className = 'asset-masonry-column'; list.appendChild(column); });
         }
         if(currentAssetTab === 'layout') {
-            const items = presetLibrary.filter(function(p) {
+            // 书签是模板页的固定快捷入口：无论当前筛选为何条件，都始终放在模板列表最前面。
+            const bookmarks = presetLibrary.filter(function(p) { return p.kind === 'bookmark'; });
+            const regularItems = presetLibrary.filter(function(p) { return p.kind !== 'bookmark'; }).filter(function(p) {
                 if (diySubtagFilter === '全部') return true;
                 // 按 name 或标签粗略匹配
                 return (p.name || '').indexOf(diySubtagFilter) !== -1;
             });
+            const items = bookmarks.concat(regularItems);
             if(items.length === 0) { list.innerHTML = '<div class=”asset-empty”>暂无版式</div>'; return; }
             items.forEach(p => {
                 const isPack = p.kind === 'pack';
+                const isBookmark = p.kind === 'bookmark';
                 const packCount = p.linkedArtboardIds?.length || (p.artboards ? Object.keys(p.artboards).length : 0);
-                const meta = isPack ? `${p.linked ? '关联画板' : '多画板'} · ${packCount || 0} 个尺寸` : `${p.size} · ${p.elements?.length || 0} 图层`;
-                appendAssetItem(createAssetItem({ title: p.name, meta, asset: p, type: isPack ? 'pack' : 'layout', current: isPack && p.id === activeTemplatePackId, onApply: () => applyLayoutPreset(p.id), onDelete: () => deleteLayoutPreset(p.id) }));
+                const bookmarkCount = isBookmark ? getLiveTemplateBookmarkMembers(p).length : 0;
+                const meta = isBookmark ? `快捷书签 · ${bookmarkCount} 个模板` : (isPack ? `${p.linked ? '关联画板' : '多画板'} · ${packCount || 0} 个尺寸` : `${p.size} · ${p.elements?.length || 0} 图层`);
+                appendAssetItem(createAssetItem({ title: p.name, meta, asset: p, type: isBookmark ? 'bookmark' : (isPack ? 'pack' : 'layout'), current: isPack && p.id === activeTemplatePackId, onApply: () => isBookmark ? openTemplateBookmarkPicker(p.id) : applyLayoutPreset(p.id), onDelete: () => deleteLayoutPreset(p.id) }));
             });
         } else if(currentAssetTab === 'component') {
             // 按 sub-tag 筛选
@@ -6512,7 +6612,7 @@
     }
     function createAssetItem({ title, meta, type, asset, img, current = false, onApply, onDelete, onRestore }) {
         // 尺寸 hover 仅属于模板（单画板版式 / 多画板套组），组件卡片不添加该样式。
-        const isTemplateAsset = type === 'layout' || type === 'pack';
+        const isTemplateAsset = type === 'layout' || type === 'pack' || type === 'bookmark';
         const item = document.createElement('div'); item.className = `asset-item ${current ? 'current' : ''} ${type === 'font' ? 'font-asset-card' : ''} ${isTemplateAsset ? 'template-preview-card' : ''}`;
         const canUseAsAIReference = type === 'reference' || (type === 'logo' && getLogoAssetType(asset) === 'image' && !!asset?.src);
         item.onclick = () => {
@@ -6555,9 +6655,12 @@
         thumb.className = `asset-thumb ${type === 'logo' ? 'logo-thumb' : ''} ${type === 'reference' ? 'reference-thumb' : ''} ${type === 'reference' && asset?.category === 'background' ? 'reference-bg-thumb' : ''}`;
         renderAssetPreview(thumb, { type, asset, img });
         let packHover = null;
-        if(type === 'layout' || type === 'pack') {
+        if(type === 'layout' || type === 'pack' || type === 'bookmark') {
             const canvasInfo = getTemplatePreviewCanvasInfo(asset);
-            if (type === 'pack') {
+            if (type === 'bookmark') {
+                item.addEventListener('mouseenter', function() { showTemplateBookmarkHover(item, asset); });
+                item.addEventListener('mouseleave', hideAssetHoverPreview);
+            } else if (type === 'pack') {
                 // 尺寸清单放在图片下方，不能遮挡真实预览图。
                 packHover = createPackHoverPreview(asset);
             } else {
@@ -6576,18 +6679,16 @@
                 }
             }, { once: true });
         }
-        var isRenameable = ['layout', 'pack', 'tag', 'logo', 'font', 'group'].indexOf(type) !== -1;
+        var isRenameable = ['layout', 'pack', 'bookmark', 'tag', 'logo', 'font', 'group'].indexOf(type) !== -1;
         const info = document.createElement('div');
         info.className = 'asset-info';
         info.innerHTML = `<div class="asset-name">${escapeHtml(title)}</div><div class="asset-meta">${escapeHtml(meta || '')}</div>`;
-        if (canUseAsAIReference) {
+        if (canUseAsAIReference || isRenameable || isTemplateAsset) {
             item.oncontextmenu = function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                openAssetContextMenu(e, { item, asset, title, renameable: isRenameable });
+                openAssetContextMenu(e, { item, asset, title, type, renameable: isRenameable, canUseAsAIReference: canUseAsAIReference, onDelete: onDelete });
             };
-        } else if (isRenameable) {
-            item.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); beginAssetRename(item, asset); };
         }
         const actions = document.createElement('div');
         actions.className = 'asset-actions';
@@ -6616,6 +6717,22 @@
             count.textContent = String(boardCount || 0);
             count.title = '包含 ' + (boardCount || 0) + ' 个画板';
             count.setAttribute('aria-label', count.title);
+            summary.append(badge, count);
+            item.appendChild(summary);
+        }
+        if (type === 'bookmark') {
+            const summary = document.createElement('span');
+            summary.className = 'asset-bookmark-summary';
+            summary.title = '模板快捷书签';
+            summary.setAttribute('aria-label', '模板快捷书签');
+            const badge = document.createElement('span');
+            badge.className = 'asset-pack-badge';
+            badge.innerHTML = '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="7" y="3" width="9" height="11" rx="1.5" stroke="currentColor" stroke-width="1.8"></rect><path d="M4 7.5V15a2 2 0 0 0 2 2h6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>';
+            const count = document.createElement('span');
+            count.className = 'asset-pack-count';
+            const templateCount = getLiveTemplateBookmarkMembers(asset).length;
+            count.textContent = String(templateCount);
+            count.title = '关联 ' + templateCount + ' 个模板';
             summary.append(badge, count);
             item.appendChild(summary);
         }
@@ -6653,8 +6770,15 @@
         assetContextTarget = target;
         const menu = document.getElementById('asset-context-menu');
         if(!menu) return;
+        const referenceButton = document.getElementById('asset-context-add-reference');
+        const bookmarkButton = document.getElementById('asset-context-template-bookmark');
         const renameButton = document.getElementById('asset-context-rename');
+        const deleteButton = document.getElementById('asset-context-delete');
+        // 模板预览图只是版式入口，不是可提交给生图的参考素材。
+        if(referenceButton) referenceButton.hidden = !target?.canUseAsAIReference;
+        if(bookmarkButton) bookmarkButton.hidden = !(target?.type === 'layout' || target?.type === 'bookmark');
         if(renameButton) renameButton.hidden = !target?.renameable;
+        if(deleteButton) deleteButton.hidden = !target?.onDelete;
         menu.style.left = event.clientX + 'px';
         menu.style.top = event.clientY + 'px';
         menu.classList.add('open');
@@ -6670,6 +6794,265 @@
     }
     function renameAssetContextItem() {
         if(assetContextTarget?.renameable) beginAssetRename(assetContextTarget.item, assetContextTarget.asset);
+    }
+    function deleteAssetContextItem() {
+        assetContextTarget?.onDelete?.();
+    }
+    function openAssetContextTemplateBookmarkEditor() {
+        const asset = assetContextTarget?.asset;
+        if (!asset) return;
+        openTemplateBookmarkEditor(asset.kind === 'bookmark' ? asset : null, asset.kind === 'bookmark' ? null : asset);
+    }
+    // ===== 模板快捷书签 =====
+    // 书签仅保存独立模板的稳定 ID；不会保存或复制任何图层，因此和旧的多画板套组互不影响。
+    function normalizeTemplateBookmarkRefs(refs) {
+        return (Array.isArray(refs) ? refs : []).map(function(ref) {
+            if (typeof ref === 'string') return { templateId: ref, name: '', canvasW: 0, canvasH: 0 };
+            return {
+                templateId: ref?.templateId || ref?.id || '',
+                name: ref?.name || '',
+                canvasW: Math.round(Number(ref?.canvasW) || 0),
+                canvasH: Math.round(Number(ref?.canvasH) || 0)
+            };
+        }).filter(function(ref) { return !!ref.templateId; });
+    }
+    function getTemplateBookmarkCandidates() {
+        // “套组”是旧功能，刻意不允许嵌套到书签内；新书签只关联独立模板。
+        return presetLibrary.filter(function(item) {
+            return item && item.kind !== 'bookmark' && item.kind !== 'pack' && !item._pending && !!(item.cloudId || item.id);
+        });
+    }
+    function findTemplateBookmarkMember(ref) {
+        const templateId = typeof ref === 'string' ? ref : ref?.templateId;
+        if (!templateId) return null;
+        return presetLibrary.find(function(item) {
+            return item.kind !== 'bookmark' && item.kind !== 'pack' && (item.id === templateId || item.cloudId === templateId);
+        }) || null;
+    }
+    function getLiveTemplateBookmarkMembers(bookmark) {
+        return normalizeTemplateBookmarkRefs(bookmark?.templateRefs).map(function(ref) {
+            const template = findTemplateBookmarkMember(ref);
+            return template ? { ref: ref, template: template } : null;
+        }).filter(Boolean);
+    }
+    function getTemplateBookmarkCover(bookmark) {
+        const refs = normalizeTemplateBookmarkRefs(bookmark?.templateRefs);
+        const preferred = refs.find(function(ref) { return ref.templateId === bookmark?.coverTemplateId; });
+        const preferredTemplate = preferred && findTemplateBookmarkMember(preferred);
+        if (preferredTemplate) return preferredTemplate;
+        const firstLive = getLiveTemplateBookmarkMembers(bookmark)[0];
+        return firstLive?.template || null;
+    }
+    function templateBookmarkRefFromTemplate(template) {
+        const info = getTemplatePreviewCanvasInfo(template) || {};
+        return {
+            templateId: template.cloudId || template.id,
+            name: template.name || '未命名模板',
+            canvasW: Math.round(Number(info.width) || 0),
+            canvasH: Math.round(Number(info.height) || 0)
+        };
+    }
+    function templateBookmarkDisplayInfo(ref, template) {
+        const info = getTemplatePreviewCanvasInfo(template || ref || {});
+        if (info) return info;
+        const width = Math.round(Number(ref?.canvasW) || 0);
+        const height = Math.round(Number(ref?.canvasH) || 0);
+        if (width && height) {
+            const divisor = greatestCommonDivisor(width, height);
+            return { width: width, height: height, ratio: (width / divisor) + ':' + (height / divisor) };
+        }
+        return null;
+    }
+    function appendTemplateBookmarkSizeIcon(parent, info) {
+        const icon = document.createElement('span');
+        icon.className = 'template-bookmark-size-icon';
+        const frame = document.createElement('i');
+        const width = Math.max(1, Number(info?.width) || 1);
+        const height = Math.max(1, Number(info?.height) || 1);
+        const scale = Math.min(20 / width, 17 / height);
+        frame.style.width = Math.max(5, Math.round(width * scale)) + 'px';
+        frame.style.height = Math.max(5, Math.round(height * scale)) + 'px';
+        icon.appendChild(frame);
+        parent.appendChild(icon);
+    }
+    function showTemplateBookmarkHover(anchor, bookmark) {
+        const el = getAssetHoverEl();
+        el.className = 'asset-hover-preview template-bookmark-hover';
+        el.innerHTML = '';
+        const title = document.createElement('div');
+        title.className = 'template-bookmark-hover-title';
+        title.textContent = bookmark?.name || '模板快捷书签';
+        const note = document.createElement('div');
+        note.className = 'template-bookmark-hover-note';
+        note.textContent = '关联模板尺寸';
+        const list = document.createElement('div');
+        list.className = 'template-bookmark-hover-list';
+        const members = getLiveTemplateBookmarkMembers(bookmark);
+        if (!members.length) {
+            const empty = document.createElement('div');
+            empty.className = 'asset-pack-loading-note';
+            empty.textContent = '暂无可用关联模板';
+            list.appendChild(empty);
+        } else {
+            members.forEach(function(member) {
+                const row = document.createElement('div');
+                row.className = 'template-bookmark-hover-row';
+                const info = templateBookmarkDisplayInfo(member.ref, member.template);
+                appendTemplateBookmarkSizeIcon(row, info);
+                const copy = document.createElement('div');
+                const name = document.createElement('div');
+                name.className = 'template-bookmark-member-name';
+                name.textContent = member.template.name || member.ref.name || '未命名模板';
+                const ratio = document.createElement('div');
+                ratio.className = 'template-bookmark-ratio';
+                ratio.textContent = info?.ratio || '读取尺寸中';
+                const pixels = document.createElement('div');
+                pixels.className = 'template-bookmark-size';
+                pixels.textContent = info ? (info.width + ' × ' + info.height + ' px') : '实际尺寸读取中';
+                copy.append(name, ratio, pixels);
+                row.append(copy);
+                list.appendChild(row);
+            });
+        }
+        el.append(title, note, list);
+        positionAssetHoverPreview(anchor);
+        requestAnimationFrame(function() { el.classList.add('show'); });
+    }
+    function ensureTemplateBookmarkDialog() {
+        let overlay = document.getElementById('template-bookmark-dialog');
+        if (overlay) return overlay;
+        overlay = document.createElement('div');
+        overlay.id = 'template-bookmark-dialog';
+        overlay.style.cssText = 'display:none;position:fixed;inset:0;z-index:10010;align-items:center;justify-content:center;padding:24px;background:rgba(17,24,39,.34);backdrop-filter:blur(4px);';
+        document.body.appendChild(overlay);
+        return overlay;
+    }
+    function closeTemplateBookmarkDialog() {
+        const overlay = document.getElementById('template-bookmark-dialog');
+        if (overlay) { overlay.style.display = 'none'; overlay.replaceChildren(); }
+    }
+    function createTemplateBookmarkDialogShell(title, description) {
+        const overlay = ensureTemplateBookmarkDialog();
+        overlay.replaceChildren();
+        overlay.style.display = 'flex';
+        const dialog = document.createElement('div');
+        dialog.style.cssText = 'width:min(620px,calc(100vw - 36px));max-height:min(700px,calc(100vh - 48px));display:flex;flex-direction:column;overflow:hidden;background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:20px;box-shadow:0 28px 80px rgba(15,23,42,.24);';
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px;padding:19px 22px;border-bottom:1px solid #e5e7eb;';
+        const heading = document.createElement('div');
+        heading.textContent = title;
+        heading.style.cssText = 'font-size:18px;font-weight:900;color:#17191d;';
+        const close = document.createElement('button');
+        close.type = 'button'; close.textContent = '×'; close.setAttribute('aria-label', '关闭');
+        close.style.cssText = 'width:30px;height:30px;border:0;border-radius:9px;background:transparent;color:#667085;font-size:28px;line-height:1;cursor:pointer;';
+        close.onclick = closeTemplateBookmarkDialog;
+        header.append(heading, close);
+        const body = document.createElement('div');
+        body.style.cssText = 'overflow:auto;padding:18px 22px 22px;';
+        if (description) {
+            const intro = document.createElement('div');
+            intro.textContent = description;
+            intro.style.cssText = 'margin-bottom:15px;color:#667085;font-size:13px;line-height:1.55;';
+            body.appendChild(intro);
+        }
+        dialog.append(header, body); overlay.appendChild(dialog);
+        overlay.onclick = function(event) { if (event.target === overlay) closeTemplateBookmarkDialog(); };
+        return { overlay: overlay, dialog: dialog, body: body };
+    }
+    function openTemplateBookmarkEditor(bookmark, seedTemplate) {
+        if (bookmark?._lazy) {
+            pendingBookmarkAction = { mode: 'edit', id: bookmark.id, asset: bookmark };
+            showToast('正在读取书签关联模板，请稍候…');
+            notifyParent({ type: 'vf:request-template-data', id: bookmark.cloudId || bookmark.id });
+            return;
+        }
+        const candidates = getTemplateBookmarkCandidates();
+        if (!candidates.length) return showToast('请先保存至少一个独立模板，再创建模板编组', true);
+        const selected = new Set(normalizeTemplateBookmarkRefs(bookmark?.templateRefs).map(function(ref) { return ref.templateId; }));
+        if (!bookmark && seedTemplate) selected.add(seedTemplate.cloudId || seedTemplate.id);
+        const shell = createTemplateBookmarkDialogShell(bookmark ? '编辑模板编组' : '模板编组', '书签只关联现有模板，不会合并、复制或修改原模板。至少选择 1 个模板。');
+        const list = document.createElement('div');
+        list.style.cssText = 'display:grid;gap:8px;';
+        candidates.forEach(function(template) {
+            const templateId = template.cloudId || template.id;
+            const row = document.createElement('label');
+            row.style.cssText = 'display:grid;grid-template-columns:auto 54px minmax(0,1fr);align-items:center;gap:11px;padding:9px 11px;border:1px solid #e6e9ef;border-radius:12px;cursor:pointer;background:#fff;';
+            const check = document.createElement('input');
+            check.type = 'checkbox'; check.value = templateId; check.checked = selected.has(templateId);
+            check.style.cssText = 'width:17px;height:17px;accent-color:#111827;';
+            const preview = document.createElement('div');
+            preview.style.cssText = 'height:42px;border-radius:7px;overflow:hidden;background:#f7f8fa;display:flex;align-items:center;justify-content:center;';
+            renderAssetPreview(preview, { type: 'layout', asset: template, img: template.previewUrl || '' });
+            const text = document.createElement('div');
+            text.style.cssText = 'min-width:0;';
+            const name = document.createElement('div'); name.textContent = template.name || '未命名模板'; name.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:850;color:#17191d;';
+            const info = templateBookmarkDisplayInfo(null, template);
+            const dim = document.createElement('div'); dim.textContent = info ? (info.ratio + ' · ' + info.width + ' × ' + info.height + ' px') : '实际尺寸读取中'; dim.style.cssText = 'margin-top:3px;font-size:11px;color:#667085;font-weight:650;';
+            text.append(name, dim); row.append(check, preview, text); list.appendChild(row);
+        });
+        shell.body.appendChild(list);
+        const footer = document.createElement('div');
+        footer.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;margin-top:18px;';
+        const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = '取消'; cancel.className = 'btn btn-outline'; cancel.onclick = closeTemplateBookmarkDialog;
+        const confirm = document.createElement('button'); confirm.type = 'button'; confirm.textContent = bookmark ? '保存关联' : '创建书签'; confirm.className = 'btn btn-dark';
+        confirm.onclick = function() {
+            const ids = Array.from(list.querySelectorAll('input[type="checkbox"]:checked')).map(function(input) { return input.value; });
+            if (!ids.length) return showToast('请至少选择 1 个模板', true);
+            const templates = ids.map(function(id) { return candidates.find(function(item) { return (item.cloudId || item.id) === id; }); }).filter(Boolean);
+            const refs = templates.map(templateBookmarkRefFromTemplate);
+            if (bookmark) {
+                bookmark.templateRefs = refs;
+                bookmark.coverTemplateId = refs[0]?.templateId || '';
+                bookmark.previewUrl = getTemplateBookmarkCover(bookmark)?.previewUrl || bookmark.previewUrl || '';
+                bookmark._pending = true;
+                notifyParent({ type: 'vf:update-template-bookmark', id: bookmark.cloudId || bookmark.id, name: bookmark.name, data: { templateRefs: refs, coverTemplateId: bookmark.coverTemplateId } });
+                showToast('正在更新模板编组...');
+            } else {
+                const name = (templates[0]?.name || '未命名模板') + '套组';
+                const tempId = genId('template_bookmark');
+                const created = { id: tempId, kind: 'bookmark', name: name, templateRefs: refs, coverTemplateId: refs[0]?.templateId || '', previewUrl: templates[0]?.previewUrl || generatePlaceholderPreview(name, '模板书签'), _pending: true };
+                presetLibrary.unshift(created);
+                notifyParent({ type: 'vf:save-template', templateType: 'bookmark', name: name, data: { templateRefs: refs, coverTemplateId: created.coverTemplateId }, previewDataUrl: created.previewUrl || '', tempId: tempId });
+                showToast('正在创建模板编组...');
+            }
+            closeTemplateBookmarkDialog();
+            renderAssetLibrary();
+        };
+        footer.append(cancel, confirm); shell.body.appendChild(footer);
+    }
+    function openTemplateBookmarkPicker(bookmarkId) {
+        const bookmark = presetLibrary.find(function(item) { return item.id === bookmarkId; });
+        if (!bookmark) return;
+        if (bookmark._lazy) {
+            pendingBookmarkAction = { mode: 'open', id: bookmark.id, asset: bookmark };
+            showToast('正在读取书签关联模板，请稍候…');
+            notifyParent({ type: 'vf:request-template-data', id: bookmark.cloudId || bookmark.id });
+            return;
+        }
+        const members = getLiveTemplateBookmarkMembers(bookmark);
+        const shell = createTemplateBookmarkDialogShell(bookmark.name || '模板编组', '选择一个关联模板打开。书签本身不会修改这些原模板。');
+        if (!members.length) {
+            const empty = document.createElement('div'); empty.textContent = '暂无可用关联模板'; empty.style.cssText = 'padding:18px;border-radius:12px;background:#f8fafc;color:#667085;text-align:center;font-size:13px;font-weight:700;'; shell.body.appendChild(empty);
+            return;
+        }
+        const list = document.createElement('div'); list.style.cssText = 'display:grid;gap:8px;';
+        members.forEach(function(member) {
+            const template = member.template;
+            const info = templateBookmarkDisplayInfo(member.ref, template);
+            const button = document.createElement('button'); button.type = 'button';
+            button.style.cssText = 'display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;padding:10px 11px;border:1px solid #e6e9ef;border-radius:12px;background:#fff;color:#17191d;text-align:left;cursor:pointer;';
+            appendTemplateBookmarkSizeIcon(button, info);
+            const copy = document.createElement('span'); copy.style.cssText = 'min-width:0;display:block;';
+            const name = document.createElement('span'); name.textContent = template.name || member.ref.name || '未命名模板'; name.style.cssText = 'display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:850;';
+            const size = document.createElement('span'); size.textContent = info ? (info.ratio + ' · ' + info.width + ' × ' + info.height + ' px') : '实际尺寸读取中'; size.style.cssText = 'display:block;margin-top:3px;font-size:11px;color:#667085;font-weight:650;';
+            const arrow = document.createElement('span'); arrow.textContent = '›'; arrow.style.cssText = 'font-size:23px;line-height:1;color:#98a2b3;';
+            copy.append(name, size); button.append(copy, arrow);
+            button.onmouseenter = function() { button.style.background = '#f8fafc'; };
+            button.onmouseleave = function() { button.style.background = '#fff'; };
+            button.onclick = function() { closeTemplateBookmarkDialog(); applyLayoutPreset(template.id); };
+            list.appendChild(button);
+        });
+        shell.body.appendChild(list);
     }
     document.addEventListener('click', function(event) {
         if(!event.target.closest('.asset-context-menu') && !event.target.closest('.asset-item')) closeAssetContextMenu();
@@ -6750,6 +7133,22 @@
     }
     function renderAssetPreview(root, { type, asset, img }) {
         root.innerHTML = '';
+        if(type === 'bookmark') {
+            const cover = getTemplateBookmarkCover(asset);
+            if (cover) {
+                // 云端列表先到元数据、预览图后到；在首张关联模板尚未下载预览且图层仍懒加载时，
+                // 暂时沿用书签保存时的封面，避免卡片短暂显示空白。关联模板删除时 cover 为 null，
+                // 则不会误显示已删除模板的旧封面。
+                if (!cover.previewUrl && (!cover.elements || !cover.elements.length) && asset?.previewUrl) {
+                    root.innerHTML = '<img src="' + asset.previewUrl + '" alt="" style="width:100%;height:100%;object-fit:contain;">';
+                    return;
+                }
+                renderAssetPreview(root, { type: cover.kind === 'pack' ? 'pack' : 'layout', asset: cover, img: cover.previewUrl || '' });
+                return;
+            }
+            root.innerHTML = '<div class="asset-bookmark-empty">暂无可用模板</div>';
+            return;
+        }
         // 优先用 Supabase 存储的真实预览图
         var previewImg = asset?.previewUrl || img || '';
         if (previewImg) {
@@ -8490,7 +8889,14 @@
     function buildResizeMenu() {
         var menu = document.getElementById('resize-dropdown-menu');
         if (!menu) return;
-        var html = '';
+        var currentSize = SIZES[currentRatio] || getArtboardPreset(currentArtboardId) || { w:1080, h:1080 };
+        var html = '<div class="resize-inline-custom">'
+            + '<div class="resize-custom-title">自定义尺寸</div>'
+            + '<div class="resize-custom-row">'
+            + '<div class="resize-custom-dimensions"><input id="resize-artboard-width" type="number" min="64" max="6000" step="1" value="' + Math.round(Number(currentSize.w) || 1080) + '" aria-label="画板宽度"><span>×</span><input id="resize-artboard-height" type="number" min="64" max="6000" step="1" value="' + Math.round(Number(currentSize.h) || 1080) + '" aria-label="画板高度"></div>'
+            + '<span class="resize-custom-unit">px</span>'
+            + '<button type="button" class="resize-custom-apply" onclick="resizeCurrentArtboardCustom()">应用</button>'
+            + '</div></div>';
         // 自定义尺寸
         var customBoards = getCustomArtboardPresets();
         if (customBoards.length > 0) {
@@ -8517,6 +8923,38 @@
         });
         menu.innerHTML = html;
     }
+    function resizeCurrentArtboardCustom() {
+        var widthInput = document.getElementById('resize-artboard-width');
+        var heightInput = document.getElementById('resize-artboard-height');
+        var w = Math.round(Number(widthInput?.value));
+        var h = Math.round(Number(heightInput?.value));
+        if(!Number.isFinite(w) || !Number.isFinite(h) || w < 64 || h < 64 || w > 6000 || h > 6000) {
+            showToast('请输入 64 到 6000 px 的宽度和高度', true);
+            return;
+        }
+        var oldSize = SIZES[currentRatio] || getArtboardPreset(currentArtboardId) || { w:1080, h:1080 };
+        if(w === oldSize.w && h === oldSize.h) { closeResizeMenu(); return; }
+        // 自定义画板使用已有的缩放逻辑；固定画板则只修改当前画板的画布尺寸，
+        // 图层本身保持原位置和大小，和上方选择预设尺寸的行为一致。
+        if(isCustomArtboardId(currentArtboardId)) {
+            var preset = getArtboardPreset(currentArtboardId);
+            updateCustomArtboardSize(currentArtboardId, { label:preset.label, w:w, h:h });
+        } else {
+            saveCurrentArtboardState();
+            var ratio = '__custom_resize_' + currentArtboardId;
+            SIZES[ratio] = { w:w, h:h };
+            currentRatio = ratio;
+            if(!artboards[currentArtboardId]) artboards[currentArtboardId] = { id:currentArtboardId, label:getArtboardPreset(currentArtboardId).label, layers:[] };
+            artboards[currentArtboardId].ratio = ratio;
+            artboards[currentArtboardId].canvasSize = { w:w, h:h };
+            syncRatioNav();
+            resizeCanvas();
+            renderCanvas(); renderLayersList(); renderProperties();
+        }
+        saveHistory(true);
+        closeResizeMenu();
+        showToast('已修改画板尺寸：' + w + '×' + h);
+    }
     function changeArtboardSize(ratio) {
         if (currentRatio === ratio) return;
         var newSize = SIZES[ratio] || NEW_ARTBOARD_PRESETS[ratio] || { w: 1080, h: 1080 };
@@ -8536,6 +8974,9 @@
         saveHistory(true);
         // 只改画布尺寸，图层位置和大小保持不变
         currentRatio = ratio;
+        if(!artboards[currentArtboardId]) artboards[currentArtboardId] = { id:currentArtboardId, label:getArtboardPreset(currentArtboardId).label, layers:[] };
+        artboards[currentArtboardId].ratio = ratio;
+        artboards[currentArtboardId].canvasSize = { w:newSize.w, h:newSize.h };
         syncRatioNav();
         resizeCanvas();
         saveHistory(true);
