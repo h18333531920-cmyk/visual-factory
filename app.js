@@ -181,6 +181,13 @@
     libraryMultiSelect: false,
     librarySelectedIds: new Set(),
     recentProjects: [],
+    homeSmartRewrite: {
+      brief: '',
+      referenceImage: null,
+      size: '1:1',
+      customWidth: 1080,
+      customHeight: 1080
+    },
     libraryFilters: {
       query: '',
       kind: 'all',
@@ -780,6 +787,11 @@
   async function renderLibrary({ homeMode = false } = {}) {
     parkActiveToolFrame();
     const canUpload = canUploadAssets();
+    const homeRewrite = state.homeSmartRewrite;
+    const isCustomHomeSize = homeRewrite.size === 'custom';
+    const homeReferenceMarkup = homeRewrite.referenceImage
+      ? `<div class="library-hero-reference-preview"><img src="${escapeAttr(homeRewrite.referenceImage.src)}" alt="${escapeAttr(homeRewrite.referenceImage.name || '参考图')}"><button type="button" id="library-hero-remove-image" aria-label="移除照片">×</button></div>`
+      : '';
     const activeKind = state.libraryFilters.kind || 'all';
     var kindCounts = { source: 0, gallery: 0, template: 0 };
     if (state.librarySources) {
@@ -798,10 +810,41 @@
               <img class="library-hero-kiki" src="./assets/kiki-home.png" alt="" aria-hidden="true">
               <strong>${state.lang === 'zh' ? '你的高效设计伙伴' : 'Your efficient design partner'}</strong>
             </div>
-            <label class="library-hero-command" aria-label="${state.lang === 'zh' ? '输入智能改稿需求' : 'Enter a smart rewrite brief'}">
-              <input id="library-hero-search" placeholder="${state.lang === 'zh' ? '输入改稿需求：标题、利益点、背景、尺寸' : 'Enter copy, offer, background, or size'}" value="${escapeAttr(state.libraryFilters.query)}">
-              <button type="button" id="library-hero-submit" aria-label="${state.lang === 'zh' ? '开始智能改稿' : 'Start smart rewrite'}">↑</button>
-            </label>
+            ${homeMode ? `
+              <section class="library-hero-command library-hero-composer" aria-label="${state.lang === 'zh' ? '输入智能改稿需求' : 'Enter a smart rewrite brief'}">
+                <input id="library-hero-image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                <div class="library-hero-composer-main">
+                  ${homeReferenceMarkup}
+                  <textarea id="library-hero-search" rows="2" placeholder="${state.lang === 'zh' ? '描述你要修改的内容，例如：主标题、利益点标签、背景和食物。' : 'Describe the copy, offer, background, and subject.'}">${escapeHtml(homeRewrite.brief || '')}</textarea>
+                </div>
+                <div class="library-hero-composer-footer">
+                  <button type="button" class="library-hero-composer-control" id="library-hero-add-image" title="添加照片">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"></rect><circle cx="9" cy="10" r="1.5"></circle><path d="m5.5 17 4.5-4.5 3.2 3.2 2.2-2.2 3 3"></path></svg><span>添加照片</span>
+                  </button>
+                  <label class="library-hero-composer-control library-hero-size-control" title="定义尺寸">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="3"></rect></svg>
+                    <select id="library-hero-size" aria-label="定义尺寸">
+                      <option value="1:1" ${homeRewrite.size === '1:1' ? 'selected' : ''}>1:1</option>
+                      <option value="3:4" ${homeRewrite.size === '3:4' ? 'selected' : ''}>3:4</option>
+                      <option value="2:3" ${homeRewrite.size === '2:3' ? 'selected' : ''}>2:3</option>
+                      <option value="9:16" ${homeRewrite.size === '9:16' ? 'selected' : ''}>9:16</option>
+                      <option value="16:9" ${homeRewrite.size === '16:9' ? 'selected' : ''}>16:9</option>
+                      <option value="head" ${homeRewrite.size === 'head' ? 'selected' : ''}>头图</option>
+                      <option value="splash" ${homeRewrite.size === 'splash' ? 'selected' : ''}>开屏</option>
+                      <option value="banner" ${homeRewrite.size === 'banner' ? 'selected' : ''}>Banner</option>
+                      <option value="custom" ${isCustomHomeSize ? 'selected' : ''}>自定义</option>
+                    </select>
+                  </label>
+                  <span class="library-hero-custom-size" id="library-hero-custom-size" ${isCustomHomeSize ? '' : 'hidden'}>
+                    <input id="library-hero-width" type="number" min="64" max="6000" value="${escapeAttr(String(homeRewrite.customWidth || 1080))}" aria-label="宽度"><b>×</b><input id="library-hero-height" type="number" min="64" max="6000" value="${escapeAttr(String(homeRewrite.customHeight || 1080))}" aria-label="高度">
+                  </span>
+                  <button type="button" id="library-hero-submit" aria-label="${state.lang === 'zh' ? '开始智能改稿' : 'Start smart rewrite'}">↑</button>
+                </div>
+              </section>` : `
+              <label class="library-hero-command" aria-label="${state.lang === 'zh' ? '输入智能改稿需求' : 'Enter a smart rewrite brief'}">
+                <input id="library-hero-search" placeholder="${state.lang === 'zh' ? '输入改稿需求：标题、利益点、背景、尺寸' : 'Enter copy, offer, background, or size'}" value="${escapeAttr(state.libraryFilters.query)}">
+                <button type="button" id="library-hero-submit" aria-label="${state.lang === 'zh' ? '开始智能改稿' : 'Start smart rewrite'}">↑</button>
+              </label>`}
           </div>
           <div class="library-module-row">
             <button type="button" data-route="library"><strong>${state.lang === 'zh' ? '超级库' : 'Super Library'}</strong><span>›</span></button>
@@ -1290,12 +1333,62 @@
       }, 200);
     });
     const heroSearchInput = document.getElementById('library-hero-search');
+    const heroImageInput = document.getElementById('library-hero-image-input');
+    const heroSize = document.getElementById('library-hero-size');
+    const heroCustomSize = document.getElementById('library-hero-custom-size');
+    const heroWidth = document.getElementById('library-hero-width');
+    const heroHeight = document.getElementById('library-hero-height');
+    const homeRewriteState = state.homeSmartRewrite;
+    const readHeroReferenceImage = function(file) {
+      if (!file) return;
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        alert(state.lang === 'zh' ? '请选择 JPG、PNG 或 WEBP 图片。' : 'Choose a JPG, PNG, or WEBP image.');
+        return;
+      }
+      if (file.size > 12 * 1024 * 1024) {
+        alert(state.lang === 'zh' ? '照片请控制在 12MB 以内。' : 'Keep the image under 12MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function() {
+        homeRewriteState.referenceImage = { src: String(reader.result || ''), name: file.name, mimeType: file.type };
+        renderLibrary({ homeMode: true });
+      };
+      reader.readAsDataURL(file);
+    };
     const openHeroSmartRewrite = function() {
-      openSmartRewriteTool(heroSearchInput?.value.trim() || '');
+      homeRewriteState.brief = heroSearchInput?.value.trim() || '';
+      homeRewriteState.size = heroSize?.value || homeRewriteState.size || '1:1';
+      homeRewriteState.customWidth = Math.max(64, Math.min(6000, Number(heroWidth?.value) || 1080));
+      homeRewriteState.customHeight = Math.max(64, Math.min(6000, Number(heroHeight?.value) || 1080));
+      const size = homeRewriteState.size === 'custom'
+        ? { w: homeRewriteState.customWidth, h: homeRewriteState.customHeight, label: homeRewriteState.customWidth + ' × ' + homeRewriteState.customHeight }
+        : { ratio: homeRewriteState.size };
+      openSmartRewriteTool(homeRewriteState.brief, {
+        size: size,
+        referenceImages: homeRewriteState.referenceImage ? [homeRewriteState.referenceImage] : []
+      });
     };
     document.getElementById('library-hero-submit')?.addEventListener('click', openHeroSmartRewrite);
+    document.getElementById('library-hero-add-image')?.addEventListener('click', function() { heroImageInput?.click(); });
+    heroImageInput?.addEventListener('change', function(event) { readHeroReferenceImage(event.target.files?.[0]); });
+    document.getElementById('library-hero-remove-image')?.addEventListener('click', function() {
+      homeRewriteState.referenceImage = null;
+      renderLibrary({ homeMode: true });
+    });
+    heroSize?.addEventListener('change', function() {
+      homeRewriteState.size = heroSize.value;
+      if (heroCustomSize) heroCustomSize.hidden = heroSize.value !== 'custom';
+      if (heroSize.value === 'custom') heroWidth?.focus();
+    });
+    [heroWidth, heroHeight].forEach(function(input) {
+      input?.addEventListener('input', function() {
+        homeRewriteState.customWidth = Math.max(64, Math.min(6000, Number(heroWidth?.value) || 1080));
+        homeRewriteState.customHeight = Math.max(64, Math.min(6000, Number(heroHeight?.value) || 1080));
+      });
+    });
     heroSearchInput?.addEventListener('keydown', event => {
-      if (event.key === 'Enter') {
+      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey || event.target.tagName !== 'TEXTAREA')) {
         event.preventDefault();
         openHeroSmartRewrite();
       }
@@ -4333,13 +4426,13 @@ function libraryTagsForForm(formData, kind) {
     }
   }
 
-  function openSmartRewriteTool(initialBrief = '') {
+  function openSmartRewriteTool(initialBrief = '', options = {}) {
     location.hash = 'static';
     navigate('static');
     const frame = state.toolFrames.static;
     if (!frame) return;
     const openModal = function() {
-      frame.contentWindow.postMessage({ type: 'vf:open-smart-rewrite', brief: initialBrief }, location.origin);
+      frame.contentWindow.postMessage({ type: 'vf:open-smart-rewrite', brief: initialBrief, options: options }, location.origin);
     };
     if (frame.dataset.staticAssetsReady === '1') {
       setTimeout(openModal, 0);

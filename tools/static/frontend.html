@@ -284,6 +284,10 @@
         .smart-rewrite-body { padding: 20px 26px 24px; }
         .smart-rewrite-input { width: 100%; min-height: 156px; box-sizing: border-box; resize: vertical; border: 1px solid #dce1e8; border-radius: 12px; outline: none; padding: 14px 15px; color: var(--text-main); background: #fbfcfd; font: inherit; font-size: 14px; line-height: 1.65; }
         .smart-rewrite-input:focus { border-color: #0f9f95; box-shadow: 0 0 0 3px rgba(15,159,149,.10); background: #fff; }
+        .smart-rewrite-reference { display:none; align-items:center; gap:10px; margin-top:12px; padding:8px 10px; border:1px solid #e2e6eb; border-radius:10px; background:#fff; color:#626d79; font-size:12px; font-weight:700; }
+        .smart-rewrite-reference.is-visible { display:flex; }
+        .smart-rewrite-reference img { width:38px; height:38px; border-radius:6px; object-fit:cover; border:1px solid #e3e6eb; }
+        .smart-rewrite-reference strong { color:#222831; }
         .smart-rewrite-guides { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
         .smart-rewrite-guide { border: 1px solid #e1e5ea; border-radius: 999px; padding: 6px 10px; color: #647080; background: #fff; font-size: 11px; font-weight: 700; }
         .smart-rewrite-note { margin: 14px 0 0; color: #6a7380; font-size: 12px; line-height: 1.6; }
@@ -2075,6 +2079,7 @@
         </div>
         <div class="smart-rewrite-body">
             <textarea class="smart-rewrite-input" id="smart-rewrite-input" placeholder="例如：做一张 1:1 社媒图，主标题改为“周末限定套餐”，60% off，免配送，活动时间 06.01-06.15，背景换成绿色餐桌上的汉堡套餐。"></textarea>
+            <div class="smart-rewrite-reference" id="smart-rewrite-reference" aria-live="polite"></div>
             <div class="smart-rewrite-guides" aria-hidden="true">
                 <span class="smart-rewrite-guide">主标题</span>
                 <span class="smart-rewrite-guide">折扣</span>
@@ -2420,6 +2425,7 @@
     let pendingGroupPresetId = '';
     let pendingTagPresetId = '';
     let pendingLogoAssetId = '';
+    let smartRewriteLaunchOptions = { size: null, referenceImages: [] };
     const smartRewriteTemplateResolvers = new Map();
     let currentAssetTab = 'layout';
     let draggingLayerId = null;
@@ -5849,11 +5855,35 @@
         modal.style.display = 'none';
         modal.setAttribute('aria-hidden', 'true');
     }
-    function openSmartRewrite(initialBrief = '') {
+    function smartRewriteReferences(value) {
+        return (Array.isArray(value) ? value : []).filter(function(item) {
+            return item && typeof item.src === 'string' && /^data:image\/(?:png|jpe?g|webp);base64,/i.test(item.src);
+        }).slice(0, 1).map(function(item) {
+            return { src: item.src, name: String(item.name || '已添加照片'), mimeType: item.mimeType || '' };
+        });
+    }
+    function renderSmartRewriteReference() {
+        const node = document.getElementById('smart-rewrite-reference');
+        const image = smartRewriteLaunchOptions.referenceImages[0];
+        if (!node) return;
+        if (!image) {
+            node.classList.remove('is-visible');
+            node.innerHTML = '';
+            return;
+        }
+        node.classList.add('is-visible');
+        node.innerHTML = '<img src="' + escapeHtml(image.src) + '" alt=""><span><strong>已添加照片</strong><br>将直接作为新稿背景</span>';
+    }
+    function openSmartRewrite(initialBrief = '', options = {}) {
         const modal = document.getElementById('smart-rewrite-modal');
         const input = document.getElementById('smart-rewrite-input');
         if (!modal || !input) return;
         if (initialBrief) input.value = String(initialBrief);
+        smartRewriteLaunchOptions = {
+            size: options?.size || null,
+            referenceImages: smartRewriteReferences(options?.referenceImages)
+        };
+        renderSmartRewriteReference();
         modal.style.display = 'flex';
         modal.setAttribute('aria-hidden', 'false');
         setTimeout(function() { input.focus(); }, 30);
@@ -6023,6 +6053,9 @@
         return { name: template?.name, ratio: template?.size, canvasW: template?.canvasW, canvasH: template?.canvasH, elements: template?.elements || [], isImageTemplate: template?.isImageTemplate, previewUrl: template?.previewUrl || '' };
     }
     function smartSourceSize(source, brief) {
+        if (brief?.pixelSize?.w && brief?.pixelSize?.h) {
+            return { ratio: 'custom', w: Number(brief.pixelSize.w), h: Number(brief.pixelSize.h) };
+        }
         const requested = brief.ratio ? (SIZES[brief.ratio] || NEW_ARTBOARD_PRESETS[brief.ratio]) : null;
         if (requested) return { ratio: brief.ratio, w: requested.w, h: requested.h };
         const declared = SIZES[source?.ratio] || NEW_ARTBOARD_PRESETS[source?.ratio];
@@ -6277,6 +6310,16 @@
         const input = document.getElementById('smart-rewrite-input');
         const button = document.getElementById('smart-rewrite-submit');
         const brief = parseSmartRewriteBrief(input?.value || '');
+        const launchSize = smartRewriteLaunchOptions?.size || null;
+        if (launchSize && Number.isFinite(Number(launchSize.w)) && Number.isFinite(Number(launchSize.h))) {
+            brief.pixelSize = {
+                w: Math.max(64, Math.min(6000, Math.round(Number(launchSize.w)))),
+                h: Math.max(64, Math.min(6000, Math.round(Number(launchSize.h))))
+            };
+            brief.ratio = '';
+        } else if (launchSize?.ratio) {
+            brief.ratio = String(launchSize.ratio);
+        }
         if (!brief.raw) return showToast('请先输入改稿需求', true);
         if (!canCreateCustomArtboard()) return;
         if (!presetLibrary.length) return showToast('模板库里还没有可用模板', true);
@@ -6292,7 +6335,8 @@
             let sourceLayers = source.elements || [];
             if (!sourceLayers.length) throw new Error('该模板缺少可编辑图层');
             sourceLayers = adaptSmartLayersToSize(sourceLayers, sourceSize, size);
-            const localBackground = await smartBackgroundAsset(brief);
+            const referenceBackground = smartRewriteLaunchOptions.referenceImages[0] || null;
+            const localBackground = referenceBackground || await smartBackgroundAsset(brief);
             const nextLayers = smartUpdateLayers(sourceLayers, brief, size, localBackground);
             if (brief.background && !localBackground) {
                 try {
@@ -6573,7 +6617,7 @@
     window.addEventListener('message', function(event) {
         if (!event.data || !event.data.type) return;
         if (event.data.type === 'vf:open-smart-rewrite') {
-            openSmartRewrite(event.data.brief || '');
+            openSmartRewrite(event.data.brief || '', event.data.options || {});
         } else if (event.data.type === 'vf:sync-progress') {
             if (event.data.status === 'done' && event.data.sourceId) {
                 var tempId = event.data.tempId || '';

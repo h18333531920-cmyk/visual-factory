@@ -6826,6 +6826,205 @@ body .app-shell[data-route="home"] .library-hero-command {
   margin-top: 18px;
 }
 
+/* Home prompt composer: reference photo, brief, and output size stay in one focused surface. */
+body .app-shell[data-route="home"] .library-hero-composer {
+  display: block;
+  width: min(980px, calc(100% - 72px));
+  min-height: 166px;
+  padding: 16px;
+  border: 1px solid #d9dee5;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 18px 46px rgba(16, 22, 31, 0.06);
+}
+
+body .app-shell[data-route="home"] .library-hero-composer-main {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  min-height: 92px;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 88px;
+  padding: 7px 8px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: #14181e;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 560;
+  line-height: 1.55;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer textarea::placeholder {
+  color: #9ba4af;
+  font-weight: 500;
+}
+
+body .app-shell[data-route="home"] .library-hero-reference-preview {
+  position: relative;
+  width: 70px;
+  min-width: 70px;
+  height: 88px;
+  overflow: hidden;
+  border: 1px solid #dce1e7;
+  border-radius: 9px;
+  background: #f4f6f7;
+}
+
+body .app-shell[data-route="home"] .library-hero-reference-preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+body .app-shell[data-route="home"] .library-hero-reference-preview button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(17, 21, 28, 0.82);
+  color: #fff;
+  font-size: 17px;
+  line-height: 18px;
+  box-shadow: none;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 9px;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid #e1e5eb;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #3f4854;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer-control:hover {
+  border-color: #bfc7d1;
+  background: #f8fafb;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer-control svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+body .app-shell[data-route="home"] .library-hero-size-control {
+  position: relative;
+}
+
+body .app-shell[data-route="home"] .library-hero-size-control select {
+  min-width: 60px;
+  border: 0;
+  outline: 0;
+  appearance: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+body .app-shell[data-route="home"] .library-hero-size-control::after {
+  content: "⌄";
+  color: #7f8995;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+body .app-shell[data-route="home"] .library-hero-custom-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 0 9px;
+  border: 1px solid #e1e5eb;
+  border-radius: 9px;
+  color: #8a94a0;
+  background: #fff;
+}
+
+body .app-shell[data-route="home"] .library-hero-custom-size input {
+  width: 48px;
+  border: 0;
+  outline: 0;
+  color: #1d2530;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+body .app-shell[data-route="home"] .library-hero-custom-size b {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer #library-hero-submit {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0;
+  border-radius: 999px;
+  background: #11151c;
+  color: #ffffff;
+  box-shadow: none;
+  font-size: 27px;
+  line-height: 1;
+}
+
+@media (max-width: 760px) {
+  body .app-shell[data-route="home"] .library-hero-composer {
+    width: calc(100% - 28px);
+    min-height: 180px;
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  body .app-shell[data-route="home"] .library-hero-composer textarea {
+    min-height: 84px;
+    font-size: 14px;
+  }
+
+  body .app-shell[data-route="home"] .library-hero-composer-footer {
+    flex-wrap: wrap;
+  }
+
+  body .app-shell[data-route="home"] .library-hero-composer #library-hero-submit {
+    margin-left: auto;
+  }
+}
+
 body .app-shell[data-route="home"] .library-module-row button {
   overflow: visible;
   background: #ffffff !important;
