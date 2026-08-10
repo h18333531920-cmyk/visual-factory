@@ -6146,6 +6146,8 @@
         let y = Number(layer?.y);
         if (!Number.isFinite(y)) y = height * .2;
         const displayText = smartHeadlineLines(title, maxWidth, size);
+        // 两行标题作为一个视觉整体居中，避免沿用旧模板的偏置文本框。
+        if (displayText.indexOf('\n') !== -1) x = width * .5;
         return {
             x: Math.round(Math.max(maxWidth / 2 + width * .035, Math.min(width - maxWidth / 2 - width * .035, x))),
             y: Math.round(Math.max(height * .1, Math.min(height * .4, y))),
@@ -6181,6 +6183,8 @@
                 editableText[0].rotation = 0;
                 editableText[0].fontSize = titleLayout.fontSize;
                 editableText[0].maxWidth = titleLayout.maxWidth;
+                editableText[0].font = smartDelaFont();
+                editableText[0].fontWeight = 400;
                 editableText[0].lineHeight = .96;
                 editableText[0].resizeMode = 'fixed';
                 editableText[0].textBoxAnchor = 'center';
@@ -6191,7 +6195,7 @@
                     if (!/keeta|gcc\s*design/i.test(String(layer.text || ''))) layer.visible = false;
                 });
             } else {
-                next.push({ id: genId('text'), type: 'text', x: Math.round(size.w * .5), y: Math.round(size.h * .16), zIndex: Math.max.apply(null, next.map(function(layer) { return Number(layer.zIndex) || 0; })) + 1, scale: 1, rotation: 0, text: brief.title, font: 'Arial Black, sans-serif', fontWeight: 900, fontSize: smartTitleFontSize(brief.title, size), lineHeight: .96, letterSpacing: 0, maxWidth: Math.round(size.w * .84), textAlign: 'center', textAlignMode: 'manual', textBoxAnchor: 'center', textCol: '#111827', resizeMode: 'fixed', visible: true, locked: false, _templateLayer: true });
+                next.push({ id: genId('text'), type: 'text', x: Math.round(size.w * .5), y: Math.round(size.h * .16), zIndex: Math.max.apply(null, next.map(function(layer) { return Number(layer.zIndex) || 0; })) + 1, scale: 1, rotation: 0, text: brief.title, font: smartDelaFont(), fontWeight: 400, fontSize: smartTitleFontSize(brief.title, size), lineHeight: .96, letterSpacing: 0, maxWidth: Math.round(size.w * .84), textAlign: 'center', textAlignMode: 'manual', textBoxAnchor: 'center', textCol: '#111827', resizeMode: 'fixed', visible: true, locked: false, _templateLayer: true });
             }
         }
         let discountLayer = next.find(function(layer) { return layer.type === 'discountTag'; });
