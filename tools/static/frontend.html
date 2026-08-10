@@ -5888,17 +5888,29 @@
         }
         return '';
     }
+    function smartRewriteFieldValue(text, labels) {
+        const labelPattern = labels.map(function(label) {
+            return String(label).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }).join('|');
+        // 字段可以写在同一行；读取到下一个已知字段前停止，避免整段需求被当成标题。
+        const allLabels = '主标题|标题|文案|利益点|优惠|尺寸|比例|背景图|背景|食物|主体|活动时间|时间|日期|优惠码|coupon';
+        const pattern = new RegExp('(?:^|[\\n，,；;\\s])(?:' + labelPattern + ')\\s*(?:改为|换成|是|为)?\\s*[：:]?\\s*[“\\\"\']?(.+?)(?=(?:[\\n，,；;\\s]+)(?:' + allLabels + ')\\s*(?:改为|换成|是|为)?\\s*[：:]|$)', 'i');
+        const match = String(text || '').match(pattern);
+        return match && match[1] ? smartRewriteText(match[1].replace(/[”\\\"\']+$/, '')) : '';
+    }
     function parseSmartRewriteBrief(rawText) {
         const raw = smartRewriteText(rawText);
-        const title = smartRewriteExtractValue(raw, [
+        const title = smartRewriteFieldValue(raw, ['主标题', '标题', '文案']) || smartRewriteExtractValue(raw, [
             /(?:主标题|标题|文案)\s*(?:改为|换成|是|为|：|:)?\s*[“\"']?([^”\"'，,。；;\n]+)[”\"']?/i,
             /(?:title)\s*(?:to|:|：)\s*[“\"']?([^”\"'，,。；;\n]+)[”\"']?/i
         ]);
-        const background = smartRewriteExtractValue(raw, [
+        const background = smartRewriteFieldValue(raw, ['背景图', '背景']) || smartRewriteExtractValue(raw, [
             /(?:背景|背景图)\s*(?:改为|换成|是|为|：|:)?\s*[“\"']?([^”\"'，,。；;\n]+)[”\"']?/i,
             /(?:换成|改成)\s*[“\"']?([^”\"'，,。；;\n]+?)背景/i
         ]);
-        const discountMatch = raw.match(/(\d{1,3})\s*%\s*(?:off|优惠|折)?/i) || raw.match(/(\d{1,2})\s*折/);
+        const food = smartRewriteFieldValue(raw, ['食物', '主体']);
+        const benefit = smartRewriteFieldValue(raw, ['利益点', '优惠']);
+        const discountMatch = benefit.match(/(\d{1,3})\s*%\s*(?:off|优惠|折)?/i) || benefit.match(/(\d{1,2})\s*折/) || raw.match(/(\d{1,3})\s*%\s*(?:off|优惠|折)?/i) || raw.match(/(\d{1,2})\s*折/);
         const dateRange = smartRewriteExtractValue(raw, [
             /(?:活动时间|时间|日期)\s*(?:是|为|：|:)?\s*([^，,。；;\n]+)/i,
             /(\d{1,2}[./月-]\d{1,2}\s*(?:[-~至到]\s*\d{1,2}[./月-]\d{1,2})?)/
@@ -5909,6 +5921,8 @@
             raw,
             title,
             background,
+            food,
+            benefit,
             ratio: smartRewriteRatioFromText(raw),
             discount: discountMatch ? String(discountMatch[1]) : '',
             delivery,
@@ -5929,6 +5943,24 @@
         return presetLibrary.slice().sort(function(a, b) {
             return smartTemplateScore(b, brief) - smartTemplateScore(a, brief);
         })[0] || null;
+    }
+    async function chooseEditableSmartRewriteTemplate(brief) {
+        const candidates = presetLibrary.slice().sort(function(a, b) {
+            return smartTemplateScore(b, brief) - smartTemplateScore(a, brief);
+        });
+        for (const candidate of candidates) {
+            try {
+                const loaded = await requestSmartTemplateData(candidate);
+                const source = smartTemplateSource(loaded, brief);
+                const hasEditableLayers = source && !source.isImageTemplate && (source.elements || []).some(function(layer) {
+                    return ['text', 'tag', 'discountTag', 'image', 'logo', 'arc'].includes(layer.type);
+                });
+                if (hasEditableLayers) return { template: loaded, source: source };
+            } catch (error) {
+                console.warn('Skipping unreadable smart rewrite template:', candidate?.name, error);
+            }
+        }
+        throw new Error('模板库中没有可编辑模板，无法安全改写文字和利益点');
     }
     function requestSmartTemplateData(template) {
         if (!template?._lazy) return Promise.resolve(template);
@@ -5994,7 +6026,7 @@
     }
     async function smartBackgroundAsset(brief) {
         if (!brief.background) return null;
-        const terms = smartRewriteText(brief.background).toLowerCase().split(/[\s,，、]+/).filter(function(term) { return term.length > 1; });
+        const terms = smartRewriteText([brief.background, brief.food].filter(Boolean).join(' ')).toLowerCase().split(/[\s,，、]+/).filter(function(term) { return term.length > 1; });
         const candidates = referenceElements.filter(function(item) { return item?.src; })
             .concat(logoAssets.filter(function(item) {
                 return item && ((item.tags || []).includes('背景') || (item.tags || []).includes('其他素材'));
@@ -6002,7 +6034,12 @@
         const candidate = candidates.sort(function(a, b) {
             return smartBackgroundScore(b, terms) - smartBackgroundScore(a, terms);
         })[0] || null;
-        if (!candidate) return null;
+        // 只接受确实命中需求关键词的素材，不能因为它被归类为“背景”就拿来冒充匹配结果。
+        const matchedTerms = candidate ? terms.filter(function(term) {
+            const value = ((candidate.name || '') + ' ' + (candidate.category || '') + ' ' + (candidate.tags || []).join(' ')).toLowerCase();
+            return value.includes(term);
+        }).length : 0;
+        if (!candidate || !matchedTerms) return null;
         if ((candidate._lazy || !candidate.src) && candidate.cloudId) {
             const loaded = await requestSmartTemplateData(candidate);
             return loaded?.src ? loaded : null;
@@ -6027,22 +6064,32 @@
             return layer;
         });
         if (!next.length) return next;
-        const editableText = next.filter(function(layer) { return layer.type === 'text' && !layer.locked; })
+        const editableText = next.filter(function(layer) { return layer.type === 'text'; })
             .sort(function(a, b) { return (Number(b.fontSize) || 0) - (Number(a.fontSize) || 0); });
         if (brief.title) {
             if (editableText[0]) {
                 editableText[0].text = brief.title;
                 editableText[0].locked = false;
+                editableText[0].visible = true;
+                // 旧模板的其他活动文案会与新标题冲突；保留品牌文字，其余隐藏。
+                editableText.slice(1).forEach(function(layer) {
+                    if (!/keeta|gcc\s*design/i.test(String(layer.text || ''))) layer.visible = false;
+                });
             } else {
                 next.push({ id: genId('text'), type: 'text', x: Math.round(size.w * .16), y: Math.round(size.h * .22), zIndex: Math.max.apply(null, next.map(function(layer) { return Number(layer.zIndex) || 0; })) + 1, scale: 1, rotation: 0, text: brief.title, font: 'Arial Black, sans-serif', fontWeight: 900, fontSize: Math.max(44, Math.round(size.w * .08)), lineHeight: .95, letterSpacing: 0, maxWidth: Math.round(size.w * .58), textAlign: 'left', textAlignMode: 'manual', textBoxAnchor: 'center', textCol: '#111827', resizeMode: 'autoWidth', visible: true, locked: false, _templateLayer: true });
             }
         }
-        const discountLayer = next.find(function(layer) { return layer.type === 'discountTag' && !layer.locked; });
+        let discountLayer = next.find(function(layer) { return layer.type === 'discountTag'; });
+        if (!discountLayer && brief.discount) {
+            discountLayer = { id: genId('discountTag'), type: 'discountTag', x: Math.round(size.w * .30), y: Math.round(size.h * .73), zIndex: Math.max.apply(null, next.map(function(layer) { return Number(layer.zIndex) || 0; })) + 1, scale: 1, rotation: -5, shadowThickness: 12, shadowOpacity: .45, letterSpacing: -3, tagPaddingX: 34, tagPaddingY: 15, tagTextOffsetY: 0, mainFontSize: Math.max(52, Math.round(size.w * .085)), topFontSize: Math.max(28, Math.round(size.w * .048)), bottomFontSize: Math.max(22, Math.round(size.w * .04)), sideGap: 8, sideLineGap: -2, font: 'Arial Black, sans-serif', bgCol: '#F60083', textCol: '#FFFFFF', shadowCol: '#111827', visible: true, locked: false, _templateLayer: true };
+            next.push(discountLayer);
+        }
         if (discountLayer && brief.discount) {
             discountLayer.mainText = brief.discount;
             discountLayer.topText = '%';
             discountLayer.bottomText = 'off';
             discountLayer.locked = false;
+            discountLayer.visible = true;
         }
         const tagValues = [brief.delivery, brief.dateRange, brief.coupon ? 'Code ' + brief.coupon : ''].filter(Boolean);
         const editableTags = next.filter(function(layer) { return layer.type === 'tag' && !layer.locked; });
@@ -6071,9 +6118,10 @@
     async function smartGenerateBackground(brief, ratio) {
         if (!brief.background) return '';
         requireAIBackendRuntime();
+        const prompt = [brief.background, brief.food ? ('主体为' + brief.food) : '', '商业广告背景，画面干净，预留清晰文案空间'].filter(Boolean).join('，');
         const res = await fetch('/api/generate-image', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: brief.background, ratio: ratio || '1:1', provider: aiProvider })
+            body: JSON.stringify({ prompt: prompt, ratio: ratio || '1:1', provider: aiProvider })
         });
         const data = await readAIResponse(res, '智能改稿生图');
         const result = data.success && data.pending && data.taskId ? await pollAIImageTask(data.taskId, data.provider || aiProvider) : data;
@@ -6086,21 +6134,17 @@
         const brief = parseSmartRewriteBrief(input?.value || '');
         if (!brief.raw) return showToast('请先输入改稿需求', true);
         if (!canCreateCustomArtboard()) return;
-        const template = chooseSmartRewriteTemplate(brief);
-        if (!template) return showToast('模板库里还没有可用模板', true);
+        if (!presetLibrary.length) return showToast('模板库里还没有可用模板', true);
         const originalText = button?.textContent || '生成改稿';
         if (button) { button.disabled = true; button.textContent = '正在生成…'; }
         try {
-            showToast('正在读取云端模板…');
-            const loadedTemplate = await requestSmartTemplateData(template);
-            const source = smartTemplateSource(loadedTemplate, brief);
+            showToast('正在读取可编辑云端模板…');
+            const selected = await chooseEditableSmartRewriteTemplate(brief);
+            const source = selected.source;
             if (!source) throw new Error('模板没有可用画板');
             const sourceSize = smartSourceSize(source, {});
             const size = smartSourceSize(source, brief);
             let sourceLayers = source.elements || [];
-            if (source.isImageTemplate && !sourceLayers.length && source.previewUrl) {
-                sourceLayers = [{ id: genId('image'), type: 'image', x: size.w / 2, y: size.h / 2, zIndex: 1, scale: 1, rotation: 0, flipX: false, baseW: size.w, baseH: size.h, src: source.previewUrl, fitMode: 'cover', visible: true, locked: false }];
-            }
             if (!sourceLayers.length) throw new Error('该模板缺少可编辑图层');
             sourceLayers = adaptSmartLayersToSize(sourceLayers, sourceSize, size);
             const localBackground = await smartBackgroundAsset(brief);
