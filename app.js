@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-  const TOOL_UI_VERSION = '20260810-template-bookmark-member-name-v225';
+const TOOL_UI_VERSION = '20260811-logo-matrix-gap-controls-v249';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -4532,7 +4532,7 @@ function libraryTagsForForm(formData, kind) {
           .order('created_at', { ascending: false })
           .limit(5000),
         state.supabase.from('vf_source_files')
-          .select('id,title,source_filename,source_ext,tags,source_path,country_id,activity_id,created_at')
+          .select('id,title,source_filename,source_ext,tags,source_path,country_id,activity_id,created_at,source_size_bytes')
           .order('created_at', { ascending: true })
       ]);
 
@@ -4554,9 +4554,11 @@ function libraryTagsForForm(formData, kind) {
         return 'source';
       }
 
-      // 计算素材累计增长（按日期 + 类型）
+      // 计算素材累计增长（按日期 + 类型）+ 存储空间统计
       var sourceCountByDate = {};
       var sourceTypes = { source: 0, gallery: 0, template: 0 };
+      var totalStorageBytes = 0;
+      var storageByType = { source: 0, gallery: 0, template: 0 };
       sources.forEach(function(s) {
         var kind = sourceKind(s);
         if (!sourceCountByDate[kind]) sourceCountByDate[kind] = {};
@@ -4567,6 +4569,9 @@ function libraryTagsForForm(formData, kind) {
           sourceCountByDate.all[d] = (sourceCountByDate.all[d] || 0) + 1;
         }
         sourceTypes[kind] = (sourceTypes[kind] || 0) + 1;
+        var bytes = Number(s.source_size_bytes) || 0;
+        totalStorageBytes += bytes;
+        storageByType[kind] = (storageByType[kind] || 0) + bytes;
       });
 
       // 按日期排序并计算累计值
@@ -4590,7 +4595,7 @@ function libraryTagsForForm(formData, kind) {
       // labels 也只保留 range 内的
       assetGrowth.labels = allDates.filter(function(d) { return d >= rangeStartStr; });
 
-      return { events: events, sources: sources, assetGrowth: assetGrowth, sourceTypes: sourceTypes, startISO: startISO };
+      return { events: events, sources: sources, assetGrowth: assetGrowth, sourceTypes: sourceTypes, startISO: startISO, totalStorageBytes: totalStorageBytes, storageByType: storageByType };
     } catch (e) {
       console.warn('Analytics data fetch failed:', e);
       return null;
@@ -4702,7 +4707,7 @@ function libraryTagsForForm(formData, kind) {
           </div>\
           <div class="ana-chart-card full"><div class="ana-chart-header"><span class="ana-chart-title">' + (zh ? '用户活跃度趋势' : 'User Activity Trend') + '</span><span><span class="ana-chart-sub" id="ana-today-active">-</span><span class="ana-chart-sub-label">' + (zh ? '今日活跃' : 'today active') + '</span></span></div><div class="ana-chart-wrap-sm"><canvas id="ana-line"></canvas></div></div>\
           <div class="ana-charts-row">\
-            <div class="ana-chart-card full"><div class="ana-chart-header"><span class="ana-chart-title">' + (zh ? '素材总量趋势' : 'Asset Growth') + '</span><span><span class="ana-chart-sub">' + (zh ? '总量' : 'Total') + ' </span><span class="ana-chart-sub" id="ana-asset-total">-</span><span class="ana-chart-sub-sep"> | </span><span class="ana-chart-sub">' + (zh ? '案例库' : 'Case') + ' </span><span class="ana-chart-sub" id="ana-asset-source" style="color:#3b82f6">-</span><span class="ana-chart-sub-sep"> | </span><span class="ana-chart-sub">' + (zh ? '图库' : 'Gallery') + ' </span><span class="ana-chart-sub" id="ana-asset-gallery" style="color:#f59e0b">-</span><span class="ana-chart-sub-sep"> | </span><span class="ana-chart-sub">' + (zh ? '模版库' : 'Template') + ' </span><span class="ana-chart-sub" id="ana-asset-template" style="color:#8b5cf6">-</span></span></div><div class="ana-chart-wrap-sm"><canvas id="ana-asset-growth"></canvas></div></div>\
+            <div class="ana-chart-card full"><div class="ana-chart-header"><span class="ana-chart-title">' + (zh ? '素材总量趋势' : 'Asset Growth') + '</span><span><span class="ana-chart-sub">' + (zh ? '总量' : 'Total') + ' </span><span class="ana-chart-sub" id="ana-asset-total">-</span><span class="ana-chart-sub-sep"> | </span><span class="ana-chart-sub">' + (zh ? '案例库' : 'Case') + ' </span><span class="ana-chart-sub" id="ana-asset-source" style="color:#3b82f6">-</span><span class="ana-chart-sub-sep"> | </span><span class="ana-chart-sub">' + (zh ? '图库' : 'Gallery') + ' </span><span class="ana-chart-sub" id="ana-asset-gallery" style="color:#f59e0b">-</span><span class="ana-chart-sub-sep"> | </span><span class="ana-chart-sub">' + (zh ? '模版库' : 'Template') + ' </span><span class="ana-chart-sub" id="ana-asset-template" style="color:#8b5cf6">-</span><span class="ana-chart-sub-sep"> | </span><span class="ana-chart-sub">' + (zh ? '已用' : 'Used') + ' </span><span class="ana-chart-sub" id="ana-storage-used" style="color:#ef4444">-</span><span class="ana-chart-sub-sep"> / </span><span class="ana-chart-sub">' + (zh ? '总量' : 'Total') + ' </span><span class="ana-chart-sub" id="ana-storage-limit" style="color:#6b7280">-</span></span></div><div class="ana-chart-wrap-sm"><canvas id="ana-asset-growth"></canvas></div></div>\
             <div class="ana-chart-card full"><div class="ana-chart-header"><span class="ana-chart-title">' + (zh ? '操作时段分布' : 'Peak Hours') + '</span><span><span class="ana-chart-sub" id="ana-peak-hour">-</span><span class="ana-chart-sub-label">' + (zh ? '峰值时段' : 'peak') + '</span></span></div><div class="ana-chart-wrap-sm"><canvas id="ana-peak-hours"></canvas></div></div>\
           </div>\
           <div class="ana-table-card">\
@@ -4793,6 +4798,14 @@ function libraryTagsForForm(formData, kind) {
       document.getElementById('ana-asset-source').textContent = st.source || '0';
       document.getElementById('ana-asset-gallery').textContent = st.gallery || '0';
       document.getElementById('ana-asset-template').textContent = st.template || '0';
+      // 存储空间（总量从 config.js 读取，升级服务器后修改 storageLimitGB 即可）
+      var usedBytes = (data && data.totalStorageBytes) ? data.totalStorageBytes : 0;
+      var limitGB = (window.VF_CONFIG && window.VF_CONFIG.storageLimitGB) ? window.VF_CONFIG.storageLimitGB : 1;
+      var limitBytes = limitGB * 1024 * 1024 * 1024;
+      var elUsed = document.getElementById('ana-storage-used');
+      var elLimit = document.getElementById('ana-storage-limit');
+      if (elUsed) elUsed.textContent = formatFileSize(usedBytes);
+      if (elLimit) elLimit.textContent = formatFileSize(limitBytes);
 
       // --- 环形图：事件类型分布 ---
       var catCounts = {};

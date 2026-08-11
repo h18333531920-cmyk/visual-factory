@@ -67,7 +67,9 @@
         body.vf-native-capture-mode .ai-loading,
         body.vf-native-capture-mode .asset-library-drop-overlay,
         body.vf-native-capture-mode .linked-artboard-dock { display:none !important; }
-        body.vf-native-capture-mode #canvas-wrapper { z-index:2147483000 !important; isolation:isolate; }
+        /* 原生 PNG 只截取画板内容本身：编辑器为画板加的 1px 边框与阴影不能进入成品，
+           否则会在缩放后变成边缘的白色细线。 */
+        body.vf-native-capture-mode #canvas-wrapper { z-index:2147483000 !important; isolation:isolate; border:0 !important; box-shadow:none !important; }
         body.vf-native-capture-mode .editor-layout { width:100vw !important; max-width:none !important; height:100vh !important; gap:0 !important; }
         body.vf-native-capture-mode .left-pane { width:100% !important; height:100% !important; border-radius:0 !important; }
         .left-pane.drag-file-over .canvas-wrapper { box-shadow: 0 0 0 3px rgba(16,17,20,0.18), 0 20px 60px rgba(16,17,20,0.10); }
@@ -77,6 +79,22 @@
         .left-pane.overview-mode .canvas-wrapper { opacity: 0; pointer-events: none; }
         .linked-artboard-dock { position:absolute; z-index:25; left:22px; right:22px; bottom:18px; min-height:108px; display:none; align-items:center; gap:15px; padding:10px 48px 10px 14px; overflow:visible; border:1px solid rgba(16,24,40,.12); border-radius:14px; background:rgba(255,255,255,.94); box-shadow:0 12px 34px rgba(16,24,40,.12); backdrop-filter:blur(12px); transition:min-height .18s ease, padding .18s ease, background-color .18s ease; }
         .linked-artboard-dock.show { display:flex; }
+        /* 底部面板改为常驻的快捷添加栏：不再承担画板副本/套组管理。 */
+        .linked-artboard-dock.quick-add-dock { left:50%; right:auto; bottom:18px; min-height:0; width:auto; max-width:calc(100% - 44px); gap:6px; padding:8px 10px; border-radius:16px; transform:translateX(-50%); }
+        .quick-add-action { width:66px; min-height:62px; display:flex; flex:0 0 auto; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:5px 3px; border:0; border-radius:10px; background:transparent; color:#4b5563; cursor:pointer; font:800 10px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; transition:background-color .15s ease,color .15s ease,transform .15s ease; }
+        .quick-add-action:hover { color:#1d4ed8; background:#f1f5ff; transform:translateY(-1px); }
+        .quick-add-action:active { transform:translateY(0); background:#e7efff; }
+        .quick-add-icon { width:30px; height:30px; display:flex; align-items:center; justify-content:center; border:1px solid #e2e6ec; border-radius:9px; background:#fff; color:currentColor; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+        .quick-add-icon svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+        .quick-add-label { white-space:nowrap; }
+        .quick-logo-menu-wrap { position:relative; display:flex; flex:0 0 auto; }
+        .quick-logo-menu { position:absolute; z-index:70; bottom:calc(100% + 13px); left:50%; display:flex; gap:4px; padding:6px; border:1px solid rgba(16,24,40,.10); border-radius:14px; background:rgba(255,255,255,.98); box-shadow:0 14px 32px rgba(16,24,40,.16); opacity:0; pointer-events:none; transform:translate(-50%,6px); transition:opacity .14s ease,transform .14s ease; white-space:nowrap; }
+        .quick-logo-menu.open { opacity:1; pointer-events:auto; transform:translate(-50%,0); }
+        .quick-logo-menu::after { content:''; position:absolute; left:50%; bottom:-6px; width:10px; height:10px; background:#fff; border-right:1px solid rgba(16,24,40,.10); border-bottom:1px solid rgba(16,24,40,.10); transform:translateX(-50%) rotate(45deg); }
+        .quick-logo-menu button { position:relative; z-index:1; width:66px; min-height:62px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:5px 3px; border:0; border-radius:10px; background:transparent; color:#4b5563; cursor:pointer; font:800 10px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; transition:background-color .15s ease,color .15s ease,transform .15s ease; }
+        .quick-logo-menu button:hover { color:#1d4ed8; background:#f1f5ff; transform:translateY(-1px); }
+        .quick-logo-menu button .quick-add-icon { width:30px; height:30px; display:flex; align-items:center; justify-content:center; border:1px solid #e2e6ec; border-radius:9px; background:#fff; color:currentColor; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+        .quick-logo-menu button .quick-add-icon svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
         /* 收起时只保留一个小把手，不再显示整条横向容器。 */
         .linked-artboard-dock.collapsed { left:50%; right:auto; bottom:18px; width:54px; min-height:0; height:26px; padding:0; overflow:visible; justify-content:center; border:0; border-radius:999px; background:transparent; box-shadow:none; transform:translateX(-50%); }
         .linked-artboard-dock.collapsed > :not(.linked-artboard-dock-toggle) { display:none; }
@@ -84,6 +102,13 @@
         .linked-artboard-dock-toggle { position:absolute; z-index:5; top:-15px; left:50%; right:auto; width:52px; height:27px; padding:0; border:1px solid rgba(16,24,40,.12); border-bottom:0; border-radius:12px 12px 0 0; background:rgba(255,255,255,.98); color:#667085; cursor:pointer; font-size:17px; font-weight:900; line-height:22px; transform:translateX(-50%); transition:background-color .16s ease,color .16s ease; }
         .linked-artboard-dock-toggle:hover { color:var(--primary); background:#f4f7ff; }
         .linked-artboard-dock.collapsed .linked-artboard-dock-toggle { position:static; width:38px; height:24px; border:1px solid rgba(16,24,40,.12); border-radius:999px; font-size:16px; line-height:20px; background:rgba(255,255,255,.98); box-shadow:0 4px 12px rgba(16,24,40,.10); transform:none; }
+        .linked-artboard-dock.quick-add-dock.collapsed { left:50%; right:auto; bottom:18px; width:42px; height:25px; min-height:0; padding:0; overflow:visible; justify-content:center; border:0; border-radius:999px; background:transparent; box-shadow:none; transform:translateX(-50%); }
+        .linked-artboard-dock.quick-add-dock.collapsed > :not(.quick-add-dock-toggle) { display:none; }
+        .linked-artboard-dock.quick-add-dock.collapsed .quick-add-dock-toggle { display:block; }
+        .quick-add-dock-toggle { position:absolute; z-index:5; top:-15px; left:50%; width:52px; height:27px; padding:0; border:1px solid rgba(16,24,40,.12); border-bottom:0; border-radius:12px 12px 0 0; background:rgba(255,255,255,.98); color:#667085; cursor:pointer; font-size:17px; font-weight:900; line-height:22px; transform:translateX(-50%); transition:background-color .16s ease,color .16s ease; }
+        .quick-add-dock-toggle:hover { color:var(--primary); background:#f4f7ff; transform:translateX(-50%) !important; }
+        .linked-artboard-dock.quick-add-dock.collapsed .quick-add-dock-toggle { position:static; width:38px; height:24px; border:1px solid rgba(16,24,40,.12); border-radius:999px; font-size:16px; line-height:20px; background:rgba(255,255,255,.98); box-shadow:0 4px 12px rgba(16,24,40,.10); transform:none; }
+        .linked-artboard-dock.quick-add-dock.collapsed .quick-add-dock-toggle:hover { transform:none !important; }
         .linked-artboard-card { position:relative; flex:0 0 auto; padding:0; overflow:visible; border:0; border-radius:0; background:transparent; cursor:pointer; }
         .linked-artboard-card .linked-artboard-mini { overflow:hidden; margin:0 auto; border:2px solid transparent; border-radius:8px; background:#fff; box-sizing:content-box; }
         .linked-artboard-card.active .linked-artboard-mini { border-color:var(--primary); box-shadow:0 0 0 2px rgba(37,99,235,.14); }
@@ -125,6 +150,53 @@
         .layer-text-content { overflow-wrap: anywhere; outline: none; }
         .layer-text-content[contenteditable="true"] { cursor: text; }
         .layer-text-editing .layer-text-content { outline: 2px solid #2563EB; outline-offset: 3px; border-radius: 2px; }
+        .layer-logo-layout-wrapper { position:absolute; display:flex; align-items:center; justify-content:center; cursor:grab; transform-origin:center center; pointer-events:auto; }
+        .layer-logo-layout-wrapper:active { cursor:grabbing; }
+        /* 两个内容区各占组合宽度的一半；分隔线永远落在组件的几何中心，
+           不再因左右 Logo 的实际宽度不同而向任一侧偏移。 */
+        .logo-layout-pair { display:grid; grid-template-columns:minmax(0,1fr) 2px minmax(0,1fr); align-items:center; justify-content:center; column-gap:0; width:100%; height:100%; padding:0; background:transparent; box-shadow:none; }
+        .logo-layout-main { justify-self:center; width:210px; height:110px; min-width:0; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+        .logo-layout-main img { max-width:210px; max-height:110px; display:block; object-fit:contain; -webkit-user-drag:none; user-drag:none; }
+        .logo-layout-divider { width:2px; height:62%; border-radius:99px; background:rgba(16,17,20,.82); justify-self:center; }
+        .logo-layout-slot { display:flex; align-items:center; justify-content:center; overflow:hidden; border:2px dashed rgba(16,24,40,.34); border-radius:14px; background:rgba(255,255,255,.72); color:#475467; cursor:pointer; transition:background-color .15s ease,border-color .15s ease,transform .15s ease; }
+        .logo-layout-slot:hover { border-color:#2563eb; background:#f3f7ff; color:#2563eb; transform:scale(1.03); }
+        .logo-layout-slot:focus-visible { outline:3px solid rgba(37,99,235,.35); outline-offset:2px; }
+        .logo-layout-slot img { display:block; width:100%; height:100%; object-fit:contain; padding:8px; pointer-events:none; -webkit-user-drag:none; user-drag:none; }
+        .logo-layout-plus { font:800 38px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; pointer-events:none; }
+        /* 左右组合：右侧复用单一 Logo 的圆角背景与上传位，而不是把图片裸放在画板上。 */
+        .logo-layout-pair-right { justify-self:center; width:110px; height:110px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:var(--pair-logo-radius,16px); background:var(--pair-logo-bg,#fff); }
+        .logo-layout-pair-right .logo-layout-slot { width:100%; height:100%; border:0; border-radius:inherit; background:transparent; box-shadow:none; }
+        .logo-layout-pair-right .logo-layout-slot:hover { border:0; background:transparent; transform:none; box-shadow:none; }
+        .logo-layout-pair-right .logo-layout-slot img { width:100%; height:100%; padding:0; border-radius:inherit; object-fit:contain; }
+        .logo-layout-pair-right .logo-layout-plus { width:auto; height:auto; display:block; border:0; border-radius:0; background:transparent; color:#667085; font-size:34px; }
+        .logo-layout-single { width:100%; height:100%; display:flex; align-items:center; justify-content:center; border-radius:16px; overflow:hidden; }
+        .logo-layout-single .logo-layout-slot { width:100%; height:100%; border:none; background:transparent; border-radius:16px; overflow:hidden; }
+        .logo-layout-single .logo-layout-slot img { padding:0; object-fit:contain; }
+        .logo-layout-matrix { display:grid; column-gap:12px; row-gap:12px; width:100%; height:100%; background:transparent; }
+        .logo-layout-matrix .logo-layout-slot { min-width:0; min-height:0; border:2px dashed #d0d5dd; border-radius:16px; background:#fff; overflow:hidden; }
+        .logo-layout-matrix .logo-layout-slot:hover { border-color:#2563eb; background:#f8faff; }
+        .logo-layout-matrix .logo-layout-slot:has(img) { border:none; background:transparent; }
+        .logo-layout-matrix .logo-layout-slot img { padding:0; object-fit:contain; }
+        .logo-layout-picker { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(16,24,40,.46); }
+        .logo-layout-picker-card { width:min(560px,100%); max-height:min(680px,calc(100vh - 48px)); display:flex; flex-direction:column; overflow:hidden; border-radius:18px; background:#fff; box-shadow:0 24px 70px rgba(16,24,40,.30); }
+        .logo-layout-picker-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 20px; border-bottom:1px solid #eaecf0; }
+        .logo-layout-picker-head strong { font-size:16px; }
+        .logo-layout-picker-close { width:32px; height:32px; border:0; border-radius:9px; background:#f2f4f7; color:#475467; cursor:pointer; font-size:21px; line-height:1; }
+        .logo-layout-picker-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:12px; overflow:auto; padding:18px 20px 22px; }
+        .logo-layout-picker-item { min-height:116px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:10px; border:1px solid #e4e7ec; border-radius:12px; background:#fff; cursor:pointer; color:#344054; font:700 11px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; overflow:hidden; }
+        .logo-layout-picker-item:hover { border-color:#2563eb; background:#f6f8ff; color:#1d4ed8; }
+        .logo-layout-picker-item img { width:72px; height:66px; object-fit:contain; }
+        .logo-layout-picker-empty { padding:26px 20px; color:#667085; font-size:13px; text-align:center; }
+        .keeta-logo-style-picker { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(16,24,40,.46); }
+        .keeta-logo-style-card { width:min(640px,100%); overflow:hidden; border-radius:18px; background:#fff; box-shadow:0 24px 70px rgba(16,24,40,.30); }
+        .keeta-logo-style-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 20px; border-bottom:1px solid #eaecf0; }
+        .keeta-logo-style-head strong { font-size:17px; }
+        .keeta-logo-style-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; padding:20px; }
+        .keeta-logo-style-option { min-width:0; padding:10px; border:1px solid #e4e7ec; border-radius:14px; background:#fff; color:#344054; cursor:pointer; font:700 13px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease; }
+        .keeta-logo-style-option:hover { transform:translateY(-2px); border-color:#2563eb; box-shadow:0 8px 18px rgba(37,99,235,.14); }
+        .keeta-logo-style-preview { height:110px; display:flex; align-items:center; justify-content:center; margin-bottom:10px; border-radius:10px; background:#f7f8fa; overflow:hidden; }
+        .keeta-logo-style-option.is-dark .keeta-logo-style-preview { background:#1b2431; }
+        .keeta-logo-style-preview img { width:86%; height:76%; object-fit:contain; -webkit-user-drag:none; user-drag:none; }
 
         /* 数字步进器 */
         .stepper-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -194,7 +266,7 @@
         input[type="range"] { flex: 1; margin: 0 12px; cursor: pointer; accent-color: var(--text-main); }
         .slider-val { width: 45px; font-size: 12px; color: var(--text-main); text-align: right; font-weight: 800; font-variant-numeric: tabular-nums;}
         
-        .layer-list { display: flex; flex-direction: column; gap: 8px; height: var(--layer-list-height, 250px); max-height: none; overflow-y: auto; padding-right: 4px; }
+        .layer-list { position:relative; display: flex; flex-direction: column; gap: 8px; height: var(--layer-list-height, 250px); max-height: none; overflow-y: auto; padding-right: 4px; }
         .layer-list-resize-handle { position: relative; height: 14px; margin: 6px -18px -14px; cursor: ns-resize; touch-action: none; user-select: none; }
         .layer-list-resize-handle::before { content: ''; position: absolute; top: 5px; left: 50%; width: 34px; height: 3px; border-radius: 999px; background: #d7dbe0; transform: translateX(-50%); transition: background .16s ease, width .16s ease; }
         .layer-list-resize-handle:hover::before, .layer-module-card.resizing-layers .layer-list-resize-handle::before { width: 46px; background: #8d949d; }
@@ -223,6 +295,8 @@
         .layer-item.active { border-color: var(--text-main); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .layer-item.locked { opacity: 0.6; }
         .layer-item.dragging { opacity: 0.45; border-style: dashed; }
+        /* 拖拽排序只显示一条确定的插入线，不再给相邻两项分别加边框。 */
+        .layer-drop-indicator { position:absolute; z-index:8; left:8px; right:12px; height:3px; border-radius:999px; background:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.13); pointer-events:none; }
         .layer-item.hidden-layer { opacity: 0.45; }
         .layer-thumb { width: 36px; height: 28px; border-radius: 4px; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #f3f4f6; }
         .layer-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -1530,7 +1604,7 @@
             right: 0;
             top: calc(100% + 10px);
             z-index: 60;
-            min-width: 180px;
+            min-width: 310px;
             padding: 8px;
             border: 1px solid rgba(16, 19, 24, 0.10);
             border-radius: 18px;
@@ -1554,8 +1628,8 @@
         .resize-dropdown-menu .resize-custom-row { display:flex; align-items:center; gap:6px; }
         .resize-dropdown-menu .resize-custom-dimensions {
             height: 34px;
-            flex: 1;
-            min-width: 0;
+            flex: 1 1 168px;
+            min-width: 168px;
             padding: 0 7px;
             border: 1px solid #dfe2e5;
             border-radius: 8px;
@@ -1565,13 +1639,13 @@
             gap: 5px;
         }
         .resize-dropdown-menu .resize-custom-dimensions:focus-within { border-color:#9198a0; box-shadow:0 0 0 3px rgba(32,34,38,.06); }
-        .resize-dropdown-menu .resize-custom-dimensions input { width:0; min-width:0; flex:1; border:0; outline:0; background:transparent; color:#282c32; font:inherit; font-size:12px; }
+        .resize-dropdown-menu .resize-custom-dimensions input { width:0; min-width:62px; flex:1 1 62px; border:0; outline:0; background:transparent; color:#282c32; font:inherit; font-size:12px; }
         .resize-dropdown-menu .resize-custom-dimensions input::placeholder { color:#abb1b9; }
         .resize-dropdown-menu .resize-custom-dimensions span { color:#b0b5bb; font-size:14px; }
         .resize-dropdown-menu .resize-custom-unit { color:#737982; font-size:12px; font-weight:650; }
         .resize-dropdown-menu button.resize-custom-apply {
-            width: 42px;
-            min-width: 42px;
+            width: 54px;
+            min-width: 54px;
             height: 34px;
             padding: 0;
             justify-content: center;
@@ -1816,6 +1890,12 @@
         #diy-subtag-row { padding: 0 2px; margin-bottom: 9px !important; }
         .filter-capsule { padding: 4px 9px; border-color: var(--border); border-radius: 5px; font-size: 11px; box-shadow: none; }
         .filter-capsule.active { background: #30343a; border-color: #30343a; box-shadow: none; }
+        .asset-search-wrap { position: relative; margin: 0 0 8px 0; }
+        .asset-search-input { width: 100%; box-sizing: border-box; padding: 7px 32px 7px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; line-height: 1.4; color: var(--text-main); background: #f9fafb; outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
+        .asset-search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.12); background: #fff; }
+        .asset-search-input::placeholder { color: #9ca3af; }
+        .asset-search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; border: 0; border-radius: 50%; background: #d1d5db; color: #fff; font-size: 11px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: background .15s; }
+        .asset-search-clear:hover { background: #9ca3af; }
         .asset-list { flex: 1; max-height: none; gap: 10px; padding: 2px 4px 18px 2px; overflow-y: auto; overflow-x: hidden; min-height: 0; }
         .asset-item { border: 1px solid transparent; border-radius: 8px; background: #fff; }
         .asset-item:hover, .asset-item.current { border-color: var(--border-strong); box-shadow: 0 5px 14px rgba(32,33,36,.10); }
@@ -2018,6 +2098,7 @@
 <input type="file" id="replace-image-upload" accept="image/png, image/jpeg, image/webp" style="display:none">
 <input type="file" id="ai-reference-upload" accept="image/png, image/jpeg, image/webp" multiple style="display:none">
 <input type="file" id="logo-upload" accept="image/png, image/jpeg, image/svg+xml" multiple style="display:none">
+<input type="file" id="logo-layout-upload" accept="image/png, image/jpeg, image/webp, image/svg+xml" style="display:none">
 <input type="file" id="component-upload" accept="image/png, image/jpeg, image/webp, image/svg+xml" multiple style="display:none">
 <input type="file" id="backup-import" accept="application/json,.json" style="display:none">
 
@@ -2150,6 +2231,7 @@
                 <button class="asset-tab" data-asset-tab="component" onclick="switchAssetTab('component')" style="white-space:nowrap;">组件 <small id="diy-count-component">· 0</small></button>
                 <button class="asset-tab" data-asset-tab="recycle" onclick="switchAssetTab('recycle')" title="回收站" aria-label="回收站">🗑 <small id="diy-count-recycle">· 0</small></button>
             </div>
+            <div class="asset-search-wrap"><input type="text" class="asset-search-input" id="asset-search-input" placeholder="搜索名称、比例或尺寸…" oninput="onAssetSearch()"><button type="button" class="asset-search-clear" id="asset-search-clear" onclick="clearAssetSearch()" hidden>✕</button></div>
             <div id="diy-subtag-row" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"></div>
             <div class="asset-list" id="asset-list-ui"></div>
 
@@ -2223,17 +2305,6 @@
                     <div class="layer-card-actions">
                         <button class="btn-icon layer-canvas-fit-btn" id="layer-canvas-fit-btn" type="button" onclick="fitCanvasToSelectedImage()" title="按选中图片原始尺寸适配画布" aria-label="按选中图片原始尺寸适配画布" hidden>⤢</button>
                         <button class="btn-icon layer-clear-btn" type="button" onclick="clearCurrentArtboardLayers()" title="清空当前画板的全部图层" aria-label="清空当前画板的全部图层">清空</button>
-                        <div class="add-menu-wrap">
-                            <button class="btn-icon" style="padding: 4px 8px; font-size:11px;" onclick="toggleAddMenu(event)">+ 添加</button>
-                            <div class="add-menu" id="add-menu">
-                                <button onclick="document.getElementById('bg-upload').click(); closeAddMenu();">图片图层</button>
-                                <button onclick="addLayer('text'); closeAddMenu();">文本</button>
-                                <button onclick="document.getElementById('logo-upload').click(); closeAddMenu();">上传Logo</button>
-                                <button onclick="addLayer('arc'); closeAddMenu();">圆弧</button>
-                                <button onclick="addLayer('tag'); closeAddMenu();">标签</button>
-                                <button onclick="addLayer('discountTag'); closeAddMenu();">折扣标签</button>
-                            </div>
-                        </div>
                     </div>
                 </div>
                 <div class="layer-list" id="layer-list-ui"></div>
@@ -2344,8 +2415,8 @@
     // 关联画板集合：复制画板后保留各自尺寸，但图层内容作为一个共享集合同步。
     let linkedArtboardGroupId = '';
     let linkedArtboardIds = [];
-    // 副本管理面板默认只露出一个底部把手，避免第一次打开模板就压缩编辑画布。
-    let linkedArtboardDockExpanded = false;
+    // 底部区域现为快捷添加栏；旧副本数据仍可兼容读取，但不再暴露副本管理入口。
+    let linkedArtboardDockExpanded = true;
 
     let tagColorPresets = [{ id: 'c1', name: '品牌绿', bg: '#00D06C', text: '#FFFFFF', shadow: '#111827', shadowOpacity: 1 }, { id: 'c2', name: '警示红', bg: '#EF4444', text: '#FFFFFF', shadow: '#450a0a', shadowOpacity: 1 }];
     let arcColorPresets = [{ id: 'a1', name: '经典黄绿', cIn: '#FFCC00', cOut: '#00D06C' }, { id: 'a2', name: '极简黑白', cIn: '#111827', cOut: '#E5E7EB' }];
@@ -2381,6 +2452,8 @@
     let fontAssets = [];
     // 回收站只存在于当前网页会话；刷新后会通知父页面清理云端记录。
     let recycleBin = [];
+    let _assetListScrollTop = 0; // 模块级滚动位置，跨 renderAssetLibrary 调用保持
+    let _assetSearchQuery = ''; // 资产库搜索关键词
     const RECYCLE_BIN_SESSION_KEY = 'vf-static-recycle-bin-v1';
 
     function saveRecycleBinSession() {
@@ -2440,6 +2513,7 @@
     let pendingBookmarkAction = null;
     let currentAssetTab = 'layout';
     let draggingLayerId = null;
+    let layerDropIndex = null;
     let aiProgressTimer = null;
     let newlyAddedLayerIds = new Set();
     let newlyAddedLayerTimer = null;
@@ -3580,6 +3654,16 @@
         });
         return [...groups.values()].map(group => ({ ...group, fonts: group.fonts.sort((a, b) => a.weight - b.weight) }));
     }
+    // 获取默认字体：优先匹配名称中含 "HT" 的自定义字体，否则退回 Arial Black
+    function getDefaultFont() {
+        var families = getCustomFontFamilies();
+        for (var i = 0; i < families.length; i++) {
+            if (families[i].familyName && families[i].familyName.toUpperCase().indexOf('HT') !== -1) {
+                return cssFontFamily(families[i].familyId);
+            }
+        }
+        return 'Arial Black, sans-serif';
+    }
     function getFontWeightOptions(fontValue, selectedWeight) {
         const family = getCustomFontFamilies().find(item => cssFontFamily(item.familyId) === fontValue);
         const weights = family ? family.fonts : [
@@ -3612,7 +3696,9 @@
         if(layer.mainText === undefined) layer.mainText = '60';
         if(layer.topText === undefined) layer.topText = '%';
         if(layer.bottomText === undefined) layer.bottomText = 'off';
-        if(layer.font === undefined) layer.font = 'Arial Black, sans-serif';
+        if(layer.discountLang === undefined) layer.discountLang = 'en';
+        if(layer.font === undefined) layer.font = getDefaultFont();
+        if(layer.fontWeight === undefined) layer.fontWeight = 900;
         if(layer.bgCol === undefined) layer.bgCol = '#050505';
         if(layer.textCol === undefined) layer.textCol = '#7CFF00';
         if(layer.shadowCol === undefined) layer.shadowCol = '#111827';
@@ -3622,6 +3708,44 @@
         if(layer.tagPaddingX === undefined) layer.tagPaddingX = 34;
         if(layer.tagPaddingY === undefined) layer.tagPaddingY = 15;
         if(layer.tagTextOffsetY === undefined) layer.tagTextOffsetY = 0;
+
+    function toggleDiscountLang() {
+        activeLayerIds.forEach(function(id) {
+            var l = layers.find(function(x) { return x.id === id; });
+            if (!l || l.type !== 'discountTag') return;
+            // 先交换上下文字位置
+            var tmp = l.topText;
+            l.topText = l.bottomText;
+            l.bottomText = tmp;
+            // 再转换语言关键词 + 调整间距和字号
+            if (l.discountLang === 'en') {
+                l.discountLang = 'ar';
+                // off → خصم
+                if (l.topText === 'off') l.topText = 'خصم';
+                if (l.bottomText === 'off') l.bottomText = 'خصم';
+                // AR 文字更高，默认增大行间距
+                if (l.sideLineGap === undefined || l.sideLineGap <= 0) l.sideLineGap = 6;
+                // AR: خصم 小一些，% 大一些
+                if ((l.topFontSize === undefined || l.topFontSize === 52) && (l.bottomFontSize === undefined || l.bottomFontSize === 42)) {
+                    l.topFontSize = 28;
+                    l.bottomFontSize = 58;
+                }
+            } else {
+                l.discountLang = 'en';
+                // خصم → off
+                if (l.topText === 'خصم') l.topText = 'off';
+                if (l.bottomText === 'خصم') l.bottomText = 'off';
+                // 恢复默认间距和字号
+                if (l.sideLineGap === 6) l.sideLineGap = -2;
+                if (l.topFontSize === 28 && l.bottomFontSize === 58) {
+                    l.topFontSize = 52;
+                    l.bottomFontSize = 42;
+                }
+            }
+        });
+        renderCanvas(); renderProperties(); saveHistory();
+    }
+    window.toggleDiscountLang = toggleDiscountLang;
         if(layer.mainFontSize === undefined) layer.mainFontSize = 96;
         if(layer.sideFontSize === undefined) layer.sideFontSize = 42;
         if(layer.topFontSize === undefined) layer.topFontSize = layer.sideFontSize;
@@ -4059,6 +4183,33 @@
         queueSharedAssetSave(0);
         showToast('已删除参考元素');
     }
+    async function applyReferenceElementToLayer(ref) {
+        if(!ref || !ref.src) return;
+        var target = null;
+        if(activeLayerIds.length === 1) {
+            var l = layers.find(function(x) { return x.id === activeLayerIds[0]; });
+            if(l && (l.type === 'image' || l.type === 'logo')) target = l;
+        }
+        if(!target) {
+            target = layers.find(function(l) { return l.type === 'image' || l.type === 'logo'; });
+        }
+        if(!target) return showToast('请先选中一个图片图层', true);
+        showToast('正在替换…');
+        // 预加载图片，避免 renderCanvas 时同步解码大数据 URL 造成卡顿
+        var preloaded;
+        try { preloaded = await loadImageElement(ref.src); } catch(e) { /* 加载失败仍尝试替换 */ }
+        saveHistory();
+        target.src = ref.src;
+        if (preloaded) {
+            target.originalW = preloaded.naturalWidth || preloaded.width;
+            target.originalH = preloaded.naturalHeight || preloaded.height;
+        } else {
+            target.originalW = undefined;
+            target.originalH = undefined;
+        }
+        renderCanvas(); renderLayersList(); renderProperties(); saveHistory();
+        showToast('已替换为：' + (ref.name || '背景'));
+    }
     async function addAIReferenceFiles(files) {
         const imageFiles = [...files].filter(file => file.type?.startsWith('image/'));
         if(imageFiles.length === 0) return showToast('请选择 PNG / JPG / WEBP 参考图', true);
@@ -4195,6 +4346,7 @@
         if(l.type === 'arc') return '圆弧';
         if(l.type === 'text') return '文本';
         if(l.type === 'logo') return 'Logo';
+        if(l.type === 'logoLayout') return l.logoLayout === 'matrix' ? 'Logo矩阵' : (l.logoLayout === 'pair' ? 'Logo左右组合' : '单一Logo');
         if(l.type === 'image') return '图像';
         if(l.type === 'discountTag') return '折扣标签';
         return '标签';
@@ -4202,6 +4354,11 @@
     function getLayerThumb(l) {
         if(l.type === 'image' || l.type === 'logo') {
             return '<img src="' + (l.src || '') + '" onerror="this.style.display=\'none\';this.parentElement.style.background=\'#e5e7eb\';">';
+        }
+        if(l.type === 'logoLayout') {
+            if(l.logoLayout === 'matrix') return '<span style="font-size:16px;letter-spacing:1px;color:#111827;">▦</span>';
+            if(l.logoLayout === 'pair') return '<span style="font-size:14px;font-weight:900;color:#111827;">keeta&nbsp;|&nbsp;+</span>';
+            return '<span style="font-size:13px;font-weight:900;color:#111827;">keeta</span>';
         }
         if(l.type === 'solid') {
             return '<div style="width:100%;height:100%;background:' + (l.color || '#00875f') + ';"></div>';
@@ -4637,7 +4794,7 @@
         wrap.style.width = w + 'px'; wrap.style.height = h + 'px';
         const capturePadding = document.body.classList.contains('vf-native-capture-mode') ? 20 : 160;
         const linkedDock = document.getElementById('linked-artboard-dock');
-        const dockSpace = !document.body.classList.contains('vf-native-capture-mode') && linkedDock?.classList.contains('show') ? (linkedDock.classList.contains('collapsed') ? 46 : 114) : 0;
+        const dockSpace = !document.body.classList.contains('vf-native-capture-mode') && linkedDock?.classList.contains('show') ? 92 : 0;
         const scale = Math.min((pane.clientWidth - capturePadding) / w, (pane.clientHeight - capturePadding - dockSpace) / h);
         currentScale = scale; wrap.style.transform = `translate(-50%, -50%) scale(${scale})`;
         syncSafeGuide();
@@ -4839,17 +4996,125 @@
         } else if (type === 'logo') {
             newL.zIndex = maxZ + 1; newL.rotation = 0; newL.baseW = 260; newL.baseH = 160; newL.flipX = false;
             Object.assign(newL, extraData);
+        } else if (type === 'logoLayout') {
+            newL.zIndex = maxZ + 1; newL.rotation = 0; newL.baseW = 360; newL.baseH = 150; newL.opacity = 1;
+            Object.assign(newL, extraData);
         } else {
             newL.zIndex = maxZ + 1; 
             if(type === 'arc') Object.assign(newL, { rIn: 400, wIn: 40, wOut: 120, cIn: '#00D06C', cOut: '#111827' });
-            else if(type === 'text') Object.assign(newL, { x: Math.round(w * 0.3), y: Math.round(h * 0.32), rotation: 0, text: '主标题\n文字', font: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 88, lineHeight: 0.95, letterSpacing: 0, maxWidth: 620, textAlign: 'auto', textAlignMode: 'auto', textBoxAnchor: 'center', textCol: '#111827', resizeMode: 'autoWidth', textDirection: 'auto' });
-            else if(type === 'tag') Object.assign(newL, { rotation: -3, tagHeight: 60, shadowThickness: 12, shadowOpacity: 1, letterSpacing: 0, tagPaddingX: 36, tagTextOffsetY: 0, text: 'NEW TAG', font: '-apple-system, sans-serif', bgCol: '#00D06C', textCol: '#FFFFFF', shadowCol: '#111827' });
-            else if(type === 'discountTag') Object.assign(newL, { rotation: -5, shadowThickness: 12, shadowOpacity: 0.45, letterSpacing: -3, tagPaddingX: 34, tagPaddingY: 15, tagTextOffsetY: 0, mainText: '60', topText: '%', bottomText: 'off', mainFontSize: 96, topFontSize: 52, bottomFontSize: 42, sideGap: 8, sideLineGap: -2, font: 'Arial Black, sans-serif', bgCol: '#050505', textCol: '#7CFF00', shadowCol: '#111827' });
+            else if(type === 'text') Object.assign(newL, { x: Math.round(w * 0.3), y: Math.round(h * 0.32), rotation: 0, text: '主标题\n文字', font: getDefaultFont(), fontWeight: 900, fontSize: 88, lineHeight: 0.95, letterSpacing: 0, maxWidth: 620, textAlign: 'auto', textAlignMode: 'auto', textBoxAnchor: 'center', textCol: '#111827', resizeMode: 'autoWidth', textDirection: 'auto' });
+            else if(type === 'tag') Object.assign(newL, { rotation: -3, tagHeight: 60, shadowThickness: 12, shadowOpacity: 1, letterSpacing: 0, tagPaddingX: 36, tagTextOffsetY: 0, text: 'NEW TAG', font: getDefaultFont(), fontWeight: 900, bgCol: '#00D06C', textCol: '#FFFFFF', shadowCol: '#111827' });
+            else if(type === 'discountTag') Object.assign(newL, { rotation: -5, shadowThickness: 12, shadowOpacity: 0.45, letterSpacing: -3, tagPaddingX: 34, tagPaddingY: 15, tagTextOffsetY: 0, mainText: '60', topText: '%', bottomText: 'off', discountLang: 'en', mainFontSize: 96, topFontSize: 52, bottomFontSize: 42, sideGap: 8, sideLineGap: -2, font: getDefaultFont(), fontWeight: 900, bgCol: '#050505', textCol: '#7CFF00', shadowCol: '#111827' });
         }
         if(['tag', 'discountTag', 'arc', 'solid'].includes(type)) ensureSharedKey(newL);
         layers.push(newL); activeLayerIds = [newL.id];
-        if(['logo', 'tag', 'discountTag', 'arc'].includes(type)) markNewlyAddedLayers([newL]);
+        if(['logo', 'logoLayout', 'tag', 'discountTag', 'arc'].includes(type)) markNewlyAddedLayers([newL]);
         saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+    }
+
+    const KEETA_PRIMARY_LOGO_SRC = '../../public/brand/keeta-primary-logo-cropped.png';
+    const KEETA_LOGO_VARIANTS = [
+        { id:'primary', name:'主 Logo（黑色）', src:KEETA_PRIMARY_LOGO_SRC, dark:false },
+        { id:'white', name:'白色 Logo', src:'../../public/brand/keeta-secondary-white-cropped.png', dark:true },
+        { id:'yellow', name:'黄色 Logo', src:'../../public/brand/keeta-secondary-yellow-cropped.png', dark:true }
+    ];
+    let pendingLogoLayoutSlot = null;
+    function addLogoLayout(layout) {
+        const {w, h} = SIZES[currentRatio];
+        let config;
+        if(layout === 'matrix') {
+            config = { logoLayout:'matrix', baseW:292, baseH:292, rows:2, cols:2, slotSize:140, matrixRowGap:12, matrixColGap:12, slots:[{}, {}, {}, {}] };
+        } else if(layout === 'single') {
+            config = { logoLayout:'single', baseW:210, baseH:210, slots:[{}] };
+        } else {
+            config = { logoLayout:'pair', baseW:442, baseH:150, borderRadius:16, bgColor:'#ffffff', mainLogoSrc:KEETA_PRIMARY_LOGO_SRC, mainLogoStyle:'primary', slots:[{}] };
+        }
+        addLayer('logoLayout', Object.assign({ x:Math.round(w / 2), y:Math.round(h / 2) }, config));
+        showToast(layout === 'matrix' ? '已添加 Logo 矩阵' : (layout === 'single' ? '已添加单一 Logo' : '已添加 Logo 左右组合'));
+    }
+    function getLogoLayoutSlotHTML(slot, index) {
+        const source = slot && slot.src ? String(slot.src) : '';
+        if(source) return '<button type="button" class="logo-layout-slot" data-logo-slot="' + index + '" title="点击替换 Logo"><img draggable="false" src="' + escapeHtml(source) + '"></button>';
+        return '<button type="button" class="logo-layout-slot" data-logo-slot="' + index + '" title="选择 Logo"><span class="logo-layout-plus">+</span></button>';
+    }
+    function chooseLocalLogoForLayout(layerId, slotIndex) {
+        pendingLogoLayoutSlot = { layerId:layerId, slotIndex:slotIndex };
+        const input = document.getElementById('logo-layout-upload');
+        if(input) { input.value = ''; input.click(); }
+    }
+    function openKeetaLogoStylePicker(layerId) {
+        const layer = layers.find(function(item) { return item.id === layerId; });
+        if(!layer || layer.type !== 'logoLayout' || layer.logoLayout !== 'pair') return;
+        const old = document.getElementById('keeta-logo-style-picker');
+        if(old) old.remove();
+        const overlay = document.createElement('div');
+        overlay.id = 'keeta-logo-style-picker';
+        overlay.className = 'keeta-logo-style-picker';
+        const card = document.createElement('div'); card.className = 'keeta-logo-style-card';
+        const head = document.createElement('div'); head.className = 'keeta-logo-style-head';
+        head.innerHTML = '<strong>选择 Keeta Logo 样式</strong>';
+        const close = document.createElement('button'); close.type = 'button'; close.className = 'logo-layout-picker-close'; close.textContent = '×'; close.title = '关闭';
+        const closePicker = function() { overlay.remove(); };
+        close.onclick = closePicker; head.appendChild(close); card.appendChild(head);
+        const list = document.createElement('div'); list.className = 'keeta-logo-style-list';
+        KEETA_LOGO_VARIANTS.forEach(function(variant) {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'keeta-logo-style-option' + (variant.dark ? ' is-dark' : '');
+            item.innerHTML = '<span class="keeta-logo-style-preview"><img draggable="false" src="' + escapeHtml(variant.src) + '"></span><span>' + escapeHtml(variant.name) + '</span>';
+            item.onclick = function() {
+                layer.mainLogoSrc = variant.src;
+                layer.mainLogoStyle = variant.id;
+                activeLayerIds = [layer.id];
+                saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+                closePicker();
+                showToast('已切换 Keeta Logo 样式');
+            };
+            list.appendChild(item);
+        });
+        card.appendChild(list); overlay.appendChild(card);
+        overlay.addEventListener('mousedown', function(event) { if(event.target === overlay) closePicker(); });
+        document.body.appendChild(overlay);
+    }
+    function openLogoLayoutPicker(layerId, slotIndex) {
+        const layer = layers.find(function(item) { return item.id === layerId; });
+        if(!layer || layer.type !== 'logoLayout') return;
+        const old = document.getElementById('logo-layout-picker');
+        if(old) old.remove();
+        const overlay = document.createElement('div');
+        overlay.id = 'logo-layout-picker';
+        overlay.className = 'logo-layout-picker';
+        const card = document.createElement('div'); card.className = 'logo-layout-picker-card';
+        const head = document.createElement('div'); head.className = 'logo-layout-picker-head';
+        head.innerHTML = '<strong>选择 Logo</strong>';
+        const close = document.createElement('button'); close.type = 'button'; close.className = 'logo-layout-picker-close'; close.textContent = '×'; close.title = '关闭';
+        const closePicker = function() { overlay.remove(); };
+        close.onclick = closePicker; head.appendChild(close); card.appendChild(head);
+        const list = document.createElement('div'); list.className = 'logo-layout-picker-list';
+        const available = logoAssets.filter(function(asset) { return asset && asset.src && !asset._lazy; });
+        if(available.length === 0) {
+            const empty = document.createElement('div'); empty.className = 'logo-layout-picker-empty';
+            empty.textContent = '还没有可用 Logo。请先在素材库上传 Logo 后再选择。';
+            card.appendChild(empty);
+        } else {
+            available.forEach(function(asset) {
+                const item = document.createElement('button'); item.type = 'button'; item.className = 'logo-layout-picker-item';
+                item.innerHTML = '<img src="' + escapeHtml(asset.src) + '"><span>' + escapeHtml(asset.name || 'Logo') + '</span>';
+                item.onclick = function() {
+                    layer.slots = Array.isArray(layer.slots) ? layer.slots : [];
+                    layer.slots[slotIndex] = { src:asset.src, name:asset.name || 'Logo' };
+                    activeLayerIds = [layer.id];
+                    saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+                    closePicker();
+                    showToast('已替换 Logo');
+                };
+                list.appendChild(item);
+            });
+            card.appendChild(list);
+        }
+        overlay.appendChild(card);
+        overlay.addEventListener('mousedown', function(event) { if(event.target === overlay) closePicker(); });
+        document.body.appendChild(overlay);
     }
 
     function markNewlyAddedLayers(newLayers) {
@@ -4881,6 +5146,69 @@
             wrapper.style.opacity = (l.opacity !== undefined ? l.opacity : 1);
             const objectFit = l.type === 'logo' ? 'contain' : (l.fitMode === 'contain' ? 'contain' : 'cover');
             wrapper.innerHTML = `<img class="layer-image-img" src="${l.src}" style="object-fit:${objectFit};">`;
+        }
+        else if(l.type === 'logoLayout') {
+            wrapper.className = 'layer-logo-layout-wrapper layer-base';
+            wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation || 0}deg) scale(${l.scale || 1})`;
+            wrapper.style.opacity = (l.opacity !== undefined ? l.opacity : 1);
+            if (l.logoLayout === 'single') {
+                wrapper.style.background = l.bgColor || '#ffffff';
+                wrapper.style.borderRadius = (l.borderRadius !== undefined ? l.borderRadius : 16) + 'px';
+            }
+            if (l.logoLayout === 'matrix') {
+                wrapper.style.background = 'transparent';
+            }
+            const slots = Array.isArray(l.slots) ? l.slots : [];
+            if(l.logoLayout === 'matrix') {
+                var rows = l.rows || 2, cols = l.cols || 2;
+                var slotSize = l.slotSize || 140;
+                var matrixRowGap = Math.max(0, Number(l.matrixRowGap !== undefined ? l.matrixRowGap : 12) || 0);
+                var matrixColGap = Math.max(0, Number(l.matrixColGap !== undefined ? l.matrixColGap : 12) || 0);
+                l.baseW = cols * slotSize + (cols - 1) * matrixColGap;
+                l.baseH = rows * slotSize + (rows - 1) * matrixRowGap;
+                wrapper.style.width = l.baseW + 'px'; wrapper.style.height = l.baseH + 'px';
+                var total = rows * cols;
+                wrapper.innerHTML = '<div class="logo-layout-matrix" style="grid-template-columns:repeat(' + cols + ',' + slotSize + 'px);grid-template-rows:repeat(' + rows + ',' + slotSize + 'px);column-gap:' + matrixColGap + 'px;row-gap:' + matrixRowGap + 'px;">' + Array.from({length: total}, function(_, i) { return getLogoLayoutSlotHTML(slots[i], i); }).join('') + '</div>';
+                // 每个槽位独立背景色 + 圆角
+                var br = l.borderRadius !== undefined ? l.borderRadius : 16;
+                wrapper.querySelectorAll('[data-logo-slot]').forEach(function(slotEl) {
+                    var si = Number(slotEl.dataset.logoSlot);
+                    var slot = slots[si];
+                    var bg = (slot && slot.bgColor) ? slot.bgColor : '#fff';
+                    slotEl.style.background = bg;
+                    slotEl.style.borderRadius = br + 'px';
+                    if (slot && slot.src) slotEl.style.border = 'none';
+                });
+            } else if(l.logoLayout === 'single') {
+                wrapper.style.width = (l.baseW || 210) + 'px'; wrapper.style.height = (l.baseH || 210) + 'px';
+                wrapper.innerHTML = '<div class="logo-layout-single">' + getLogoLayoutSlotHTML(slots[0], 0) + '</div>';
+            } else {
+                if(l.logoPairLayoutVersion !== 2) { l.baseW = 442; l.logoPairLayoutVersion = 2; }
+                wrapper.style.width = (l.baseW || 442) + 'px'; wrapper.style.height = (l.baseH || 150) + 'px';
+                const mainLogoSrc = l.mainLogoSrc || KEETA_PRIMARY_LOGO_SRC;
+                const isLightKeeta = l.mainLogoStyle === 'white' || l.mainLogoStyle === 'yellow' || /keeta-secondary-(white|yellow)/.test(mainLogoSrc);
+                const dividerColor = isLightKeeta ? '#ffffff' : 'rgba(16,17,20,.82)';
+                const pairBg = String(l.bgColor || '#ffffff').replace(/[^#(),.%\w\s-]/g, '');
+                const pairRadius = Math.max(0, Math.min(60, Number(l.borderRadius !== undefined ? l.borderRadius : 16) || 0));
+                wrapper.innerHTML = '<div class="logo-layout-pair"><div class="logo-layout-main" data-keeta-logo-main title="双击切换 Keeta Logo 样式"><img draggable="false" src="' + escapeHtml(mainLogoSrc) + '"></div><div class="logo-layout-divider" style="background:' + dividerColor + '"></div><div class="logo-layout-pair-right" style="--pair-logo-bg:' + escapeHtml(pairBg) + ';--pair-logo-radius:' + pairRadius + 'px">' + getLogoLayoutSlotHTML(slots[0], 0) + '</div></div>';
+            }
+            wrapper.querySelectorAll('img').forEach(function(img) { img.draggable = false; });
+            wrapper.addEventListener('dragstart', function(event) { event.preventDefault(); });
+            const keetaLogoMain = wrapper.querySelector('[data-keeta-logo-main]');
+            if(keetaLogoMain) {
+                keetaLogoMain.addEventListener('dblclick', function(event) {
+                    event.preventDefault(); event.stopPropagation();
+                    openKeetaLogoStylePicker(l.id);
+                });
+            }
+            wrapper.querySelectorAll('[data-logo-slot]').forEach(function(slotEl) {
+                if (l.logoLayout === 'single' || l.logoLayout === 'matrix' || l.logoLayout === 'pair') {
+                    slotEl.addEventListener('dblclick', function(event) {
+                        event.preventDefault(); event.stopPropagation();
+                        chooseLocalLogoForLayout(l.id, Number(slotEl.dataset.logoSlot));
+                    });
+                }
+            });
         }
         else if(l.type === 'solid') {
             wrapper.className = 'layer-solid-wrapper layer-base';
@@ -5050,73 +5378,54 @@
         if (!dock) return;
         dock.innerHTML = '';
         dock.classList.add('show');
+        dock.classList.add('quick-add-dock');
         dock.classList.toggle('collapsed', !linkedArtboardDockExpanded);
-        const ids = isLinkedArtboard(currentArtboardId) ? linkedArtboardIds.filter(function(id) { return isLinkedArtboard(id); }) : [];
-        ids.forEach(function(id, index) {
-            const preset = getArtboardPreset(id);
-            const size = linkedArtboardSize(id);
-            const card = document.createElement('button');
-            card.type = 'button';
-            card.className = 'linked-artboard-card' + (id === currentArtboardId ? ' active' : '');
-            card.title = '切换到 ' + (preset?.label || ('副本 ' + (index + 1)));
-            card.onclick = function() { switchArtboard(id); };
-            const mini = document.createElement('div');
-            mini.className = 'linked-artboard-mini';
-            const scale = Math.min(82 / Math.max(1, size.w), 70 / Math.max(1, size.h));
-            const viewportW = Math.max(26, Math.round(size.w * scale));
-            const viewportH = Math.max(26, Math.round(size.h * scale));
-            // 尺寸文案放在预览框外的底部。竖版缩略图本身较窄时仍给文字留出可读宽度。
-            const cardW = Math.max(68, viewportW + 4);
-            card.style.width = cardW + 'px';
-            card.style.height = (viewportH + 36) + 'px';
-            const stage = document.createElement('div');
-            stage.style.cssText = 'width:' + size.w + 'px;height:' + size.h + 'px;position:relative;overflow:hidden;background:#fff;transform:scale(' + scale + ');';
-            (artboards[id]?.layers || []).slice().sort(function(a,b) { return (a.zIndex || 0) - (b.zIndex || 0); }).forEach(function(layer) {
-                stage.appendChild(createLayerElement(layer, { active:false, interactive:false, idPrefix:'linked_preview_' + id + '_' }));
-            });
-            mini.appendChild(stage);
-            mini.style.width = viewportW + 'px';
-            mini.style.height = viewportH + 'px';
-            const label = document.createElement('span');
-            label.className = 'linked-artboard-size-label';
-            const divisor = (function gcd(a, b) { return b ? gcd(b, a % b) : (a || 1); })(Math.round(size.w), Math.round(size.h));
-            const ratioLabel = document.createElement('span');
-            ratioLabel.className = 'linked-artboard-ratio-label';
-            ratioLabel.textContent = (Math.round(size.w) / divisor) + ':' + (Math.round(size.h) / divisor);
-            const pixelsLabel = document.createElement('span');
-            pixelsLabel.className = 'linked-artboard-pixels-label';
-            pixelsLabel.textContent = size.w + '×' + size.h;
-            label.append(ratioLabel, pixelsLabel);
-            card.appendChild(mini); card.appendChild(label);
-            if (ids.length > 1) {
-                const remove = document.createElement('button');
-                remove.type = 'button';
-                remove.className = 'linked-artboard-remove';
-                remove.title = '删除此副本';
-                remove.setAttribute('aria-label', '删除此副本');
-                remove.textContent = '×';
-                remove.onclick = function(event) { event.preventDefault(); event.stopPropagation(); deleteLinkedArtboardCopy(id); };
-                card.appendChild(remove);
+        const actions = [
+            { label:'图片图层', icon:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.4"/><path d="m4 18 5-5 3.5 3.5 2.5-2.5 5 4"/></svg>', run:function() { document.getElementById('bg-upload')?.click(); } },
+            { label:'文本', icon:'<svg viewBox="0 0 24 24"><path d="M4 5V3h16v2M12 3v18M8 21h8"/></svg>', run:function() { addLayer('text'); } },
+            { label:'添加Logo', logoMenu:true, icon:'<svg viewBox="0 0 24 24"><path d="M4 19h16M6 16V5h12v11M9 9h6M9 12h6"/></svg>' },
+            { label:'圆弧', icon:'<svg viewBox="0 0 24 24"><path d="M4 17a8 8 0 0 1 16 0"/><path d="M4 20a11 11 0 0 1 16 0"/></svg>', run:function() { addLayer('arc'); } },
+            { label:'标签', icon:'<svg viewBox="0 0 24 24"><path d="M3 11V5a2 2 0 0 1 2-2h6l10 10-8 8L3 11Z"/><circle cx="7.5" cy="7.5" r="1"/></svg>', run:function() { addLayer('tag'); } },
+            { label:'折扣标签', icon:'<svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="m8 15 8-6M8 9h.01M16 15h.01"/></svg>', run:function() { addLayer('discountTag'); } }
+        ];
+        actions.forEach(function(action) {
+            if(action.logoMenu) {
+                const wrap = document.createElement('div'); wrap.className = 'quick-logo-menu-wrap';
+                const button = document.createElement('button');
+                button.type = 'button'; button.className = 'quick-add-action'; button.title = '添加 Logo';
+                button.innerHTML = '<span class="quick-add-icon">' + action.icon + '</span><span class="quick-add-label">' + action.label + '</span>';
+                const menu = document.createElement('div'); menu.className = 'quick-logo-menu';
+                [['pair','左右组合','<svg viewBox="0 0 24 24"><rect x="3" y="6" width="7" height="12" rx="1.5"/><rect x="14" y="6" width="7" height="12" rx="1.5"/><line x1="11" y1="12" x2="13" y2="12"/></svg>'], ['single','单一Logo','<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3"/><circle cx="12" cy="12" r="4"/></svg>'], ['matrix','Logo矩阵','<svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>']].forEach(function(item) {
+                    const option = document.createElement('button'); option.type = 'button';
+                    option.innerHTML = '<span class="quick-add-icon">' + item[2] + '</span><span class="quick-add-label">' + item[1] + '</span>';
+                    option.onclick = function(event) { event.preventDefault(); event.stopPropagation(); menu.classList.remove('open'); addLogoLayout(item[0]); };
+                    menu.appendChild(option);
+                });
+                let closeTimer = null;
+                const openMenu = function() { clearTimeout(closeTimer); menu.classList.add('open'); };
+                const closeMenu = function() { closeTimer = setTimeout(function() { menu.classList.remove('open'); }, 140); };
+                wrap.onmouseenter = openMenu; wrap.onmouseleave = closeMenu;
+                button.onclick = function(event) { event.preventDefault(); event.stopPropagation(); clearTimeout(closeTimer); menu.classList.toggle('open'); };
+                wrap.appendChild(menu); wrap.appendChild(button); dock.appendChild(wrap);
+                return;
             }
-            dock.appendChild(card);
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'quick-add-action';
+            button.title = '添加' + action.label;
+            button.innerHTML = '<span class="quick-add-icon">' + action.icon + '</span><span class="quick-add-label">' + action.label + '</span>';
+            button.onclick = action.run;
+            dock.appendChild(button);
         });
-        const add = document.createElement('button');
-        add.type = 'button'; add.className = 'linked-artboard-add';
-        add.title = '副本管理功能开发中'; add.setAttribute('aria-label', '副本管理功能开发中');
-        add.setAttribute('aria-disabled', 'true');
-        add.classList.add('is-disabled');
-        add.textContent = '+';
-        // 先暂停新增副本入口，保留原有实现以便后续继续开发。
-        add.onclick = function() { showToast('副本管理功能开发中…'); };
-        dock.appendChild(add);
         const toggle = document.createElement('button');
         toggle.type = 'button';
-        toggle.className = 'linked-artboard-dock-toggle';
-        toggle.title = linkedArtboardDockExpanded ? '收起副本管理' : '展开副本管理';
+        toggle.className = 'quick-add-dock-toggle';
+        toggle.title = linkedArtboardDockExpanded ? '收起快捷添加栏' : '展开快捷添加栏';
         toggle.setAttribute('aria-label', toggle.title);
         toggle.textContent = linkedArtboardDockExpanded ? '⌄' : '⌃';
         toggle.onclick = function(event) {
-            event.preventDefault(); event.stopPropagation();
+            event.preventDefault();
+            event.stopPropagation();
             linkedArtboardDockExpanded = !linkedArtboardDockExpanded;
             renderLinkedArtboardDock();
         };
@@ -5152,6 +5461,44 @@
 
     function renderLayersList() {
         const listUI = document.getElementById('layer-list-ui'); listUI.innerHTML = '';
+        const clearLayerDropIndicator = function() {
+            layerDropIndex = null;
+            listUI.querySelector('.layer-drop-indicator')?.remove();
+        };
+        const updateLayerDropIndicator = function(event) {
+            if (!draggingLayerId) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            const items = [...listUI.querySelectorAll('.layer-item')].filter(function(item) { return item.dataset.id !== draggingLayerId; });
+            let insertIndex = items.length;
+            for (let index = 0; index < items.length; index++) {
+                const rect = items[index].getBoundingClientRect();
+                if (event.clientY < rect.top + rect.height / 2) { insertIndex = index; break; }
+            }
+            layerDropIndex = insertIndex;
+            let indicator = listUI.querySelector('.layer-drop-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.className = 'layer-drop-indicator';
+                indicator.setAttribute('aria-hidden', 'true');
+                listUI.appendChild(indicator);
+            }
+            const before = items[insertIndex];
+            const top = before
+                ? before.offsetTop - 5
+                : (items.length ? items[items.length - 1].offsetTop + items[items.length - 1].offsetHeight + 3 : 6);
+            indicator.style.top = Math.max(2, top) + 'px';
+        };
+        listUI.ondragover = updateLayerDropIndicator;
+        listUI.ondragleave = function(event) {
+            if (!listUI.contains(event.relatedTarget)) clearLayerDropIndicator();
+        };
+        listUI.ondrop = function(event) {
+            event.preventDefault();
+            const insertIndex = layerDropIndex;
+            clearLayerDropIndicator();
+            if (draggingLayerId && Number.isInteger(insertIndex)) reorderLayerByDrop(draggingLayerId, insertIndex);
+        };
         [...layers].sort((a,b) => b.zIndex - a.zIndex).forEach(l => {
             const hidden = l.visible === false;
             const li = document.createElement('div');
@@ -5164,9 +5511,7 @@
                 if(isImageLayer) createAIReferenceDrag(e, { name: getLayerName(l), src: l.src }, getLayerName(l));
                 e.dataTransfer.effectAllowed = isImageLayer ? 'copyMove' : 'move';
             };
-            li.ondragend = () => { draggingLayerId = null; li.classList.remove('dragging'); };
-            li.ondragover = e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
-            li.ondrop = e => { e.preventDefault(); reorderLayerByDrop(draggingLayerId, l.id); };
+            li.ondragend = () => { draggingLayerId = null; layerDropIndex = null; listUI.querySelector('.layer-drop-indicator')?.remove(); li.classList.remove('dragging'); };
             li._clickTimer = null;
             li.onclick = (e) => {
                 if(e.target.closest('button')) return;
@@ -5244,15 +5589,15 @@
         syncLayerCanvasFitButton();
     }
 
-    function reorderLayerByDrop(fromId, toId) {
-        if(!fromId || !toId || fromId === toId) return;
+    function reorderLayerByDrop(fromId, insertIndex) {
+        if(!fromId || !Number.isInteger(insertIndex)) return;
         preservePaneScroll(() => {
             const ordered = [...layers].sort((a,b) => b.zIndex - a.zIndex);
             const fromIdx = ordered.findIndex(l => l.id === fromId);
-            const toIdx = ordered.findIndex(l => l.id === toId);
-            if(fromIdx < 0 || toIdx < 0) return;
+            if(fromIdx < 0) return;
             const [moved] = ordered.splice(fromIdx, 1);
-            ordered.splice(toIdx, 0, moved);
+            const targetIndex = Math.max(0, Math.min(insertIndex, ordered.length));
+            ordered.splice(targetIndex, 0, moved);
             ordered.forEach((l, idx) => { l.zIndex = ordered.length - idx; });
             renderCanvas(); renderLayersList(); renderProperties(); saveHistory();
         });
@@ -5410,6 +5755,169 @@
         renderCanvas(); renderLayersList();
     }
 
+    function bindSingleDropZone(layer) {
+        var zone = document.getElementById('logo-drop-zone');
+        if (!zone) return;
+        function handleFile(file) {
+            if (!file || !file.type.match(/image\/(png|jpeg|webp)/)) { showToast('请拖入 PNG/JPG/WebP 图片', true); return; }
+            var reader = new FileReader();
+            reader.onload = function(ev) {
+                var dataUrl = ev.target.result;
+                detectImageBackgroundColor(dataUrl).then(function(info) {
+                    layer.bgColor = 'rgb(' + info.r + ',' + info.g + ',' + info.b + ')';
+                    layer.slots = layer.slots || [];
+                    layer.slots[0] = { src: dataUrl, name: file.name || 'Logo' };
+                    saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+                    showToast('已更新 Logo');
+                });
+            };
+            reader.readAsDataURL(file);
+        }
+        zone.addEventListener('dragover', function(e) { e.preventDefault(); e.stopPropagation(); zone.style.borderColor = '#2563eb'; zone.style.background = '#eff6ff'; });
+        zone.addEventListener('dragleave', function(e) { e.preventDefault(); e.stopPropagation(); zone.style.borderColor = '#cbd5e1'; zone.style.background = '#f8fafc'; });
+        zone.addEventListener('drop', function(e) { e.preventDefault(); e.stopPropagation(); zone.style.borderColor = '#cbd5e1'; zone.style.background = '#f8fafc'; var f = e.dataTransfer.files[0]; if (f) handleFile(f); });
+        zone.addEventListener('click', function() { document.getElementById('logo-layout-upload').click(); });
+    }
+
+    function bindMatrixThumbManager(layer) {
+        var list = document.getElementById('matrix-thumb-list');
+        var addBtn = document.getElementById('matrix-thumb-add');
+        if (!list || !addBtn) return;
+        // 同步 slots 并重渲染
+        function syncAndRefresh() {
+            var filled = [];
+            (layer.slots || []).forEach(function(s) { if (s && s.src) filled.push(s); });
+            while (layer.slots.length < filled.length) layer.slots.push({});
+            for (var i = 0; i < filled.length; i++) layer.slots[i] = filled[i];
+            if (layer.slots.length > filled.length) layer.slots.length = filled.length;
+            // 补到 rows*cols
+            var total = (layer.rows || 2) * (layer.cols || 2);
+            while (layer.slots.length < total) layer.slots.push({});
+            saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+        }
+        function handleFiles(files) {
+            var validFiles = Array.from(files).filter(function(f) { return f.type.match(/image\/(png|jpeg|webp)/); });
+            if (validFiles.length === 0) { showToast('请拖入 PNG/JPG/WebP 图片', true); return; }
+            var processed = 0;
+            validFiles.forEach(function(file) {
+                var reader = new FileReader();
+                reader.onload = function(ev) {
+                    layer.slots = layer.slots || [];
+                    var slot = { src: ev.target.result, name: file.name || 'Logo' };
+                    layer.slots.push(slot);
+                    detectImageBackgroundColor(ev.target.result).then(function(info) {
+                        slot.bgColor = 'rgb(' + info.r + ',' + info.g + ',' + info.b + ')';
+                        processed++;
+                        if (processed >= validFiles.length) syncAndRefresh();
+                    });
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        // 拖拽上传到缩略图列表（仅处理外部文件拖入）
+        list.addEventListener('dragover', function(e) { e.preventDefault(); if (dragIdx >= 0) return; list.style.borderColor = '#2563eb'; list.style.background = '#eff6ff'; });
+        list.addEventListener('dragleave', function(e) { if (dragIdx >= 0) return; list.style.borderColor = '#cbd5e1'; list.style.background = '#f8fafc'; });
+        list.addEventListener('drop', function(e) { e.preventDefault(); e.stopPropagation(); list.style.borderColor = '#cbd5e1'; list.style.background = '#f8fafc'; if (dragIdx >= 0) return; if (e.dataTransfer.files && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
+        // 点击 + 按钮
+        addBtn.addEventListener('click', function() {
+            var input = document.getElementById('logo-layout-upload');
+            if (input) { input.value = ''; input.click(); }
+        });
+        // 删除按钮
+        list.addEventListener('click', function(e) {
+            var delBtn = e.target.closest('[data-matrix-thumb-del]');
+            if (!delBtn) return;
+            e.stopPropagation();
+            var idx = parseInt(delBtn.getAttribute('data-matrix-thumb-del'));
+            layer.slots = (layer.slots || []).filter(function(s, i) { return !s.src || i !== idx; });
+            // 重排 slots（去掉空位）
+            var filled = layer.slots.filter(function(s) { return s && s.src; });
+            layer.slots = filled;
+            syncAndRefresh();
+        });
+        // 拖拽排序 — 蓝线指示插入位置
+        var dragIdx = -1, dropLine = null;
+        // 创建蓝线指示器
+        dropLine = document.createElement('div');
+        dropLine.className = 'matrix-drop-line';
+        dropLine.style.cssText = 'width:3px;height:54px;background:#2563eb;border-radius:2px;flex-shrink:0;display:none;';
+        function getDropIndex(e) {
+            var thumbs = Array.from(list.querySelectorAll('[data-matrix-thumb]'));
+            if (thumbs.length === 0) return 0;
+            // 遍历找到第一个中心点在光标右侧的缩略图
+            for (var i = 0; i < thumbs.length; i++) {
+                var r = thumbs[i].getBoundingClientRect();
+                // 光标在该缩略图的垂直范围内
+                if (e.clientY >= r.top && e.clientY <= r.bottom) {
+                    if (e.clientX < r.left + r.width / 2) return Math.min(i, thumbs.length);
+                }
+                // 光标在该缩略图上方 → 插入在该行开头
+                if (e.clientY < r.top) return Math.min(i, thumbs.length);
+            }
+            return thumbs.length;
+        }
+        list.addEventListener('dragstart', function(e) {
+            var thumb = e.target.closest('[data-matrix-thumb]');
+            if (!thumb) { e.preventDefault(); return; }
+            dragIdx = parseInt(thumb.getAttribute('data-matrix-thumb'));
+            e.dataTransfer.effectAllowed = 'move';
+            var emptyImg = new Image(); emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+            e.dataTransfer.setDragImage(emptyImg, 0, 0);
+            thumb.style.opacity = '0.4';
+            list.appendChild(dropLine);
+        });
+        list.addEventListener('dragend', function(e) {
+            var thumb = list.querySelector('[data-matrix-thumb][style*="opacity: 0.4"]');
+            if (thumb) thumb.style.opacity = '1';
+            dragIdx = -1;
+            dropLine.style.display = 'none';
+        });
+        list.addEventListener('dragover', function(e) {
+            if (dragIdx < 0) return;
+            e.preventDefault(); e.stopPropagation();
+            var toIdx = getDropIndex(e);
+            dropLine.style.display = '';
+            var thumbs = list.querySelectorAll('[data-matrix-thumb]');
+            if (toIdx < thumbs.length) {
+                list.insertBefore(dropLine, thumbs[toIdx]);
+            } else {
+                list.insertBefore(dropLine, document.getElementById('matrix-thumb-add'));
+            }
+        });
+        list.addEventListener('drop', function(e) {
+            if (dragIdx < 0) return;
+            e.preventDefault(); e.stopPropagation();
+            dropLine.style.display = 'none';
+            var toIdx = getDropIndex(e);
+            if (dragIdx === toIdx || dragIdx + 1 === toIdx) { dragIdx = -1; return; }
+            var filled = (layer.slots || []).filter(function(s) { return s && s.src; });
+            var moved = filled.splice(dragIdx, 1)[0];
+            if (toIdx > dragIdx) toIdx--;
+            filled.splice(toIdx, 0, moved);
+            layer.slots = filled;
+            dragIdx = -1;
+            syncAndRefresh();
+        });
+    }
+
+    window.updateMatrixGrid = function(rows, cols) {
+        activeLayerIds.forEach(function(id) {
+            var l = layers.find(function(x) { return x.id === id; });
+            if (!l || l.type !== 'logoLayout' || l.logoLayout !== 'matrix') return;
+            if (rows !== null && rows !== undefined) l.rows = Math.max(1, Math.min(6, rows));
+            if (cols !== null && cols !== undefined) l.cols = Math.max(1, Math.min(6, cols));
+            var r = l.rows || 2, c = l.cols || 2;
+            var slotSize = l.slotSize || 140;
+            var rowGap = Math.max(0, Number(l.matrixRowGap !== undefined ? l.matrixRowGap : 12) || 0);
+            var colGap = Math.max(0, Number(l.matrixColGap !== undefined ? l.matrixColGap : 12) || 0);
+            l.baseW = c * slotSize + (c - 1) * colGap;
+            l.baseH = r * slotSize + (r - 1) * rowGap;
+            var total = r * c;
+            l.slots = l.slots || [];
+            while (l.slots.length < total) l.slots.push({});
+        });
+        renderCanvas(); renderArtboardPreviews();
+    };
     window.updateProp = function(p, v) {
         activeLayerIds.forEach(id => {
             const l = layers.find(x => x.id === id);
@@ -5503,6 +6011,39 @@
             const fitControls = l.type === 'image' ? `<label class="label">图片适配</label><div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px;"><button class="btn ${fitMode === 'cover' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="applyImageFitMode('cover')">铺满</button><button class="btn ${fitMode === 'contain' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="applyImageFitMode('contain')">完整</button><button class="btn btn-outline" type="button" onclick="applyImageFitMode('original')">原图</button></div><div style="font-size:11px; color:var(--text-sub); line-height:1.55; margin:-4px 0 14px;">铺满会裁切；完整不裁切；原图按原比例放入画布。</div>` : '';
             area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">${title}</div>${fitControls}<div class="slider-row"><span class="s-label">不透明度</span><input type="range" min="0" max="1" step="0.05" value="${l.opacity !== undefined ? l.opacity : 1}" oninput="updateProp('opacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-opacity">${Math.round((l.opacity !== undefined ? l.opacity : 1) * 100)}%</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div style="display:flex; gap:8px; margin-top:16px;"><button class="btn btn-outline" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="centerLayer()">居中</button><button class="btn btn-outline" style="flex:1;" onclick="toggleFlipX()" title="镜像反转">镜像</button></div>`;
         }
+        else if(l.type === 'logoLayout') {
+            const layoutLabel = l.logoLayout === 'matrix' ? 'Logo矩阵' : (l.logoLayout === 'pair' ? 'Logo左右组合' : '单一Logo');
+            var br = l.borderRadius !== undefined ? l.borderRadius : 16;
+            radiusSlider = '<div class="slider-row"><span class="s-label">圆角大小</span><input type="range" min="0" max="60" step="1" value="' + br + '" oninput="updateProp(\'borderRadius\', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-borderRadius">' + br + 'px</span></div>';
+            var dropZone = '';
+            var pairBackgroundControl = '';
+            var gridSliders = '';
+            if (l.logoLayout === 'single') {
+                dropZone = '<div class="logo-drop-zone" id="logo-drop-zone" style="height:80px;margin-bottom:12px;border:2px dashed #cbd5e1;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px;cursor:pointer;transition:border-color .15s,background .15s;background:#f8fafc;">拖拽 Logo 图片到此处上传</div>';
+            } else if (l.logoLayout === 'pair') {
+                var pairBgValue = escapeHtml(l.bgColor || '#ffffff');
+                pairBackgroundControl = '<label class="label">右侧 Logo 背景</label><input type="color" value="' + pairBgValue + '" style="width:100%;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;background:#FFF;cursor:pointer;margin-bottom:8px;" oninput="updateProp(\'bgColor\',this.value)" onchange="saveHistory()"><div style="font-size:11px;color:var(--text-sub);line-height:1.5;margin:-2px 0 10px;">右侧上传位与单一 Logo 使用相同的圆角背景。</div>';
+            } else if (l.logoLayout === 'matrix') {
+                var r = l.rows || 2, c = l.cols || 2;
+                var rowGap = Math.max(0, Number(l.matrixRowGap !== undefined ? l.matrixRowGap : 12) || 0);
+                var colGap = Math.max(0, Number(l.matrixColGap !== undefined ? l.matrixColGap : 12) || 0);
+                gridSliders = '<div class="slider-row"><span class="s-label">行数</span><input type="range" min="1" max="6" step="1" value="' + r + '" oninput="updateMatrixGrid(parseInt(this.value), null)" onchange="saveHistory()"><span class="slider-val" id="val-rows">' + r + '</span></div><div class="slider-row"><span class="s-label">列数</span><input type="range" min="1" max="6" step="1" value="' + c + '" oninput="updateMatrixGrid(null, parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-cols">' + c + '</span></div><div class="slider-row"><span class="s-label">行间距</span><input type="range" min="0" max="60" step="1" value="' + rowGap + '" oninput="updateProp(\'matrixRowGap\', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-matrixRowGap">' + rowGap + 'px</span></div><div class="slider-row"><span class="s-label">列间距</span><input type="range" min="0" max="60" step="1" value="' + colGap + '" oninput="updateProp(\'matrixColGap\', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-matrixColGap">' + colGap + 'px</span></div>';
+                // 缩略图管理器
+                var filledSlots = (l.slots || []).filter(function(s) { return s && s.src; });
+                var thumbHTML = '';
+                filledSlots.forEach(function(s, i) {
+                    thumbHTML += '<div class="matrix-thumb" draggable="true" data-matrix-thumb="' + i + '" style="width:54px;height:54px;border-radius:8px;overflow:hidden;border:2px solid #e5e7eb;cursor:grab;flex-shrink:0;position:relative;background:#f9fafb;"><img src="' + s.src + '" draggable="false" style="width:100%;height:100%;object-fit:cover;pointer-events:none;"><button data-matrix-thumb-del="' + i + '" style="position:absolute;top:0;right:0;width:18px;height:18px;border:none;border-radius:0 6px 0 6px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;line-height:18px;cursor:pointer;padding:0;" title="删除">×</button></div>';
+                });
+                dropZone = '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--text-sub);margin-bottom:4px;">Logo 列表（可拖拽排序）</div><div class="matrix-thumb-list" id="matrix-thumb-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:60px;padding:8px;border:2px dashed #cbd5e1;border-radius:10px;background:#f8fafc;align-items:center;">' + thumbHTML + '<div class="matrix-thumb-add" id="matrix-thumb-add" style="width:54px;height:54px;border:2px dashed #d0d5dd;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:22px;cursor:pointer;flex-shrink:0;">+</div></div></div>';
+            }
+            area.innerHTML = '<div style="text-align:center;color:var(--text-main);font-size:14px;font-weight:bold;padding:10px 0;margin-bottom:12px;border-bottom:1px dashed var(--border);">' + layoutLabel + '</div>' + dropZone + gridSliders + pairBackgroundControl + radiusSlider + '<div class="slider-row"><span class="s-label">不透明度</span><input type="range" min="0" max="1" step="0.05" value="' + (l.opacity !== undefined ? l.opacity : 1) + '" oninput="updateProp(\'opacity\', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-opacity">' + Math.round((l.opacity !== undefined ? l.opacity : 1) * 100) + '%</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="' + (l.scale || 1) + '" oninput="updateProp(\'scale\', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">' + (l.scale || 1) + 'x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="' + (l.rotation || 0) + '" oninput="updateProp(\'rotation\', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">' + (l.rotation || 0) + '°</span></div><button class="btn btn-outline" style="width:100%;margin-top:8px;border-color:var(--primary);color:var(--primary);" onclick="centerLayer()">居中画板</button>';
+            // 事件绑定
+            if (l.logoLayout === 'single') {
+                setTimeout(function() { bindSingleDropZone(l); }, 50);
+            } else if (l.logoLayout === 'matrix') {
+                setTimeout(function() { bindMatrixThumbManager(l); }, 50);
+            }
+        }
         else if(l.type === 'solid') {
             area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">延展背景色块</div><label class="label">颜色</label><input type="text" class="input-text" value="${escapeHtml(l.color || '#00875f')}" oninput="updateProp('color', this.value)" onchange="saveHistory()"><div style="font-size:12px; color:var(--text-sub); line-height:1.6;">用于开屏和 Banner 的品牌色背景，可按项目需要微调。</div>`;
         }
@@ -5538,8 +6079,9 @@
         } 
         else if(l.type === 'discountTag') {
             normalizeDiscountTagLayer(l);
+            const isAr = l.discountLang === 'ar';
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="handleColorPresetClick(event,'tag','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;" title="双击编辑并同步"></div>`; });
-            area.innerHTML = `<label class="label">主文字</label><input type="text" class="input-text" value="${escapeHtml(l.mainText)}" oninput="updateProp('mainText', this.value)" onchange="saveHistory()"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><div><label class="label">右上角</label><input type="text" class="input-text" value="${escapeHtml(l.topText)}" oninput="updateProp('topText', this.value)" onchange="saveHistory()"></div><div><label class="label">右下角</label><input type="text" class="input-text" value="${escapeHtml(l.bottomText)}" oninput="updateProp('bottomText', this.value)" onchange="saveHistory()"></div></div><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">主字大小</span><input type="range" min="48" max="150" step="1" value="${l.mainFontSize ?? 96}" oninput="updateProp('mainFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-mainFontSize">${l.mainFontSize ?? 96}px</span></div><div class="slider-row"><span class="s-label">%大小</span><input type="range" min="20" max="90" step="1" value="${l.topFontSize ?? l.sideFontSize ?? 52}" oninput="updateProp('topFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-topFontSize">${l.topFontSize ?? l.sideFontSize ?? 52}px</span></div><div class="slider-row"><span class="s-label">Off大小</span><input type="range" min="16" max="80" step="1" value="${l.bottomFontSize ?? l.sideFontSize ?? 42}" oninput="updateProp('bottomFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-bottomFontSize">${l.bottomFontSize ?? l.sideFontSize ?? 42}px</span></div><div class="slider-row"><span class="s-label">左右间距</span><input type="range" min="-8" max="32" step="1" value="${l.sideGap ?? 8}" oninput="updateProp('sideGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideGap">${l.sideGap ?? 8}px</span></div><div class="slider-row"><span class="s-label">%/Off间距</span><input type="range" min="-18" max="24" step="1" value="${l.sideLineGap ?? -2}" oninput="updateProp('sideLineGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideLineGap">${l.sideLineGap ?? -2}px</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="18" step="0.5" value="${l.letterSpacing ?? -3}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? -3}px</span></div><div class="slider-row"><span class="s-label">左右边距</span><input type="range" min="8" max="90" step="1" value="${l.tagPaddingX ?? 34}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 34}px</span></div><div class="slider-row"><span class="s-label">上下边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingY ?? 15}" oninput="updateProp('tagPaddingY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingY">${l.tagPaddingY ?? 15}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="36" step="1" value="${l.shadowThickness ?? 12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness ?? 12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 0.45)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 0.45)*100)}%</span></div>`;
+            area.innerHTML = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;"><span style="font-size:11px; font-weight:700; color:#6b7280;">语言格式</span><button type="button" onclick="toggleDiscountLang()" style="display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#f3f4f6; padding:0; cursor:pointer;"><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:7px 0 0 7px; transition:all .15s; ${!isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">EN</span><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:0 7px 7px 0; transition:all .15s; ${isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">AR</span></button></div><label class="label">主文字</label><input type="text" class="input-text" value="${escapeHtml(l.mainText)}" oninput="updateProp('mainText', this.value)" onchange="saveHistory()"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><div><label class="label">右上角</label><input type="text" class="input-text" value="${escapeHtml(l.topText)}" oninput="updateProp('topText', this.value)" onchange="saveHistory()"></div><div><label class="label">右下角</label><input type="text" class="input-text" value="${escapeHtml(l.bottomText)}" oninput="updateProp('bottomText', this.value)" onchange="saveHistory()"></div></div><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();"><option value="300" ${(l.fontWeight||900)===300?'selected':''}>细体 (300)</option><option value="400" ${(l.fontWeight||900)===400?'selected':''}>常规 (400)</option><option value="700" ${(l.fontWeight||900)===700?'selected':''}>加粗 (700)</option><option value="900" ${(l.fontWeight||900)===900?'selected':''}>黑体 (900)</option></select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">主字大小</span><input type="range" min="48" max="150" step="1" value="${l.mainFontSize ?? 96}" oninput="updateProp('mainFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-mainFontSize">${l.mainFontSize ?? 96}px</span></div><div class="slider-row"><span class="s-label">%大小</span><input type="range" min="20" max="90" step="1" value="${l.topFontSize ?? l.sideFontSize ?? 52}" oninput="updateProp('topFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-topFontSize">${l.topFontSize ?? l.sideFontSize ?? 52}px</span></div><div class="slider-row"><span class="s-label">Off大小</span><input type="range" min="16" max="80" step="1" value="${l.bottomFontSize ?? l.sideFontSize ?? 42}" oninput="updateProp('bottomFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-bottomFontSize">${l.bottomFontSize ?? l.sideFontSize ?? 42}px</span></div><div class="slider-row"><span class="s-label">左右间距</span><input type="range" min="-8" max="32" step="1" value="${l.sideGap ?? 8}" oninput="updateProp('sideGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideGap">${l.sideGap ?? 8}px</span></div><div class="slider-row"><span class="s-label">%/Off间距</span><input type="range" min="-18" max="48" step="1" value="${l.sideLineGap ?? -2}" oninput="updateProp('sideLineGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideLineGap">${l.sideLineGap ?? -2}px</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="18" step="0.5" value="${l.letterSpacing ?? -3}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? -3}px</span></div><div class="slider-row"><span class="s-label">左右边距</span><input type="range" min="8" max="90" step="1" value="${l.tagPaddingX ?? 34}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 34}px</span></div><div class="slider-row"><span class="s-label">上下边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingY ?? 15}" oninput="updateProp('tagPaddingY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingY">${l.tagPaddingY ?? 15}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="36" step="1" value="${l.shadowThickness ?? 12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness ?? 12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 0.45)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 0.45)*100)}%</span></div>`;
         }
         else if(l.type === 'arc') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; arcColorPresets.forEach(p => { const isActive = l.cIn === p.cIn && l.cOut === p.cOut; presetHtml += `<div onclick="handleColorPresetClick(event,'arc','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.cIn}; border: 4px solid ${p.cOut}; box-shadow: 0 0 0 ${isActive ? '2px' : '0'} var(--text-main); cursor:pointer;" title="双击编辑并同步"></div>`; });
@@ -5771,7 +6313,13 @@
             if(e.shiftKey || e.ctrlKey || e.metaKey || !activeLayerIds.includes(id)) selectLayerWithModifiers(id, e);
             isDragging = true; dragStartX = e.clientX; dragStartY = e.clientY;
             dragData = activeLayerIds.map(selId => ({ id: selId, ix: layers.find(x => x.id === selId).x, iy: layers.find(x => x.id === selId).y }));
-            renderCanvas(); renderLayersList(); renderProperties();
+            // Logo 内部的双击操作不能在首击时重建 DOM，否则第二击会落在新节点上，浏览器无法识别为双击。
+            const isLogoSlot = (l.logoLayout === 'single' || l.logoLayout === 'matrix') && e.target.closest('.logo-layout-slot');
+            const isPairInternalLogo = l.logoLayout === 'pair' && e.target.closest('.logo-layout-main, .logo-layout-slot');
+            if (!(isLogoSlot || isPairInternalLogo)) {
+                renderCanvas();
+            }
+            renderLayersList(); renderProperties();
         } else { exitTextEdit(); activeLayerIds = []; layerSelectionAnchorId = null; renderCanvas(); renderLayersList(); renderProperties(); }
     });
     // 画布右键菜单
@@ -5839,7 +6387,16 @@
         diySubtagFilter = '全部';
         diySelectedSubtag = '全部';
         document.querySelectorAll('.asset-tab').forEach(b => b.classList.toggle('active', b.dataset.assetTab === tab));
+        // 更新搜索框占位文字
+        var searchInput = document.getElementById('asset-search-input');
+        if (searchInput) searchInput.placeholder = tab === 'layout' ? '搜索名称、比例或尺寸…' : '搜索组件名称…';
         refreshSaveActiveAssetButton();
+        // 切换 tab 时清空搜索（clearAssetSearch 内部会调 renderAssetLibrary）
+        var input = document.getElementById('asset-search-input');
+        var clearBtn = document.getElementById('asset-search-clear');
+        if (input) input.value = '';
+        _assetSearchQuery = '';
+        if (clearBtn) clearBtn.hidden = true;
         renderAssetLibrary();
     }
     function refreshSaveActiveAssetButton() {
@@ -6181,7 +6738,32 @@
                     var item = arr.find(function(x) { return x.cloudId === pid; });
                     if (item) item.previewUrl = pUrl;
                 });
-                renderAssetLibrary();
+                // 精准更新对应卡片的预览图，避免全量 renderAssetLibrary 导致滚动重置和 hover 闪烁
+                var card = document.querySelector('.asset-item[data-asset-id="' + CSS.escape(pid) + '"]');
+                if (card) {
+                    var thumb = card.querySelector('.asset-thumb');
+                    if (thumb) {
+                        // 只替换预览图内容，保留 hover-info 等其他子元素
+                        var existingImg = thumb.querySelector('img:not(.hover-preview-img)');
+                        if (!existingImg) {
+                            existingImg = document.createElement('img');
+                            existingImg.style.width = '100%';
+                            existingImg.style.height = '100%';
+                            existingImg.style.objectFit = 'contain';
+                            existingImg.style.display = 'block';
+                            // 如果有 mini canvas 等非 img 非 hover-info 的内容，先清除
+                            var toRemove = [];
+                            thumb.childNodes.forEach(function(c) {
+                                if (c.nodeType === 1 && !c.classList.contains('asset-template-hover-info') && c.tagName !== 'IMG') {
+                                    toRemove.push(c);
+                                }
+                            });
+                            toRemove.forEach(function(c) { c.remove(); });
+                            thumb.insertBefore(existingImg, thumb.querySelector('.asset-template-hover-info') || null);
+                        }
+                        existingImg.src = pUrl;
+                    }
+                }
             }
         } else if (event.data.type === 'vf:template-metadata') {
             // hover 只取得尺寸描述，不取得图层与图片数据，避免预览造成编辑器卡顿。
@@ -6203,7 +6785,17 @@
                 }
                 packItem._metadataLoaded = true;
                 packItem._metadataLoading = false;
-                renderAssetLibrary();
+                // 精准更新对应卡片，避免全量 renderAssetLibrary 导致 hover 闪烁和滚动重置
+                var card = document.querySelector('.asset-item[data-asset-id="' + CSS.escape(metaId) + '"]');
+                if (card) {
+                    var hoverInfo = card.querySelector('.asset-template-hover-info');
+                    if (hoverInfo) {
+                        var canvasInfo = getTemplatePreviewCanvasInfo(packItem);
+                        hoverInfo.innerHTML = canvasInfo
+                            ? '<span class="asset-template-hover-ratio">' + escapeHtml(canvasInfo.ratio) + '</span><span class="asset-template-hover-size">' + escapeHtml(canvasInfo.width + ' × ' + canvasInfo.height + ' px') + '</span>'
+                            : '<span class="asset-template-hover-ratio">—</span><span class="asset-template-hover-size">读取真实画板尺寸中…</span>';
+                    }
+                }
             }
         } else if (event.data.type === 'vf:template-metadata-error') {
             // 预取阶段网络偶发失败时允许自动重试，不能把卡片永久锁在“读取中/0 个画板”。
@@ -6462,7 +7054,7 @@
                 });
             });
         } else if (currentAssetTab === 'component') {
-            tagPresetLibrary.concat(logoAssets).concat(groupPresets).forEach(function(item) {
+            tagPresetLibrary.concat(logoAssets).concat(groupPresets).concat(referenceElements).forEach(function(item) {
                 var itemTag = item.subTag || item._subTag || '';
                 if (!itemTag && item.tags && Array.isArray(item.tags)) {
                     var tt = item.tags;
@@ -6475,6 +7067,9 @@
                     else if (tt.includes('组合')) itemTag = '组合';
                     else if (tt.includes('其他素材')) itemTag = '其他素材';
                 }
+                // 参考元素用 category 字段推断
+                if (!itemTag && item.category === 'background') itemTag = '背景';
+                if (!itemTag && item.category === 'food') itemTag = '其他素材';
                 counts['全部']++;
                 if (counts[itemTag] !== undefined) counts[itemTag]++;
             });
@@ -6490,6 +7085,42 @@
         }).join('');
     }
 
+    function onAssetSearch() {
+        var input = document.getElementById('asset-search-input');
+        var clearBtn = document.getElementById('asset-search-clear');
+        _assetSearchQuery = (input.value || '').trim();
+        clearBtn.hidden = !_assetSearchQuery;
+        renderAssetLibrary();
+    }
+    function clearAssetSearch() {
+        var input = document.getElementById('asset-search-input');
+        var clearBtn = document.getElementById('asset-search-clear');
+        input.value = '';
+        _assetSearchQuery = '';
+        clearBtn.hidden = true;
+        renderAssetLibrary();
+    }
+    // 检查资产是否匹配搜索关键词
+    function assetMatchesSearch(asset, type) {
+        if (!_assetSearchQuery) return true;
+        var q = _assetSearchQuery.toLowerCase();
+        // 名称匹配
+        var name = (asset.name || '').toLowerCase();
+        if (name.indexOf(q) !== -1) return true;
+        // 比例匹配
+        var canvasInfo = getTemplatePreviewCanvasInfo(asset);
+        if (canvasInfo) {
+            if (canvasInfo.ratio.toLowerCase().indexOf(q) !== -1) return true;
+            if (String(canvasInfo.width).indexOf(q) !== -1) return true;
+            if (String(canvasInfo.height).indexOf(q) !== -1) return true;
+            if ((canvasInfo.width + '×' + canvasInfo.height).indexOf(q) !== -1) return true;
+            if ((canvasInfo.width + 'x' + canvasInfo.height).toLowerCase().indexOf(q) !== -1) return true;
+        }
+        // 对于 pack 和 bookmark，也检查 size 字段
+        var size = asset.size || '';
+        if (size.toLowerCase().indexOf(q) !== -1) return true;
+        return false;
+    }
     function refreshAssetLibrary() {
         var btn = document.getElementById('refresh-asset-btn');
         if (btn) { btn.style.transform = 'rotate(360deg)'; btn.style.transition = 'transform 0.6s ease'; setTimeout(function() { btn.style.transform = ''; btn.style.transition = ''; }, 600); }
@@ -6497,10 +7128,13 @@
     }
     function renderAssetLibrary() {
         var cl = document.getElementById('diy-count-layout'); if (cl) cl.textContent = '· ' + presetLibrary.length;
-        var cc = document.getElementById('diy-count-component'); if (cc) cc.textContent = '· ' + (tagPresetLibrary.length + logoAssets.length + groupPresets.length);
+        var cc = document.getElementById('diy-count-component'); if (cc) cc.textContent = '· ' + (tagPresetLibrary.length + logoAssets.length + groupPresets.length + referenceElements.length);
         var cr = document.getElementById('diy-count-recycle'); if (cr) cr.textContent = '· ' + recycleBin.length;
         renderDiySubtags();
         const list = document.getElementById('asset-list-ui'); if(!list) return;
+        // 保存滚动位置，避免渲染过程中跳回顶部
+        // 只在当前有滚动位置时更新模块级变量（防止 innerHTML 清空后的 0 覆盖真实位置）
+        if (list.scrollTop > 0) _assetListScrollTop = list.scrollTop;
         list.innerHTML = '';
         // 使用真实的两列容器来实现瀑布流。CSS multi-column 在此滚动区域会把后续项排到
         // 看不见的横向列里，导致“背景 · 41”却只能看到少量卡片。
@@ -6512,14 +7146,13 @@
             item.dataset.masonryOrder = String(masonryOrder++);
             var target = masonryColumns[0].scrollHeight <= masonryColumns[1].scrollHeight ? masonryColumns[0] : masonryColumns[1];
             target.appendChild(item);
-            item.querySelectorAll('img').forEach(function(image) {
-                if (!image.complete) image.addEventListener('load', rebalanceMasonry, { once: true });
-            });
+            // 缩略图已通过 aspect-ratio 固定高度，不需要图片加载后再重排（避免重排导致 hover 闪烁）
         }
         function rebalanceMasonry() {
             if (masonryFrame || !masonryColumns.length) return;
             masonryFrame = requestAnimationFrame(function() {
                 masonryFrame = 0;
+                var savedScroll = list.scrollTop;
                 var allItems = Array.from(masonryColumns[0].children).concat(Array.from(masonryColumns[1].children))
                     .sort(function(a, b) { return Number(a.dataset.masonryOrder) - Number(b.dataset.masonryOrder); });
                 masonryColumns[0].replaceChildren();
@@ -6528,6 +7161,7 @@
                     var target = masonryColumns[0].scrollHeight <= masonryColumns[1].scrollHeight ? masonryColumns[0] : masonryColumns[1];
                     target.appendChild(item);
                 });
+                if (savedScroll > 0) { list.scrollTop = savedScroll; _assetListScrollTop = savedScroll; }
             });
         }
         if (currentAssetTab === 'layout' || currentAssetTab === 'component') {
@@ -6542,8 +7176,12 @@
                 // 按 name 或标签粗略匹配
                 return (p.name || '').indexOf(diySubtagFilter) !== -1;
             });
-            const items = bookmarks.concat(regularItems);
-            if(items.length === 0) { list.innerHTML = '<div class=”asset-empty”>暂无版式</div>'; return; }
+            // 搜索过滤
+            var searchFilter = function(p) { return assetMatchesSearch(p, p.kind === 'bookmark' ? 'bookmark' : (p.kind === 'pack' ? 'pack' : 'layout')); };
+            var filteredBookmarks = bookmarks.filter(searchFilter);
+            var filteredRegular = regularItems.filter(searchFilter);
+            const items = filteredBookmarks.concat(filteredRegular);
+            if(items.length === 0) { list.innerHTML = '<div class="asset-empty">' + (_assetSearchQuery ? '未找到匹配的模板' : '暂无版式') + '</div>'; if (_assetListScrollTop) list.scrollTop = _assetListScrollTop; return; }
             items.forEach(p => {
                 const isPack = p.kind === 'pack';
                 const isBookmark = p.kind === 'bookmark';
@@ -6571,16 +7209,24 @@
                 }
                 return itemTag === diySubtagFilter;
             };
-            var filteredTags = tagPresetLibrary.filter(filterFn);
-            var filteredLogos = logoAssets.filter(filterFn);
-            var filteredGroups = groupPresets.filter(filterFn);
-            var totalComp = filteredTags.length + filteredLogos.length + filteredGroups.length;
-            if(totalComp === 0) { list.innerHTML = '<div class="asset-empty">暂无组件</div>'; return; }
+            var refFilterFn = function(ref) {
+                if(diySubtagFilter === '全部') return true;
+                if(diySubtagFilter === '背景' && ref.category === 'background') return true;
+                if(diySubtagFilter === '其他素材' && ref.category === 'food') return true;
+                return false;
+            };
+            var filteredTags = tagPresetLibrary.filter(filterFn).filter(function(p) { return assetMatchesSearch(p, 'tag'); });
+            var filteredLogos = logoAssets.filter(filterFn).filter(function(l) { return assetMatchesSearch(l, 'logo'); });
+            var filteredGroups = groupPresets.filter(filterFn).filter(function(p) { return assetMatchesSearch(p, 'group'); });
+            var filteredRefs = referenceElements.filter(refFilterFn).filter(function(r) { return assetMatchesSearch(r, 'reference'); });
+            var totalComp = filteredTags.length + filteredLogos.length + filteredGroups.length + filteredRefs.length;
+            if(totalComp === 0) { list.innerHTML = '<div class="asset-empty">' + (_assetSearchQuery ? '未找到匹配的组件' : '暂无组件') + '</div>'; if (_assetListScrollTop) list.scrollTop = _assetListScrollTop; return; }
             filteredTags.forEach(p => appendAssetItem(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, asset: p, type: 'tag', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
             filteredLogos.forEach(l => appendAssetItem(createAssetItem({ title: l.name, meta: '点击添加到画布', asset: l, type: 'logo', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
             filteredGroups.forEach(p => appendAssetItem(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个图层`, asset: p, type: 'group', onApply: () => applyGroupCombo(p.id), onDelete: () => deleteGroupCombo(p.id) })));
+            filteredRefs.forEach(r => appendAssetItem(createAssetItem({ title: r.name, meta: '点击替换选中图层', asset: r, type: 'reference', img: r.src, onApply: () => applyReferenceElementToLayer(r), onDelete: () => deleteReferenceElement(r.id) })));
         } else if(currentAssetTab === 'recycle') {
-            if (!recycleBin.length) { list.innerHTML = '<div class="asset-empty">回收站为空</div>'; return; }
+            if (!recycleBin.length) { list.innerHTML = '<div class="asset-empty">回收站为空</div>'; if (_assetListScrollTop) list.scrollTop = _assetListScrollTop; return; }
             recycleBin.forEach(function(entry) {
                 var meta = '右键还原 · 刷新网页后自动删除';
                 list.appendChild(createAssetItem({
@@ -6590,6 +7236,8 @@
                 }));
             });
         }
+        // 恢复滚动位置
+        if (_assetListScrollTop) requestAnimationFrame(function() { list.scrollTop = _assetListScrollTop; });
     }
     function createColorPaletteAssetItem(palette) {
         const item = document.createElement('div');
@@ -6614,6 +7262,8 @@
         // 尺寸 hover 仅属于模板（单画板版式 / 多画板套组），组件卡片不添加该样式。
         const isTemplateAsset = type === 'layout' || type === 'pack' || type === 'bookmark';
         const item = document.createElement('div'); item.className = `asset-item ${current ? 'current' : ''} ${type === 'font' ? 'font-asset-card' : ''} ${isTemplateAsset ? 'template-preview-card' : ''}`;
+        if (asset?.cloudId) item.dataset.assetId = asset.cloudId;
+        else if (asset?.id) item.dataset.assetId = asset.id;
         const canUseAsAIReference = type === 'reference' || (type === 'logo' && getLogoAssetType(asset) === 'image' && !!asset?.src);
         item.onclick = () => {
             if(item._isDragging) return;
@@ -6653,6 +7303,10 @@
         }
         const thumb = document.createElement('div');
         thumb.className = `asset-thumb ${type === 'logo' ? 'logo-thumb' : ''} ${type === 'reference' ? 'reference-thumb' : ''} ${type === 'reference' && asset?.category === 'background' ? 'reference-bg-thumb' : ''}`;
+        // 用已知预览尺寸固定宽高比，避免图片加载过程中卡片高度变化导致滚动跳动
+        var pw = Number(asset?.previewW) || 0;
+        var ph = Number(asset?.previewH) || 0;
+        if (pw > 0 && ph > 0) thumb.style.aspectRatio = pw + ' / ' + ph;
         renderAssetPreview(thumb, { type, asset, img });
         let packHover = null;
         if(type === 'layout' || type === 'pack' || type === 'bookmark') {
@@ -7436,7 +8090,9 @@
         }
         preset.previewUrl = previewDataUrl;
         renderAssetLibrary();
-        var subTag = (diySelectedSubtag && diySelectedSubtag !== '全部') ? diySelectedSubtag : '社媒物料';
+        // 保存模版始终使用 layout 类的子标签，不受当前资产库 tab 影响
+        var layoutSubtags = DIY_SUBTAGS['layout'] || ['全部', '社媒物料', 'C端物料'];
+        var subTag = (diySelectedSubtag && layoutSubtags.indexOf(diySelectedSubtag) !== -1 && diySelectedSubtag !== '全部') ? diySelectedSubtag : '社媒物料';
         // 保存模板时也必须使用当前实际画布尺寸，而不是仍可能为 head 的固定画板预设。
         var canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
         notifyParent({ type: 'vf:save-template', templateType: 'layout', name: name, data: { size: currentRatio, canvasW: canvasSize.w, canvasH: canvasSize.h, elements: elements }, previewDataUrl: previewDataUrl || '', tempId: tempId, subTag: subTag });
@@ -7735,17 +8391,17 @@
         });
     }
 
-    async function applyFontFromAsset(id) {
+    async function applyFontFromAsset(id, silent) {
         var fontAsset = fontAssets.find(function(f) { return f.id === id; });
         if (!fontAsset) return;
         // 检查是否已安装
         if (fontAsset.fontFamilyId && customFonts.some(function(f) {
             return f.familyId === fontAsset.fontFamilyId && f.weight === fontAsset.fontWeight;
         })) {
-            showToast('该字体已安装，可直接使用');
+            if (!silent) showToast('该字体已安装，可直接使用');
             return;
         }
-        showToast('正在下载字体...');
+        if (!silent) showToast('正在下载字体...');
         try {
             var fontDataUrl;
             if (fontAsset.fontData) {
@@ -7768,10 +8424,10 @@
             if (!registered) throw new Error('字体注册失败');
             fontAsset._installed = true;
             if (fontAsset.fontFamilyName) fontAsset.name = fontAsset.fontFamilyName;
-            renderAssetLibrary(); renderProperties(); renderCanvas();
-            showToast('已安装字体：' + (fontAsset.fontFamilyName || fontAsset.name));
+            if (!silent) { renderAssetLibrary(); renderProperties(); renderCanvas(); }
+            if (!silent) showToast('已安装字体：' + (fontAsset.fontFamilyName || fontAsset.name));
         } catch (e) {
-            showToast('字体安装失败：' + (e.message || '未知错误'));
+            if (!silent) showToast('字体安装失败：' + (e.message || '未知错误'));
         }
     }
 
@@ -7823,6 +8479,7 @@
     }
 
     async function preloadCloudFonts() {
+        var anyInstalled = false;
         for (var i = 0; i < fontAssets.length; i++) {
             var f = fontAssets[i];
             if (!f.cloudId) continue;
@@ -7834,11 +8491,13 @@
                 continue;
             }
             try {
-                await applyFontFromAsset(f.id);
+                await applyFontFromAsset(f.id, true); // 预加载模式，跳过单次 renderAssetLibrary
+                anyInstalled = true;
             } catch(e) {
                 console.warn('字体预加载失败:', f.name, e);
             }
         }
+        if (anyInstalled) { renderAssetLibrary(); renderProperties(); renderCanvas(); }
     }
 
     function getLayerBounds(l) {
@@ -8392,6 +9051,111 @@
             };
             reader.readAsDataURL(file);
         }).finally(() => { e.target.value = ''; });
+    });
+
+    function detectImageBackgroundColor(src) {
+        return new Promise(function(resolve) {
+            var img = new Image();
+            img.onload = function() {
+                var w = img.naturalWidth, h = img.naturalHeight;
+                var cvs = document.createElement('canvas');
+                cvs.width = w; cvs.height = h;
+                var ctx = cvs.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                // 采样四角 + 四边中点
+                var r = 3;
+                var points = [[r,r], [w-1-r,r], [r,h-1-r], [w-1-r,h-1-r], [Math.floor(w/2),r], [Math.floor(w/2),h-1-r], [r,Math.floor(h/2)], [w-1-r,Math.floor(h/2)]];
+                var edgeAlphas = [];
+                points.forEach(function(p) {
+                    var d = ctx.getImageData(Math.max(0,p[0]), Math.max(0,p[1]), 1, 1).data;
+                    edgeAlphas.push(d[3]);
+                });
+                // 如果边缘大部分透明 → 透明 PNG，根据 logo 主体明暗选背景
+                var transparentEdges = edgeAlphas.filter(function(a) { return a < 20; }).length;
+                if (transparentEdges >= 5) {
+                    // 采样中心区域的不透明像素判断明暗
+                    var cx = Math.floor(w/2), cy = Math.floor(h/2), sw = Math.floor(w/4), sh = Math.floor(h/4);
+                    var sampleData = ctx.getImageData(cx - Math.floor(sw/2), cy - Math.floor(sh/2), sw, sh).data;
+                    var totalLum = 0, count = 0;
+                    for (var i = 0; i < sampleData.length; i += 4) {
+                        if (sampleData[i+3] > 100) { // 只统计不透明的像素
+                            totalLum += 0.299 * sampleData[i] + 0.587 * sampleData[i+1] + 0.114 * sampleData[i+2];
+                            count++;
+                        }
+                    }
+                    var avgLum = count > 0 ? totalLum / count : 128;
+                    // 浅色 logo → 深色背景，深色 logo → 白色背景
+                    if (avgLum > 160) {
+                        resolve({ r: 30, g: 30, b: 30, w: w, h: h });
+                    } else if (avgLum < 80) {
+                        resolve({ r: 255, g: 255, b: 255, w: w, h: h });
+                    } else {
+                        // 中等亮度 → 白色底
+                        resolve({ r: 255, g: 255, b: 255, w: w, h: h });
+                    }
+                    return;
+                }
+                // 非透明图片：采样边缘颜色
+                var samples = [];
+                points.forEach(function(p) {
+                    var d = ctx.getImageData(Math.max(0,p[0]), Math.max(0,p[1]), 1, 1).data;
+                    samples.push([d[0], d[1], d[2]]);
+                });
+                var map = {};
+                samples.forEach(function(rgb) {
+                    var key = rgb.join(',');
+                    map[key] = (map[key] || 0) + 1;
+                });
+                var best = samples[0];
+                var bestCount = 0;
+                Object.keys(map).forEach(function(k) {
+                    if (map[k] > bestCount) { bestCount = map[k]; best = k.split(',').map(Number); }
+                });
+                resolve({ r: best[0], g: best[1], b: best[2], w: w, h: h });
+            };
+            img.onerror = function() { resolve({ r: 255, g: 255, b: 255, w: 100, h: 100 }); };
+            img.src = src;
+        });
+    }
+
+    document.getElementById('logo-layout-upload').addEventListener('change', e => {
+        var file = e.target.files[0];
+        var target = pendingLogoLayoutSlot;
+        pendingLogoLayoutSlot = null;
+        e.target.value = '';
+        if (!file) return;
+        // 无 pending target → 矩阵 "+" 按钮触发，追加到当前矩阵
+        if (!target) {
+            var activeLayer = activeLayerIds.length === 1 ? layers.find(function(l) { return l.id === activeLayerIds[0]; }) : null;
+            if (activeLayer && activeLayer.type === 'logoLayout' && activeLayer.logoLayout === 'matrix') {
+                var reader = new FileReader();
+                reader.onload = function(ev) {
+                    activeLayer.slots = activeLayer.slots || [];
+                    var slot = { src: ev.target.result, name: file.name || 'Logo' };
+                    activeLayer.slots.push(slot);
+                    detectImageBackgroundColor(ev.target.result).then(function(info) {
+                        slot.bgColor = 'rgb(' + info.r + ',' + info.g + ',' + info.b + ')';
+                        saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+            return;
+        }
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+            var layer = layers.find(function(l) { return l.id === target.layerId; });
+            if (!layer || !Array.isArray(layer.slots)) return;
+            var dataUrl = ev.target.result;
+            detectImageBackgroundColor(dataUrl).then(function(info) {
+                var bg = 'rgb(' + info.r + ',' + info.g + ',' + info.b + ')';
+                layer.slots[target.slotIndex] = { src: dataUrl, name: file.name || 'Logo', bgColor: bg };
+                if (layer.logoLayout !== 'matrix') layer.bgColor = bg;
+                saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+                showToast('已添加 Logo');
+            });
+        };
+        reader.readAsDataURL(file);
     });
 
     document.getElementById('replace-image-upload').addEventListener('change', async e => {
@@ -9262,10 +10026,14 @@
             if (!rect || rect.width < 2 || rect.height < 2) throw new Error('未找到可导出的画板');
             const scaleX = video.videoWidth / rect.viewportWidth;
             const scaleY = video.videoHeight / rect.viewportHeight;
+            // 起点和终点分别换算、分别取整，不能用“起点 + 四舍五入后的宽度”。
+            // 后者在 iframe 缩放或高 DPI 下可能多裁到右侧/底部的一列页面背景像素。
             const sx = Math.max(0, Math.round(rect.left * scaleX));
             const sy = Math.max(0, Math.round(rect.top * scaleY));
-            const sw = Math.round(rect.width * scaleX);
-            const sh = Math.round(rect.height * scaleY);
+            const ex = Math.min(video.videoWidth, Math.round((rect.left + rect.width) * scaleX));
+            const ey = Math.min(video.videoHeight, Math.round((rect.top + rect.height) * scaleY));
+            const sw = Math.max(1, ex - sx);
+            const sh = Math.max(1, ey - sy);
             if (sx + sw > video.videoWidth + 2 || sy + sh > video.videoHeight + 2) {
                 throw new Error('共享画面与当前标签页不一致，请重新选择“当前标签页”');
             }
