@@ -14,15 +14,20 @@ const OPENAI_IMAGE_SIZE_BY_RATIO = {
 };
 
 const VOLC_IMAGE_SIZE_BY_RATIO = {
-  '1:1': '2048x2048',
-  '3:4': '1920x2560',
-  '4:3': '2560x1920',
-  '9:16': '1440x2560',
-  '16:9': '2560x1440'
+  // 生图结果进入 1080 级别画板后还会缩放。此前默认请求 2K/2.5K，
+  // 不仅大幅增加火山排队和推理时间，也让参考图生图更容易超时。
+  // 这里保留足够用于常用社媒画板的长边分辨率；需要印刷级大图时再由
+  // 专门的高清/放大流程处理，而不是拖慢每一次普通生图。
+  '1:1': '1024x1024',
+  '3:4': '1024x1536',
+  '4:3': '1536x1024',
+  '9:16': '1024x1536',
+  '16:9': '1536x1024'
 };
 const VOLC_VISUAL_HOST = 'visual.volcengineapi.com';
 const VOLC_VISUAL_REGION = 'cn-north-1';
 const VOLC_VISUAL_SERVICE = 'cv';
+const GPT_REFERENCE_LIMIT = 8;
 
 export function hasOpenAI(env) {
   return !!env?.OPENAI_API_KEY;
@@ -427,7 +432,7 @@ export async function generateWithOpenAIReference(env, prompt, ratio, referenceI
     throw new Error('GPT 参考图生图未配置：请在 Cloudflare Pages 环境变量中设置 LK888_API_KEY 或 OPENAI_API_KEY。');
   }
   const images = Array.isArray(referenceImages)
-    ? referenceImages.slice(0, 8).filter(item => item?.image)
+    ? referenceImages.slice(0, GPT_REFERENCE_LIMIT).filter(item => item?.image)
     : referenceImages
       ? [{ image: referenceImages, mimeType: 'image/png' }]
       : [];
@@ -479,7 +484,7 @@ export async function submitLK888ImageReferenceTask(env, prompt, ratio, referenc
     throw new Error('抹尘 GPT Image 2 参考图生图未配置：请在 Cloudflare Pages 环境变量中设置 LK888_API_KEY。');
   }
   const images = Array.isArray(referenceImages)
-    ? referenceImages.slice(0, 8).filter(item => item?.image)
+    ? referenceImages.slice(0, GPT_REFERENCE_LIMIT).filter(item => item?.image)
     : referenceImages
       ? [{ image: referenceImages, mimeType: 'image/png' }]
       : [];
@@ -490,9 +495,9 @@ export async function submitLK888ImageReferenceTask(env, prompt, ratio, referenc
     'use the uploaded reference images for subject, composition, product style, color palette, or visual direction while creating a polished commercial poster image'
   ].join(', ');
   try {
-    for (let i = 0; i < images.length; i += 1) {
-      uploadedReferences.push(await uploadLK888ReferenceImage(env, images[i], i));
-    }
+    // 临时 URL 相互独立，改为并行上传以缩短参考图生图的提交阶段。
+    const uploaded = await Promise.all(images.map((item, index) => uploadLK888ReferenceImage(env, item, index)));
+    uploadedReferences.push(...uploaded);
     const referenceUrls = uploadedReferences.map(item => item.url);
     const submitData = await postJson(`${getLK888BaseUrl(env)}/v1/media/generate`, {
       model: getLK888ImageModel(env),

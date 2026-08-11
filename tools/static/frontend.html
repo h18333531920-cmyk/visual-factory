@@ -2434,6 +2434,14 @@
     let aiFeatureMode = 'generate';
     let aiProvider = 'openai';
     const AI_REFERENCE_LIMIT = 8;
+    // 火山图生图的吞吐量会随参考图数量和原始文件体积急剧下降；普通生图
+    // 优先使用最关键的两张即可。上传时统一压缩，避免把相机原图 Base64 直传。
+    const VOLC_REFERENCE_LIMIT = 2;
+    // GPT 参考图会被上传到临时存储后再提交模型。保留完整的八张上限，
+    // 以支持多主体/多角度的创作；速度优化通过压缩与并行上传完成。
+    const GPT_REFERENCE_LIMIT = 8;
+    const AI_REFERENCE_MAX_EDGE = 1280;
+    const AI_REFERENCE_JPEG_QUALITY = 0.86;
     const AI_REFERENCE_DRAG_MIME = 'application/x-vf-ai-reference';
     const aiReferenceDragPayloads = new Map();
     let assetContextTarget = null;
@@ -3664,6 +3672,24 @@
         }
         return 'Arial Black, sans-serif';
     }
+    function getHTFont() {
+        var families = getCustomFontFamilies();
+        for (var i = 0; i < families.length; i++) {
+            if (families[i].familyName && families[i].familyName.toUpperCase().indexOf('HT') !== -1) {
+                return cssFontFamily(families[i].familyId);
+            }
+        }
+        return 'Arial Black, sans-serif';
+    }
+    function getDelaFont() {
+        var families = getCustomFontFamilies();
+        for (var i = 0; i < families.length; i++) {
+            if (families[i].familyName && /dela/i.test(families[i].familyName)) {
+                return cssFontFamily(families[i].familyId);
+            }
+        }
+        return 'Arial Black, sans-serif';
+    }
     function getFontWeightOptions(fontValue, selectedWeight) {
         const family = getCustomFontFamilies().find(item => cssFontFamily(item.familyId) === fontValue);
         const weights = family ? family.fonts : [
@@ -3708,6 +3734,12 @@
         if(layer.tagPaddingX === undefined) layer.tagPaddingX = 34;
         if(layer.tagPaddingY === undefined) layer.tagPaddingY = 15;
         if(layer.tagTextOffsetY === undefined) layer.tagTextOffsetY = 0;
+        if(layer.subtitle === undefined) layer.subtitle = '';
+        if(layer.subtitleOffsetY === undefined) layer.subtitleOffsetY = -10;
+        if(layer.subtitleFontSize === undefined) layer.subtitleFontSize = 29;
+        if(layer.subtitleFontWeight === undefined) layer.subtitleFontWeight = 900;
+        if(layer.subtitlePosition === undefined) layer.subtitlePosition = 'bottom';
+        if(layer.subtitleStrokeWidth === undefined) layer.subtitleStrokeWidth = 6;
 
     function toggleDiscountLang() {
         activeLayerIds.forEach(function(id) {
@@ -3746,6 +3778,20 @@
         renderCanvas(); renderProperties(); saveHistory();
     }
     window.toggleDiscountLang = toggleDiscountLang;
+    function toggleDiscountSubtitle() {
+        activeLayerIds.forEach(function(id) {
+            var l = layers.find(function(x) { return x.id === id; });
+            if (!l || l.type !== 'discountTag') return;
+            if (l.subtitle) {
+                l.subtitle = '';
+            } else {
+                l.subtitle = 'على طلبك الاول';
+                if (l.subtitleOffsetY === undefined) l.subtitleOffsetY = -10;
+            }
+        });
+        renderCanvas(); renderProperties(); saveHistory();
+    }
+    window.toggleDiscountSubtitle = toggleDiscountSubtitle;
         if(layer.mainFontSize === undefined) layer.mainFontSize = 96;
         if(layer.sideFontSize === undefined) layer.sideFontSize = 42;
         if(layer.topFontSize === undefined) layer.topFontSize = layer.sideFontSize;
@@ -3771,7 +3817,7 @@
     function formatPropValue(p, v) {
         if(p === 'scale') return v + 'x';
         if(p.includes('rotation')) return v + '°';
-        if(p.includes('Thickness') || p === 'letterSpacing' || p === 'tagPaddingX' || p === 'tagPaddingY' || p === 'tagTextOffsetY' || p === 'mainFontSize' || p === 'topFontSize' || p === 'bottomFontSize' || p === 'sideFontSize' || p === 'sideGap' || p === 'sideLineGap' || p === 'fontSize' || p === 'maxWidth') return v + 'px';
+        if(p.includes('Thickness') || p === 'letterSpacing' || p === 'tagPaddingX' || p === 'tagPaddingY' || p === 'tagTextOffsetY' || p === 'subtitleOffsetY' || p === 'mainFontSize' || p === 'topFontSize' || p === 'bottomFontSize' || p === 'sideFontSize' || p === 'sideGap' || p === 'sideLineGap' || p === 'fontSize' || p === 'maxWidth' || p === 'borderRadius' || p === 'tagHeight' || p === 'subtitleFontSize' || p === 'subtitleStrokeWidth' || p === 'textStrokeWidth') return v + 'px';
         if(p === 'lineHeight') return Number(v).toFixed(2);
         if(p === 'shadowOpacity') return Math.round(normalizeAlpha(v) * 100) + '%';
         return v;
@@ -4060,6 +4106,27 @@
             });
         });
     }
+    async function compactAIReferenceSource(src, mimeType = '') {
+        const img = await loadImageElement(src);
+        const sourceW = img.naturalWidth || img.width || 1;
+        const sourceH = img.naturalHeight || img.height || 1;
+        const maxEdge = Math.max(sourceW, sourceH);
+        const scale = Math.min(1, AI_REFERENCE_MAX_EDGE / maxEdge);
+        const width = Math.max(1, Math.round(sourceW * scale));
+        const height = Math.max(1, Math.round(sourceH * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d', { alpha: false });
+        // 参考图传给模型不需要透明通道；填白后转 JPEG 能明显降低上传时间。
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        return {
+            src: canvas.toDataURL('image/jpeg', AI_REFERENCE_JPEG_QUALITY),
+            mimeType: 'image/jpeg'
+        };
+    }
     async function readAIReferenceFile(file) {
         if(!file || !file.type?.startsWith('image/')) return null;
         const src = await new Promise((resolve, reject) => {
@@ -4068,7 +4135,8 @@
             reader.onerror = () => reject(new Error('参考图读取失败'));
             reader.readAsDataURL(file);
         });
-        return { name: file.name, mimeType: file.type || 'image/png', src };
+        const compact = await compactAIReferenceSource(src, file.type || 'image/png');
+        return { name: file.name, ...compact };
     }
     function addAIReferenceItems(items = [], message = '已添加参考图') {
         const validItems = (Array.isArray(items) ? items : [items]).filter(item => item?.src);
@@ -4129,14 +4197,18 @@
         if(!source) return null;
         const src = await readAIReferenceUrl(source.src);
         const isSvg = String(source.mimeType || '').includes('svg') || String(src || '').startsWith('data:image/svg');
-        if(!isSvg) return { ...source, src };
+        if(!isSvg) {
+            const compact = await compactAIReferenceSource(src, source.mimeType || 'image/png');
+            return { ...source, ...compact };
+        }
         const img = await loadImageElement(src);
         const canvas = document.createElement('canvas');
         canvas.width = img.naturalWidth || img.width || 320;
         canvas.height = img.naturalHeight || img.height || 210;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        return { ...source, mimeType: 'image/png', src: canvas.toDataURL('image/png') };
+        const compact = await compactAIReferenceSource(canvas.toDataURL('image/png'), 'image/png');
+        return { ...source, ...compact };
     }
     async function addReferenceElementToAI(item) {
         const normalized = await normalizeReferenceElementForAI(item);
@@ -5002,7 +5074,7 @@
         } else {
             newL.zIndex = maxZ + 1; 
             if(type === 'arc') Object.assign(newL, { rIn: 400, wIn: 40, wOut: 120, cIn: '#00D06C', cOut: '#111827' });
-            else if(type === 'text') Object.assign(newL, { x: Math.round(w * 0.3), y: Math.round(h * 0.32), rotation: 0, text: '主标题\n文字', font: getDefaultFont(), fontWeight: 900, fontSize: 88, lineHeight: 0.95, letterSpacing: 0, maxWidth: 620, textAlign: 'auto', textAlignMode: 'auto', textBoxAnchor: 'center', textCol: '#111827', resizeMode: 'autoWidth', textDirection: 'auto' });
+            else if(type === 'text') Object.assign(newL, { x: Math.round(w * 0.3), y: Math.round(h * 0.32), rotation: 0, text: '主标题\n文字', font: getDefaultFont(), fontWeight: 900, fontSize: 88, lineHeight: 0.95, letterSpacing: 0, maxWidth: 620, textAlign: 'auto', textAlignMode: 'auto', textBoxAnchor: 'center', textCol: '#111827', resizeMode: 'autoWidth', textDirection: 'auto', textStrokeWidth: 0, textStrokeCol: '#000000' });
             else if(type === 'tag') Object.assign(newL, { rotation: -3, tagHeight: 60, shadowThickness: 12, shadowOpacity: 1, letterSpacing: 0, tagPaddingX: 36, tagTextOffsetY: 0, text: 'NEW TAG', font: getDefaultFont(), fontWeight: 900, bgCol: '#00D06C', textCol: '#FFFFFF', shadowCol: '#111827' });
             else if(type === 'discountTag') Object.assign(newL, { rotation: -5, shadowThickness: 12, shadowOpacity: 0.45, letterSpacing: -3, tagPaddingX: 34, tagPaddingY: 15, tagTextOffsetY: 0, mainText: '60', topText: '%', bottomText: 'off', discountLang: 'en', mainFontSize: 96, topFontSize: 52, bottomFontSize: 42, sideGap: 8, sideLineGap: -2, font: getDefaultFont(), fontWeight: 900, bgCol: '#050505', textCol: '#7CFF00', shadowCol: '#111827' });
         }
@@ -5012,13 +5084,68 @@
         saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
     }
 
+    // Keeta 的三个预设 Logo 必须来自线上 Logo 组件库。下面的本地路径只用于
+    // 旧编辑记录识别，渲染时会自动替换为云端资产，避免部署后引用本机文件而丢失。
     const KEETA_PRIMARY_LOGO_SRC = '../../public/brand/keeta-primary-logo-cropped.png';
     const KEETA_LOGO_VARIANTS = [
-        { id:'primary', name:'主 Logo（黑色）', src:KEETA_PRIMARY_LOGO_SRC, dark:false },
-        { id:'white', name:'白色 Logo', src:'../../public/brand/keeta-secondary-white-cropped.png', dark:true },
-        { id:'yellow', name:'黄色 Logo', src:'../../public/brand/keeta-secondary-yellow-cropped.png', dark:true }
+        { id:'primary', name:'主 Logo（黑色）', legacySrc:KEETA_PRIMARY_LOGO_SRC, dark:false, aliases:['主logo黑色','主logo','黑色logo','primarylogo','mainlogo'] },
+        { id:'white', name:'白色 Logo', legacySrc:'../../public/brand/keeta-secondary-white-cropped.png', dark:true, aliases:['白色logo','whitelogo'] },
+        { id:'yellow', name:'黄色 Logo', legacySrc:'../../public/brand/keeta-secondary-yellow-cropped.png', dark:true, aliases:['黄色logo','yellowlogo'] }
     ];
     let pendingLogoLayoutSlot = null;
+    function normalizeKeetaLogoName(value) {
+        return String(value || '').toLowerCase().replace(/[\s_\-()（）【】\[\]{}·.]/g, '');
+    }
+    function getKeetaLogoVariant(variantId) {
+        return KEETA_LOGO_VARIANTS.find(function(item) { return item.id === variantId; }) || KEETA_LOGO_VARIANTS[0];
+    }
+    function findCloudKeetaLogoAsset(variantOrId) {
+        const variant = typeof variantOrId === 'string' ? getKeetaLogoVariant(variantOrId) : variantOrId;
+        const targets = [variant.name].concat(variant.aliases || []).map(normalizeKeetaLogoName);
+        let best = null, bestScore = 0;
+        (logoAssets || []).forEach(function(asset) {
+            const name = normalizeKeetaLogoName(asset && asset.name);
+            if (!name) return;
+            let score = 0;
+            targets.forEach(function(target) {
+                if (name === target) score = Math.max(score, 100);
+                else if (target && (name.includes(target) || target.includes(name))) score = Math.max(score, 70);
+            });
+            if (variant.id === 'primary' && /主logo|黑色logo|primarylogo|mainlogo/.test(name)) score = Math.max(score, 60);
+            if (variant.id === 'white' && /白色|white/.test(name)) score = Math.max(score, 60);
+            if (variant.id === 'yellow' && /黄色|yellow/.test(name)) score = Math.max(score, 60);
+            if (score > bestScore) { best = asset; bestScore = score; }
+        });
+        return best;
+    }
+    function requestCloudKeetaLogo(variantOrId) {
+        const asset = findCloudKeetaLogoAsset(variantOrId);
+        if (asset && (!asset.src || asset._lazy) && !asset._keetaLogoRequested) {
+            asset._keetaLogoRequested = true;
+            notifyParent({ type:'vf:request-template-data', id:asset.cloudId || asset.id });
+        }
+        return asset;
+    }
+    function getCloudKeetaLogoSrc(variantId, storedSrc) {
+        const variant = getKeetaLogoVariant(variantId);
+        const asset = requestCloudKeetaLogo(variant);
+        if (asset && asset.src) return asset.src;
+        // 不继续使用部署后不存在的 ../../public 路径；线上数据回来后会自动补上。
+        if (String(storedSrc || '').indexOf('../../public/brand/keeta-') === 0) return '';
+        return storedSrc || '';
+    }
+    function ensureCloudKeetaLogosLoaded() {
+        KEETA_LOGO_VARIANTS.forEach(function(variant) { requestCloudKeetaLogo(variant); });
+    }
+    function hydrateCloudKeetaLogoLayers() {
+        let changed = false;
+        (layers || []).forEach(function(layer) {
+            if (layer.type !== 'logoLayout' || layer.logoLayout !== 'pair') return;
+            const src = getCloudKeetaLogoSrc(layer.mainLogoStyle || 'primary', layer.mainLogoSrc);
+            if (src && layer.mainLogoSrc !== src) { layer.mainLogoSrc = src; changed = true; }
+        });
+        if (changed) { renderCanvas(); renderLayersList(); renderProperties(); }
+    }
     function addLogoLayout(layout) {
         const {w, h} = SIZES[currentRatio];
         let config;
@@ -5027,7 +5154,8 @@
         } else if(layout === 'single') {
             config = { logoLayout:'single', baseW:210, baseH:210, slots:[{}] };
         } else {
-            config = { logoLayout:'pair', baseW:442, baseH:150, borderRadius:16, bgColor:'#ffffff', mainLogoSrc:KEETA_PRIMARY_LOGO_SRC, mainLogoStyle:'primary', slots:[{}] };
+            config = { logoLayout:'pair', baseW:442, baseH:150, borderRadius:16, bgColor:'#ffffff', mainLogoSrc:'', mainLogoStyle:'primary', slots:[{}] };
+            ensureCloudKeetaLogosLoaded();
         }
         addLayer('logoLayout', Object.assign({ x:Math.round(w / 2), y:Math.round(h / 2) }, config));
         showToast(layout === 'matrix' ? '已添加 Logo 矩阵' : (layout === 'single' ? '已添加单一 Logo' : '已添加 Logo 左右组合'));
@@ -5057,14 +5185,17 @@
         const closePicker = function() { overlay.remove(); };
         close.onclick = closePicker; head.appendChild(close); card.appendChild(head);
         const list = document.createElement('div'); list.className = 'keeta-logo-style-list';
+        ensureCloudKeetaLogosLoaded();
         KEETA_LOGO_VARIANTS.forEach(function(variant) {
             const item = document.createElement('button');
             item.type = 'button';
             item.className = 'keeta-logo-style-option' + (variant.dark ? ' is-dark' : '');
-            item.innerHTML = '<span class="keeta-logo-style-preview"><img draggable="false" src="' + escapeHtml(variant.src) + '"></span><span>' + escapeHtml(variant.name) + '</span>';
+            const asset = findCloudKeetaLogoAsset(variant);
+            const previewSrc = (asset && (asset.src || asset.previewUrl)) || '';
+            item.innerHTML = '<span class="keeta-logo-style-preview">' + (previewSrc ? '<img draggable="false" src="' + escapeHtml(previewSrc) + '">' : '<span class="keeta-logo-loading">读取中</span>') + '</span><span>' + escapeHtml(variant.name) + '</span>';
             item.onclick = function() {
-                layer.mainLogoSrc = variant.src;
                 layer.mainLogoStyle = variant.id;
+                layer.mainLogoSrc = getCloudKeetaLogoSrc(variant.id, '');
                 activeLayerIds = [layer.id];
                 saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                 closePicker();
@@ -5185,12 +5316,12 @@
             } else {
                 if(l.logoPairLayoutVersion !== 2) { l.baseW = 442; l.logoPairLayoutVersion = 2; }
                 wrapper.style.width = (l.baseW || 442) + 'px'; wrapper.style.height = (l.baseH || 150) + 'px';
-                const mainLogoSrc = l.mainLogoSrc || KEETA_PRIMARY_LOGO_SRC;
+                const mainLogoSrc = getCloudKeetaLogoSrc(l.mainLogoStyle || 'primary', l.mainLogoSrc);
                 const isLightKeeta = l.mainLogoStyle === 'white' || l.mainLogoStyle === 'yellow' || /keeta-secondary-(white|yellow)/.test(mainLogoSrc);
                 const dividerColor = isLightKeeta ? '#ffffff' : 'rgba(16,17,20,.82)';
                 const pairBg = String(l.bgColor || '#ffffff').replace(/[^#(),.%\w\s-]/g, '');
                 const pairRadius = Math.max(0, Math.min(60, Number(l.borderRadius !== undefined ? l.borderRadius : 16) || 0));
-                wrapper.innerHTML = '<div class="logo-layout-pair"><div class="logo-layout-main" data-keeta-logo-main title="双击切换 Keeta Logo 样式"><img draggable="false" src="' + escapeHtml(mainLogoSrc) + '"></div><div class="logo-layout-divider" style="background:' + dividerColor + '"></div><div class="logo-layout-pair-right" style="--pair-logo-bg:' + escapeHtml(pairBg) + ';--pair-logo-radius:' + pairRadius + 'px">' + getLogoLayoutSlotHTML(slots[0], 0) + '</div></div>';
+                wrapper.innerHTML = '<div class="logo-layout-pair"><div class="logo-layout-main" data-keeta-logo-main title="双击切换 Keeta Logo 样式">' + (mainLogoSrc ? '<img draggable="false" src="' + escapeHtml(mainLogoSrc) + '">' : '<span class="keeta-logo-loading">读取 Logo…</span>') + '</div><div class="logo-layout-divider" style="background:' + dividerColor + '"></div><div class="logo-layout-pair-right" style="--pair-logo-bg:' + escapeHtml(pairBg) + ';--pair-logo-radius:' + pairRadius + 'px">' + getLogoLayoutSlotHTML(slots[0], 0) + '</div></div>';
             }
             wrapper.querySelectorAll('img').forEach(function(img) { img.draggable = false; });
             wrapper.addEventListener('dragstart', function(event) { event.preventDefault(); });
@@ -5259,6 +5390,12 @@
                 wrapper.style.height = 'auto';
                 wrapper.style.overflow = 'visible';
             }
+            var strokeW = (l.textStrokeWidth !== undefined) ? Number(l.textStrokeWidth) : 0;
+            if (strokeW > 0) {
+                var strokeCol = l.textStrokeCol || '#000000';
+                wrapper.style.webkitTextStroke = strokeW + 'px ' + strokeCol;
+                wrapper.style.paintOrder = 'stroke fill';
+            }
             var editing = textEditLayerId === l.id;
             var safeText = String(l.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             wrapper.innerHTML = '<div class="layer-text-content" contenteditable="' + (editing ? 'true' : 'false') + '" oninput="syncTextEdit(\'' + l.id + '\', this)" onblur="syncTextEdit(\'' + l.id + '\', this)" style="white-space:' + ws + ';">' + safeText + '</div>';
@@ -5277,7 +5414,8 @@
             const textOffsetY = Number.isFinite(Number(l.tagTextOffsetY)) ? Number(l.tagTextOffsetY) : 0;
             const textSpan = `<span style="display:inline-block; transform:translateY(${textOffsetY}px);">${safeText}</span>`;
             var tagH = Number(l.tagHeight) || 60;
-            const pillBox = `height:${tagH}px; line-height:${tagH}px; padding:0 ${paddingX}px; border-radius:${Math.round(tagH/2)}px;`;
+            const br = (l.borderRadius !== undefined && l.borderRadius !== null) ? Number(l.borderRadius) : Math.round(tagH/2);
+            const pillBox = `height:${tagH}px; line-height:${tagH}px; padding:0 ${paddingX}px; border-radius:${br}px;`;
             const autoAngle = Math.atan2(thick, paddingX * 2 + String(l.text || '').length * (tagH * 0.37)) * (180/Math.PI);
             var halfH = Math.round(tagH/2);
             wrapper.innerHTML = `<div style="position:relative; display:inline-block;"><div class="tag-pill" style="position:absolute; left:0; top:0; width:100%; ${pillBox} background:${shadowColor}; color:transparent; z-index:0; transform-origin: ${halfH}px ${halfH}px; transform: rotate(${autoAngle}deg); clip-path: inset(-100px -100px -100px ${halfH}px);">${textSpan}</div><div class="tag-pill" style="position:relative; ${pillBox} background:${l.bgCol}; color:${l.textCol}; z-index:1;">${textSpan}</div></div>`;
@@ -5303,15 +5441,33 @@
             const safeMain = escapeHtml(l.mainText);
             const safeTop = escapeHtml(l.topText);
             const safeBottom = escapeHtml(l.bottomText);
+            const isAr = l.discountLang === 'ar';
+            // inline style 中用单引号，避免 cssFontFamily 的双引号破坏 HTML 属性解析
+            const mainFont = isAr ? getDelaFont().replace(/"/g, "'") : '';
+            const topFont = isAr ? getHTFont().replace(/"/g, "'") : '';
+            const bottomFont = isAr ? getDelaFont().replace(/"/g, "'") : '';
+            const mainFontStyle = mainFont ? `font-family:${mainFont}; font-weight:400;` : '';
+            const topFontStyle = topFont ? `font-family:${topFont};` : '';
+            const bottomFontStyle = bottomFont ? `font-family:${bottomFont}; font-weight:400;` : '';
             const sideMax = Math.max(String(l.topText || '').length * topSize, String(l.bottomText || '').length * bottomSize);
             const approxW = paddingX * 2 + String(l.mainText || '').length * mainSize * 0.62 + sideMax * 0.5 + sideGap;
             const approxH = Math.max(mainSize * 0.92, topSize + bottomSize + sideLineGap) + paddingY * 2;
             const autoAngle = Math.atan2(thick, approxW) * (180/Math.PI);
             const leftClip = Math.round(Math.max(34, Math.min(approxW * 0.18, approxH * 0.78)));
             const transformOriginX = Math.round(Math.max(28, approxH * 0.42));
-            const inner = `<span class="discount-main" style="font-size:${mainSize}px; transform:translateY(${textOffsetY}px);">${safeMain}</span><span class="discount-side" style="gap:${sideLineGap}px; transform:translateY(${textOffsetY}px);"><span style="font-size:${topSize}px;">${safeTop}</span><span style="font-size:${bottomSize}px;">${safeBottom}</span></span>`;
+            const inner = `<span class="discount-main" style="font-size:${mainSize}px; transform:translateY(${textOffsetY}px); ${mainFontStyle}">${safeMain}</span><span class="discount-side" style="gap:${sideLineGap}px; transform:translateY(${textOffsetY}px);"><span style="font-size:${topSize}px; ${topFontStyle}">${safeTop}</span><span style="font-size:${bottomSize}px; ${bottomFontStyle}">${safeBottom}</span></span>`;
             const pillStyle = `gap:${sideGap}px; padding:${paddingY}px ${paddingX}px; border-radius:999px;`;
-            wrapper.innerHTML = `<div style="position:relative; display:inline-block;"><div class="discount-pill" style="position:absolute; left:0; top:0; width:100%; height:100%; ${pillStyle} background:${shadowColor}; color:transparent; z-index:0; transform-origin:${transformOriginX}px 50%; transform:rotate(${autoAngle}deg); clip-path:inset(-160px -160px -160px ${leftClip}px);">${inner}</div><div class="discount-pill" style="position:relative; ${pillStyle} color:${l.textCol}; background:${l.bgCol}; z-index:1;">${inner}</div></div>`;
+            const isSubtitleTop = l.subtitlePosition === 'top';
+            const subOffset = l.subtitleOffsetY || 8;
+            const subVert = isSubtitleTop
+                ? `bottom:100%; margin-bottom:${subOffset}px;`
+                : `top:100%; margin-top:${subOffset}px;`;
+            const subPosStyle = `left:0; right:0; ${subVert}`;
+            const subFontSize = l.subtitleFontSize || 14;
+            const subFontWeight = l.subtitleFontWeight || 700;
+            const subStroke = l.subtitleStrokeWidth !== undefined ? l.subtitleStrokeWidth : 2;
+            const subtitleHtml = l.subtitle ? `<div style="position:absolute; ${subPosStyle} text-align:center; font-size:${subFontSize}px; font-weight:${subFontWeight}; color:#000; -webkit-text-stroke:${subStroke}px #fff; paint-order:stroke fill; white-space:nowrap; line-height:1.2; z-index:2;">${escapeHtml(l.subtitle)}</div>` : '';
+            wrapper.innerHTML = `<div style="position:relative; display:inline-block;"><div class="discount-pill" style="position:absolute; left:0; top:0; width:100%; height:100%; ${pillStyle} background:${shadowColor}; color:transparent; z-index:0; transform-origin:${transformOriginX}px 50%; transform:rotate(${autoAngle}deg); clip-path:inset(-160px -160px -160px ${leftClip}px);">${inner}</div><div class="discount-pill" style="position:relative; ${pillStyle} color:${l.textCol}; background:${l.bgCol}; z-index:1;">${inner}</div>${subtitleHtml}</div>`;
         }
         if(active) wrapper.classList.add('is-active-layer');
         if(newlyAddedLayerIds.has(l.id)) wrapper.classList.add('is-new-layer');
@@ -6071,17 +6227,24 @@
                 + widthStepper + heightStepper
                 + stepper('scale','缩放',0.01,10,0.05,'x')
                 + stepper('rotation','旋转',-180,180,1,'°')
+                + '<div style="text-align:center;color:var(--text-main);font-size:14px;font-weight:bold;padding:10px 0;margin:12px 0 12px;border-bottom:1px dashed var(--border);">文字效果</div>'
+                + '<label class="label">描边颜色</label><input type="color" value="' + escapeHtml(l.textStrokeCol || '#000000') + '" style="width:100%;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;background:#FFF;cursor:pointer;" oninput="updateProp(\'textStrokeCol\',this.value)" onchange="saveHistory()">'
+                + '<div class="slider-row"><span class="s-label">描边粗细</span><input type="range" min="0" max="30" step="0.5" value="' + (l.textStrokeWidth || 0) + '" oninput="updateProp(\'textStrokeWidth\', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-textStrokeWidth">' + (l.textStrokeWidth || 0) + 'px</span></div>'
                 + '<button class="btn btn-outline" style="width:100%;margin-top:4px;" type="button" onclick="centerLayer()">居中画板</button>';
         }
         else if(l.type === 'tag') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="handleColorPresetClick(event,'tag','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;" title="双击编辑并同步"></div>`; });
-            area.innerHTML = `<label class="label">文案内容</label><input type="text" class="input-text" value="${escapeHtml(l.text)}" oninput="updateProp('text', this.value)" onchange="saveHistory()"><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();"><option value="300" ${(l.fontWeight||900)===300?'selected':''}>细体</option><option value="400" ${(l.fontWeight||900)===400?'selected':''}>常规</option><option value="700" ${(l.fontWeight||900)===700?'selected':''}>加粗</option><option value="900" ${(l.fontWeight||900)===900?'selected':''}>黑体</option></select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">标签高度</span><input type="range" min="10" max="300" step="1" value="${l.tagHeight || 60}" oninput="updateProp('tagHeight', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagHeight">${l.tagHeight || 60}px</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-50" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">内边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingX ?? 36}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 36}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="30" step="1" value="${l.shadowThickness||12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness||12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 1)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 1)*100)}%</span></div>`;
+            area.innerHTML = `<label class="label">文案内容</label><input type="text" class="input-text" value="${escapeHtml(l.text)}" oninput="updateProp('text', this.value)" onchange="saveHistory()"><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();"><option value="300" ${(l.fontWeight||900)===300?'selected':''}>细体</option><option value="400" ${(l.fontWeight||900)===400?'selected':''}>常规</option><option value="700" ${(l.fontWeight||900)===700?'selected':''}>加粗</option><option value="900" ${(l.fontWeight||900)===900?'selected':''}>黑体</option></select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">标签高度</span><input type="range" min="10" max="300" step="1" value="${l.tagHeight || 60}" oninput="updateProp('tagHeight', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagHeight">${l.tagHeight || 60}px</span></div><div class="slider-row"><span class="s-label">圆角</span><input type="range" min="0" max="150" step="1" value="${l.borderRadius !== undefined && l.borderRadius !== null ? l.borderRadius : Math.round((l.tagHeight || 60)/2)}" oninput="updateProp('borderRadius', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-borderRadius">${l.borderRadius !== undefined && l.borderRadius !== null ? l.borderRadius : Math.round((l.tagHeight || 60)/2)}px</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-50" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">内边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingX ?? 36}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 36}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="30" step="1" value="${l.shadowThickness||12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness||12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 1)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 1)*100)}%</span></div>`;
         } 
         else if(l.type === 'discountTag') {
             normalizeDiscountTagLayer(l);
             const isAr = l.discountLang === 'ar';
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="handleColorPresetClick(event,'tag','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;" title="双击编辑并同步"></div>`; });
-            area.innerHTML = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;"><span style="font-size:11px; font-weight:700; color:#6b7280;">语言格式</span><button type="button" onclick="toggleDiscountLang()" style="display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#f3f4f6; padding:0; cursor:pointer;"><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:7px 0 0 7px; transition:all .15s; ${!isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">EN</span><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:0 7px 7px 0; transition:all .15s; ${isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">AR</span></button></div><label class="label">主文字</label><input type="text" class="input-text" value="${escapeHtml(l.mainText)}" oninput="updateProp('mainText', this.value)" onchange="saveHistory()"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><div><label class="label">右上角</label><input type="text" class="input-text" value="${escapeHtml(l.topText)}" oninput="updateProp('topText', this.value)" onchange="saveHistory()"></div><div><label class="label">右下角</label><input type="text" class="input-text" value="${escapeHtml(l.bottomText)}" oninput="updateProp('bottomText', this.value)" onchange="saveHistory()"></div></div><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();"><option value="300" ${(l.fontWeight||900)===300?'selected':''}>细体 (300)</option><option value="400" ${(l.fontWeight||900)===400?'selected':''}>常规 (400)</option><option value="700" ${(l.fontWeight||900)===700?'selected':''}>加粗 (700)</option><option value="900" ${(l.fontWeight||900)===900?'selected':''}>黑体 (900)</option></select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">主字大小</span><input type="range" min="48" max="150" step="1" value="${l.mainFontSize ?? 96}" oninput="updateProp('mainFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-mainFontSize">${l.mainFontSize ?? 96}px</span></div><div class="slider-row"><span class="s-label">%大小</span><input type="range" min="20" max="90" step="1" value="${l.topFontSize ?? l.sideFontSize ?? 52}" oninput="updateProp('topFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-topFontSize">${l.topFontSize ?? l.sideFontSize ?? 52}px</span></div><div class="slider-row"><span class="s-label">Off大小</span><input type="range" min="16" max="80" step="1" value="${l.bottomFontSize ?? l.sideFontSize ?? 42}" oninput="updateProp('bottomFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-bottomFontSize">${l.bottomFontSize ?? l.sideFontSize ?? 42}px</span></div><div class="slider-row"><span class="s-label">左右间距</span><input type="range" min="-8" max="32" step="1" value="${l.sideGap ?? 8}" oninput="updateProp('sideGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideGap">${l.sideGap ?? 8}px</span></div><div class="slider-row"><span class="s-label">%/Off间距</span><input type="range" min="-18" max="48" step="1" value="${l.sideLineGap ?? -2}" oninput="updateProp('sideLineGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideLineGap">${l.sideLineGap ?? -2}px</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="18" step="0.5" value="${l.letterSpacing ?? -3}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? -3}px</span></div><div class="slider-row"><span class="s-label">左右边距</span><input type="range" min="8" max="90" step="1" value="${l.tagPaddingX ?? 34}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 34}px</span></div><div class="slider-row"><span class="s-label">上下边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingY ?? 15}" oninput="updateProp('tagPaddingY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingY">${l.tagPaddingY ?? 15}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="36" step="1" value="${l.shadowThickness ?? 12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness ?? 12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 0.45)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 0.45)*100)}%</span></div>`;
+            const hasSubtitle = !!(l.subtitle);
+            const subtitleToggleBtn = `<button type="button" onclick="toggleDiscountSubtitle()" style="padding:8px 16px; font-size:12px; font-weight:600; border-radius:8px; border:1px solid var(--border); background:${hasSubtitle ? 'var(--primary)' : '#f3f4f6'}; color:${hasSubtitle ? '#fff' : '#6b7280'}; cursor:pointer; width:100%; margin-bottom:${hasSubtitle ? '8px' : '0'}; transition:all .2s;">${hasSubtitle ? '✕ 移除副标题' : '+ 添加副标题'}</button>`;
+            const subPos = l.subtitlePosition || 'bottom';
+            const subtitleControls = hasSubtitle ? `<label class="label">副标题文字</label><input type="text" class="input-text" value="${escapeHtml(l.subtitle || '')}" oninput="updateProp('subtitle', this.value)" onchange="saveHistory()"><div style="display:flex; gap:6px; margin-bottom:10px;"><button type="button" onclick="updateProp('subtitlePosition','top');saveHistory();renderProperties();" style="flex:1;padding:6px 10px;font-size:12px;font-weight:600;border-radius:7px;border:1px solid var(--border);background:${subPos==='top'?'var(--primary)':'#f3f4f6'};color:${subPos==='top'?'#fff':'#6b7280'};cursor:pointer;">↑ 顶部</button><button type="button" onclick="updateProp('subtitlePosition','bottom');saveHistory();renderProperties();" style="flex:1;padding:6px 10px;font-size:12px;font-weight:600;border-radius:7px;border:1px solid var(--border);background:${subPos==='bottom'?'var(--primary)':'#f3f4f6'};color:${subPos==='bottom'?'#fff':'#6b7280'};cursor:pointer;">↓ 底部</button></div><div class="slider-row"><span class="s-label">位置偏移</span><input type="range" min="-80" max="80" step="1" value="${l.subtitleOffsetY ?? 8}" oninput="updateProp('subtitleOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-subtitleOffsetY">${l.subtitleOffsetY ?? 8}px</span></div><div class="slider-row"><span class="s-label">字体大小</span><input type="range" min="8" max="48" step="1" value="${l.subtitleFontSize ?? 14}" oninput="updateProp('subtitleFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-subtitleFontSize">${l.subtitleFontSize ?? 14}px</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('subtitleFontWeight',parseInt(this.value));saveHistory();"><option value="300" ${(l.subtitleFontWeight||700)===300?'selected':''}>细体 (300)</option><option value="400" ${(l.subtitleFontWeight||700)===400?'selected':''}>常规 (400)</option><option value="700" ${(l.subtitleFontWeight||700)===700?'selected':''}>加粗 (700)</option><option value="900" ${(l.subtitleFontWeight||700)===900?'selected':''}>黑体 (900)</option></select></div><div></div></div><div class="slider-row"><span class="s-label">白边粗细</span><input type="range" min="0" max="6" step="0.5" value="${l.subtitleStrokeWidth ?? 2}" oninput="updateProp('subtitleStrokeWidth', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-subtitleStrokeWidth">${l.subtitleStrokeWidth ?? 2}px</span></div>` : '';
+            area.innerHTML = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;"><span style="font-size:11px; font-weight:700; color:#6b7280;">语言格式</span><button type="button" onclick="toggleDiscountLang()" style="display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#f3f4f6; padding:0; cursor:pointer;"><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:7px 0 0 7px; transition:all .15s; ${!isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">EN</span><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:0 7px 7px 0; transition:all .15s; ${isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">AR</span></button></div><label class="label">主文字</label><input type="text" class="input-text" value="${escapeHtml(l.mainText)}" oninput="updateProp('mainText', this.value)" onchange="saveHistory()"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><div><label class="label">右上角</label><input type="text" class="input-text" value="${escapeHtml(l.topText)}" oninput="updateProp('topText', this.value)" onchange="saveHistory()"></div><div><label class="label">右下角</label><input type="text" class="input-text" value="${escapeHtml(l.bottomText)}" oninput="updateProp('bottomText', this.value)" onchange="saveHistory()"></div></div>${subtitleToggleBtn}${subtitleControls}<label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();"><option value="300" ${(l.fontWeight||900)===300?'selected':''}>细体 (300)</option><option value="400" ${(l.fontWeight||900)===400?'selected':''}>常规 (400)</option><option value="700" ${(l.fontWeight||900)===700?'selected':''}>加粗 (700)</option><option value="900" ${(l.fontWeight||900)===900?'selected':''}>黑体 (900)</option></select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">主字大小</span><input type="range" min="48" max="150" step="1" value="${l.mainFontSize ?? 96}" oninput="updateProp('mainFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-mainFontSize">${l.mainFontSize ?? 96}px</span></div><div class="slider-row"><span class="s-label">%大小</span><input type="range" min="20" max="90" step="1" value="${l.topFontSize ?? l.sideFontSize ?? 52}" oninput="updateProp('topFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-topFontSize">${l.topFontSize ?? l.sideFontSize ?? 52}px</span></div><div class="slider-row"><span class="s-label">Off大小</span><input type="range" min="16" max="80" step="1" value="${l.bottomFontSize ?? l.sideFontSize ?? 42}" oninput="updateProp('bottomFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-bottomFontSize">${l.bottomFontSize ?? l.sideFontSize ?? 42}px</span></div><div class="slider-row"><span class="s-label">左右间距</span><input type="range" min="-8" max="32" step="1" value="${l.sideGap ?? 8}" oninput="updateProp('sideGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideGap">${l.sideGap ?? 8}px</span></div><div class="slider-row"><span class="s-label">%/Off间距</span><input type="range" min="-18" max="48" step="1" value="${l.sideLineGap ?? -2}" oninput="updateProp('sideLineGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideLineGap">${l.sideLineGap ?? -2}px</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="18" step="0.5" value="${l.letterSpacing ?? -3}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? -3}px</span></div><div class="slider-row"><span class="s-label">左右边距</span><input type="range" min="8" max="90" step="1" value="${l.tagPaddingX ?? 34}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 34}px</span></div><div class="slider-row"><span class="s-label">上下边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingY ?? 15}" oninput="updateProp('tagPaddingY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingY">${l.tagPaddingY ?? 15}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="36" step="1" value="${l.shadowThickness ?? 12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness ?? 12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 0.45)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 0.45)*100)}%</span></div>`;
         }
         else if(l.type === 'arc') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; arcColorPresets.forEach(p => { const isActive = l.cIn === p.cIn && l.cOut === p.cOut; presetHtml += `<div onclick="handleColorPresetClick(event,'arc','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.cIn}; border: 4px solid ${p.cOut}; box-shadow: 0 0 0 ${isActive ? '2px' : '0'} var(--text-main); cursor:pointer;" title="双击编辑并同步"></div>`; });
@@ -6726,6 +6889,8 @@
             logoAssets.push.apply(logoAssets, pendingLogos);
             fontAssets.push.apply(fontAssets, pendingFonts);
             groupPresets.push.apply(groupPresets, pendingGroups);
+            // 三个 Keeta 预设先读取线上 Logo 组件，保证部署环境也能直接使用。
+            ensureCloudKeetaLogosLoaded();
             renderAssetLibrary();
             // 后台预加载云端字体
             setTimeout(function() { preloadCloudFonts(); }, 2000);
@@ -6849,6 +7014,9 @@
                 if (pendingLogoAssetId && item.id === pendingLogoAssetId) loadedRequestedPresetId = item.id;
                 if (pendingBookmarkAction && item.id === pendingBookmarkAction.id) loadedRequestedPresetId = item.id;
             });
+            // 三种内置 Keeta Logo 已经改为组件库资产。云端 Logo 到达后，自动
+            // 修复旧版画板中保存的本地相对路径，无需用户重新添加组件。
+            hydrateCloudKeetaLogoLayers();
             renderAssetLibrary();
             if (loadedRequestedPresetId) {
                 var isGroup = pendingGroupPresetId === loadedRequestedPresetId;
@@ -9572,7 +9740,13 @@
                 provider: aiProvider
             };
             if(aiReferenceImages.length) {
-                body.referenceImages = aiReferenceImages.map(item => ({
+                const referenceLimit = aiProvider === 'volc' ? VOLC_REFERENCE_LIMIT : GPT_REFERENCE_LIMIT;
+                const refsForRequest = aiReferenceImages.slice(0, referenceLimit);
+                if(aiReferenceImages.length > referenceLimit) {
+                    const providerName = aiProvider === 'volc' ? '火山' : 'GPT';
+                    showToast(`${providerName}生图为提升速度，将使用前 ${referenceLimit} 张参考图`);
+                }
+                body.referenceImages = refsForRequest.map(item => ({
                     image: stripDataUrl(item.src),
                     mimeType: item.mimeType || 'image/png'
                 }));

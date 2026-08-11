@@ -38,6 +38,8 @@ export async function onRequest({ request, env }) {
     const requestedProvider = body.provider === 'volc' ? 'volc' : body.provider === 'openai' ? 'openai' : '';
     const hasGPTImage = hasLK888(env) || hasOpenAI(env);
     const provider = requestedProvider || (hasGPTImage ? 'openai' : 'volc');
+    // 前端已压缩参考图；后端保持八张上限，支持多主体/多角度的创作，
+    // 同时避免绕过页面直接提交无限数量的大图。
     const referenceImages = Array.isArray(body.referenceImages)
       ? body.referenceImages.slice(0, 8).filter(item => item?.image)
       : body.referenceImage
