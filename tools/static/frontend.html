@@ -457,6 +457,22 @@
         .ai-reference-card button { position: absolute; right: 5px; top: 5px; width: 22px; height: 22px; border: 0; border-radius: 999px; background: rgba(16,17,20,0.82); color: #fff; font-size: 13px; cursor: pointer; }
         .ai-reference-hint { color: #8b929b; font-size: 13px; line-height: 1.55; font-weight: 720; min-width: 0; flex: 1 1 auto; }
         .ai-reference-count { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 22px; border-radius: 999px; background: #f0f1ef; color: #5f6770; font-size: 11px; font-weight: 860; margin-top: 4px; }
+        .jimeng-api-row { display:flex; align-items:center; gap:6px; margin:0 0 10px; padding:8px 9px; border:1px solid #e5e8ed; border-radius:10px; background:#fafbfc; font-size:12px; color:#667085; flex-wrap:wrap; }
+        .jimeng-api-row[hidden] { display:none !important; }
+        .jimeng-api-row.connected { border-color:rgba(6,178,116,.28); background:rgba(6,178,116,.06); color:#117a55; }
+        .jimeng-api-dot { width:7px; height:7px; border-radius:50%; background:#aab3bf; flex:0 0 auto; }
+        .jimeng-api-row.connected .jimeng-api-dot { background:#16a36a; box-shadow:0 0 0 3px rgba(22,163,106,.12); }
+        .jimeng-api-status { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:80px; }
+        .jimeng-session-input { flex:2; min-width:140px; border:1px solid #d0d5dd; border-radius:6px; padding:3px 6px; font-size:11px; background:#fff; color:#333; font-family:monospace; }
+        .jimeng-session-input:focus { outline:none; border-color:#7c5cfc; }
+        .jimeng-api-action { border:0; background:transparent; padding:2px 5px; color:inherit; font:inherit; font-weight:760; cursor:pointer; white-space:nowrap; }
+        .jimeng-api-action:hover { text-decoration:underline; color:#7c5cfc; }
+        .jimeng-settings-row { display:flex; align-items:center; gap:10px; margin:0 0 10px; padding:8px 9px; border:1px solid #e5e8ed; border-radius:10px; background:#fafbfc; font-size:12px; color:#667085; }
+        .jimeng-settings-row[hidden] { display:none !important; }
+        .jimeng-setting-group { display:flex; align-items:center; gap:5px; }
+        .jimeng-setting-label { font-weight:760; white-space:nowrap; color:#555; }
+        .jimeng-setting-select { border:1px solid #d0d5dd; border-radius:6px; padding:3px 6px; font-size:12px; background:#fff; color:#333; cursor:pointer; }
+        .jimeng-setting-select:focus { outline:none; border-color:#7c5cfc; }
         .ai-prompt-shell { border: 1px solid #d7d9d6; border-radius: 15px; background: #ffffff; padding: 10px; margin-bottom: 12px; }
         .ai-prompt-shell .textarea { border: 0; box-shadow: none; margin: 0; padding: 6px; min-height: 112px; background: transparent; font-size: 14px; line-height: 1.55; }
         .ai-prompt-shell .textarea:focus { border: 0; box-shadow: none; }
@@ -2328,6 +2344,14 @@
             <div class="module-card">
                 <div class="card-title"><div class="card-title-wrap">生图</div></div>
                 <div class="ai-console">
+                    <div class="jimeng-api-row" id="jimeng-api-row" hidden>
+                        <span class="jimeng-api-dot" id="jimeng-api-dot"></span>
+                        <span class="jimeng-api-status" id="jimeng-api-status">即梦 API 未检测</span>
+                        <input class="jimeng-session-input" id="jimeng-session-input" type="password" placeholder="粘贴即梦 sessionid…" autocomplete="off">
+                        <button class="jimeng-api-action" type="button" onclick="saveJimengSessionId()">保存</button>
+                        <button class="jimeng-api-action" type="button" onclick="requestJimengSessionId()" title="通过浏览器扩展自动读取即梦 Cookie">自动获取</button>
+                        <button class="jimeng-api-action" type="button" onclick="checkJimengApiHealth()">检测</button>
+                    </div>
                     <div class="ai-reference-strip" id="ai-reference-strip">
                         <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
                         <div class="ai-reference-hint">上传参考图，或输入文字描述想生成的图片。</div>
@@ -2350,9 +2374,35 @@
                             <div class="ai-dropdown" id="ai-provider-menu">
                                 <button type="button" data-ai-provider="openai" onclick="selectAIProvider('openai')">GPT 大模型</button>
                                 <button type="button" data-ai-provider="volc" onclick="selectAIProvider('volc')">火山大模型</button>
+                                <button type="button" data-ai-provider="jimeng" onclick="selectAIProvider('jimeng')">即梦本机</button>
                             </div>
                         </div>
                         <button class="ai-submit-btn" id="ai-submit-btn" type="button" onclick="runSelectedAIAction()" title="开始生成">↑</button>
+                    </div>
+                    <div class="jimeng-settings-row" id="jimeng-settings-row" hidden>
+                        <div class="jimeng-setting-group">
+                            <span class="jimeng-setting-label">模型</span>
+                            <select class="jimeng-setting-select" id="jimeng-model-select" onchange="onJimengSettingChange()">
+                                <option value="jimeng-image-5.0-pro">5.0 Pro</option>
+                                <option value="jimeng-image-5.0-lite">5.0 Lite</option>
+                                <option value="jimeng-image-4.7">4.7</option>
+                                <option value="jimeng-image-4.6">4.6</option>
+                                <option value="jimeng-image-4.5">4.5</option>
+                            </select>
+                        </div>
+                        <div class="jimeng-setting-group">
+                            <span class="jimeng-setting-label">画质</span>
+                            <select class="jimeng-setting-select" id="jimeng-resolution-select" onchange="onJimengSettingChange()">
+                                <option value="2k">2K</option>
+                                <option value="4k">4K</option>
+                            </select>
+                        </div>
+                        <div class="jimeng-setting-group">
+                            <span class="jimeng-setting-label">尺寸</span>
+                            <select class="jimeng-setting-select" id="jimeng-ratio-select" onchange="onJimengSettingChange()">
+                                <option value="">自动（跟画板）</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2430,9 +2480,16 @@
         { id: 'kw_vivid', name: '鲜艳色彩', prompt: '高饱和色彩，明亮活泼，社交媒体广告风格' }
     ];
     const AI_FEATURE_LABELS = { generate: '图片生成', outpaint: '智能扩图', upscale: '图片清晰' };
-    const AI_PROVIDER_LABELS = { openai: 'GPT 大模型', volc: '火山大模型' };
+    const AI_PROVIDER_LABELS = { openai: 'GPT 大模型', volc: '火山大模型', jimeng: '即梦本机' };
     let aiFeatureMode = 'generate';
     let aiProvider = 'openai';
+    const JIMENG_API_URL = 'http://localhost:5567';
+    let jimengApiReady = false;
+    let jimengSessionId = '';
+    const JIMENG_RATIOS = ['1:1', '3:4', '4:3', '9:16', '16:9', '2:3', '3:2', '21:9'];
+    let jimengModel = 'jimeng-image-5.0-pro';
+    let jimengResolution = '2k';
+    let jimengRatio = ''; // 空字符串表示自动跟随画板
     const AI_REFERENCE_LIMIT = 8;
     // 火山图生图的吞吐量会随参考图数量和原始文件体积急剧下降；普通生图
     // 优先使用最关键的两张即可。上传时统一压缩，避免把相机原图 Base64 直传。
@@ -3835,6 +3892,22 @@
         const safeW = Math.max(1, Number(imgW) || target.w);
         const safeH = Math.max(1, Number(imgH) || target.h);
         if(mode === 'cover') return { x: target.w / 2, y: target.h / 2, baseW: target.w, baseH: target.h, scale: 1, fitMode: 'cover' };
+        if(mode === 'shortSide') {
+            // 按图片最短边适配画布：短边撑满，长边溢出但不裁切
+            const imgAspect = safeW / safeH;
+            const targetAspect = target.w / target.h;
+            if(imgAspect >= targetAspect) {
+                // 图片更宽 → 高度是短边 → 高度撑满画布
+                const h = target.h;
+                const w = Math.round(h * imgAspect);
+                return { x: target.w / 2, y: target.h / 2, baseW: w, baseH: h, scale: 1, fitMode: 'contain' };
+            } else {
+                // 图片更高 → 宽度是短边 → 宽度撑满画布
+                const w = target.w;
+                const h = Math.round(w / imgAspect);
+                return { x: target.w / 2, y: target.h / 2, baseW: w, baseH: h, scale: 1, fitMode: 'contain' };
+            }
+        }
         const maxRatio = mode === 'original' ? 0.78 : 1;
         const fit = Math.min((target.w * maxRatio) / safeW, (target.h * maxRatio) / safeH, mode === 'original' ? 1 : Infinity);
         return {
@@ -3850,6 +3923,18 @@
         const img = await loadImageElement(src);
         const frame = getImageFrameForMode(img.naturalWidth || img.width, img.naturalHeight || img.height, 'contain');
         addLayer('image', { src, ...frame, originalW: img.naturalWidth || img.width, originalH: img.naturalHeight || img.height });
+    }
+    async function addAIImageLayer(src) {
+        // AI 生图统一入口：按图片短边适配画布（短边撑满，长边溢出可拖动查看）
+        try {
+            const img = await loadImageElement(src);
+            const frame = getImageFrameForMode(img.naturalWidth || img.width, img.naturalHeight || img.height, 'shortSide');
+            addLayer('image', { src, ...frame, originalW: img.naturalWidth || img.width, originalH: img.naturalHeight || img.height });
+        } catch(e) {
+            // 尺寸读取失败时使用铺满模式
+            addLayer('image', { src, fitMode: 'contain' });
+            showToast('图片已生成，但尺寸读取失败，已按铺满模式放入', true);
+        }
     }
     function syncLayerCanvasFitButton() {
         const button = document.getElementById('layer-canvas-fit-btn');
@@ -4000,6 +4085,111 @@
         const input = document.getElementById('ai-prompt-input');
         if(input) input.value = text || '';
     }
+    function updateJimengApiUI(status = {}) {
+        const row = document.getElementById('jimeng-api-row');
+        const dot = document.getElementById('jimeng-api-dot');
+        const label = document.getElementById('jimeng-api-status');
+        const input = document.getElementById('jimeng-session-input');
+        if(!row || !label) return;
+        row.hidden = aiProvider !== 'jimeng';
+        var settingsRow = document.getElementById('jimeng-settings-row');
+        if(settingsRow) settingsRow.hidden = aiProvider !== 'jimeng';
+        jimengApiReady = Boolean(status.ready);
+        row.classList.toggle('connected', jimengApiReady);
+        label.textContent = status.label || (jimengSessionId ? '即梦 API（已保存凭证）' : '即梦 API（请设置 Session ID）');
+        if(input && !jimengSessionId) input.value = '';
+        if(input && jimengSessionId) input.value = jimengSessionId;
+    }
+    function saveJimengSessionId() {
+        const input = document.getElementById('jimeng-session-input');
+        const value = (input?.value || '').trim();
+        if(!value) return showToast('请粘贴即梦 sessionid', true);
+        jimengSessionId = value;
+        try { localStorage.setItem('jimeng_sessionid', value); } catch(_) {}
+        updateJimengApiUI();
+        showToast('✅ 即梦 Session ID 已保存');
+    }
+    async function checkJimengApiHealth() {
+        if(!jimengSessionId) return showToast('请先粘贴并保存即梦 Session ID', true);
+        updateJimengApiUI({ label: '正在检测即梦 API…' });
+        try {
+            const res = await fetch(JIMENG_API_URL + '/v1/models', {
+                headers: { 'Authorization': 'Bearer ' + jimengSessionId }
+            });
+            if(!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            const hasPro = JSON.stringify(data).includes('jimeng-image-5.0-pro');
+            updateJimengApiUI({ ready: true, label: '✅ 即梦 API 连接正常' + (hasPro ? '（5.0 Pro 可用）' : '') });
+        } catch(e) {
+            updateJimengApiUI({ ready: false, label: '❌ 无法连接即梦 API：' + (e.message || '未知错误') });
+        }
+    }
+    function loadJimengSessionId() {
+        try { jimengSessionId = localStorage.getItem('jimeng_sessionid') || ''; } catch(_) { jimengSessionId = ''; }
+        if(jimengSessionId) {
+            const input = document.getElementById('jimeng-session-input');
+            if(input) input.value = jimengSessionId;
+        }
+        try { jimengModel = localStorage.getItem('jimeng_model') || 'jimeng-image-5.0-pro'; } catch(_) {}
+        try { jimengResolution = localStorage.getItem('jimeng_resolution') || '2k'; } catch(_) {}
+        try { jimengRatio = localStorage.getItem('jimeng_ratio') || ''; } catch(_) {}
+        syncJimengSettingSelects();
+    }
+    function onJimengSettingChange() {
+        var modelEl = document.getElementById('jimeng-model-select');
+        var resEl = document.getElementById('jimeng-resolution-select');
+        var ratioEl = document.getElementById('jimeng-ratio-select');
+        if(modelEl) { jimengModel = modelEl.value; try { localStorage.setItem('jimeng_model', jimengModel); } catch(_) {} }
+        if(resEl) { jimengResolution = resEl.value; try { localStorage.setItem('jimeng_resolution', jimengResolution); } catch(_) {} }
+        if(ratioEl) { jimengRatio = ratioEl.value; try { localStorage.setItem('jimeng_ratio', jimengRatio); } catch(_) {} }
+    }
+    function syncJimengSettingSelects() {
+        var modelEl = document.getElementById('jimeng-model-select');
+        var resEl = document.getElementById('jimeng-resolution-select');
+        var ratioEl = document.getElementById('jimeng-ratio-select');
+        if(modelEl) modelEl.value = jimengModel;
+        if(resEl) resEl.value = jimengResolution;
+        if(ratioEl) {
+            // 动态填充尺寸选项
+            while(ratioEl.options.length > 1) ratioEl.remove(1);
+            JIMENG_RATIOS.forEach(function(r) {
+                var opt = document.createElement('option');
+                opt.value = r; opt.textContent = r;
+                ratioEl.appendChild(opt);
+            });
+            ratioEl.value = jimengRatio;
+        }
+    }
+    function requestJimengSessionId() {
+        updateJimengApiUI({ label: '正在从浏览器读取即梦 Cookie…' });
+        postJimengApiMessage({ source: 'vf-diy-page', type: 'vf:get-jimeng-sessionid', requestId: 'sid_' + Date.now() });
+    }
+    function postJimengApiMessage(message) {
+        var target = window.parent && window.parent !== window ? window.parent : window;
+        target.postMessage(message, location.origin);
+    }
+    window.addEventListener('message', function(event) {
+        if(event.origin !== location.origin) return;
+        var data = event.data || {};
+        if(data.source !== 'vf-jimeng-extension') return;
+        if(data.type === 'vf:jimeng-sessionid') {
+            if(data.sessionId) {
+                jimengSessionId = data.sessionId;
+                try { localStorage.setItem('jimeng_sessionid', data.sessionId); } catch(_) {}
+                var input = document.getElementById('jimeng-session-input');
+                if(input) input.value = data.sessionId;
+                updateJimengApiUI({ ready: true, label: '✅ 已自动获取 Session ID（' + data.sessionId.substring(0, 8) + '…）' });
+                showToast('✅ 已自动获取即梦 Session ID');
+            } else {
+                updateJimengApiUI({ ready: false, label: '⚠️ 未获取到 sessionid，请确认已在浏览器中登录即梦' });
+                showToast('未获取到 sessionid，请先登录 jimeng.jianying.com', true);
+            }
+        }
+        if(data.type === 'vf:jimeng-bridge-ready') {
+            // 扩展已就绪，静默更新状态
+            updateJimengApiUI();
+        }
+    });
     function closeAIMenus() {
         document.getElementById('ai-feature-menu')?.classList.remove('open');
         document.getElementById('ai-provider-menu')?.classList.remove('open');
@@ -4021,6 +4211,7 @@
         document.querySelectorAll('[data-ai-feature]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiFeature === aiFeatureMode));
         document.querySelectorAll('[data-ai-provider]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiProvider === aiProvider));
         renderAIReferenceImage();
+        updateJimengApiUI();
     }
     function selectAIFeature(value) {
         aiFeatureMode = value || 'generate';
@@ -4031,6 +4222,7 @@
         aiProvider = value || 'openai';
         closeAIMenus();
         refreshAIConsole();
+        updateJimengApiUI();
     }
     function renderAIReferenceImage() {
         const strip = document.getElementById('ai-reference-strip');
@@ -9727,6 +9919,7 @@
 
     async function generateAIBG() {
         const p = getPromptText(); if(!p) return showToast('请输入描述词或选择关键词标签', true);
+        if(aiProvider === 'jimeng') return generateWithJimeng(p);
         const btn = document.getElementById('ai-submit-btn') || window.event?.target || document.activeElement;
         const ogText = btn?.innerText || '↑';
         if(btn) { btn.innerText = '…'; btn.disabled = true; }
@@ -9757,13 +9950,81 @@
             if(data.success && data.pending && data.taskId) {
                 updateAIProgress('任务已提交，正在等待结果...', 42);
                 const result = await pollAIImageTask(data.taskId, data.provider || aiProvider);
-                addLayer('image', { src: `data:image/png;base64,${result.imageBase64}` });
+                addAIImageLayer(`data:image/png;base64,${result.imageBase64}`);
                 showToast(`✅ ${result.provider || data.provider || 'AI'} 已生成新图片`);
             } else if(data.success) {
-                addLayer('image', { src: `data:image/png;base64,${data.imageBase64}` });
+                addAIImageLayer(`data:image/png;base64,${data.imageBase64}`);
                 showToast(data.warning || `✅ ${data.provider || 'AI'} 已生成新图片`);
             } else { showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true); }
         } catch(e) { showToast('❌ ' + (e.message || '无法连接服务器'), true); } finally { updateAIProgress('正在应用到画布...', 96); stopAIProgress(); if(btn) { btn.innerText = ogText; btn.disabled = false; } }
+    }
+    async function generateWithJimeng(prompt) {
+        if(!jimengSessionId) return showToast('请先在生图面板中粘贴并保存即梦 Session ID', true);
+        const button = document.getElementById('ai-submit-btn');
+        const original = button?.textContent || '↑';
+        if(button) { button.textContent = '…'; button.disabled = true; }
+        startAIProgress('正在通过即梦 API 生成图片…');
+        try {
+            const body = {
+                model: jimengModel,
+                prompt: prompt,
+                n: 1,
+                ratio: jimengRatio || getGenerationRatio(),
+                resolution: jimengResolution,
+                response_format: 'b64_json'
+            };
+            if(aiReferenceImages.length) {
+                body.images = aiReferenceImages.map(function(item) { return item.src; });
+            }
+            updateAIProgress('正在提交生成请求到即梦…', 30);
+            const res = await fetch(JIMENG_API_URL + '/v1/images/generations', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + jimengSessionId, 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            updateAIProgress('即梦正在生成图片，请耐心等待…', 55);
+            if(!res.ok) {
+                var errText = '';
+                try { var ej = await res.json(); errText = ej.message || ej.errmsg || ''; } catch(_) {}
+                throw new Error('即梦 API 返回 HTTP ' + res.status + (errText ? '：' + errText : ''));
+            }
+            var payload = await res.json();
+            var items = payload && payload.data ? payload.data : [];
+            var images = [];
+            for(var j = 0; j < items.length; j++) {
+                var item = items[j];
+                if(item.b64_json) {
+                    images.push('data:image/png;base64,' + item.b64_json);
+                } else if(item.url) {
+                    try {
+                        var imgRes = await fetch(item.url);
+                        var blob = await imgRes.blob();
+                        var src = await new Promise(function(resolve) {
+                            var reader = new FileReader();
+                            reader.onload = function() { resolve(reader.result); };
+                            reader.readAsDataURL(blob);
+                        });
+                        images.push(src);
+                    } catch(_) { /* skip failed downloads */ }
+                }
+            }
+            if(images.length) {
+                updateAIProgress('正在导入生成结果…', 85);
+                for(var i = 0; i < images.length; i++) { addAIImageLayer(images[i]); }
+                showToast('✅ 即梦已生成 ' + images.length + ' 张图片');
+            } else {
+                showToast('❌ ' + (payload.message || payload.errmsg || '即梦未返回图片'), true);
+            }
+        } catch(e) {
+            if(e.message && (e.message.includes('Failed to fetch') || e.message.includes('NetworkError'))) {
+                showToast('❌ 无法连接即梦 API 服务。请在终端执行：cd ~/jimeng-api-v2 && node dist/index.js', true);
+            } else {
+                showToast('❌ ' + (e.message || '即梦 API 调用失败'), true);
+            }
+        } finally {
+            stopAIProgress();
+            if(button) { button.textContent = original; button.disabled = false; }
+        }
     }
     
     // 真扩图：把原图和需要扩展的方向比例交给后端 outpainting 接口。
@@ -10733,6 +10994,7 @@
         await loadSharedAssetsFromCloud();
         // 刷新后先清理上一会话移入回收站的云端资产；收到完成消息后再加载清单。
         if (!purgeRecycleBinAfterReload()) notifyParent({ type: 'vf:request-templates' });
+        loadJimengSessionId();
         setupCanvasDropImport();
         setupLayerDropImport();
         setupLayerListResize();
