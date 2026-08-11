@@ -791,7 +791,7 @@
     const isCustomHomeSize = homeRewrite.size === 'custom';
     const homeReferenceMarkup = homeRewrite.referenceImage
       ? `<div class="library-hero-reference-preview"><img src="${escapeAttr(homeRewrite.referenceImage.src)}" alt="${escapeAttr(homeRewrite.referenceImage.name || '参考图')}"><button type="button" id="library-hero-remove-image" aria-label="移除照片">×</button></div>`
-      : '';
+      : `<button type="button" class="library-hero-photo-add" id="library-hero-add-image" aria-label="添加照片"><span>+</span></button>`;
     const activeKind = state.libraryFilters.kind || 'all';
     var kindCounts = { source: 0, gallery: 0, template: 0 };
     if (state.librarySources) {
@@ -815,12 +815,10 @@
                 <input id="library-hero-image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
                 <div class="library-hero-composer-main">
                   ${homeReferenceMarkup}
-                  <textarea id="library-hero-search" rows="2" placeholder="${state.lang === 'zh' ? '描述你要修改的内容，例如：主标题、利益点标签、背景和食物。' : 'Describe the copy, offer, background, and subject.'}">${escapeHtml(homeRewrite.brief || '')}</textarea>
+                  <textarea id="library-hero-search" rows="2" placeholder="${state.lang === 'zh' ? '输入你的设计需求，例如：主标题、利益点标签、背景和食物。' : 'Describe the copy, offer, background, and subject.'}">${escapeHtml(homeRewrite.brief || '')}</textarea>
                 </div>
                 <div class="library-hero-composer-footer">
-                  <button type="button" class="library-hero-composer-control" id="library-hero-add-image" title="添加照片">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"></rect><circle cx="9" cy="10" r="1.5"></circle><path d="m5.5 17 4.5-4.5 3.2 3.2 2.2-2.2 3 3"></path></svg><span>添加照片</span>
-                  </button>
+                  <span class="library-hero-composer-mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5v-1A2.5 2.5 0 0 1 6.5 4h1M16.5 4h1A2.5 2.5 0 0 1 20 6.5v1M20 16.5v1a2.5 2.5 0 0 1-2.5 2.5h-1M7.5 20h-1A2.5 2.5 0 0 1 4 17.5v-1M8 12h8M12 8v8"></path></svg>智能改稿</span>
                   <label class="library-hero-composer-control library-hero-size-control" title="定义尺寸">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="3"></rect></svg>
                     <select id="library-hero-size" aria-label="定义尺寸">

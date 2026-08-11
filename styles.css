@@ -8377,3 +8377,260 @@ body .app-shell[data-route="library"] .library-board {
 .library-font-card button[data-action="font-menu"]:focus-visible {
   background: #f0f1f3 !important;
 }
+
+/* Homepage prompt composer: isolate it from legacy hero button rules. */
+body .app-shell[data-route="home"] .library-hero-command.library-hero-composer {
+  box-sizing: border-box;
+  display: block;
+  width: min(1200px, calc(100% - 40px));
+  min-height: 182px;
+  margin: 0 auto;
+  padding: 16px 18px 14px;
+  border: 1px solid #dfe4ea;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 18px 54px rgba(18, 27, 39, 0.07);
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-composer-main {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+  min-height: 108px;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-photo-add,
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-reference-preview {
+  box-sizing: border-box;
+  align-self: start;
+  width: 76px;
+  min-width: 76px;
+  height: 96px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px dashed #c8d0da;
+  border-radius: 12px;
+  background: #f8fafb;
+  box-shadow: none;
+  transform: rotate(-5deg);
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-photo-add {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: #8995a2;
+  cursor: pointer;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-photo-add:hover {
+  border-color: #98a5b3;
+  background: #f1f4f6;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-photo-add span {
+  font-size: 34px;
+  font-weight: 350;
+  line-height: 1;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-reference-preview {
+  position: relative;
+  border-style: solid;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-reference-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-reference-preview button {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 21px;
+  min-width: 21px;
+  height: 21px;
+  min-height: 21px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(16, 19, 24, 0.84);
+  color: #fff;
+  font-size: 16px;
+  line-height: 19px;
+  box-shadow: none;
+  transform: none;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer textarea#library-hero-search {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  margin: 0;
+  padding: 8px 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: #171d25;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 540;
+  line-height: 1.5;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer textarea#library-hero-search::placeholder {
+  color: #9aa5b1;
+  font-weight: 500;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-composer-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin: 0;
+  padding-left: 94px;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-composer-mode,
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-size-control,
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-custom-size {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #e1e6ec;
+  border-radius: 10px;
+  background: #fff;
+  color: #3d4855;
+  font-size: 13px;
+  font-weight: 720;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-composer-mode {
+  color: #1296be;
+  background: #f4fbfe;
+  border-color: #c7e9f4;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-composer-mode svg,
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-size-control svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-size-control {
+  position: relative;
+  cursor: pointer;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-size-control::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-left: 4px;
+  border-right: 1.5px solid #778290;
+  border-bottom: 1.5px solid #778290;
+  transform: rotate(45deg) translateY(-2px);
+  pointer-events: none;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-size-control select {
+  width: 50px;
+  min-width: 50px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  appearance: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-custom-size {
+  gap: 5px;
+  padding-inline: 8px;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer .library-hero-custom-size input {
+  width: 46px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  color: #202a35;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer #library-hero-submit {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  align-self: center;
+  justify-self: auto;
+  background: #151a21;
+  color: #fff;
+  font-size: 29px;
+  font-weight: 500;
+  line-height: 1;
+  box-shadow: none;
+}
+
+body .app-shell[data-route="home"] .library-hero-composer:focus-within #library-hero-submit {
+  background: #151a21;
+}
+
+@media (max-width: 720px) {
+  body .app-shell[data-route="home"] .library-hero-command.library-hero-composer {
+    width: calc(100% - 24px);
+    min-height: 176px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  body .app-shell[data-route="home"] .library-hero-composer .library-hero-composer-main {
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 12px;
+    min-height: 92px;
+  }
+
+  body .app-shell[data-route="home"] .library-hero-composer .library-hero-photo-add,
+  body .app-shell[data-route="home"] .library-hero-composer .library-hero-reference-preview {
+    width: 60px;
+    min-width: 60px;
+    height: 78px;
+  }
+
+  body .app-shell[data-route="home"] .library-hero-composer textarea#library-hero-search {
+    min-height: 78px;
+    font-size: 15px;
+  }
+
+  body .app-shell[data-route="home"] .library-hero-composer .library-hero-composer-footer {
+    gap: 7px;
+    padding-left: 0;
+  }
+
+  body .app-shell[data-route="home"] .library-hero-composer .library-hero-composer-mode {
+    display: none;
+  }
+}
