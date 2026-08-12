@@ -641,6 +641,54 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
     });
   }
 
+  function wireHomeCommandComposer() {
+    const form = document.getElementById('home-command-form');
+    const prompt = document.getElementById('library-hero-search');
+    const upload = document.getElementById('home-command-upload');
+    const references = document.getElementById('home-command-references');
+    const sizeTrigger = document.getElementById('home-size-trigger');
+    const sizeMenu = document.getElementById('home-size-menu');
+
+    document.querySelectorAll('.home-command-stage [data-route]').forEach(button => {
+      button.addEventListener('click', () => {
+        const route = button.dataset.route;
+        if (!route) return;
+        location.hash = route;
+        navigate(route);
+      });
+    });
+
+    const renderReferences = files => {
+      if (!references) return;
+      references.innerHTML = Array.from(files || []).slice(0, 8).map((file, index) => {
+        const url = URL.createObjectURL(file);
+        return `<span class="home-command-reference" title="${escapeAttr(file.name)}"><img src="${escapeAttr(url)}" alt="参考图 ${index + 1}"></span>`;
+      }).join('');
+    };
+
+    upload?.addEventListener('change', event => renderReferences(event.target.files));
+    sizeTrigger?.addEventListener('click', event => {
+      event.stopPropagation();
+      sizeMenu?.toggleAttribute('hidden');
+    });
+    sizeMenu?.querySelectorAll('[data-home-size]').forEach(button => {
+      button.addEventListener('click', () => {
+        const size = button.dataset.homeSize || '1:1';
+        sizeTrigger.querySelector('strong').textContent = size;
+        sizeMenu.hidden = true;
+      });
+    });
+    document.addEventListener('click', event => {
+      if (sizeMenu && !sizeMenu.hidden && !event.target.closest('.home-size-wrap')) sizeMenu.hidden = true;
+    });
+    form?.addEventListener('submit', event => {
+      event.preventDefault();
+      state.libraryFilters.query = prompt?.value.trim() || '';
+      location.hash = 'library';
+      navigate('library');
+    });
+  }
+
   async function loadHomeRecentProjects() {
     const mount = document.getElementById('home-recent-projects');
     if (!mount) return;
@@ -790,6 +838,44 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
     }
     els.content.innerHTML = `
       <div class="library-page ${homeMode ? 'library-page-home' : ''}">
+        ${homeMode ? `
+        <section class="library-hero home-command-stage">
+          <div class="home-command-kicker">GCC CREATIVE WORKSPACE</div>
+          <div class="library-hero-title home-command-title">
+            <span>Hey</span>
+            <img class="library-hero-kiki" src="./assets/kiki-home.png" alt="" aria-hidden="true">
+            <strong>${state.lang === 'zh' ? '把一个需求变成可编辑的设计' : 'Turn a brief into an editable design'}</strong>
+          </div>
+          <form id="home-command-form" class="home-command-composer" aria-label="${state.lang === 'zh' ? '创作需求输入' : 'Creative brief'}">
+            <label class="home-command-upload" title="${state.lang === 'zh' ? '添加参考图片' : 'Add references'}">
+              <input id="home-command-upload" type="file" accept="image/png,image/jpeg,image/webp" multiple>
+              <span>+</span>
+            </label>
+            <div class="home-command-main">
+              <div id="home-command-references" class="home-command-references"></div>
+              <textarea id="library-hero-search" rows="3" placeholder="${state.lang === 'zh' ? '输入你的创作需求，例如：主标题、利益点、背景和食物。' : 'Describe the headline, benefit, background, and food.'}">${escapeHtml(state.libraryFilters.query)}</textarea>
+            </div>
+            <div class="home-command-controls">
+              <span class="home-command-mode"><span aria-hidden="true">◇</span>${state.lang === 'zh' ? '智能改稿' : 'Smart rewrite'}</span>
+              <span class="home-command-divider"></span>
+              <button class="home-control-button" type="button" data-route="static"><span aria-hidden="true">▣</span>${state.lang === 'zh' ? '进入设计器' : 'Designer'}</button>
+              <div class="home-size-wrap">
+                <button class="home-control-button home-size-trigger" id="home-size-trigger" type="button"><span class="home-ratio-icon" aria-hidden="true"></span><strong>1:1</strong><span aria-hidden="true">⌄</span></button>
+                <div class="home-size-menu" id="home-size-menu" hidden>
+                  <span>${state.lang === 'zh' ? '选择比例' : 'Choose ratio'}</span>
+                  <div>${['16:9', '3:2', '4:3', '1:1', '3:4', '2:3', '9:16'].map(size => `<button type="button" data-home-size="${size}"><i class="home-ratio-icon" style="--ratio:${size.replace(':', '/')}"></i>${size}</button>`).join('')}</div>
+                </div>
+              </div>
+              <button class="home-command-submit" type="submit" aria-label="${state.lang === 'zh' ? '提交需求' : 'Submit brief'}">↑</button>
+            </div>
+          </form>
+          <div class="library-module-row home-workspace-links">
+            <button type="button" data-route="library"><strong>${state.lang === 'zh' ? '素材与模板' : 'Library'}</strong><span>›</span></button>
+            <button type="button" data-route="static"><strong>${state.lang === 'zh' ? '静态设计' : 'Static'}</strong><span>›</span></button>
+            <button type="button" data-route="dynamic"><strong>${state.lang === 'zh' ? '动态设计' : 'Motion'}</strong><span>›</span></button>
+            <button type="button" data-route="request"><strong>${state.lang === 'zh' ? '需求流程' : 'Requests'}</strong><span>›</span></button>
+          </div>
+        </section>` : `
         <section class="library-hero">
           <div class="library-hero-panel">
             <div class="library-hero-badge">${state.lang === 'zh' ? 'GCC Creative 1.1 已上线 ↗' : 'GCC Creative 1.1 is live ↗'}</div>
@@ -803,13 +889,7 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
               <button type="button" data-route="library" aria-label="${state.lang === 'zh' ? '进入超级库' : 'Open library'}">↑</button>
             </label>
           </div>
-          <div class="library-module-row">
-            <button type="button" data-route="library"><strong>${state.lang === 'zh' ? '超级库' : 'Super Library'}</strong><span>›</span></button>
-            <button type="button" data-route="static"><strong>${state.lang === 'zh' ? '静态设计师' : 'Static Designer'}</strong><span>›</span></button>
-            <button type="button" data-route="dynamic"><strong>${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'}</strong><span>›</span></button>
-            <button type="button" data-route="request"><strong>${state.lang === 'zh' ? '提需流程' : 'Request Flow'}</strong><span>›</span></button>
-          </div>
-        </section>
+        </section>`}
 
         <section class="library-control-strip" style="margin-left:0!important;margin-inline:0!important;padding-left:0!important;padding-right:0!important;background:transparent!important;border:none!important;border-radius:0!important;width:100%!important;grid-template-columns:1fr auto auto!important">
           <div class="library-kind-tabs" role="tablist" style="position:relative;">
@@ -890,6 +970,7 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
       </div>
     `;
     wireLibraryShell();
+    if (homeMode) wireHomeCommandComposer();
     await loadLibraryData();
     refreshKindTabCounts();
     if (state.libraryScrollToSource) {

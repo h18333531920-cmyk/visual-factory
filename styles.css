@@ -8498,3 +8498,239 @@ body .app-shell[data-route="home"] .library-page-home .library-module-row button
 body .app-shell[data-route="home"] .library-page-home .library-module-row button span {
   color: var(--vf-ink) !important;
 }
+
+/* Home command composer. This is the live entry point, not a decorative hero. */
+.library-page-home {
+  max-width: 1480px;
+  padding-top: clamp(38px, 7vh, 88px);
+}
+
+.library-page-home .home-command-stage {
+  display: block;
+}
+
+.home-command-kicker {
+  margin-bottom: 14px;
+  color: #10a7c6;
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: .1em;
+  text-align: center;
+}
+
+.library-page-home .home-command-title {
+  margin: 0 auto 34px !important;
+}
+
+.library-page-home .home-command-title strong {
+  font-size: clamp(31px, 3.7vw, 52px) !important;
+}
+
+.home-command-composer {
+  position: relative;
+  display: grid;
+  width: 100%;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 18px;
+  min-height: 258px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 30px 30px 76px;
+  border: 1px solid #e6e9ed;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(28, 34, 43, .07);
+}
+
+.home-command-upload {
+  display: grid;
+  width: 88px;
+  height: 118px;
+  place-items: center;
+  align-self: start;
+  margin-top: 2px;
+  border: 1px dashed #cbd2da;
+  border-radius: 13px;
+  background: #fafbfc;
+  color: #8d97a3;
+  cursor: pointer;
+  transform: rotate(-6deg);
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease, transform .16s ease;
+}
+
+.home-command-upload:hover {
+  border-color: #75bfd1;
+  background: #f0fafc;
+  color: #129ab8;
+  transform: rotate(0deg);
+}
+
+.home-command-upload input { display: none; }
+.home-command-upload span { font-size: 35px; font-weight: 330; line-height: 1; }
+
+.home-command-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.home-command-references {
+  display: flex;
+  min-height: 0;
+  gap: 7px;
+  overflow: hidden;
+}
+
+.home-command-reference {
+  display: block;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  overflow: hidden;
+  border: 2px solid #fff;
+  border-radius: 8px;
+  box-shadow: 0 3px 9px rgba(17, 24, 39, .14);
+}
+
+.home-command-reference img { width: 100%; height: 100%; object-fit: cover; }
+
+.home-command-main textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 3px 0;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+  color: #22272d;
+  background: transparent;
+  font: 460 19px/1.62 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.home-command-main textarea:focus { box-shadow: none; }
+.home-command-main textarea::placeholder { color: #98a1ab; }
+
+.home-command-controls {
+  position: absolute;
+  right: 24px;
+  bottom: 20px;
+  left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.home-command-mode,
+.home-control-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid #e5e9ed;
+  border-radius: 9px;
+  color: #414950;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.home-command-mode { color: #129cbc; }
+.home-command-mode span { font-size: 17px; }
+.home-command-divider { width: 1px; height: 24px; margin: 0 2px; background: #edf0f2; }
+.home-control-button:hover { border-color: #c7d0d8; background: #f8f9fa; }
+.home-ratio-icon { width: 16px; height: 12px; display: inline-block; border: 1.7px solid currentColor; border-radius: 3px; }
+
+.home-size-wrap { position: relative; }
+.home-size-trigger strong { font-size: inherit; font-weight: 700; }
+.home-size-menu {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 12px);
+  left: 0;
+  width: 386px;
+  padding: 14px;
+  border: 1px solid #e6e9ed;
+  border-radius: 14px;
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 18px 44px rgba(21, 27, 36, .14);
+}
+
+.home-size-menu > span {
+  display: block;
+  margin-bottom: 10px;
+  color: #929ba5;
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.home-size-menu > div {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  padding: 4px;
+  border-radius: 10px;
+  background: #f4f5f6;
+}
+
+.home-size-menu button {
+  display: grid;
+  min-height: 62px;
+  place-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  color: #4a535d;
+  background: transparent;
+  font-size: 11px;
+}
+
+.home-size-menu button:hover { color: #11181d; background: #fff; }
+.home-size-menu .home-ratio-icon { transform: scaleY(.72); }
+
+.home-command-submit {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: #17181b;
+  font-size: 26px;
+  font-weight: 350;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.home-command-submit:hover { background: #31343a; }
+
+.library-page-home .home-workspace-links {
+  max-width: 1180px;
+  margin-top: 14px !important;
+}
+
+.library-page-home .home-workspace-links button {
+  min-height: 42px !important;
+  padding-inline: 13px !important;
+  color: #666f79 !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.library-page-home .home-workspace-links button:hover { color: #17181b !important; background: #fff !important; border-color: #e5e9ed !important; }
+.library-page-home .home-workspace-links button strong,
+.library-page-home .home-workspace-links button span { color: inherit !important; }
+
+@media (max-width: 760px) {
+  .home-command-composer { grid-template-columns: 64px minmax(0, 1fr); min-height: 272px; padding: 20px 20px 76px; gap: 14px; border-radius: 15px; }
+  .home-command-upload { width: 56px; height: 76px; border-radius: 10px; }
+  .home-command-upload span { font-size: 26px; }
+  .home-command-main textarea { font-size: 16px; }
+  .home-command-mode, .home-command-divider, .home-control-button[data-route="static"] { display: none; }
+  .home-size-menu { right: -4px; left: auto; width: min(360px, calc(100vw - 42px)); }
+}
