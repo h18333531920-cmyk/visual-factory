@@ -6103,6 +6103,7 @@
         saveHistory(true);
         var cloned = cloneData(layer);
         cloned.id = genId('arc');
+        cloned.sharedKey = genId('shared_arc');
         cloned.locked = false;
         cloned.zIndex = makeRoomAboveLayerIds([layer.id]);
         cloned.x = (cloned.x || 0) + 30;
