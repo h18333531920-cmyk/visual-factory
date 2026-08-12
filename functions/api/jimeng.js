@@ -246,6 +246,192 @@ async function jimengRequest(token, method, uri, data) {
 }
 
 // ---------------------------------------------------------------------------
+// CRC32（纯 JS，用于即梦图片上传校验）
+// ---------------------------------------------------------------------------
+
+function crc32(data) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) {
+    crc ^= data[i];
+    for (let j = 0; j < 8; j++) {
+      if (crc & 1) crc = (crc >>> 1) ^ 0xEDB88320;
+      else crc >>>= 1;
+    }
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// ---------------------------------------------------------------------------
+// AWS Signature V4（Web Crypto 实现，用于字节跳动 imagex 上传）
+// ---------------------------------------------------------------------------
+
+async function hmacSha256(key, data) {
+  const cryptoKey = await crypto.subtle.importKey('raw', typeof key === 'string' ? new TextEncoder().encode(key) : key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', cryptoKey, typeof data === 'string' ? new TextEncoder().encode(data) : data);
+  return new Uint8Array(sig);
+}
+
+async function sha256Hex(data) {
+  const hash = await crypto.subtle.digest('SHA-256', typeof data === 'string' ? new TextEncoder().encode(data) : data);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function generateAWSAuthorizationHeader(accessKeyID, secretAccessKey, sessionToken, region, service, requestMethod, requestParams, requestBody = {}) {
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:\-]|\.\d{3}/g, '').slice(0, 15) + 'Z';
+  const amzDay = amzDate.substring(0, 8);
+
+  const requestHeaders = {
+    'X-Amz-Date': amzDate,
+    'X-Amz-Security-Token': sessionToken,
+  };
+
+  const bodyStr = JSON.stringify(requestBody);
+  if (Object.keys(requestBody).length > 0) {
+    requestHeaders['X-Amz-Content-Sha256'] = await sha256Hex(bodyStr);
+  }
+
+  const credentialString = `${amzDay}/${region}/${service}/aws4_request`;
+  const signedHeaders = Object.keys(requestHeaders).map(k => k.toLowerCase()).sort().join(';');
+  const canonicalHeaders = Object.keys(requestHeaders).sort().map(k => `${k.toLowerCase()}:${requestHeaders[k]}`).join('\n') + '\n';
+
+  const bodyHash = Object.keys(requestBody).length > 0
+    ? await sha256Hex(bodyStr)
+    : await sha256Hex('');
+
+  const canonicalRequest = [
+    requestMethod.toUpperCase(),
+    '/',
+    new URLSearchParams(requestParams).toString(),
+    canonicalHeaders,
+    signedHeaders,
+    bodyHash,
+  ].join('\n');
+
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialString,
+    await sha256Hex(canonicalRequest),
+  ].join('\n');
+
+  const kDate = await hmacSha256('AWS4' + secretAccessKey, amzDay);
+  const kRegion = await hmacSha256(kDate, region);
+  const kService = await hmacSha256(kRegion, service);
+  const signingKey = await hmacSha256(kService, 'aws4_request');
+
+  const signature = await hmacSha256(signingKey, stringToSign);
+  const signatureHex = Array.from(signature).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  const authorization = `AWS4-HMAC-SHA256 Credential=${accessKeyID}/${credentialString}, SignedHeaders=${signedHeaders}, Signature=${signatureHex}`;
+
+  return { ...requestHeaders, 'Authorization': authorization };
+}
+
+// ---------------------------------------------------------------------------
+// 参考图上传到即梦 CDN（字节跳动 imagex）
+// ---------------------------------------------------------------------------
+
+async function uploadImageToJimeng(token, imageDataUrl) {
+  // 1. 解析图片数据
+  let fileData;
+  const isBase64 = /^data:/.test(imageDataUrl);
+  if (isBase64) {
+    const mimeMatch = imageDataUrl.match(/^data:(.+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+    const ext = mimeType.split('/')[1] || 'png';
+    const base64Data = imageDataUrl.replace(/^data:.+;base64,/, '');
+    // 使用 Uint8Array 而不是 Buffer
+    const binaryStr = atob(base64Data);
+    fileData = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      fileData[i] = binaryStr.charCodeAt(i);
+    }
+    var filename = `${uuid()}.${ext}`;
+  } else if (/^https?:\/\//.test(imageDataUrl)) {
+    const resp = await fetch(imageDataUrl);
+    const arrBuf = await resp.arrayBuffer();
+    fileData = new Uint8Array(arrBuf);
+    filename = imageDataUrl.split('/').pop()?.split('?')[0] || `${uuid()}.jpg`;
+  } else {
+    throw new Error('参考图格式不支持，请使用 base64 或 HTTP URL');
+  }
+
+  // 2. 获取上传令牌
+  const uploadAuth = await jimengRequest(token, 'POST', '/mweb/v1/get_upload_token?aid=513695&da_version=3.2.2&aigc_features=app_lip_sync', { scene: 2 });
+  if (!uploadAuth?.access_key_id) throw new Error('获取上传凭证失败，账号可能已掉线');
+
+  // 3. 计算 CRC32
+  const imageCrc32 = crc32(fileData).toString(16);
+
+  // 4. ApplyImageUpload
+  const applyParams = {
+    Action: 'ApplyImageUpload',
+    FileSize: fileData.length,
+    ServiceId: 'tb4s082cfz',
+    Version: '2018-08-01',
+    s: Array.from({ length: 11 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join(''),
+  };
+
+  const applyHeaders = await generateAWSAuthorizationHeader(
+    uploadAuth.access_key_id, uploadAuth.secret_access_key, uploadAuth.session_token,
+    'cn-north-1', 'imagex', 'GET', applyParams
+  );
+
+  const applyResp = await fetch('https://imagex.bytedanceapi.com/?' + new URLSearchParams(applyParams).toString(), {
+    headers: applyHeaders, timeout: 30000
+  });
+  const applyData = await applyResp.json();
+  if (applyData['Response ']?.hasOwnProperty('Error')) {
+    throw new Error(applyData['Response ']['Error']['Message']);
+  }
+
+  const UploadAddress = applyData.Result.UploadAddress;
+  const uploadImgUrl = `https://${UploadAddress.UploadHosts[0]}/upload/v1/${UploadAddress.StoreInfos[0].StoreUri}`;
+
+  // 5. 上传图片
+  const uploadResp = await fetch(uploadImgUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': UploadAddress.StoreInfos[0].Auth,
+      'Content-Crc32': imageCrc32,
+      'Content-Type': 'application/octet-stream',
+    },
+    body: fileData,
+  });
+  const uploadResult = await uploadResp.json();
+  if (uploadResult.code !== 2000) {
+    throw new Error(uploadResult.message || '上传图片失败');
+  }
+
+  // 6. CommitImageUpload
+  const commitParams = {
+    Action: 'CommitImageUpload',
+    FileSize: fileData.length,
+    ServiceId: 'tb4s082cfz',
+    Version: '2018-08-01',
+  };
+  const commitBody = { SessionKey: UploadAddress.SessionKey };
+
+  const commitHeaders = await generateAWSAuthorizationHeader(
+    uploadAuth.access_key_id, uploadAuth.secret_access_key, uploadAuth.session_token,
+    'cn-north-1', 'imagex', 'POST', commitParams, commitBody
+  );
+
+  const commitResp = await fetch('https://imagex.bytedanceapi.com/?' + new URLSearchParams(commitParams).toString(), {
+    method: 'POST',
+    headers: { ...commitHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify(commitBody),
+  });
+  const commitData = await commitResp.json();
+  if (commitData['Response ']?.hasOwnProperty('Error')) {
+    throw new Error(commitData['Response ']['Error']['Message']);
+  }
+
+  return commitData.Result.Results[0].Uri;
+}
+
+// ---------------------------------------------------------------------------
 // 健康检测 (GET)
 // ---------------------------------------------------------------------------
 
@@ -305,24 +491,87 @@ async function handleGenerate(token, body) {
     : resolutionType === '2k' ? DIMENSIONS_2K : DIMENSIONS_1K;
   const dims = dimMap[ratioKey] || dimMap['1:1'];
 
+  // 上传参考图
+  let uploadIDs = [];
+  if (images.length > 0) {
+    for (const img of images) {
+      try {
+        const uri = await uploadImageToJimeng(token, img);
+        uploadIDs.push(uri);
+      } catch (e) {
+        throw new Error(`参考图上传失败：${e.message}`);
+      }
+    }
+  }
+
   // 构建 abilities
   const componentId = uuid();
   const submitId = uuid();
 
   let abilities;
-  if (images.length > 0) {
-    // 参考图模式 — 暂不支持（需要先上传到即梦 CDN，流程复杂）
-    // 回退到纯文本生成
-    abilities = buildTextGenerateAbilities(reqKey, prompt, imageRatio, resolutionType, dims);
+  let generateType = 'generate';
+  if (uploadIDs.length > 0) {
+    generateType = 'blend';
+    abilities = {
+      type: '',
+      id: uuid(),
+      blend: {
+        type: '',
+        id: uuid(),
+        min_features: [],
+        core_param: {
+          type: '',
+          id: uuid(),
+          model: reqKey,
+          prompt: prompt + '##',
+          sample_strength: 0.5,
+          image_ratio: imageRatio,
+          large_image_info: {
+            type: '',
+            id: uuid(),
+            height: dims.h,
+            width: dims.w,
+            resolution_type: resolutionType,
+          },
+        },
+        ability_list: uploadIDs.map((uid) => ({
+          type: '',
+          id: uuid(),
+          name: 'byte_edit',
+          image_uri_list: [uid],
+          image_list: [{
+            type: 'image',
+            id: uuid(),
+            source_from: 'upload',
+            platform_type: 1,
+            name: '',
+            image_uri: uid,
+            width: 0,
+            height: 0,
+            format: '',
+            uri: uid,
+          }],
+          strength: 0.5,
+        })),
+        history_option: { type: '', id: uuid() },
+        prompt_placeholder_info_list: uploadIDs.map((_uid, index) => ({
+          type: '',
+          id: uuid(),
+          ability_index: index,
+        })),
+        postedit_param: { type: '', id: uuid(), generate_type: 0 },
+      },
+      gen_option: { type: '', id: uuid(), gen_count: n, generate_all: false },
+    };
   } else {
-    abilities = buildTextGenerateAbilities(reqKey, prompt, imageRatio, resolutionType, dims);
+    abilities = buildTextGenerateAbilities(reqKey, prompt, imageRatio, resolutionType, dims, n);
   }
 
   // 构建请求
   const requestData = {
     extend: { root_model: reqKey },
     submit_id: submitId,
-    metrics_extra: JSON.stringify({
+    metrics_extra: uploadIDs.length > 0 ? undefined : JSON.stringify({
       promptSource: 'custom',
       generateCount: n,
       enterFrom: 'click',
@@ -365,7 +614,7 @@ async function handleGenerate(token, body) {
           created_time_in_ms: String(Date.now()),
           created_did: '',
         },
-        generate_type: 'generate',
+        generate_type: generateType,
         aigc_mode: 'workbench',
         abilities,
       }],
@@ -442,7 +691,7 @@ async function handleGenerate(token, body) {
   return { data };
 }
 
-function buildTextGenerateAbilities(reqKey, prompt, imageRatio, resolutionType, dims) {
+function buildTextGenerateAbilities(reqKey, prompt, imageRatio, resolutionType, dims, n = 1) {
   return {
     type: '',
     id: uuid(),
@@ -468,7 +717,7 @@ function buildTextGenerateAbilities(reqKey, prompt, imageRatio, resolutionType, 
       },
       history_option: { type: '', id: uuid() },
     },
-    gen_option: { type: '', id: uuid(), gen_count: 1, generate_all: false },
+    gen_option: { type: '', id: uuid(), gen_count: n, generate_all: false },
   };
 }
 
