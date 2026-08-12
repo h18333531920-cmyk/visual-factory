@@ -854,8 +854,7 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
         <section class="library-hero home-command-stage">
           <div class="home-command-kicker">GCC CREATIVE WORKSPACE</div>
           <div class="library-hero-title home-command-title">
-            <span>Hey</span>
-            <img class="library-hero-kiki" src="./assets/kiki-home.png" alt="" aria-hidden="true">
+            <span>hey，</span>
             <strong>${state.lang === 'zh' ? '你的高效设计伙伴' : 'Your efficient design partner'}</strong>
           </div>
           <form id="home-command-form" class="home-command-composer" aria-label="${state.lang === 'zh' ? '创作需求输入' : 'Creative brief'}">
@@ -2437,6 +2436,10 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
               ${canManage ? `<button type="button" data-action="edit">${state.lang === 'zh' ? '编辑' : 'Edit'}</button><button class="danger" type="button" data-action="delete">${state.lang === 'zh' ? '删除' : 'Delete'}</button>` : ''}
             </div>
           </div>
+        </div>
+        <div class="library-home-card-meta">
+          <div><strong>${escapeHtml(source.title)}</strong><span>${escapeHtml([libraryKindLabel(kind), ...tags.slice(0, 1)].filter(Boolean).join(' · '))}</span></div>
+          <button type="button" data-action="download-preview" aria-label="${previewLabel}">↓</button>
         </div>
       </article>
     `;
