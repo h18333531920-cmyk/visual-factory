@@ -7591,6 +7591,12 @@
             // 重新向服务端读取一次，确保删除发生在 DIY 页面未激活期间时也能同步。
             refreshAssetLibrary();
         } else if (event.data.type === 'vf:recycle-purged') {
+            var failedPurgeIds = event.data.failed || [];
+            if (failedPurgeIds.length) {
+                // 删除被云端权限策略拒绝（通常因为这些模板不是当前账号上传的，或需要管理员权限）。
+                // 明确提示，避免“刷新后又出现”被误认为回收站 bug。
+                showToast('❌ ' + failedPurgeIds.length + ' 个模板因权限无法删除（非本人上传），刷新后仍会显示', true);
+            }
             refreshAssetLibrary();
         }
     });
@@ -9507,6 +9513,14 @@
         showToast('该功能优化中...');
     }
 
+    // 判断模板是否有真实内容（图层/画板数据）。懒加载的空壳模板（elements 为空）
+    // 导出会变成「坏模板」，导入又重复上传，导致资产库被空壳淹没。
+    function hasTemplateContent(p) {
+        if (!p) return false;
+        if (p.kind === 'pack') return !!(p.artboards && Object.keys(p.artboards).length);
+        if (p.kind === 'bookmark') return false; // 书签是模板引用，跨环境导入无效
+        return !!(p.elements && p.elements.length);
+    }
     async function exportAssetBackup() {
         const fonts = await getAllFromDB('fonts');
         const logos = await getAllFromDB('logos');
@@ -9514,7 +9528,12 @@
             app: 'GCC Poster',
             version: 1,
             exportedAt: new Date().toISOString(),
-            data: { tagColorPresets, arcColorPresets, keywordTags, presetLibrary, tagPresetLibrary, referenceElements },
+            data: {
+                tagColorPresets, arcColorPresets, keywordTags,
+                presetLibrary: presetLibrary.filter(hasTemplateContent),
+                tagPresetLibrary: tagPresetLibrary.filter(function(p) { return !!(p.elements && p.elements.length); }),
+                referenceElements
+            },
             fonts,
             logos
         };
@@ -9552,8 +9571,8 @@
             renderLayersList();
             renderProperties();
             // 导入的版式/标签组/Logo 上传到素材库
-            const layouts = Array.isArray(data.presetLibrary) ? data.presetLibrary : [];
-            const tagCombos = Array.isArray(data.tagPresetLibrary) ? data.tagPresetLibrary : [];
+            const layouts = (Array.isArray(data.presetLibrary) ? data.presetLibrary : []).filter(hasTemplateContent);
+            const tagCombos = (Array.isArray(data.tagPresetLibrary) ? data.tagPresetLibrary : []).filter(function(p) { return !!(p.elements && p.elements.length); });
             const logos = Array.isArray(backup.logos) ? backup.logos : [];
             var totalImport = layouts.length + tagCombos.length + logos.length;
             var labelMap = { layout: '版式', pack: '套组', tagcombo: '标签组', logo: 'Logo' };

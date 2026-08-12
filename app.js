@@ -5636,12 +5636,15 @@ function libraryTagsForForm(formData, kind) {
   }
 
   async function handleDeleteTemplate(msg, sourceWindow) {
-    if (!msg.sourceId || state.localPreview || !state.supabase) return;
+    if (!msg.sourceId || state.localPreview || !state.supabase) return false;
     try {
       var { data: src } = await state.supabase.from('vf_source_files').select('source_path').eq('id', msg.sourceId).single();
       if (src && src.source_path) {
         var userId = state.session ? state.session.user.id : '';
-        var previewsPath = userId + '/previews/' + msg.sourceId + '/';
+        // 预览图文件夹属于原上传者（source_path 第一段是上传者 uid），
+        // 不能用当前登录用户的 uid 拼，否则删除他人模板时预览图会清不干净。
+        var ownerId = (src.source_path || '').split('/')[0] || userId;
+        var previewsPath = ownerId + '/previews/' + msg.sourceId + '/';
         var { data: previews } = await state.supabase.storage.from(LIBRARY_BUCKET).list(previewsPath, { limit: 10 });
         var pathsToDelete = [src.source_path];
         if (previews && previews.length > 0) {
@@ -5649,12 +5652,21 @@ function libraryTagsForForm(formData, kind) {
         }
         await state.supabase.storage.from(LIBRARY_BUCKET).remove(pathsToDelete);
       }
-      await state.supabase.from('vf_source_files').delete().eq('id', msg.sourceId);
+      // 用 .select() 取回实际被删除的行：RLS 拒绝（非本人上传 / 无权限）或 id 不存在时，
+      // delete 返回空数组且不抛错，必须显式判断，否则会误以为删除成功，导致模板刷新后“复活”。
+      var { data: deleted, error: deleteError } = await state.supabase.from('vf_source_files').delete().eq('id', msg.sourceId).select();
+      if (deleteError) throw deleteError;
+      if (!deleted || deleted.length === 0) {
+        console.warn('Template delete blocked (RLS/not owner):', msg.sourceId);
+        return false;
+      }
       // 立即从内存移除，无需等 Supabase 复制
       state.librarySources = state.librarySources.filter(function(s) { return s.id !== msg.sourceId; });
       state.libraryPreviews = state.libraryPreviews.filter(function(p) { return p.source_file_id !== msg.sourceId; });
+      return true;
     } catch (error) {
       console.warn('Template delete failed:', error);
+      return false;
     }
   }
 
@@ -5692,10 +5704,12 @@ function libraryTagsForForm(formData, kind) {
 
   async function handlePurgeRecycleBin(msg, sourceWindow) {
     var ids = Array.from(new Set((msg.sourceIds || []).filter(Boolean)));
+    var failed = [];
     for (var i = 0; i < ids.length; i += 1) {
-      await handleDeleteTemplate({ sourceId: ids[i] }, sourceWindow);
+      var ok = await handleDeleteTemplate({ sourceId: ids[i] }, sourceWindow);
+      if (!ok) failed.push(ids[i]);
     }
-    try { sourceWindow.postMessage({ type: 'vf:recycle-purged' }, location.origin); } catch (_error) {}
+    try { sourceWindow.postMessage({ type: 'vf:recycle-purged', failed: failed }, location.origin); } catch (_error) {}
   }
 
   async function handleFetchTemplates(sourceWindow) {
@@ -5752,10 +5766,12 @@ function libraryTagsForForm(formData, kind) {
         if (t.includes('字体') && t.includes('组件')) templateType = 'font';
         else if (t.includes('组合') && t.includes('组件')) templateType = 'groupcombo';
         else if ((t.includes('标签') && t.includes('组件')) || t.includes('标签组')) templateType = 'tagcombo';
-        else if (t.includes('LOGO') || t.includes('Logo') || t.includes('背景') || t.includes('KIKI') || t.includes('其他素材') || t.includes('品牌圆弧')) templateType = 'logo';
         else if (t.includes('模板书签')) templateType = 'bookmark';
         else if (t.includes('套组')) templateType = 'pack';
-        else if (t.includes('社媒物料') || t.includes('C端物料') || t.includes('模版') || t.includes('版式') || t.includes('静态模板')) templateType = 'layout';
+        // 模版特征优先于组件标签判断：带「背景/品牌圆弧/LOGO」等标签的模板仍应归入模版，
+        // 而不是被误判成 logo 组件，避免模版跑到「组件 → LOGO」分类里且预览图丢失。
+        else if (t.includes('模版') || t.includes('社媒物料') || t.includes('C端物料') || t.includes('版式') || t.includes('静态模板')) templateType = 'layout';
+        else if (t.includes('LOGO') || t.includes('Logo') || t.includes('背景') || t.includes('KIKI') || t.includes('其他素材') || t.includes('品牌圆弧')) templateType = 'logo';
         var dims = previewDims[s.id] || {};
         templates.push({ id: s.id, name: s.title, templateType: templateType, tags: t, previewW: dims.w || 0, previewH: dims.h || 0 });
       }
@@ -5898,8 +5914,23 @@ function libraryTagsForForm(formData, kind) {
       var srcExt = (src.source_path || '').split('.').pop().toLowerCase();
       var IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp'];
       if (IMAGE_EXTS.includes(srcExt)) {
-        // 图片模版：构造合成 JSON
+        // 图片素材（logo/背景/KIKI/其他素材）与图片模板共用此分支。
+        // 必须下载图片本体转 data URL 作为 src 返回，否则组件素材的 src 永远为空，
+        // 前端 addLogoFromAsset 的 `_lazy || !src` 恒为真，会陷入「正在加载素材内容」无限循环。
         var imgData = { schema: 'vf-layout-preset/v1', name: src.title || '图片模板', size: '1:1', canvasW: 1080, canvasH: 1080, elements: [], isImageTemplate: true };
+        try {
+          var { data: imgBlob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(src.source_path);
+          if (imgBlob) {
+            imgData.src = await new Promise(function(resolve) {
+              var r = new FileReader();
+              r.onload = function() { resolve(r.result); };
+              r.onerror = function() { resolve(''); };
+              r.readAsDataURL(imgBlob);
+            });
+          }
+        } catch (downloadError) {
+          console.warn('Download image asset failed:', downloadError);
+        }
         sourceWindow.postMessage({ type: 'vf:template-data', id: src.id, data: imgData }, location.origin);
       } else {
         // JSON 模版：下载源文件
@@ -5958,6 +5989,8 @@ function libraryTagsForForm(formData, kind) {
   const PALETTE_CONFIG_TAG = 'vf:internal:palette-config';
   window.VF_SAVE_COLOR_PALETTES = async function (payload) {
     if (!state.supabase || !state.session?.user?.id) throw new Error('未登录，无法同步全局预设');
+    // 保险：本地预览模式（localhost 假账号）只读不写，防止把本地旧配色反向覆盖到线上云端
+    if (state.localPreview && !state.emergencyMode) throw new Error('本地预览模式只读，不会写入云端');
     const userId = state.session.user.id;
     const data = payload?.data || payload || {};
     const jsonText = JSON.stringify({
