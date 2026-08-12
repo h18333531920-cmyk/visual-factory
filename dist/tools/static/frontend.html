@@ -2631,7 +2631,7 @@
     function applyGlobalData(data = {}) {
         if(data.tagColorPresets?.length) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
         if(data.arcColorPresets?.length) arcColorPresets = data.arcColorPresets;
-        if(data.keywordTags) keywordTags = data.keywordTags;
+        if(data.keywordTags?.length) keywordTags = data.keywordTags;
         if(data.referenceElements) referenceElements = data.referenceElements;
         // presetLibrary / tagPresetLibrary / logoAssets 不再从本地加载，全部从素材库（Supabase）获取
     }
@@ -2672,7 +2672,7 @@
             if(data.arcColorPresets?.length) arcColorPresets = data.arcColorPresets;
             setCloudColorPaletteSnapshot(data);
         }
-        if(Array.isArray(data.keywordTags) && !cloudKeywordTagsLoaded) keywordTags = data.keywordTags;
+        if(Array.isArray(data.keywordTags) && data.keywordTags.length && !cloudKeywordTagsLoaded) keywordTags = data.keywordTags;
         referenceElements = mergeById(referenceElements, cloudReferenceElements);
         // presetLibrary / tagPresetLibrary / logoAssets 全部从 Supabase 获取，不在这里合并
 
@@ -2789,7 +2789,7 @@
             if(!data || (!Array.isArray(data.tagColorPresets) && !Array.isArray(data.arcColorPresets) && !Array.isArray(data.keywordTags))) return false;
             if(Array.isArray(data.tagColorPresets) && data.tagColorPresets.length) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
             if(Array.isArray(data.arcColorPresets) && data.arcColorPresets.length) arcColorPresets = data.arcColorPresets;
-            if(Array.isArray(data.keywordTags)) {
+            if(Array.isArray(data.keywordTags) && data.keywordTags.length) {
                 keywordTags = data.keywordTags;
                 cloudKeywordTagsLoaded = true;
             }
@@ -5161,9 +5161,9 @@
     function updateTagPreset(i, k, v) { tagColorPresets[i][k] = k === 'shadowOpacity' ? normalizeAlpha(v) : v; tagColorPresets[i]._cloudSaved = true; saveGlobalData(); queueColorPaletteCloudSave(); if(k !== 'shadowOpacity') renderSettings(); renderProperties(); renderCanvas(); }
     function addTagPreset() { tagColorPresets.push({ id: genId('c'), name: '新预设', bg: '#00D06C', text: '#FFFFFF', shadow: '#000000', shadowOpacity: 0.7, _cloudSaved: true }); saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); }
     function deleteTagPreset(i) { tagColorPresets.splice(i, 1); saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); }
-    function updateKeywordTag(i, k, v) { keywordTags[i][k] = v; saveGlobalData(); renderPromptTags(); }
-    function addKeywordTag() { keywordTags.push({ id: genId('kw'), name: '新标签', prompt: '输入关键词' }); saveGlobalData(); renderSettings(); renderPromptTags(); }
-    function deleteKeywordTag(i) { const id = keywordTags[i]?.id; keywordTags.splice(i, 1); selectedKeywordTagIds = selectedKeywordTagIds.filter(x => x !== id); saveGlobalData(); renderSettings(); renderPromptTags(); queueSharedAssetSave(0); }
+    function updateKeywordTag(i, k, v) { keywordTags[i][k] = v; saveGlobalData(); queueColorPaletteCloudSave(); renderPromptTags(); }
+    function addKeywordTag() { keywordTags.push({ id: genId('kw'), name: '新标签', prompt: '输入关键词' }); saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); renderPromptTags(); }
+    function deleteKeywordTag(i) { const id = keywordTags[i]?.id; keywordTags.splice(i, 1); selectedKeywordTagIds = selectedKeywordTagIds.filter(x => x !== id); saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); renderPromptTags(); queueSharedAssetSave(0); }
     function updateArcPreset(i, k, v) { arcColorPresets[i][k] = v; arcColorPresets[i]._cloudSaved = true; saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); renderProperties(); renderCanvas(); }
     function addArcPreset() { arcColorPresets.push({ id: genId('ac'), name: '新圆弧', cIn: '#FFCC00', cOut: '#00D06C', _cloudSaved: true }); saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); }
     function deleteArcPreset(i) { arcColorPresets.splice(i, 1); saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); }
@@ -9513,7 +9513,7 @@
             const data = backup.data || backup;
             if(data.tagColorPresets?.length) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
             if(data.arcColorPresets?.length) arcColorPresets = data.arcColorPresets;
-            if(data.keywordTags) keywordTags = data.keywordTags;
+            if(data.keywordTags?.length) keywordTags = data.keywordTags;
             if(data.referenceElements) referenceElements = data.referenceElements;
 
             const fonts = Array.isArray(backup.fonts) ? backup.fonts : [];
