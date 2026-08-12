@@ -4199,10 +4199,21 @@
             ratioEl.value = jimengRatio;
         }
     }
+    const JIMENG_SESSION_ENDPOINTS = [
+        '/api/jimeng-session',
+        'https://visual-factory.pages.dev/api/jimeng-session'
+    ];
     function requestJimengSessionId(silent) {
         if(!silent) updateJimengApiUI({ label: '正在从云端获取即梦 Session ID…' });
-        // 优先尝试云端获取（管理员扩展同步的 sessionid）
-        fetch('/api/jimeng-session')
+        fetchJimengSessionFromEndpoints(0, silent);
+    }
+    function fetchJimengSessionFromEndpoints(index, silent) {
+        if(index >= JIMENG_SESSION_ENDPOINTS.length) {
+            if(!silent) updateJimengApiUI({ label: '云端不可达，尝试从扩展获取…' });
+            return;
+        }
+        // 依次尝试同源 /api 与 Cloudflare Pages 绝对地址（GitHub Pages 静态页没有 /api，必须跨域回退）。
+        fetch(JIMENG_SESSION_ENDPOINTS[index])
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if(data.found && data.sessionid) {
@@ -4215,11 +4226,11 @@
                     updateJimengApiUI({ ready: true, label: '✅ 已获取 Session ID（' + data.sessionid.substring(0, 8) + '…）' + updated });
                     if(!silent && isNew) showToast('✅ 已获取即梦 Session ID');
                 } else {
-                    if(!silent) updateJimengApiUI({ label: '云端暂无 sessionid，尝试从扩展获取…' });
+                    fetchJimengSessionFromEndpoints(index + 1, silent);
                 }
             })
             .catch(function(e) {
-                if(!silent) updateJimengApiUI({ label: '云端不可达，尝试从扩展获取…' });
+                fetchJimengSessionFromEndpoints(index + 1, silent);
             });
     }
     function postJimengApiMessage(message) {
