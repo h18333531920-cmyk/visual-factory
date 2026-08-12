@@ -2662,17 +2662,13 @@
             }) : []
         };
     }
-    function mergeCloudAssetData(data = {}, fonts = [], logos = [], skipPalettes = false) {
+    function mergeCloudAssetData(data = {}, fonts = [], logos = []) {
         const hadLocalAssets = hasLocalSharedAssets();
         const cloudReferenceElements = Array.isArray(data.referenceElements) ? data.referenceElements : [];
 
-        // per-user 配色（VF_LOAD_COLOR_PALETTES）是配色权威数据源；已加载时忽略旧 shared-assets.json 里的配色，避免旧数据覆盖新配色。
-        if(!skipPalettes) {
-            if(data.tagColorPresets?.length) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
-            if(data.arcColorPresets?.length) arcColorPresets = data.arcColorPresets;
-            setCloudColorPaletteSnapshot(data);
-        }
-        if(Array.isArray(data.keywordTags) && data.keywordTags.length && !cloudKeywordTagsLoaded) keywordTags = data.keywordTags;
+        // 配色与关键词标签已完全迁出公共 shared-assets.json：只由 per-user 私有云端
+        // （VF_LOAD_COLOR_PALETTES）和浏览器本地 localStorage 提供，这里一律不再读写，
+        // 从根上杜绝「公共旧数据覆盖新配色」导致的窗口间显示不一致。
         referenceElements = mergeById(referenceElements, cloudReferenceElements);
         // presetLibrary / tagPresetLibrary / logoAssets 全部从 Supabase 获取，不在这里合并
 
@@ -2720,8 +2716,10 @@
     async function buildSharedAssetPayload() {
         const fonts = await getAllFromDB('fonts');
         const logos = Array.isArray(logoAssets) ? logoAssets : await getAllFromDB('logos');
+        // 配色与关键词标签不再写入公共 shared-assets.json（改由 per-user 私有云端承载），
+        // 这里只同步版式、标签组、参考元素等公共资产，避免旧配色残留。
         return {
-            data: { tagColorPresets, arcColorPresets, keywordTags, presetLibrary, tagPresetLibrary, referenceElements },
+            data: { presetLibrary, tagPresetLibrary, referenceElements },
             fonts,
             logos
         };
@@ -2812,7 +2810,7 @@
                 }
                 const fonts = Array.isArray(payload.fonts) ? payload.fonts : [];
                 const logos = Array.isArray(payload.logos) ? payload.logos : [];
-                const shouldBackfillCloud = mergeCloudAssetData(payload.data || {}, fonts, logos, libraryColorLoaded);
+                const shouldBackfillCloud = mergeCloudAssetData(payload.data || {}, fonts, logos);
 
                 await saveStateToDB(getGlobalSnapshot());
                 await replaceStoreInDB('logos', logoAssets);
@@ -2857,7 +2855,7 @@
             const fonts = Array.isArray(payload.fonts) ? payload.fonts : [];
             const logos = Array.isArray(payload.logos) ? payload.logos : [];
             const data = payload.data || rawPayload;
-            const shouldBackfillCloud = mergeCloudAssetData(data, fonts, logos, libraryColorLoaded);
+            const shouldBackfillCloud = mergeCloudAssetData(data, fonts, logos);
 
             await saveStateToDB(getGlobalSnapshot());
             await replaceStoreInDB('logos', logoAssets);
