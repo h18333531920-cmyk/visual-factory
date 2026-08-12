@@ -2662,14 +2662,17 @@
             }) : []
         };
     }
-    function mergeCloudAssetData(data = {}, fonts = [], logos = []) {
+    function mergeCloudAssetData(data = {}, fonts = [], logos = [], skipPalettes = false) {
         const hadLocalAssets = hasLocalSharedAssets();
         const cloudReferenceElements = Array.isArray(data.referenceElements) ? data.referenceElements : [];
 
-        if(data.tagColorPresets?.length) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
-        if(data.arcColorPresets?.length) arcColorPresets = data.arcColorPresets;
+        // per-user 配色（VF_LOAD_COLOR_PALETTES）是配色权威数据源；已加载时忽略旧 shared-assets.json 里的配色，避免旧数据覆盖新配色。
+        if(!skipPalettes) {
+            if(data.tagColorPresets?.length) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
+            if(data.arcColorPresets?.length) arcColorPresets = data.arcColorPresets;
+            setCloudColorPaletteSnapshot(data);
+        }
         if(Array.isArray(data.keywordTags) && !cloudKeywordTagsLoaded) keywordTags = data.keywordTags;
-        setCloudColorPaletteSnapshot(data);
         referenceElements = mergeById(referenceElements, cloudReferenceElements);
         // presetLibrary / tagPresetLibrary / logoAssets 全部从 Supabase 获取，不在这里合并
 
@@ -2809,7 +2812,7 @@
                 }
                 const fonts = Array.isArray(payload.fonts) ? payload.fonts : [];
                 const logos = Array.isArray(payload.logos) ? payload.logos : [];
-                const shouldBackfillCloud = mergeCloudAssetData(payload.data || {}, fonts, logos);
+                const shouldBackfillCloud = mergeCloudAssetData(payload.data || {}, fonts, logos, libraryColorLoaded);
 
                 await saveStateToDB(getGlobalSnapshot());
                 await replaceStoreInDB('logos', logoAssets);
@@ -2854,7 +2857,7 @@
             const fonts = Array.isArray(payload.fonts) ? payload.fonts : [];
             const logos = Array.isArray(payload.logos) ? payload.logos : [];
             const data = payload.data || rawPayload;
-            const shouldBackfillCloud = mergeCloudAssetData(data, fonts, logos);
+            const shouldBackfillCloud = mergeCloudAssetData(data, fonts, logos, libraryColorLoaded);
 
             await saveStateToDB(getGlobalSnapshot());
             await replaceStoreInDB('logos', logoAssets);
@@ -5155,15 +5158,15 @@
         arcColorPresets.forEach((p, index) => { arcList.innerHTML += `<div class="setting-row"><input type="text" class="setting-input" value="${p.name}" onchange="updateArcPreset(${index}, 'name', this.value)"><div class="color-box" style="background:${p.cIn}"></div><input type="text" class="setting-input" value="${p.cIn}" onchange="updateArcPreset(${index}, 'cIn', this.value)"><div class="color-box" style="background:${p.cOut}"></div><input type="text" class="setting-input" value="${p.cOut}" onchange="updateArcPreset(${index}, 'cOut', this.value)"><div style="width: 80px;"></div><button class="l-btn" style="color:var(--danger);" onclick="deleteArcPreset(${index})">✖</button></div>`; });
     }
 
-    function updateTagPreset(i, k, v) { tagColorPresets[i][k] = k === 'shadowOpacity' ? normalizeAlpha(v) : v; tagColorPresets[i]._cloudSaved = true; saveGlobalData(); if(k !== 'shadowOpacity') renderSettings(); renderProperties(); renderCanvas(); }
-    function addTagPreset() { tagColorPresets.push({ id: genId('c'), name: '新预设', bg: '#00D06C', text: '#FFFFFF', shadow: '#000000', shadowOpacity: 0.7, _cloudSaved: true }); saveGlobalData(); renderSettings(); }
-    function deleteTagPreset(i) { tagColorPresets.splice(i, 1); saveGlobalData(); renderSettings(); }
+    function updateTagPreset(i, k, v) { tagColorPresets[i][k] = k === 'shadowOpacity' ? normalizeAlpha(v) : v; tagColorPresets[i]._cloudSaved = true; saveGlobalData(); queueColorPaletteCloudSave(); if(k !== 'shadowOpacity') renderSettings(); renderProperties(); renderCanvas(); }
+    function addTagPreset() { tagColorPresets.push({ id: genId('c'), name: '新预设', bg: '#00D06C', text: '#FFFFFF', shadow: '#000000', shadowOpacity: 0.7, _cloudSaved: true }); saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); }
+    function deleteTagPreset(i) { tagColorPresets.splice(i, 1); saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); }
     function updateKeywordTag(i, k, v) { keywordTags[i][k] = v; saveGlobalData(); renderPromptTags(); }
     function addKeywordTag() { keywordTags.push({ id: genId('kw'), name: '新标签', prompt: '输入关键词' }); saveGlobalData(); renderSettings(); renderPromptTags(); }
     function deleteKeywordTag(i) { const id = keywordTags[i]?.id; keywordTags.splice(i, 1); selectedKeywordTagIds = selectedKeywordTagIds.filter(x => x !== id); saveGlobalData(); renderSettings(); renderPromptTags(); queueSharedAssetSave(0); }
-    function updateArcPreset(i, k, v) { arcColorPresets[i][k] = v; arcColorPresets[i]._cloudSaved = true; saveGlobalData(); renderSettings(); renderProperties(); renderCanvas(); }
-    function addArcPreset() { arcColorPresets.push({ id: genId('ac'), name: '新圆弧', cIn: '#FFCC00', cOut: '#00D06C', _cloudSaved: true }); saveGlobalData(); renderSettings(); }
-    function deleteArcPreset(i) { arcColorPresets.splice(i, 1); saveGlobalData(); renderSettings(); }
+    function updateArcPreset(i, k, v) { arcColorPresets[i][k] = v; arcColorPresets[i]._cloudSaved = true; saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); renderProperties(); renderCanvas(); }
+    function addArcPreset() { arcColorPresets.push({ id: genId('ac'), name: '新圆弧', cIn: '#FFCC00', cOut: '#00D06C', _cloudSaved: true }); saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); }
+    function deleteArcPreset(i) { arcColorPresets.splice(i, 1); saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); }
 
     function normalizePresetHex(value, fallback) {
         const color = String(value || '').trim();
@@ -5239,6 +5242,29 @@
     };
     // 兼容旧按钮或旧缓存页面的调用。
     window.syncColorPresetsFromSettings = window.syncSettingsPresetsToCloud;
+    // 配色任何改动后自动同步到 per-user 云端，避免「存到 shared-assets、却从 color-palettes 读取」导致的丢失。
+    let colorPaletteCloudSaveTimer = null;
+    function queueColorPaletteCloudSave(delay = 1500) {
+        clearTimeout(colorPaletteCloudSaveTimer);
+        colorPaletteCloudSaveTimer = setTimeout(async () => {
+            try {
+                await saveGlobalData();
+                const colorData = buildSettingsPresetCloudData();
+                if(window.parent !== window && typeof window.parent.VF_SAVE_COLOR_PALETTES === 'function') {
+                    const saved = await window.parent.VF_SAVE_COLOR_PALETTES({ data: colorData });
+                    setCloudColorPaletteSnapshot(saved?.data || colorData);
+                    renderAssetLibrary();
+                } else {
+                    await saveSharedAssetsToCloud();
+                }
+                cloudKeywordTagsLoaded = true;
+                reportColorPaletteSync('done', '✅ 配色已自动同步');
+            } catch(error) {
+                console.warn('配色自动同步失败:', error);
+                reportColorPaletteSync('error', '❌ 配色自动同步失败，请检查登录状态');
+            }
+        }, delay);
+    }
     let pendingColorPresetClick = null;
     window.handleColorPresetClick = function(event, type, id) {
         event.stopPropagation();
