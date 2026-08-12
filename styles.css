@@ -8840,3 +8840,208 @@ body .app-shell[data-route="home"] .sidebar-footer .ghost-btn:last-child::after 
   .home-library-shortcut, .home-command-divider { display: none; }
   .home-size-menu { right: -8px; left: auto; width: min(430px, calc(100vw - 32px)); }
 }
+
+/* Gemini designer pass: compact home chrome and quiet library navigation. */
+body .app-shell[data-route="home"] .sidebar-brand {
+  min-height: 64px;
+  padding: 12px 0 6px;
+}
+
+body .app-shell[data-route="home"] .sidebar-brand .brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+
+body .app-shell[data-route="home"] .nav-list {
+  gap: 12px;
+  padding: 10px 14px 8px;
+}
+
+body .app-shell[data-route="home"] .nav-item {
+  width: 36px;
+  min-height: 36px;
+  height: 36px;
+  margin: 0 auto;
+  padding: 0;
+  border-radius: 11px;
+}
+
+body .app-shell[data-route="home"] .nav-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+
+body .app-shell[data-route="home"] .nav-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.9;
+}
+
+body .app-shell[data-route="home"] .sidebar-footer {
+  padding: 10px 14px 12px;
+}
+
+body .app-shell[data-route="home"] .sidebar-footer .ghost-btn {
+  width: 36px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 10px;
+}
+
+.library-page-home .home-command-composer {
+  border-radius: 18px;
+}
+
+.library-page-home .home-command-main {
+  min-height: 122px;
+  padding: 15px 16px;
+}
+
+.library-page-home .home-command-upload {
+  width: 52px;
+  height: 68px;
+  flex-basis: 52px;
+  margin-right: 13px;
+  border-radius: 9px;
+}
+
+.library-page-home .home-command-main textarea {
+  min-height: 84px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.library-page-home .home-command-references {
+  top: 15px;
+  left: 16px;
+}
+
+.library-page-home .home-command-reference,
+.library-page-home .home-command-add-reference {
+  width: 44px;
+  height: 56px;
+  flex-basis: 44px;
+}
+
+.library-page-home .home-command-controls {
+  min-height: 48px;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 0 0 18px 18px;
+}
+
+.library-page-home .home-control-button {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.library-page-home .home-command-submit {
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+}
+
+/* Home has one level of navigation: type tabs. Detailed tags stay available in Library. */
+body .app-shell[data-route="home"] .library-control-strip {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto auto !important;
+  align-items: center;
+  gap: 10px !important;
+  padding: 12px 0 18px !important;
+}
+
+body .app-shell[data-route="home"] .library-kind-tabs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+body .app-shell[data-route="home"] .library-kind-tabs > button {
+  position: relative;
+  min-height: 30px;
+  padding: 0 0 8px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: #98a1ae !important;
+  background: transparent !important;
+  font-size: 13px !important;
+  font-weight: 550 !important;
+}
+
+body .app-shell[data-route="home"] .library-kind-tabs > button.active {
+  color: #101828 !important;
+}
+
+body .app-shell[data-route="home"] .library-kind-tabs > button.active::after {
+  display: block;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: #101828;
+  content: "";
+}
+
+body .app-shell[data-route="home"] .library-kind-tabs small {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+body .app-shell[data-route="home"] .library-tag-rows {
+  display: none !important;
+}
+
+body .app-shell[data-route="home"] .library-search-pill {
+  width: min(184px, 18vw);
+  min-height: 28px;
+  border-radius: 7px;
+  background: #e8edf5;
+}
+
+body .app-shell[data-route="home"] .library-search-pill input {
+  font-size: 12px;
+}
+
+body .app-shell[data-route="home"] .filter-dropdown-wrap { order: 2; }
+body .app-shell[data-route="home"] .library-upload-area { order: 3; }
+
+body .app-shell[data-route="home"] .filter-dropdown-wrap .ghost-btn,
+body .app-shell[data-route="home"] .library-upload-pill {
+  min-height: 32px;
+  border-radius: 9px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+body .app-shell[data-route="home"] .library-upload-pill {
+  padding: 0 14px;
+  color: #fff !important;
+  background: #101828 !important;
+  border-color: #101828 !important;
+}
+
+@media (max-width: 760px) {
+  body .app-shell[data-route="home"] .library-control-strip {
+    grid-template-columns: minmax(0, 1fr) auto auto !important;
+  }
+
+  body .app-shell[data-route="home"] .library-kind-tabs {
+    gap: 12px;
+  }
+
+  body .app-shell[data-route="home"] .library-kind-tabs > button {
+    font-size: 12px !important;
+  }
+
+  body .app-shell[data-route="home"] .library-search-pill {
+    display: none;
+  }
+}
