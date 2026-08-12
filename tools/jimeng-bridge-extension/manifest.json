@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "GCC Design · 即梦本机桥",
+  "description": "在用户已登录且主动配对的即梦标签页与 GCC Design 之间建立本机创作桥接。",
+  "version": "0.1.2",
+  "permissions": ["tabs", "storage", "activeTab", "scripting", "cookies"],
+  "host_permissions": [
+    "http://localhost:8791/*",
+    "http://127.0.0.1:8791/*",
+    "https://h18333531920-cmyk.github.io/*",
+    "https://gccdesign.app/*",
+    "https://*.gccdesign.app/*",
+    "https://jimeng.jianying.com/*",
+    "https://*.jimeng.jianying.com/*"
+  ],
+  "background": { "service_worker": "service-worker.js", "type": "module" },
+  "action": { "default_title": "GCC Design · 即梦本机桥", "default_popup": "popup.html" },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:8791/*", "http://127.0.0.1:8791/*", "https://h18333531920-cmyk.github.io/*", "https://gccdesign.app/*", "https://*.gccdesign.app/*"],
+      "js": ["diy-bridge.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://jimeng.jianying.com/*", "https://*.jimeng.jianying.com/*"],
+      "js": ["jimeng-bridge.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

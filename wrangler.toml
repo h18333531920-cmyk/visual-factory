@@ -3,6 +3,10 @@ compatibility_date = "2026-06-04"
 pages_build_output_dir = "./dist"
 send_metrics = false
 
+[[kv_namespaces]]
+binding = "VF_KV"
+id = "5fae7742d41b4a3a85b807466af9b447"
+
 [vars]
 SUPABASE_URL = "https://juuqvjmhzdgfggzrivbb.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_PIa3V0LGlOn1K6G1nBUeqw_kiFB6fjt"

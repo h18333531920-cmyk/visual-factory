@@ -2349,7 +2349,7 @@
                         <span class="jimeng-api-status" id="jimeng-api-status">即梦 API 未检测</span>
                         <input class="jimeng-session-input" id="jimeng-session-input" type="password" placeholder="粘贴即梦 sessionid…" autocomplete="off">
                         <button class="jimeng-api-action" type="button" onclick="saveJimengSessionId()">保存</button>
-                        <button class="jimeng-api-action" type="button" onclick="requestJimengSessionId()" title="通过浏览器扩展自动读取即梦 Cookie">自动获取</button>
+                        <button class="jimeng-api-action" type="button" onclick="requestJimengSessionId()" title="从云端获取管理员同步的即梦 Session ID">一键获取</button>
                         <button class="jimeng-api-action" type="button" onclick="checkJimengApiHealth()">检测</button>
                     </div>
                     <div class="ai-reference-strip" id="ai-reference-strip">
@@ -4162,8 +4162,30 @@
         }
     }
     function requestJimengSessionId() {
-        updateJimengApiUI({ label: '正在从浏览器读取即梦 Cookie…' });
-        postJimengApiMessage({ source: 'vf-diy-page', type: 'vf:get-jimeng-sessionid', requestId: 'sid_' + Date.now() });
+        updateJimengApiUI({ label: '正在从云端获取即梦 Session ID…' });
+        // 优先尝试云端获取（管理员扩展同步的 sessionid）
+        fetch('/api/jimeng-session')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if(data.found && data.sessionid) {
+                    jimengSessionId = data.sessionid;
+                    try { localStorage.setItem('jimeng_sessionid', data.sessionid); } catch(_) {}
+                    var input = document.getElementById('jimeng-session-input');
+                    if(input) input.value = data.sessionid;
+                    var updated = data.updatedAt ? '，同步时间 ' + new Date(data.updatedAt).toLocaleString('zh-CN') : '';
+                    updateJimengApiUI({ ready: true, label: '✅ 已获取 Session ID（' + data.sessionid.substring(0, 8) + '…）' + updated });
+                    showToast('✅ 已获取即梦 Session ID');
+                } else {
+                    // 云端没有，回退到扩展获取
+                    updateJimengApiUI({ label: '云端暂无 sessionid，尝试从扩展获取…' });
+                    postJimengApiMessage({ source: 'vf-diy-page', type: 'vf:get-jimeng-sessionid', requestId: 'sid_' + Date.now() });
+                }
+            })
+            .catch(function(e) {
+                // 网络错误，回退到扩展获取
+                updateJimengApiUI({ label: '云端不可达，尝试从扩展获取…' });
+                postJimengApiMessage({ source: 'vf-diy-page', type: 'vf:get-jimeng-sessionid', requestId: 'sid_' + Date.now() });
+            });
     }
     function postJimengApiMessage(message) {
         var target = window.parent && window.parent !== window ? window.parent : window;
