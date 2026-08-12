@@ -2104,6 +2104,344 @@
         @media (max-width: 1280px) {
             .asset-pane-collapse-handle { left: 240px; }
         }
+
+        /* Unified editor visual layer: preserve runtime behavior, simplify hierarchy. */
+        :root {
+            --primary: #17181b;
+            --primary-hover: #303237;
+            --text-main: #17181b;
+            --text-sub: #727b86;
+            --border: #e5e8eb;
+            --border-strong: #d8dde2;
+            --bg-canvas: #f5f6f7;
+        }
+        body {
+            padding: 0;
+            min-width: 1120px;
+            background: #f5f6f7;
+            color: var(--text-main);
+        }
+        .workspace-tabs {
+            height: 56px;
+            padding: 0 22px;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+            background: #fff;
+        }
+        .workspace-tabs strong,
+        .workspace-tabs button {
+            font-size: 13px;
+            font-weight: 650;
+        }
+        .workspace-tabs strong::after,
+        .workspace-tabs .workspace-overview-tab.active::after {
+            bottom: -17px;
+            width: calc(100% - 18px);
+            height: 2px;
+            background: var(--text-main);
+        }
+        .workspace-tabs button {
+            padding: 0 9px;
+            color: #7b848f;
+        }
+        .workspace-tabs button.active,
+        .workspace-tabs .workspace-overview-tab {
+            color: var(--text-main);
+        }
+        .workspace-tabs .new-artboard-menu-wrap {
+            margin-left: 6px;
+        }
+        .workspace-tabs .new-artboard-trigger {
+            min-width: 94px;
+            height: 32px;
+            padding: 0 14px;
+            border-radius: 8px;
+            color: #fff;
+            background: var(--text-main);
+            box-shadow: none;
+        }
+        .editor-layout {
+            height: calc(100vh - 68px);
+            min-height: 640px;
+            border: 0;
+            border-radius: 0;
+            background: var(--bg-canvas);
+        }
+        .asset-pane {
+            width: 292px;
+            flex-basis: 292px;
+            background: #fff;
+            border-right: 1px solid var(--border);
+        }
+        .asset-pane .asset-library-card {
+            padding: 18px 16px;
+            background: #fff;
+        }
+        .asset-pane .card-title {
+            padding: 0;
+            margin-bottom: 16px;
+            font-size: 17px;
+        }
+        .asset-pane .card-title::before,
+        .right-pane .card-title::before {
+            display: none;
+        }
+        .asset-tabs {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 5px;
+            padding: 4px;
+            margin-bottom: 10px;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            background: #f5f6f7;
+        }
+        .asset-tab {
+            min-height: 30px;
+            padding: 0 4px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: #737c87;
+            font-size: 12px;
+            font-weight: 650;
+        }
+        .asset-tab.active {
+            background: var(--text-main);
+            color: #fff;
+            box-shadow: none;
+        }
+        .asset-search-wrap {
+            margin: 0 0 9px;
+        }
+        .asset-search-input {
+            height: 34px;
+            padding: 0 30px 0 10px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: #fafbfc;
+            font-size: 12px;
+        }
+        #diy-subtag-row {
+            gap: 5px !important;
+            margin: 0 0 10px !important;
+            padding: 0 !important;
+        }
+        .filter-capsule {
+            min-height: 27px;
+            padding: 4px 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: #fff;
+            color: #747d87;
+            font-size: 11px;
+            font-weight: 650;
+            box-shadow: none;
+        }
+        .filter-capsule.active {
+            background: #edf0f3;
+            color: var(--text-main);
+            border-color: #d7dde3;
+        }
+        .asset-list {
+            gap: 10px;
+            padding: 2px 2px 20px 0;
+        }
+        #asset-list-ui:not(:has(.reference-filter)) {
+            gap: 10px;
+        }
+        #asset-list-ui:not(:has(.reference-filter)) .asset-masonry-column {
+            gap: 10px;
+        }
+        .asset-item {
+            border-color: var(--border);
+            border-radius: 9px;
+            background: #fff;
+            box-shadow: none;
+        }
+        .asset-item:hover,
+        .asset-item.current {
+            border-color: #c8ced5;
+            box-shadow: 0 7px 16px rgba(25, 30, 38, .08);
+        }
+        .asset-thumb {
+            border-color: #edf0f2;
+            border-radius: 7px;
+        }
+        .asset-info {
+            padding: 7px 3px 1px;
+        }
+        .asset-name {
+            color: var(--text-main);
+            font-size: 12px;
+            font-weight: 680;
+        }
+        .asset-meta {
+            color: var(--text-sub);
+            font-size: 11px;
+        }
+        .asset-pane-collapse-handle {
+            left: 292px;
+            z-index: 70;
+            width: 18px;
+            height: 54px;
+            border: 1px solid var(--border);
+            border-left: 0;
+            border-radius: 0 8px 8px 0;
+            background: #fff;
+            box-shadow: none;
+        }
+        .asset-pane-collapse-handle::before {
+            color: #78818b;
+            font-size: 18px;
+        }
+        #asset-pane-collapse-toggle:checked ~ .asset-pane-collapse-handle {
+            left: 0;
+        }
+        .left-pane {
+            background: var(--bg-canvas);
+        }
+        .left-pane::before {
+            background-image: radial-gradient(circle, rgba(116, 124, 135, .17) 1px, transparent 1px);
+            background-size: 18px 18px;
+            opacity: .38;
+        }
+        .canvas-toolbar {
+            min-height: 66px;
+        }
+        .left-pane .canvas-actions {
+            top: 16px;
+            right: 20px;
+            gap: 6px;
+        }
+        .left-pane .canvas-actions button {
+            min-width: auto;
+            height: 32px;
+            padding: 0 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: #505862;
+            background: #fff;
+            box-shadow: none;
+            font-size: 12px;
+            font-weight: 650;
+        }
+        .left-pane .canvas-actions button:hover {
+            border-color: #c7cdd4;
+            background: #fafbfc;
+        }
+        .left-pane .canvas-actions button.primary {
+            color: var(--text-main);
+            background: #fff;
+            border-color: var(--border);
+        }
+        .left-pane .canvas-actions .export-dropdown-wrap button.primary {
+            color: #fff;
+            background: var(--text-main);
+            border-color: var(--text-main);
+        }
+        .left-pane .canvas-actions button.save-template-btn {
+            color: #505862;
+            background: #fff;
+            border-color: var(--border);
+        }
+        .left-pane .canvas-actions .toolbar-more-wrap > button {
+            background: transparent;
+            border-color: transparent;
+        }
+        .canvas-wrapper {
+            border: 1px solid #eef0f2;
+            box-shadow: 0 14px 34px rgba(29, 35, 45, .10);
+        }
+        .right-pane {
+            width: 368px;
+            flex-basis: 368px;
+            border-left: 1px solid var(--border);
+            background: #fff;
+        }
+        .pane-header {
+            min-height: 58px;
+            padding: 0 16px;
+            border-bottom-color: var(--border);
+        }
+        .pane-header h2 {
+            color: var(--text-main);
+            font-size: 14px;
+            font-weight: 680;
+            letter-spacing: 0;
+        }
+        .pane-header .btn-icon,
+        .layer-card-actions .btn-icon {
+            min-height: 30px;
+            border: 0;
+            border-radius: 7px;
+            background: transparent;
+            color: #7a838d;
+            box-shadow: none;
+        }
+        .pane-content {
+            padding: 0;
+            gap: 0;
+            background: #fff;
+        }
+        .module-card {
+            padding: 17px 16px 18px;
+            border: 0;
+            border-bottom: 1px solid var(--border);
+            border-radius: 0;
+            background: #fff;
+            box-shadow: none;
+        }
+        .card-title {
+            margin-bottom: 12px;
+            color: var(--text-main);
+            font-size: 15px;
+            font-weight: 680;
+        }
+        .layer-item {
+            min-height: 42px;
+            padding: 8px 9px;
+            border-color: var(--border);
+            border-radius: 7px;
+            background: #fff;
+        }
+        .layer-item.active {
+            border-color: #c4cbd2;
+            background: #f7f8f9;
+            box-shadow: none;
+        }
+        .ai-console {
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: none;
+        }
+        .btn,
+        .btn-icon,
+        .prompt-tag-chip,
+        .p-tab,
+        .add-menu button,
+        .ai-menu-btn,
+        .toolbar-more-menu,
+        .resize-dropdown-menu,
+        .export-dropdown-menu,
+        .ai-dropdown {
+            border-radius: 7px;
+        }
+        .btn-dark,
+        .p-tab.active,
+        .prompt-tag-chip.active {
+            background: var(--text-main);
+            border-color: var(--text-main);
+        }
+        .ai-submit {
+            background: var(--text-main);
+        }
+        @media (max-width: 1280px) {
+            .asset-pane { width: 248px; flex-basis: 248px; }
+            .asset-pane-collapse-handle { left: 248px; }
+            .right-pane { width: 338px; flex-basis: 338px; }
+        }
     </style>
 </head>
 <body>
@@ -2243,7 +2581,7 @@
                 <button type="button" class="btn-icon" id="refresh-asset-btn" onclick="refreshAssetLibrary()" title="刷新资产库" style="padding:2px 6px;font-size:13px;">↻</button>
             </div>
             <div class="asset-tabs">
-                <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')" style="white-space:nowrap;">模版 <small id="diy-count-layout">· 0</small></button>
+                <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')" style="white-space:nowrap;">模板 <small id="diy-count-layout">· 0</small></button>
                 <button class="asset-tab" data-asset-tab="component" onclick="switchAssetTab('component')" style="white-space:nowrap;">组件 <small id="diy-count-component">· 0</small></button>
                 <button class="asset-tab" data-asset-tab="recycle" onclick="switchAssetTab('recycle')" title="回收站" aria-label="回收站">🗑 <small id="diy-count-recycle">· 0</small></button>
             </div>
@@ -2264,7 +2602,7 @@
 <div class="left-pane" id="left-pane">
         <div class="canvas-toolbar">
             <div class="canvas-actions">
-                <button type="button" class="save-template-btn" onclick="saveActiveAsset()" id="canvas-save-btn">保存模版</button>
+                <button type="button" class="save-template-btn" onclick="saveActiveAsset()" id="canvas-save-btn">保存模板</button>
                 <div class="resize-menu-wrap">
                     <button type="button" onclick="toggleResizeMenu(event)">修改尺寸 ⌄</button>
                     <div class="resize-dropdown-menu" id="resize-dropdown-menu"></div>
@@ -6761,7 +7099,7 @@
         // 资产库切换仅影响左侧内容，不能改变右上角的主操作。
         // 组件不再通过这里上传，任何普通分类下均保存当前画板为模板。
         btn.style.display = '';
-        btn.textContent = '保存模版';
+        btn.textContent = '保存模板';
         btn.disabled = currentAssetTab === 'recycle';
     }
     function toggleAddMenu(e) { e.stopPropagation(); document.getElementById('add-menu')?.classList.toggle('open'); }

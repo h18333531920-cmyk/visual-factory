@@ -396,6 +396,181 @@
             }
         }
 
+        /* Unified motion workspace: only visual treatment, existing timeline and export logic stay intact. */
+        :root {
+            --primary: #17181b;
+            --primary-strong: #303237;
+            --bg: #f5f6f7;
+            --panel: #fff;
+            --border: #e5e8eb;
+            --border-strong: #d8dde2;
+            --text: #17181b;
+            --muted: #727b86;
+        }
+        html,
+        body {
+            background: var(--bg);
+        }
+        body {
+            gap: 0;
+            padding: 0;
+        }
+        .workspace-tabs {
+            width: 100%;
+            height: 56px;
+            padding: 0 22px;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+            background: #fff;
+        }
+        .workspace-tabs strong,
+        .workspace-tabs button {
+            font-size: 13px;
+            font-weight: 650;
+        }
+        .workspace-tabs strong::after {
+            bottom: -18px;
+            height: 2px;
+            border-radius: 0;
+            background: var(--text);
+        }
+        .workspace-tabs button {
+            padding: 0 9px;
+            color: #7b848f;
+        }
+        .container {
+            width: 100%;
+            max-width: none;
+            height: calc(100vh - 56px);
+            min-height: 620px;
+            gap: 0;
+        }
+        .preview-section {
+            border-radius: 0;
+            background: #f5f6f7;
+        }
+        .preview-section::before {
+            background-image: radial-gradient(circle, rgba(116, 124, 135, .16) 1px, transparent 1px);
+            background-size: 18px 18px;
+            opacity: .4;
+        }
+        .view-toggle-bar {
+            top: 16px;
+            right: 20px;
+            gap: 6px;
+        }
+        .view-toggle-bar button {
+            height: 32px;
+            padding: 0 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #fff;
+            color: #505862;
+            font-size: 12px;
+            font-weight: 650;
+        }
+        .view-toggle-bar button.active {
+            background: var(--text);
+            border-color: var(--text);
+            color: #fff;
+        }
+        .edit-tools {
+            top: 20px;
+            left: 20px;
+            gap: 6px;
+        }
+        .edit-tools button,
+        .mockup-tools .tool-btn {
+            width: 30px;
+            height: 30px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: none;
+        }
+        .timeline-container {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: none;
+        }
+        .action-bar {
+            gap: 8px;
+        }
+        .btn {
+            min-height: 34px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 650;
+        }
+        .btn-upload {
+            background: #fff;
+            border-color: var(--border);
+            color: #505862;
+        }
+        .btn-play,
+        .btn-png,
+        .btn-gif {
+            background: var(--text);
+            box-shadow: none;
+        }
+        .control-section {
+            width: 368px;
+            flex-basis: 368px;
+            padding: 0;
+            background: #fff;
+            border-left: 1px solid var(--border);
+        }
+        .card {
+            margin: 0;
+            padding: 18px 16px;
+            border: 0;
+            border-bottom: 1px solid var(--border);
+            border-radius: 0;
+            background: #fff;
+        }
+        h3 {
+            margin-bottom: 12px;
+            color: var(--text);
+            font-size: 15px;
+            font-weight: 680;
+        }
+        h3::before {
+            display: none;
+        }
+        .layer-item,
+        .semantic-select,
+        .param-group,
+        .bg-choice,
+        .mockup-popover {
+            border-color: var(--border);
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: none;
+        }
+        .layer-item {
+            min-height: 44px;
+            margin-bottom: 6px;
+        }
+        .layer-item.active {
+            background: #f7f8f9;
+            box-shadow: 0 0 0 1px #c8ced5;
+        }
+        .param-group {
+            background: #fafbfc;
+        }
+        .bg-choice.active {
+            color: #fff;
+            background: var(--text);
+            border-color: var(--text);
+            box-shadow: none;
+        }
+        input[type="range"].scrubber::-webkit-slider-thumb,
+        input[type="range"]::-webkit-slider-thumb,
+        input:checked + .slider,
+        .progress-fill {
+            background: var(--text);
+        }
+
         /* GCC decisive creative workspace skin v1ui6 */
         :root {
             --primary: #0b0d12;
