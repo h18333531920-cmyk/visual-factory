@@ -533,7 +533,7 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
         button.dataset.route = route.id;
         button.title = t(route.title);
         button.setAttribute('aria-label', t(route.title));
-        button.innerHTML = `<span class="nav-icon" aria-hidden="true">${navIcon(route.icon)}</span><span>${t(route.title)}</span>`;
+        button.innerHTML = `<span class="nav-icon" aria-hidden="true">${navIcon(route.icon)}</span><span class="nav-label">${t(route.title)}</span>`;
         button.addEventListener('click', () => {
           location.hash = route.id;
           navigate(route.id);
@@ -658,12 +658,21 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
       });
     });
 
+    let referenceFiles = [];
     const renderReferences = files => {
       if (!references) return;
-      references.innerHTML = Array.from(files || []).slice(0, 8).map((file, index) => {
-        const url = URL.createObjectURL(file);
-        return `<span class="home-command-reference" title="${escapeAttr(file.name)}"><img src="${escapeAttr(url)}" alt="参考图 ${index + 1}"></span>`;
+      referenceFiles.forEach(file => {
+        if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
+      });
+      referenceFiles = Array.from(files || []).slice(0, 4).map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
+      references.innerHTML = referenceFiles.map((entry, index) => {
+        const file = entry.file;
+        return `<span class="home-command-reference" title="${escapeAttr(file.name)}"><img src="${escapeAttr(entry.previewUrl)}" alt="参考图 ${index + 1}"></span>`;
       }).join('');
+      references.classList.toggle('has-references', referenceFiles.length > 0);
+      const addButton = referenceFiles.length < 4 ? `<button type="button" class="home-command-add-reference" aria-label="${state.lang === 'zh' ? '添加参考图' : 'Add reference'}">+</button>` : '';
+      references.insertAdjacentHTML('beforeend', addButton);
+      references.querySelector('.home-command-add-reference')?.addEventListener('click', () => upload?.click());
     };
 
     upload?.addEventListener('change', event => renderReferences(event.target.files));
@@ -675,12 +684,15 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
       button.addEventListener('click', () => {
         const size = button.dataset.homeSize || '1:1';
         sizeTrigger.querySelector('strong').textContent = size;
+        sizeMenu.querySelectorAll('[data-home-size]').forEach(item => item.classList.toggle('is-selected', item === button));
         sizeMenu.hidden = true;
       });
     });
-    document.addEventListener('click', event => {
+    if (window.__vfHomeSizeMenuHandler) document.removeEventListener('click', window.__vfHomeSizeMenuHandler);
+    window.__vfHomeSizeMenuHandler = event => {
       if (sizeMenu && !sizeMenu.hidden && !event.target.closest('.home-size-wrap')) sizeMenu.hidden = true;
-    });
+    };
+    document.addEventListener('click', window.__vfHomeSizeMenuHandler);
     form?.addEventListener('submit', event => {
       event.preventDefault();
       state.libraryFilters.query = prompt?.value.trim() || '';
@@ -844,21 +856,19 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
           <div class="library-hero-title home-command-title">
             <span>Hey</span>
             <img class="library-hero-kiki" src="./assets/kiki-home.png" alt="" aria-hidden="true">
-            <strong>${state.lang === 'zh' ? '把一个需求变成可编辑的设计' : 'Turn a brief into an editable design'}</strong>
+            <strong>${state.lang === 'zh' ? '你的高效设计伙伴' : 'Your efficient design partner'}</strong>
           </div>
           <form id="home-command-form" class="home-command-composer" aria-label="${state.lang === 'zh' ? '创作需求输入' : 'Creative brief'}">
-            <label class="home-command-upload" title="${state.lang === 'zh' ? '添加参考图片' : 'Add references'}">
-              <input id="home-command-upload" type="file" accept="image/png,image/jpeg,image/webp" multiple>
-              <span>+</span>
-            </label>
             <div class="home-command-main">
               <div id="home-command-references" class="home-command-references"></div>
-              <textarea id="library-hero-search" rows="3" placeholder="${state.lang === 'zh' ? '输入你的创作需求，例如：主标题、利益点、背景和食物。' : 'Describe the headline, benefit, background, and food.'}">${escapeHtml(state.libraryFilters.query)}</textarea>
+              <label class="home-command-upload" title="${state.lang === 'zh' ? '添加参考图片' : 'Add references'}">
+                <input id="home-command-upload" type="file" accept="image/png,image/jpeg,image/webp" multiple>
+                <span>+</span>
+              </label>
+              <textarea id="library-hero-search" rows="4" placeholder="${state.lang === 'zh' ? '上传参考图、输入文字描述或 @ 使用功能' : 'Upload a reference, enter a brief, or use @ tools'}">${escapeHtml(state.libraryFilters.query)}</textarea>
             </div>
             <div class="home-command-controls">
-              <span class="home-command-mode"><span aria-hidden="true">◇</span>${state.lang === 'zh' ? '智能改稿' : 'Smart rewrite'}</span>
-              <span class="home-command-divider"></span>
-              <button class="home-control-button" type="button" data-route="static"><span aria-hidden="true">▣</span>${state.lang === 'zh' ? '进入设计器' : 'Designer'}</button>
+              <button class="home-control-button home-control-primary" type="button" data-route="static"><span aria-hidden="true">✦</span>${state.lang === 'zh' ? '静态设计' : 'Static design'}<span aria-hidden="true">⌄</span></button>
               <div class="home-size-wrap">
                 <button class="home-control-button home-size-trigger" id="home-size-trigger" type="button"><span class="home-ratio-icon" aria-hidden="true"></span><strong>1:1</strong><span aria-hidden="true">⌄</span></button>
                 <div class="home-size-menu" id="home-size-menu" hidden>
@@ -866,15 +876,11 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
                   <div>${['16:9', '3:2', '4:3', '1:1', '3:4', '2:3', '9:16'].map(size => `<button type="button" data-home-size="${size}"><i class="home-ratio-icon" style="--ratio:${size.replace(':', '/')}"></i>${size}</button>`).join('')}</div>
                 </div>
               </div>
-              <button class="home-command-submit" type="submit" aria-label="${state.lang === 'zh' ? '提交需求' : 'Submit brief'}">↑</button>
+              <span class="home-command-divider"></span>
+              <button class="home-control-button home-library-shortcut" type="button" data-route="library"><span aria-hidden="true">⌕</span>${state.lang === 'zh' ? '素材库' : 'Library'}</button>
+              <button class="home-command-submit" type="submit" aria-label="${state.lang === 'zh' ? '搜索素材与模板' : 'Search library'}">↑</button>
             </div>
           </form>
-          <div class="library-module-row home-workspace-links">
-            <button type="button" data-route="library"><strong>${state.lang === 'zh' ? '素材与模板' : 'Library'}</strong><span>›</span></button>
-            <button type="button" data-route="static"><strong>${state.lang === 'zh' ? '静态设计' : 'Static'}</strong><span>›</span></button>
-            <button type="button" data-route="dynamic"><strong>${state.lang === 'zh' ? '动态设计' : 'Motion'}</strong><span>›</span></button>
-            <button type="button" data-route="request"><strong>${state.lang === 'zh' ? '需求流程' : 'Requests'}</strong><span>›</span></button>
-          </div>
         </section>` : `
         <section class="library-hero">
           <div class="library-hero-panel">
