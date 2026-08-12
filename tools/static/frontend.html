@@ -2331,6 +2331,7 @@
         <div class="layer-context-menu" id="canvas-context-menu">
             <button type="button" onclick="saveGroupCombo(); closeCanvasContextMenu();">保存组合</button>
             <button type="button" id="ctx-duplicate-logolayout" onclick="duplicateLogoLayout(); closeCanvasContextMenu();" style="display:none">复制组件</button>
+            <button type="button" id="ctx-duplicate-arc" onclick="duplicateArc(); closeCanvasContextMenu();" style="display:none">复制圆弧</button>
         </div>
         <div class="artboard-preview-dock" id="artboard-preview-dock"></div>
         <div class="linked-artboard-dock" id="linked-artboard-dock" aria-label="关联画板集合"></div>
@@ -6096,6 +6097,21 @@
         saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
         showToast('已复制组件');
     }
+    function duplicateArc() {
+        var layer = layers.find(function(l) { return l.id === _contextMenuLayerId; });
+        if (!layer || layer.type !== 'arc') return;
+        saveHistory(true);
+        var cloned = cloneData(layer);
+        cloned.id = genId('arc');
+        cloned.locked = false;
+        cloned.zIndex = makeRoomAboveLayerIds([layer.id]);
+        cloned.x = (cloned.x || 0) + 30;
+        cloned.y = (cloned.y || 0) + 30;
+        layers.push(cloned);
+        activeLayerIds = [cloned.id];
+        saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+        showToast('已复制圆弧');
+    }
     function duplicateLayerContext() {
         const layer = layers.find(function(item) { return item.id === _contextMenuLayerId; });
         if(!layer?.src || (layer.type !== 'image' && layer.type !== 'logo')) {
@@ -6850,8 +6866,10 @@
             e.preventDefault();
             var cm2 = document.getElementById('canvas-context-menu');
             var dupBtn2 = document.getElementById('ctx-duplicate-logolayout');
+            var dupArcBtn3 = document.getElementById('ctx-duplicate-arc');
             var saveBtn2 = cm2 ? cm2.querySelector('button[onclick*="saveGroupCombo"]') : null;
             if (dupBtn2) dupBtn2.style.display = 'none';
+            if (dupArcBtn3) dupArcBtn3.style.display = 'none';
             if (saveBtn2) saveBtn2.style.display = '';
             if (cm2) { cm2.style.left = e.clientX + 'px'; cm2.style.top = e.clientY + 'px'; cm2.classList.add('open'); }
             return;
@@ -6881,10 +6899,30 @@
                 }
                 var cm = document.getElementById('canvas-context-menu');
                 var dupBtn = document.getElementById('ctx-duplicate-logolayout');
+                var dupArcBtn = document.getElementById('ctx-duplicate-arc');
                 var saveBtn = cm ? cm.querySelector('button[onclick*="saveGroupCombo"]') : null;
                 if (dupBtn) dupBtn.style.display = '';
+                if (dupArcBtn) dupArcBtn.style.display = 'none';
                 if (saveBtn) saveBtn.style.display = 'none';
                 if (cm) { cm.style.left = e.clientX + 'px'; cm.style.top = e.clientY + 'px'; cm.classList.add('open'); }
+            }
+            // 单选 arc → 复制圆弧
+            if (layer && layer.type === 'arc') {
+                e.preventDefault();
+                _contextMenuLayerId = layer.id;
+                if (!activeLayerIds.includes(layer.id)) {
+                    activeLayerIds = [layer.id];
+                    layerSelectionAnchorId = layer.id;
+                    renderCanvas(); renderLayersList(); renderProperties();
+                }
+                var cm3 = document.getElementById('canvas-context-menu');
+                var dupArcBtn2 = document.getElementById('ctx-duplicate-arc');
+                var dupLogoBtn2 = document.getElementById('ctx-duplicate-logolayout');
+                var saveBtn3 = cm3 ? cm3.querySelector('button[onclick*="saveGroupCombo"]') : null;
+                if (dupArcBtn2) dupArcBtn2.style.display = '';
+                if (dupLogoBtn2) dupLogoBtn2.style.display = 'none';
+                if (saveBtn3) saveBtn3.style.display = 'none';
+                if (cm3) { cm3.style.left = e.clientX + 'px'; cm3.style.top = e.clientY + 'px'; cm3.classList.add('open'); }
             }
         }
     });
