@@ -117,8 +117,11 @@ const DRAFT_VERSION = '3.3.20';
 const WEB_VERSION = '7.5.0';
 const MIN_VERSION = '3.0.2';
 
-const WEB_ID = String(Math.floor(Math.random() * 999999999999999999) + 7000000000000000000);
-const USER_ID = uuid().replace(/-/g, '');
+// 延迟初始化（避免 Cloudflare Workers 全局作用域限制）
+let _webId = null;
+let _userId = null;
+function getWebId() { if (!_webId) _webId = String(Math.floor(Math.random() * 999999999999999999) + 7000000000000000000); return _webId; }
+function getUserId() { if (!_userId) _userId = uuid().replace(/-/g, ''); return _userId; }
 
 const FAKE_HEADERS = {
   'Accept': 'application/json, text/plain, */*',
@@ -196,13 +199,13 @@ function isHighResModel(modelName) {
 
 function buildCookie(token) {
   return [
-    `_tea_web_id=${WEB_ID}`,
+    `_tea_web_id=${getWebId()}`,
     'is_staff_user=false',
     'store-region=cn-gd',
     'store-region-src=uid',
     `sid_guard=${token}%7C${unixTimestamp()}%7C5184000%7CMon%2C+03-Feb-2025+08%3A17%3A09+GMT`,
-    `uid_tt=${USER_ID}`,
-    `uid_tt_ss=${USER_ID}`,
+    `uid_tt=${getUserId()}`,
+    `uid_tt_ss=${getUserId()}`,
     `sid_tt=${token}`,
     `sessionid=${token}`,
     `sessionid_ss=${token}`,
