@@ -2629,8 +2629,8 @@
     let sharedAssetSaveTimer = null;
     function getGlobalSnapshot() { return { tagColorPresets, arcColorPresets, keywordTags, referenceElements }; }
     function applyGlobalData(data = {}) {
-        if(data.tagColorPresets) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
-        if(data.arcColorPresets) arcColorPresets = data.arcColorPresets;
+        if(data.tagColorPresets?.length) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
+        if(data.arcColorPresets?.length) arcColorPresets = data.arcColorPresets;
         if(data.keywordTags) keywordTags = data.keywordTags;
         if(data.referenceElements) referenceElements = data.referenceElements;
         // presetLibrary / tagPresetLibrary / logoAssets 不再从本地加载，全部从素材库（Supabase）获取
@@ -2784,8 +2784,8 @@
             const loaded = await window.parent.VF_LOAD_COLOR_PALETTES();
             const data = loaded?.data;
             if(!data || (!Array.isArray(data.tagColorPresets) && !Array.isArray(data.arcColorPresets) && !Array.isArray(data.keywordTags))) return false;
-            if(Array.isArray(data.tagColorPresets)) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
-            if(Array.isArray(data.arcColorPresets)) arcColorPresets = data.arcColorPresets;
+            if(Array.isArray(data.tagColorPresets) && data.tagColorPresets.length) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
+            if(Array.isArray(data.arcColorPresets) && data.arcColorPresets.length) arcColorPresets = data.arcColorPresets;
             if(Array.isArray(data.keywordTags)) {
                 keywordTags = data.keywordTags;
                 cloudKeywordTagsLoaded = true;
@@ -9485,8 +9485,8 @@
         try {
             const backup = JSON.parse(await file.text());
             const data = backup.data || backup;
-            if(data.tagColorPresets) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
-            if(data.arcColorPresets) arcColorPresets = data.arcColorPresets;
+            if(data.tagColorPresets?.length) tagColorPresets = data.tagColorPresets.map(normalizeTagPreset);
+            if(data.arcColorPresets?.length) arcColorPresets = data.arcColorPresets;
             if(data.keywordTags) keywordTags = data.keywordTags;
             if(data.referenceElements) referenceElements = data.referenceElements;
 
