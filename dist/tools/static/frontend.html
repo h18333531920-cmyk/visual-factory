@@ -5233,7 +5233,20 @@
         await saveGlobalData();
         clearTimeout(sharedAssetSaveTimer);
         try {
-            const colorData = buildSettingsPresetCloudData();
+            // 全量上传：把当前页面显示的所有配色/关键词标签都同步到私有云端，
+            // 不因 _cloudSaved 标记缺失而漏掉用户手工添加的预设。
+            tagColorPresets.forEach(item => { if(item) item._cloudSaved = true; });
+            arcColorPresets.forEach(item => { if(item) item._cloudSaved = true; });
+            const colorData = {
+                tagColorPresets: tagColorPresets.map(normalizeTagPreset),
+                arcColorPresets: arcColorPresets.map(a => ({ ...a })),
+                keywordTags: keywordTags.map(tag => ({
+                    id: tag?.id || genId('kw'),
+                    name: String(tag?.name || '').trim(),
+                    prompt: String(tag?.prompt || '').trim()
+                }))
+            };
+            await saveGlobalData();
             if(window.parent !== window && typeof window.parent.VF_SAVE_COLOR_PALETTES === 'function') {
                 const saved = await window.parent.VF_SAVE_COLOR_PALETTES({ data: colorData });
                 setCloudColorPaletteSnapshot(saved?.data || colorData);
