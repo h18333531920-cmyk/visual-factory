@@ -1506,3 +1506,34 @@ html body {
   max-height: 230px !important;
   overflow-y: auto !important;
 }
+
+/* Editor shell is an application workspace: browser zoom must never turn it into document flow. */
+.editor-layout {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: calc(100vh - 52px) !important;
+  overflow: hidden !important;
+}
+.editor-layout > .asset-pane,
+.editor-layout > .right-pane {
+  flex-shrink: 0 !important;
+}
+.editor-layout > .left-pane {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+.left-pane .canvas-actions {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+}
+.left-pane .canvas-actions > button,
+.left-pane .canvas-actions > div {
+  flex-shrink: 0 !important;
+}
