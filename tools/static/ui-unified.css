@@ -1350,3 +1350,79 @@ html body {
   flex-basis: 30px !important;
   color: var(--ui-text) !important;
 }
+
+/* Permanent dock and one coherent icon family. */
+.quick-add-dock-toggle { display: none !important; }
+.linked-artboard-dock.quick-add-dock {
+  padding: 4px !important;
+  gap: 2px !important;
+  border-radius: 12px !important;
+}
+
+.quick-logo-menu {
+  bottom: calc(100% + 9px) !important;
+  gap: 3px !important;
+  padding: 4px !important;
+  border: 1px solid rgba(226, 232, 240, .94) !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, .97) !important;
+  box-shadow: 0 12px 26px -14px rgba(15, 23, 42, .24) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+}
+.quick-logo-menu::after {
+  bottom: -5px !important;
+  width: 8px !important;
+  height: 8px !important;
+  border-color: rgba(226, 232, 240, .94) !important;
+}
+.quick-logo-menu button {
+  width: auto !important;
+  min-width: 92px !important;
+  min-height: 34px !important;
+  height: 34px !important;
+  flex-direction: row !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+  padding: 0 9px !important;
+  border-radius: 7px !important;
+  color: var(--ui-muted) !important;
+  background: transparent !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  transform: none !important;
+}
+.quick-logo-menu button:hover,
+.quick-logo-menu button:focus-visible {
+  color: var(--ui-ink) !important;
+  background: #f1f5f9 !important;
+  outline: none !important;
+  transform: none !important;
+}
+.quick-logo-menu button .quick-add-icon {
+  width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  flex: 0 0 18px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: currentColor !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.quick-logo-menu button .quick-add-icon svg {
+  width: 17px !important;
+  height: 17px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+.quick-logo-menu .quick-add-label {
+  display: inline !important;
+  color: inherit !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+}

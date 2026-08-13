@@ -2624,7 +2624,7 @@
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260813-static-ui-v7">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260813-static-ui-v8">
 </head>
 <body>
 
@@ -6261,11 +6261,11 @@
         dock.innerHTML = '';
         dock.classList.add('show');
         dock.classList.add('quick-add-dock');
-        dock.classList.toggle('collapsed', !linkedArtboardDockExpanded);
+        dock.classList.remove('collapsed');
         const actions = [
             { label:'图片图层', icon:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.4"/><path d="m4 18 5-5 3.5 3.5 2.5-2.5 5 4"/></svg>', run:function() { document.getElementById('bg-upload')?.click(); } },
             { label:'文本', icon:'<svg viewBox="0 0 24 24"><path d="M4 5V3h16v2M12 3v18M8 21h8"/></svg>', run:function() { addLayer('text'); } },
-            { label:'添加Logo', logoMenu:true, icon:'<svg viewBox="0 0 24 24"><path d="M4 19h16M6 16V5h12v11M9 9h6M9 12h6"/></svg>' },
+            { label:'添加Logo', logoMenu:true, icon:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="13" height="13" rx="2.5"/><path d="M8 20h9a3 3 0 0 0 3-3V8"/></svg>' },
             { label:'圆弧', icon:'<svg viewBox="0 0 24 24"><path d="M4 17a8 8 0 0 1 16 0"/><path d="M4 20a11 11 0 0 1 16 0"/></svg>', run:function() { addLayer('arc'); } },
             { label:'标签', icon:'<svg viewBox="0 0 24 24"><path d="M3 11V5a2 2 0 0 1 2-2h6l10 10-8 8L3 11Z"/><circle cx="7.5" cy="7.5" r="1"/></svg>', run:function() { addLayer('tag'); } },
             { label:'折扣标签', icon:'<svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="m8 15 8-6M8 9h.01M16 15h.01"/></svg>', run:function() { addLayer('discountTag'); } }
@@ -6279,7 +6279,7 @@
                 button.dataset.tooltip = '添加 Logo';
                 button.innerHTML = '<span class="quick-add-icon">' + action.icon + '</span><span class="quick-add-label">' + action.label + '</span>';
                 const menu = document.createElement('div'); menu.className = 'quick-logo-menu';
-                [['pair','左右组合','<svg viewBox="0 0 24 24"><rect x="3" y="6" width="7" height="12" rx="1.5"/><rect x="14" y="6" width="7" height="12" rx="1.5"/><line x1="11" y1="12" x2="13" y2="12"/></svg>'], ['single','单一Logo','<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3"/><circle cx="12" cy="12" r="4"/></svg>'], ['matrix','Logo矩阵','<svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>']].forEach(function(item) {
+                [['pair','左右组合','<svg viewBox="0 0 24 24"><rect x="3" y="5" width="7" height="14" rx="2"/><rect x="14" y="5" width="7" height="14" rx="2"/></svg>'], ['single','单一 Logo','<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="12" r="2.5"/></svg>'], ['matrix','Logo 矩阵','<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>']].forEach(function(item) {
                     const option = document.createElement('button'); option.type = 'button';
                     option.innerHTML = '<span class="quick-add-icon">' + item[2] + '</span><span class="quick-add-label">' + item[1] + '</span>';
                     option.onclick = function(event) { event.preventDefault(); event.stopPropagation(); menu.classList.remove('open'); addLogoLayout(item[0]); };
@@ -6289,7 +6289,7 @@
                 const openMenu = function() { clearTimeout(closeTimer); menu.classList.add('open'); };
                 const closeMenu = function() { closeTimer = setTimeout(function() { menu.classList.remove('open'); }, 140); };
                 wrap.onmouseenter = openMenu; wrap.onmouseleave = closeMenu;
-                button.onclick = function(event) { event.preventDefault(); event.stopPropagation(); clearTimeout(closeTimer); menu.classList.toggle('open'); };
+                button.onclick = function(event) { event.preventDefault(); event.stopPropagation(); clearTimeout(closeTimer); menu.classList.add('open'); };
                 wrap.appendChild(menu); wrap.appendChild(button); dock.appendChild(wrap);
                 return;
             }
@@ -6303,19 +6303,6 @@
             button.onclick = action.run;
             dock.appendChild(button);
         });
-        const toggle = document.createElement('button');
-        toggle.type = 'button';
-        toggle.className = 'quick-add-dock-toggle';
-        toggle.title = linkedArtboardDockExpanded ? '收起快捷添加栏' : '展开快捷添加栏';
-        toggle.setAttribute('aria-label', toggle.title);
-        toggle.textContent = linkedArtboardDockExpanded ? '⌄' : '⌃';
-        toggle.onclick = function(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            linkedArtboardDockExpanded = !linkedArtboardDockExpanded;
-            renderLinkedArtboardDock();
-        };
-        dock.appendChild(toggle);
         requestAnimationFrame(resizeCanvas);
     }
 
