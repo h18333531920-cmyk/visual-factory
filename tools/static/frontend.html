@@ -2402,8 +2402,6 @@
         </div>
         <div class="layer-context-menu" id="canvas-context-menu">
             <button type="button" onclick="saveGroupCombo(); closeCanvasContextMenu();">保存组合</button>
-            <button type="button" id="ctx-duplicate-logolayout" onclick="duplicateLogoLayout(); closeCanvasContextMenu();" style="display:none">复制组件</button>
-            <button type="button" id="ctx-duplicate-arc" onclick="duplicateArc(); closeCanvasContextMenu();" style="display:none">复制圆弧</button>
         </div>
         <div class="artboard-preview-dock" id="artboard-preview-dock"></div>
         <div class="linked-artboard-dock" id="linked-artboard-dock" aria-label="关联画板集合"></div>
@@ -2439,7 +2437,7 @@
                 <div class="layer-context-menu" id="layer-context-menu">
                     <button type="button" id="layer-context-add-reference" onclick="addLayerContextReferenceToAI(); closeLayerContextMenu();" hidden>加入生图参考图</button>
                     <button type="button" id="layer-context-replace-image" onclick="replaceLayerContextImage(); closeLayerContextMenu();" hidden>替换图片</button>
-                    <button type="button" id="layer-context-duplicate-layer" onclick="duplicateLayerContext(); closeLayerContextMenu();" hidden>复制图层</button>
+                    <button type="button" id="layer-context-duplicate-layer" onclick="duplicateLayerContext(); closeLayerContextMenu();">复制图层</button>
                     <button type="button" onclick="centerLayerOnCanvas(); closeLayerContextMenu();">元素画板居中</button>
                     <button type="button" id="ctx-save-group-btn" onclick="saveGroupCombo(); closeLayerContextMenu();" style="display:none">保存组合</button>
                 </div>
@@ -6235,7 +6233,7 @@
         const isImageLayer = !!layer?.src && (layer.type === 'image' || layer.type === 'logo');
         if(button) button.hidden = !isImageLayer;
         if(replaceButton) replaceButton.hidden = !isImageLayer;
-        if(duplicateButton) duplicateButton.hidden = !isImageLayer;
+        if(duplicateButton) duplicateButton.hidden = false;
     }
     function addLayerContextReferenceToAI() {
         const layer = layers.find(function(item) { return item.id === _contextMenuLayerId; });
@@ -6255,50 +6253,20 @@
         _pendingImageReplacementLayerId = layer.id;
         document.getElementById('replace-image-upload')?.click();
     }
-    function duplicateLogoLayout() {
-        var layer = layers.find(function(l) { return l.id === _contextMenuLayerId; });
-        if (!layer || layer.type !== 'logoLayout') return;
-        saveHistory(true);
-        var cloned = cloneData(layer);
-        cloned.id = genId('logoLayout');
-        cloned.locked = false;
-        cloned.customName = layer.customName ? layer.customName + ' 副本' : null;
-        cloned.zIndex = makeRoomAboveLayerIds([layer.id]);
-        // 偏移副本位置避免完全重叠
-        cloned.x = (cloned.x || 0) + 30;
-        cloned.y = (cloned.y || 0) + 30;
-        layers.push(cloned);
-        activeLayerIds = [cloned.id];
-        saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
-        showToast('已复制组件');
-    }
-    function duplicateArc() {
-        var layer = layers.find(function(l) { return l.id === _contextMenuLayerId; });
-        if (!layer || layer.type !== 'arc') return;
-        saveHistory(true);
-        var cloned = cloneData(layer);
-        cloned.id = genId('arc');
-        cloned.sharedKey = genId('shared_arc');
-        cloned.locked = false;
-        cloned.zIndex = makeRoomAboveLayerIds([layer.id]);
-        cloned.x = (cloned.x || 0) + 30;
-        cloned.y = (cloned.y || 0) + 30;
-        layers.push(cloned);
-        activeLayerIds = [cloned.id];
-        saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
-        showToast('已复制圆弧');
-    }
     function duplicateLayerContext() {
         const layer = layers.find(function(item) { return item.id === _contextMenuLayerId; });
-        if(!layer?.src || (layer.type !== 'image' && layer.type !== 'logo')) {
-            showToast('请选择一张图片或素材图层', true);
-            return;
-        }
+        if (!layer) return;
+        saveHistory(true);
         const cloned = cloneData(layer);
         cloned.id = genId(layer.type);
         cloned.locked = false;
         cloned.customName = layer.customName ? `${layer.customName} 副本` : null;
+        // 关联画板共享类型的图层（tag/discountTag/arc/solid）复制后需独立，避免与原件联动
+        if (cloned.sharedKey) cloned.sharedKey = genId('shared_' + cloned.type);
         cloned.zIndex = makeRoomAboveLayerIds([layer.id]);
+        // 偏移副本位置避免完全重叠
+        cloned.x = (Number(cloned.x) || 0) + 30;
+        cloned.y = (Number(cloned.y) || 0) + 30;
         layers.push(cloned);
         activeLayerIds = [cloned.id];
         saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
@@ -6627,6 +6595,13 @@
         renderCanvas(); renderArtboardPreviews();
         if(activeLayerIds.length === 1) { const el = document.getElementById('val-'+p); if(el) el.innerText = formatPropValue(p, v); }
     };
+    window.setTextColor = function(color) {
+        activeLayerIds.forEach(id => {
+            const l = layers.find(x => x.id === id);
+            if(l && l.type === 'text') l.textCol = color;
+        });
+        saveHistory(); renderCanvas(); renderProperties();
+    };
     function detectTextDirection(text = '') {
         let rtl = 0, ltr = 0;
         for(const char of String(text)) {
@@ -6769,6 +6744,7 @@
                 + '<div style="font-size:11px;color:var(--text-sub);margin:-6px 0 8px;">💡 双击画布文字可直接编辑</div>'
                 + '<label class="label">字体</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">' + selectedFontOptions + '</select>'
                 + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp(\'fontWeight\',parseInt(this.value));saveHistory();renderCanvas();">' + selectedWeightInfo.html + '</select></div><div><label class="label">颜色</label><input type="color" value="' + escapeHtml(textColor) + '" style="width:100%;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;background:#FFF;cursor:pointer;" oninput="updateProp(\'textCol\',this.value)" onchange="saveHistory()"></div></div>'
+                + '<div style="display:flex; gap:6px; margin:-2px 0 10px;"><button type="button" onclick="setTextColor(\'#000000\')" title="黑色" style="flex:1;height:26px;border:1px solid rgba(16,19,24,.15);border-radius:7px;background:#000000;cursor:pointer;"></button><button type="button" onclick="setTextColor(\'#ffe41f\')" title="黄色" style="flex:1;height:26px;border:1px solid rgba(16,19,24,.15);border-radius:7px;background:#ffe41f;cursor:pointer;"></button></div>'
                 + stepper('fontSize','字号',1,480,1,'px')
                 + '<label class="label" style="margin-bottom:8px;">对齐</label><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;"><button class="btn ' + (textAlign==='left'?'btn-dark':'btn-outline') + '" type="button" onclick="setTextAlignment(\'left\')">左对齐</button><button class="btn ' + (textAlign==='center'?'btn-dark':'btn-outline') + '" type="button" onclick="setTextAlignment(\'center\')">居中</button><button class="btn ' + (textAlign==='right'?'btn-dark':'btn-outline') + '" type="button" onclick="setTextAlignment(\'right\')">右对齐</button></div>'
                 + stepper('lineHeight','行距',0.1,5,0.05,'')
@@ -7048,64 +7024,28 @@
         if (activeLayerIds.length >= 2) {
             e.preventDefault();
             var cm2 = document.getElementById('canvas-context-menu');
-            var dupBtn2 = document.getElementById('ctx-duplicate-logolayout');
-            var dupArcBtn3 = document.getElementById('ctx-duplicate-arc');
-            var saveBtn2 = cm2 ? cm2.querySelector('button[onclick*="saveGroupCombo"]') : null;
-            if (dupBtn2) dupBtn2.style.display = 'none';
-            if (dupArcBtn3) dupArcBtn3.style.display = 'none';
-            if (saveBtn2) saveBtn2.style.display = '';
             if (cm2) { cm2.style.left = e.clientX + 'px'; cm2.style.top = e.clientY + 'px'; cm2.classList.add('open'); }
             return;
         }
-        // 单选图片/logo → 设为AI参考
+        // 单选任意图层 → 统一右键菜单（复制图层；图片额外提供参考图/替换等）
         if (wrap) {
             var layer = layers.find(function(item) { return item.id === wrap.dataset.id; });
-            if (layer?.src && (layer.type === 'image' || layer.type === 'logo')) {
-                e.preventDefault();
-                _contextMenuLayerId = layer.id;
-                if (!activeLayerIds.includes(layer.id)) {
-                    activeLayerIds = [layer.id];
-                    layerSelectionAnchorId = layer.id;
-                    renderCanvas(); renderLayersList(); renderProperties();
-                }
-                var lm = document.getElementById('layer-context-menu');
-                if (lm) { updateLayerContextReferenceAction(layer); lm.style.left = e.clientX + 'px'; lm.style.top = e.clientY + 'px'; lm.classList.add('open'); }
+            if (!layer) return;
+            e.preventDefault();
+            _contextMenuLayerId = layer.id;
+            if (!activeLayerIds.includes(layer.id)) {
+                activeLayerIds = [layer.id];
+                layerSelectionAnchorId = layer.id;
+                renderCanvas(); renderLayersList(); renderProperties();
             }
-            // 单选 logoLayout → 复制组件
-            if (layer && layer.type === 'logoLayout') {
-                e.preventDefault();
-                _contextMenuLayerId = layer.id;
-                if (!activeLayerIds.includes(layer.id)) {
-                    activeLayerIds = [layer.id];
-                    layerSelectionAnchorId = layer.id;
-                    renderCanvas(); renderLayersList(); renderProperties();
-                }
-                var cm = document.getElementById('canvas-context-menu');
-                var dupBtn = document.getElementById('ctx-duplicate-logolayout');
-                var dupArcBtn = document.getElementById('ctx-duplicate-arc');
-                var saveBtn = cm ? cm.querySelector('button[onclick*="saveGroupCombo"]') : null;
-                if (dupBtn) dupBtn.style.display = '';
-                if (dupArcBtn) dupArcBtn.style.display = 'none';
-                if (saveBtn) saveBtn.style.display = 'none';
-                if (cm) { cm.style.left = e.clientX + 'px'; cm.style.top = e.clientY + 'px'; cm.classList.add('open'); }
-            }
-            // 单选 arc → 复制圆弧
-            if (layer && layer.type === 'arc') {
-                e.preventDefault();
-                _contextMenuLayerId = layer.id;
-                if (!activeLayerIds.includes(layer.id)) {
-                    activeLayerIds = [layer.id];
-                    layerSelectionAnchorId = layer.id;
-                    renderCanvas(); renderLayersList(); renderProperties();
-                }
-                var cm3 = document.getElementById('canvas-context-menu');
-                var dupArcBtn2 = document.getElementById('ctx-duplicate-arc');
-                var dupLogoBtn2 = document.getElementById('ctx-duplicate-logolayout');
-                var saveBtn3 = cm3 ? cm3.querySelector('button[onclick*="saveGroupCombo"]') : null;
-                if (dupArcBtn2) dupArcBtn2.style.display = '';
-                if (dupLogoBtn2) dupLogoBtn2.style.display = 'none';
-                if (saveBtn3) saveBtn3.style.display = 'none';
-                if (cm3) { cm3.style.left = e.clientX + 'px'; cm3.style.top = e.clientY + 'px'; cm3.classList.add('open'); }
+            var lm = document.getElementById('layer-context-menu');
+            if (lm) {
+                updateLayerContextReferenceAction(layer);
+                var saveGroupBtn = document.getElementById('ctx-save-group-btn');
+                if (saveGroupBtn) saveGroupBtn.style.display = 'none';
+                lm.style.left = e.clientX + 'px';
+                lm.style.top = e.clientY + 'px';
+                lm.classList.add('open');
             }
         }
     });
