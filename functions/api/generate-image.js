@@ -1,5 +1,5 @@
 import { getBearerToken, getUserFromToken, json, requireCloudflareEnv } from '../_shared.js';
-import { generateWithOpenAI, generateWithOpenAIReference, generateWithVolc, generateWithVolcReference, hasLK888, hasOpenAI, hasVolcImage, requireAI, submitLK888ImageReferenceTask } from '../_ai.js';
+import { generateWithOpenAI, generateWithOpenAIReference, generateWithVolc, generateWithVolcReference, hasLK888, hasOpenAI, hasVolcImage, requireAI, submitLK888ImageReferenceTask, tryLK888ImageTaskWithoutRef } from '../_ai.js';
 
 function isRegionUnsupportedError(error) {
   return /country,?\s*region,?\s*or\s*territory\s*not\s*supported|country.*region.*territory.*not\s*supported/i.test(String(error?.message || error));
@@ -11,6 +11,13 @@ async function generateWithProvider(env, provider, prompt, ratio, referenceImage
       const task = await submitLK888ImageReferenceTask(env, prompt, ratio, referenceImages);
       if (task.imageBase64) return { imageBase64: task.imageBase64 };
       return { pending: true, taskId: task.taskId };
+    }
+    if (hasLK888(env)) {
+      // 无参考图时也优先走 LK888 异步任务，避免同步生图撞上 Cloudflare 执行时长上限。
+      // media/generate 若不支持无图会返回 null，再回退到同步 images/generations。
+      const task = await tryLK888ImageTaskWithoutRef(env, prompt, ratio);
+      if (task && task.imageBase64) return { imageBase64: task.imageBase64 };
+      if (task && task.taskId) return { pending: true, taskId: task.taskId };
     }
     const imageBase64 = referenceImages.length
       ? await generateWithOpenAIReference(env, prompt, ratio, referenceImages)

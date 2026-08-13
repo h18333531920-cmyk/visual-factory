@@ -10712,7 +10712,7 @@
         const maxAttempts = 90;
         for(let i = 0; i < maxAttempts; i += 1) {
             await new Promise(resolve => setTimeout(resolve, i < 3 ? 1800 : 3000));
-            updateAIProgress('模型正在生成画面...', Math.min(88, 34 + Math.round((i / maxAttempts) * 52)));
+            updateAIProgress('模型正在生成画面...', Math.min(88, 48 + Math.round((i / maxAttempts) * 40)));
             const res = await fetch(`/api/generate-image-status?task_id=${encodeURIComponent(taskId)}`);
             const data = await readAIResponse(res, '生图结果查询');
             if(!res.ok || !data.success) throw new Error(data.message || `查询失败（HTTP ${res.status}）`);
@@ -10751,14 +10751,14 @@
                 }));
             }
             const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-            updateAIProgress('模型正在生成画面...', 70);
             const data = await readAIResponse(res, '生图');
             if(data.success && data.pending && data.taskId) {
-                updateAIProgress('任务已提交，正在等待结果...', 42);
+                updateAIProgress('任务已提交，正在等待结果...', 46);
                 const result = await pollAIImageTask(data.taskId, data.provider || aiProvider);
                 addAIImageLayer(`data:image/png;base64,${result.imageBase64}`);
                 showToast(`✅ ${result.provider || data.provider || 'AI'} 已生成新图片`);
             } else if(data.success) {
+                updateAIProgress('模型正在生成画面...', 70);
                 addAIImageLayer(`data:image/png;base64,${data.imageBase64}`);
                 showToast(data.warning || `✅ ${data.provider || 'AI'} 已生成新图片`);
             } else { showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true); }

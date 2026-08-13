@@ -532,6 +532,34 @@ export async function submitLK888ImageReferenceTask(env, prompt, ratio, referenc
   }
 }
 
+export async function tryLK888ImageTaskWithoutRef(env, prompt, ratio) {
+  if (!hasLK888(env)) return null;
+  try {
+    const promptText = finalImagePrompt(prompt);
+    const submitData = await postJson(`${getLK888BaseUrl(env)}/v1/media/generate`, {
+      model: getLK888ImageModel(env),
+      prompt: promptText,
+      images: [],
+      params: {
+        prompt: promptText,
+        images: [],
+        size: getOpenAIImageSize(ratio)
+      }
+    }, {
+      Authorization: `Bearer ${env.LK888_API_KEY}`
+    });
+    assertLK888Accepted(submitData);
+    const immediate = findImageValue(submitData);
+    if (immediate) return { imageBase64: await parseImageResultAsBase64(submitData) };
+    const taskId = getLK888TaskId(submitData);
+    if (taskId) return { taskId };
+    return null;
+  } catch (_error) {
+    // media/generate 可能不支持无参考图，回退到同步生图即可。
+    return null;
+  }
+}
+
 function getLK888TaskId(data) {
   if (typeof data?.data === 'string' && data.data.trim()) return data.data.trim();
   if (typeof data?.result === 'string' && data.result.trim()) return data.result.trim();
@@ -798,7 +826,7 @@ export async function generateWithVolc(env, prompt, ratio) {
     model: env.ENDPOINT_ID,
     prompt: finalImagePrompt(prompt),
     size: getVolcImageSize(ratio),
-    response_format: 'url',
+    response_format: 'b64_json',
     watermark: false
   }, {
     Authorization: `Bearer ${env.VOLC_API_KEY}`
@@ -846,7 +874,7 @@ export async function generateWithVolcReference(env, prompt, ratio, referenceIma
       'use the uploaded reference image as visual reference, keep subject identity, product appearance, composition cues, color palette and commercial poster direction'
     ].join(', '),
     size: getVolcImageSize(ratio),
-    response_format: 'url',
+    response_format: 'b64_json',
     watermark: false
   };
   const imageUrls = images.map(item => item.dataUrl);
