@@ -9626,3 +9626,245 @@ body .app-shell[data-route="home"] .library-upload-pill {
     display: none;
   }
 }
+
+/* Gemini Designer · Unified Demo v2 visual-system pass
+   Presentation only: preserve the existing homepage structure and interaction hooks. */
+:root {
+  --vf-ui-bg: #f5f6f8;
+  --vf-ui-surface: #ffffff;
+  --vf-ui-subtle: #f8fafc;
+  --vf-ui-text: #0f172a;
+  --vf-ui-muted: #64748b;
+  --vf-ui-border: rgba(15, 23, 42, 0.08);
+  --vf-ui-border-strong: rgba(15, 23, 42, 0.16);
+  --vf-ui-radius-sm: 8px;
+  --vf-ui-radius-md: 12px;
+  --vf-ui-radius-lg: 16px;
+  --vf-ui-shadow-pop: 0 12px 32px -4px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+  --vf-ui-shadow-hover: 0 18px 38px -12px rgba(15, 23, 42, 0.22), 0 6px 14px -6px rgba(15, 23, 42, 0.12);
+  --bg: var(--vf-ui-bg);
+  --surface: var(--vf-ui-surface);
+  --surface-2: var(--vf-ui-subtle);
+  --border: var(--vf-ui-border);
+  --border-strong: var(--vf-ui-border-strong);
+  --text: var(--vf-ui-text);
+  --muted: var(--vf-ui-muted);
+  --primary: var(--vf-ui-text);
+  --primary-strong: #1e293b;
+}
+
+body,
+.content,
+.library-page {
+  background-color: var(--vf-ui-bg);
+}
+
+/* One compact toolbar language for tabs, search, filter, and upload. */
+.library-kind-tabs > button {
+  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+
+.library-search-pill,
+.filter-dropdown-wrap > .ghost-btn,
+.library-upload-pill {
+  height: 32px;
+  min-height: 32px;
+  border: 1px solid var(--vf-ui-border) !important;
+  border-radius: var(--vf-ui-radius-sm) !important;
+  box-shadow: none !important;
+}
+
+.library-search-pill {
+  background: rgba(255, 255, 255, 0.72) !important;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.library-search-pill:focus-within {
+  border-color: var(--vf-ui-border-strong) !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.04) !important;
+}
+
+.filter-dropdown-wrap > .ghost-btn {
+  padding: 0 12px;
+  color: var(--vf-ui-text);
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.library-upload-pill {
+  padding: 0 14px;
+  color: #ffffff !important;
+  background: var(--vf-ui-text) !important;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.filter-dropdown-wrap > .ghost-btn:hover,
+.library-upload-pill:hover {
+  transform: translateY(-1px);
+}
+
+/* Asset cards: restrained surface, consistent radius, clear hover affordance. */
+.library-card {
+  border: 1px solid var(--vf-ui-border) !important;
+  border-radius: var(--vf-ui-radius-md) !important;
+  background: var(--vf-ui-surface) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025) !important;
+  transform: translateY(0);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease !important;
+}
+
+.library-card:hover,
+.library-card:focus-within {
+  border-color: var(--vf-ui-border-strong) !important;
+  box-shadow: var(--vf-ui-shadow-hover) !important;
+  transform: translateY(-2px) !important;
+}
+
+.library-card.multi-selected,
+.library-card.selected {
+  border-color: var(--vf-ui-text) !important;
+  outline: 2px solid var(--vf-ui-text) !important;
+  outline-offset: -2px;
+}
+
+.library-card-icons button,
+.library-card-actions button,
+.file-pill,
+.favorite-btn {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.library-card-icons button,
+.file-pill,
+.favorite-btn {
+  border-radius: var(--vf-ui-radius-sm) !important;
+  background: rgba(15, 23, 42, 0.68) !important;
+  color: #ffffff !important;
+}
+
+/* Floating surfaces share the same material and elevation. */
+.filter-dropdown,
+.search-history-dropdown,
+#context-menu,
+.upload-tag-menu,
+.home-prompt-menu,
+.home-size-menu {
+  border: 1px solid var(--vf-ui-border) !important;
+  border-radius: var(--vf-ui-radius-md) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: var(--vf-ui-shadow-pop) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+
+.filter-dropdown {
+  padding: 16px !important;
+}
+
+.filter-section h4,
+.search-history-label {
+  color: var(--vf-ui-muted) !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.04em;
+}
+
+.filter-capsule,
+.search-history-item {
+  border-color: var(--vf-ui-border) !important;
+  background: var(--vf-ui-subtle) !important;
+  color: var(--vf-ui-muted) !important;
+}
+
+.filter-capsule:hover,
+.search-history-item:hover {
+  border-color: var(--vf-ui-border-strong) !important;
+  color: var(--vf-ui-text) !important;
+}
+
+.filter-capsule.active {
+  border-color: var(--vf-ui-text) !important;
+  background: var(--vf-ui-text) !important;
+  color: #ffffff !important;
+}
+
+#context-menu button {
+  border-radius: var(--vf-ui-radius-sm) !important;
+  color: var(--vf-ui-text) !important;
+}
+
+#context-menu button:hover {
+  background: var(--vf-ui-subtle) !important;
+}
+
+/* Upload modal follows the same surface system without touching form behavior. */
+#library-upload-modal .library-modal {
+  border: 1px solid var(--vf-ui-border) !important;
+  border-radius: var(--vf-ui-radius-lg) !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  box-shadow: 0 28px 80px -20px rgba(15, 23, 42, 0.3) !important;
+}
+
+#library-upload-modal .modal-head,
+.library-upload-footer {
+  border-color: var(--vf-ui-border) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+#library-upload-modal .modal-head h3 {
+  color: var(--vf-ui-text) !important;
+  font-size: 22px !important;
+  font-weight: 750 !important;
+}
+
+#library-upload-modal .library-kind-card,
+#library-upload-modal .library-drop-zone,
+#library-upload-modal .library-form input,
+#library-upload-modal .library-form select,
+#library-upload-modal .upload-tag-trigger {
+  border-color: var(--vf-ui-border) !important;
+  border-radius: var(--vf-ui-radius-md) !important;
+  box-shadow: none !important;
+}
+
+#library-upload-modal .library-kind-card.active {
+  border-color: var(--vf-ui-text) !important;
+  background: var(--vf-ui-text) !important;
+  color: #ffffff !important;
+}
+
+#library-upload-modal .modal-actions .primary-btn,
+#library-upload-modal .modal-actions .ghost-btn {
+  height: 42px;
+  min-height: 42px;
+  border-radius: 10px !important;
+}
+
+#multi-select-bar {
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: var(--vf-ui-radius-md) !important;
+  background: var(--vf-ui-text) !important;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.28) !important;
+}
+
+.library-card.multi-selected .multi-check {
+  border-color: var(--vf-ui-text) !important;
+  background: var(--vf-ui-text) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-card,
+  .library-kind-tabs > button,
+  .library-search-pill,
+  .filter-dropdown-wrap > .ghost-btn,
+  .library-upload-pill {
+    transition: none !important;
+  }
+}
