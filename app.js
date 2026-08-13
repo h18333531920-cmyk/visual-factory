@@ -907,20 +907,20 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
             </div>
             <div class="home-command-controls">
               <div class="home-prompt-menu-wrap">
-                <button class="home-control-button" id="home-skills-trigger" type="button" aria-expanded="false"><span aria-hidden="true">✦</span>Skills<span class="home-menu-chevron" aria-hidden="true">⌄</span></button>
+                <button class="home-control-button" id="home-skills-trigger" type="button" aria-expanded="false"><span aria-hidden="true">✦</span>Skills<svg class="home-menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.25 3.5 3.5 3.5-3.5"/></svg></button>
                 <div class="home-prompt-menu" id="home-skills-menu" hidden>
                   <label class="home-skill-option"><span>${state.lang === 'zh' ? '一键高清' : 'Upscale'}</span><input type="checkbox" data-home-skill="upscale"></label>
                   <label class="home-skill-option"><span>${state.lang === 'zh' ? '一键换菜品' : 'Replace dish'}</span><input type="checkbox" data-home-skill="replace-dish"></label>
                 </div>
               </div>
               <div class="home-size-wrap">
-                <button class="home-control-button home-size-trigger" id="home-size-trigger" type="button" aria-expanded="false"><span class="home-ratio-icon" aria-hidden="true"></span><strong>1:1</strong><span class="home-menu-chevron" aria-hidden="true">⌄</span></button>
+                <button class="home-control-button home-size-trigger" id="home-size-trigger" type="button" aria-expanded="false"><span class="home-ratio-icon" aria-hidden="true"></span><strong>1:1</strong><svg class="home-menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.25 3.5 3.5 3.5-3.5"/></svg></button>
                 <div class="home-size-menu" id="home-size-menu" hidden>
                   <div>${['16:9', '3:2', '4:3', '1:1', '3:4', '2:3', '9:16', '3:3.75'].map(size => `<button type="button" class="${size === '1:1' ? 'is-selected' : ''}" data-home-size="${size}"><i class="home-ratio-icon" style="--ratio:${size.replace(':', '/')}"></i><span>${size}</span><span class="home-option-check">${size === '1:1' ? '✓' : ''}</span></button>`).join('')}</div>
                 </div>
               </div>
               <div class="home-prompt-menu-wrap home-model-wrap">
-                <button class="home-control-button home-model-trigger" id="home-model-trigger" type="button" aria-expanded="false"><span aria-hidden="true">◇</span><strong>GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}</strong><span class="home-menu-chevron" aria-hidden="true">⌄</span></button>
+                <button class="home-control-button home-model-trigger" id="home-model-trigger" type="button" aria-expanded="false"><span aria-hidden="true">◇</span><strong>GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}</strong><svg class="home-menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.25 3.5 3.5 3.5-3.5"/></svg></button>
                 <div class="home-prompt-menu home-model-menu" id="home-model-menu" hidden>
                   <button type="button" class="is-selected"><span>GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}</span><span class="home-option-check">✓</span></button>
                   <button type="button"><span>Gemini ${state.lang === 'zh' ? '图像模型' : 'Image'}</span><span class="home-option-check"></span></button>
@@ -2448,6 +2448,7 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
     const isTemplateArtwork = kind === 'template' && !tags.includes('组件');
     // 缩略图会被压缩；hover 只能显示模板 JSON 内记录的真实画板尺寸。
     const templateSizeInfo = isTemplateArtwork ? libraryTemplateDimensionInfo(item) : null;
+    const cardSizeInfo = templateSizeInfo || libraryPreviewDimensionInfo(item);
     const quickUse = kind === 'gallery'
       ? `<button type="button" data-action="use-static">${state.lang === 'zh' ? '静态' : 'Static'}</button><button type="button" data-action="use-dynamic">${state.lang === 'zh' ? '动态' : 'Motion'}</button>`
       : kind === 'template'
@@ -2475,15 +2476,14 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
         <div class="library-thumb-wrap">
           <div class="multi-check"></div>
           <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t){t.classList.add('img-loaded');if(this.naturalWidth&&this.naturalHeight)t.style.setProperty('--preview-ratio',this.naturalWidth+' / '+this.naturalHeight)}" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
-          ${isTemplateArtwork ? `<div class="library-template-size-hover" data-template-size-source="${escapeAttr(source.id)}"><span class="library-template-size-ratio">${escapeHtml(templateSizeInfo?.ratio || '—')}</span><span class="library-template-size-pixels">${escapeHtml(templateSizeInfo?.pixels || '读取真实画板尺寸中…')}</span></div>` : ''}
           <div class="library-card-icons">
-            <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
-            <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}">↓</button>
+            <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}" aria-label="${state.lang === 'zh' ? '收藏' : 'Favorite'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3Z"/></svg></button>
+            <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}" aria-label="${previewLabel}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button>
           </div>
           <div class="library-card-overlay">
-            <div>
-              <h4>${escapeHtml(source.title)}</h4>
-              <p>${escapeHtml([libraryKindLabel(kind), ...tags.slice(0, 2)].filter(Boolean).join(' / '))}</p>
+            <div class="library-hover-dimensions" ${isTemplateArtwork ? `data-template-size-source="${escapeAttr(source.id)}"` : ''}>
+              <span class="library-template-size-ratio">${escapeHtml(cardSizeInfo?.ratio || '—')}</span>
+              <span class="library-template-size-pixels">${escapeHtml(cardSizeInfo?.pixels || (isTemplateArtwork ? '读取真实画板尺寸中…' : '—'))}</span>
             </div>
             <div class="library-card-actions">
               ${quickUse}
@@ -2499,6 +2499,17 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
         </div>
       </article>
     `;
+  }
+
+  function libraryPreviewDimensionInfo(item) {
+    const preview = item?.preview || {};
+    const width = Math.round(Number(preview.width) || 0);
+    const height = Math.round(Number(preview.height) || 0);
+    if (width < 1 || height < 1) return null;
+    let a = width, b = height;
+    while (b) { const remainder = a % b; a = b; b = remainder; }
+    const divisor = a || 1;
+    return { ratio: `${width / divisor}:${height / divisor}`, pixels: `${width} × ${height} px` };
   }
 
   function libraryTemplateDimensionInfo(item) {
