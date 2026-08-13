@@ -2466,8 +2466,10 @@
                         <div class="jimeng-setting-group">
                             <span class="jimeng-setting-label">模型</span>
                             <select class="jimeng-setting-select" id="jimeng-model-select" onchange="onJimengSettingChange()">
-                                <option value="jimeng-image-5.0-pro">5.0 Pro</option>
                                 <option value="jimeng-image-5.0-lite">5.0 Lite</option>
+                                <option value="jimeng-image-4.7">4.7</option>
+                                <option value="jimeng-image-4.6">4.6</option>
+                                <option value="jimeng-image-4.1">4.1</option>
                             </select>
                         </div>
                         <div class="jimeng-setting-group">
@@ -2568,7 +2570,7 @@
     const AI_PROVIDER_LABELS = { openai: 'GPT 大模型', volc: '火山大模型', jimeng: '即梦' };
     let aiFeatureMode = 'generate';
     let aiProvider = 'jimeng';
-    const JIMENG_API_URL = '';
+    const JIMENG_API_URL = 'https://threshold-labor-holly-bronze.trycloudflare.com';
     let jimengApiReady = false;
     let jimengSessionId = '';
     let jimengCookies = {};
@@ -2593,7 +2595,7 @@
             img.src = src;
         });
     }
-    let jimengModel = 'jimeng-image-5.0-pro';
+    let jimengModel = 'jimeng-image-5.0-lite';
     let jimengResolution = '2k';
     let jimengRatio = ''; // 空字符串表示自动跟随画板
     const AI_REFERENCE_LIMIT = 8;
@@ -4259,17 +4261,15 @@
         showToast('✅ 即梦 Session ID 已保存');
     }
     async function checkJimengApiHealth() {
-        if(!jimengSessionId) return showToast('请先粘贴并保存即梦 Session ID', true);
+        if(!jimengSessionId) return showToast('请先获取或保存即梦 Session ID', true);
         updateJimengApiUI({ label: '正在检测即梦 API…' });
         try {
-            const res = await fetch('/api/jimeng', {
-                headers: { 'Authorization': 'Bearer ' + jimengSessionId }
-            });
+            const res = await fetch(JIMENG_API_URL + '/v1/models');
             if(!res.ok) throw new Error('HTTP ' + res.status);
             const data = await res.json();
-            if(data.status !== 'ok') throw new Error(data.message || 'sessionid 无效');
-            const hasPro = data.models && data.models.some(function(m) { return m.includes('5.0-pro'); });
-            updateJimengApiUI({ ready: true, label: '✅ 即梦 API 连接正常' + (hasPro ? '（5.0 Pro 可用）' : '') });
+            const models = (data && data.data) || [];
+            const hasLite = models.some(function(m) { return String(m.id || '').includes('5.0-lite'); });
+            updateJimengApiUI({ ready: true, label: '✅ 即梦 API 连接正常' + (hasLite ? '（5.0 Lite 可用）' : '') });
         } catch(e) {
             updateJimengApiUI({ ready: false, label: '❌ 无法连接即梦 API：' + (e.message || '未知错误') });
         }
@@ -4280,7 +4280,7 @@
             const input = document.getElementById('jimeng-session-input');
             if(input) input.value = jimengSessionId;
         }
-        try { jimengModel = localStorage.getItem('jimeng_model') || 'jimeng-image-5.0-pro'; } catch(_) {}
+        try { jimengModel = localStorage.getItem('jimeng_model') || 'jimeng-image-5.0-lite'; } catch(_) {}
         try { jimengRatio = localStorage.getItem('jimeng_ratio') || ''; } catch(_) {}
         syncJimengSettingSelects();
     }
@@ -10824,7 +10824,7 @@
         return url;
     }
     async function generateWithJimeng(prompt) {
-        if(!jimengSessionId) return showToast('请先在生图面板中粘贴并保存即梦 Session ID', true);
+        if(!jimengSessionId) return showToast('请先获取即梦 Session ID（点生图面板的「一键获取」）', true);
         const button = document.getElementById('ai-submit-btn');
         const original = button?.textContent || '↑';
         if(button) { button.textContent = '…'; button.disabled = true; }
@@ -10836,37 +10836,41 @@
                 if(dims) ratio = closestJimengRatio(dims.w, dims.h);
             }
             if(!ratio) ratio = getGenerationRatio();
+            if(JIMENG_RATIOS.indexOf(ratio) < 0) ratio = closestJimengRatio((SIZES[currentRatio] || {}).w, (SIZES[currentRatio] || {}).h) || '1:1';
             const body = {
                 model: jimengModel,
                 prompt: prompt,
                 n: 1,
                 ratio: ratio,
                 resolution: jimengResolution,
-                response_format: 'b64_json',
-                cookies: jimengCookies || {}
+                response_format: 'b64_json'
             };
             if(aiReferenceImages.length) {
                 body.images = aiReferenceImages.map(function(item) { return item.src; });
             }
-            updateAIProgress('正在提交生成请求到即梦…', 30);
-            const res = await fetch('/api/jimeng', {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + jimengSessionId, 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
+            updateAIProgress('正在提交生成请求到即梦（同步出图，通常需 10~40 秒）…', 30);
+            // 直连 jimeng-free-api 代理（OpenAI 风格同步接口），绕过 Cloudflare 函数 30s 限制。
+            // 代理内部会自行轮询即梦直到出图，这里 await 一次即可拿到最终结果。
+            const controller = new AbortController();
+            const timeoutId = setTimeout(function() { controller.abort(); }, 160000);
+            var res, payload;
+            try {
+                res = await fetch(JIMENG_API_URL + '/v1/images/generations', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + jimengSessionId, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                    signal: controller.signal
+                });
+            } finally {
+                clearTimeout(timeoutId);
+            }
             if(!res.ok) {
                 var errText = '';
-                try { var ej = await res.json(); errText = ej.message || ej.errmsg || ''; } catch(_) {}
+                try { var ej = await res.json(); errText = ej.message || ej.errmsg || ej.error || ''; } catch(_) {}
                 throw new Error('即梦 API 返回 HTTP ' + res.status + (errText ? '：' + errText : ''));
             }
-            var payload = await res.json();
-            var items = [];
-            if(payload && payload.pending && payload.taskId) {
-                updateAIProgress('任务已提交，即梦正在生成图片…', 55);
-                items = await pollJimengTask(payload.taskId);
-            } else {
-                items = payload && payload.data ? payload.data : [];
-            }
+            payload = await res.json();
+            var items = payload && payload.data ? payload.data : [];
             var images = [];
             for(var j = 0; j < items.length; j++) {
                 var item = items[j];
@@ -10884,10 +10888,11 @@
                 showToast('❌ ' + (payload.message || payload.errmsg || '即梦未返回图片'), true);
             }
         } catch(e) {
-            if(e.message && (e.message.includes('Failed to fetch') || e.message.includes('NetworkError'))) {
-                showToast('❌ 无法连接即梦中转服务，请检查网络或稍后重试', true);
+            var jmErr = e && e.message ? e.message : '';
+            if(jmErr.includes('Failed to fetch') || jmErr.includes('NetworkError') || jmErr.includes('aborted') || jmErr.includes('AbortError')) {
+                showToast('❌ 无法连接即梦中转服务（网络中断或超时），请稍后重试', true);
             } else {
-                showToast('❌ ' + (e.message || '即梦 API 调用失败'), true);
+                showToast('❌ ' + (jmErr || '即梦 API 调用失败'), true);
             }
         } finally {
             stopAIProgress();
