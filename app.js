@@ -573,13 +573,13 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
 
   function navIcon(icon) {
     const icons = {
-      home: '<svg viewBox="0 0 24 24"><path d="M4 11.4 12 4l8 7.4"/><path d="M6.7 10.5V20h10.6v-9.5"/><path d="M9.6 20v-5.5h4.8V20"/></svg>',
-      library: '<svg viewBox="0 0 24 24"><path d="M5 6.3h14v11.4H5z"/><path d="M8 3.8h8M8 20.2h8"/><path d="m8.2 15.3 2.4-2.8 2.2 2.2 1.6-1.8 2.7 3.2"/></svg>',
-      static: '<svg viewBox="0 0 24 24"><rect x="4" y="4.8" width="16" height="14.4" rx="3"/><path d="M8 8.2h5.5M8 11h8"/><path d="M8 15.5h3.6l1.8-2 1.8 2H18"/></svg>',
-      dynamic: '<svg viewBox="0 0 24 24"><rect x="4.4" y="5" width="15.2" height="14" rx="3"/><path d="M10 9v6l5.2-3L10 9z"/><path d="M7.5 3.8h9"/></svg>',
+      home: '<svg viewBox="0 0 24 24"><path d="M3 12l2-2m0 0 7-7 7 7M5 10v10a1 1 0 001 1h3m10-11 2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>',
+      library: '<svg viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2 1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+      static: '<svg viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+      dynamic: '<svg viewBox="0 0 24 24"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>',
       request: '<svg viewBox="0 0 24 24"><path d="M5 5.5h14v10H8.5L5 19V5.5Z"/><path d="M8.5 9h7M8.5 12h4.5"/></svg>',
-      admin: '<svg viewBox="0 0 24 24"><path d="M12 13.4a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M5.5 20c.9-3.2 3.1-4.8 6.5-4.8s5.6 1.6 6.5 4.8"/></svg>',
-      analytics: '<svg viewBox="0 0 24 24"><rect x="3" y="13" width="4" height="7" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="16" rx="1"/></svg>'
+      admin: '<svg viewBox="0 0 24 24"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>',
+      analytics: '<svg viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>'
     };
     return icons[icon] || '';
   }

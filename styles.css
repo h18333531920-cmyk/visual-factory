@@ -10092,3 +10092,231 @@ html body #app-shell.app-shell[data-route="home"] .library-home-card-meta button
     grid-template-columns: 1fr !important;
   }
 }
+
+/* Authoritative home contract: gccdesign-unified-demo-v2.html#home. */
+html body #app-shell.app-shell[data-route="home"] { padding-left: 64px !important; }
+
+html body #app-shell.app-shell[data-route="home"] .sidebar {
+  width: 64px !important;
+  overflow: visible !important;
+  border-right: 1px solid rgba(226, 232, 240, 0.75) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .sidebar-brand {
+  min-height: 64px !important;
+  padding: 20px 0 7px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .sidebar-brand .brand-mark {
+  display: grid !important;
+  width: 36px !important;
+  height: 36px !important;
+  place-items: center !important;
+  margin: 0 !important;
+  border-radius: 10px !important;
+  background: #020617 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .sidebar-brand .brand-mark::after { display: none !important; }
+
+html body #app-shell.app-shell[data-route="home"] .sidebar-brand .brand-mark svg {
+  width: 18px !important;
+  height: 18px !important;
+  fill: none !important;
+  stroke: #ffffff !important;
+  stroke-width: 2.5 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .nav-list {
+  display: flex !important;
+  overflow: visible !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 21px 12px 8px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .nav-item {
+  position: relative !important;
+  display: flex !important;
+  width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  flex: 0 0 40px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: #94a3b8 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: color 150ms ease, background-color 150ms ease !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .nav-item:hover {
+  color: #0f172a !important;
+  background: #f8fafc !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .nav-item.active {
+  color: #0f172a !important;
+  background: #f1f5f9 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .nav-item::before { display: none !important; }
+
+html body #app-shell.app-shell[data-route="home"] .nav-item::after {
+  position: absolute !important;
+  z-index: 170 !important;
+  top: 50% !important;
+  left: calc(100% + 10px) !important;
+  display: block !important;
+  padding: 5px 8px !important;
+  border-radius: 6px !important;
+  color: #ffffff !important;
+  background: rgba(15, 23, 42, 0.96) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  content: attr(aria-label) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translate(-4px, -50%) !important;
+  transition: opacity 150ms ease, transform 150ms ease !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .nav-item:hover::after,
+html body #app-shell.app-shell[data-route="home"] .nav-item:focus-visible::after {
+  opacity: 1 !important;
+  transform: translate(0, -50%) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .nav-icon {
+  display: grid !important;
+  width: 18px !important;
+  height: 18px !important;
+  place-items: center !important;
+  border-radius: 0 !important;
+  color: inherit !important;
+  background: transparent !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .nav-icon svg {
+  width: 18px !important;
+  height: 18px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .sidebar-footer {
+  gap: 8px !important;
+  padding: 10px 12px 20px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .sidebar-footer::before {
+  width: 24px;
+  height: 1px;
+  margin: 0 auto;
+  background: rgba(226, 232, 240, 0.8);
+  content: "";
+  order: 2;
+}
+
+html body #app-shell.app-shell[data-route="home"] .sidebar-footer .ghost-btn {
+  width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: #94a3b8 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] #lang-toggle { order: 1; }
+html body #app-shell.app-shell[data-route="home"] #sign-out-btn { order: 3; }
+
+/* Restore the demo's second-level taxonomy beneath the primary tabs. */
+html body #app-shell.app-shell[data-route="home"] .library-tag-rows {
+  display: flex !important;
+  grid-column: 1 / -1 !important;
+  min-width: 0 !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  padding: 1px 0 0 !important;
+  overflow: visible !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-tag-row,
+html body #app-shell.app-shell[data-route="home"] .library-tag-row > div {
+  display: flex !important;
+  min-width: 0 !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-tag-row button {
+  display: inline-flex !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  align-items: center !important;
+  padding: 0 10px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: #64748b !important;
+  background: rgba(241, 245, 249, 0.8) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  transition: color 150ms ease, background-color 150ms ease !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-tag-row button:hover {
+  color: #1e293b !important;
+  background: #f1f5f9 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-tag-row button.active {
+  color: #ffffff !important;
+  background: #0f172a !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-tag-row button small {
+  margin-left: 6px !important;
+  color: inherit !important;
+  font-size: 11px !important;
+  font-weight: inherit !important;
+  opacity: 0.7 !important;
+}
+
+/* Demo primary indicator: short 20px pill, not a full-width underline. */
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button.active::after { display: none !important; }
+
+html body #app-shell.app-shell[data-route="home"] .kind-tab-indicator {
+  display: block !important;
+  width: 20px !important;
+  height: 2px !important;
+  border-radius: 999px !important;
+  transition: left 200ms cubic-bezier(.22, .8, .24, 1) !important;
+}
+
+@media (max-width: 760px) {
+  html body #app-shell.app-shell[data-route="home"] { padding-left: 0 !important; }
+}
