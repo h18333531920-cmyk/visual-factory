@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260811-cloud-keeta-logo-assets-v250';
+const TOOL_UI_VERSION = '20260813-native-group-preview-v253';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -4305,6 +4305,7 @@ function libraryTagsForForm(formData, kind) {
       frame.className = 'tool-frame';
       frame.src = item.src;
       frame.title = type;
+      if (type === 'static') frame.allow = 'display-capture';
       frame.dataset.toolFrame = type;
       state.toolFrames[type] = frame;
     }

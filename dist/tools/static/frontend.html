@@ -102,12 +102,12 @@
         .linked-artboard-dock-toggle { position:absolute; z-index:5; top:-15px; left:50%; right:auto; width:52px; height:27px; padding:0; border:1px solid rgba(16,24,40,.12); border-bottom:0; border-radius:12px 12px 0 0; background:rgba(255,255,255,.98); color:#667085; cursor:pointer; font-size:17px; font-weight:900; line-height:22px; transform:translateX(-50%); transition:background-color .16s ease,color .16s ease; }
         .linked-artboard-dock-toggle:hover { color:var(--primary); background:#f4f7ff; }
         .linked-artboard-dock.collapsed .linked-artboard-dock-toggle { position:static; width:38px; height:24px; border:1px solid rgba(16,24,40,.12); border-radius:999px; font-size:16px; line-height:20px; background:rgba(255,255,255,.98); box-shadow:0 4px 12px rgba(16,24,40,.10); transform:none; }
-        .linked-artboard-dock.quick-add-dock.collapsed { left:50%; right:auto; bottom:18px; width:42px; height:25px; min-height:0; padding:0; overflow:visible; justify-content:center; border:0; border-radius:999px; background:transparent; box-shadow:none; transform:translateX(-50%); }
+        .linked-artboard-dock.quick-add-dock.collapsed { left:50%; right:auto; bottom:18px; width:42px; height:30px; min-height:0; padding:0; overflow:visible; justify-content:center; border:0; border-radius:999px; background:transparent; box-shadow:none; transform:translateX(-50%); }
         .linked-artboard-dock.quick-add-dock.collapsed > :not(.quick-add-dock-toggle) { display:none; }
         .linked-artboard-dock.quick-add-dock.collapsed .quick-add-dock-toggle { display:block; }
-        .quick-add-dock-toggle { position:absolute; z-index:5; top:-15px; left:50%; width:52px; height:27px; padding:0; border:1px solid rgba(16,24,40,.12); border-bottom:0; border-radius:12px 12px 0 0; background:rgba(255,255,255,.98); color:#667085; cursor:pointer; font-size:17px; font-weight:900; line-height:22px; transform:translateX(-50%); transition:background-color .16s ease,color .16s ease; }
-        .quick-add-dock-toggle:hover { color:var(--primary); background:#f4f7ff; transform:translateX(-50%) !important; }
-        .linked-artboard-dock.quick-add-dock.collapsed .quick-add-dock-toggle { position:static; width:38px; height:24px; border:1px solid rgba(16,24,40,.12); border-radius:999px; font-size:16px; line-height:20px; background:rgba(255,255,255,.98); box-shadow:0 4px 12px rgba(16,24,40,.10); transform:none; }
+        .quick-add-dock-toggle { position:absolute; z-index:5; top:-36px; left:50%; width:30px; height:30px; padding:0; display:flex; align-items:center; justify-content:center; border:1px solid rgba(16,24,40,.12); border-radius:50%; background:rgba(255,255,255,.60); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); color:#667085; cursor:pointer; box-shadow:0 2px 8px rgba(16,24,40,.10); transform:translateX(-50%); transition:background-color .16s ease,color .16s ease,box-shadow .16s ease; }
+        .quick-add-dock-toggle:hover { color:var(--primary); background:rgba(255,255,255,.9); transform:translateX(-50%) !important; }
+        .linked-artboard-dock.quick-add-dock.collapsed .quick-add-dock-toggle { position:static; width:30px; height:30px; border:1px solid rgba(16,24,40,.12); border-radius:50%; background:rgba(255,255,255,.9); box-shadow:0 4px 12px rgba(16,24,40,.10); transform:none; }
         .linked-artboard-dock.quick-add-dock.collapsed .quick-add-dock-toggle:hover { transform:none !important; }
         .linked-artboard-card { position:relative; flex:0 0 auto; padding:0; overflow:visible; border:0; border-radius:0; background:transparent; cursor:pointer; }
         .linked-artboard-card .linked-artboard-mini { overflow:hidden; margin:0 auto; border:2px solid transparent; border-radius:8px; background:#fff; box-sizing:content-box; }
@@ -1454,6 +1454,73 @@
             width: max-content;
         }
 
+        .left-pane .canvas-zoom-control {
+            position: absolute;
+            top: 22px;
+            left: 22px;
+            z-index: 23;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            height: 24px;
+            padding: 0 8px 0 2px;
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            box-shadow: none;
+            backdrop-filter: none;
+            pointer-events: auto;
+            opacity: 0.6;
+            transition: opacity .16s ease, background .16s ease, backdrop-filter .16s ease;
+        }
+
+        .left-pane .canvas-zoom-control:hover,
+        .left-pane .canvas-zoom-control:focus-within {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        .left-pane .canvas-zoom-control .cz-btn {
+            flex: 0 0 auto;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border: 0;
+            border-radius: 50%;
+            background: transparent;
+            color: #7a8088;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .left-pane .canvas-zoom-control .cz-btn:hover { background: rgba(16, 19, 24, 0.08); color: var(--text-main); }
+
+        .left-pane .canvas-zoom-control .cz-slider {
+            width: 64px;
+            margin: 0;
+            cursor: pointer;
+            accent-color: #9aa0a8;
+        }
+
+        .left-pane .canvas-zoom-control:hover .cz-slider,
+        .left-pane .canvas-zoom-control:focus-within .cz-slider { accent-color: var(--primary); }
+
+        .left-pane .canvas-zoom-control .cz-value {
+            min-width: 34px;
+            text-align: right;
+            font-size: 10px;
+            font-weight: 700;
+            color: #7a8088;
+            font-variant-numeric: tabular-nums;
+        }
+
         .left-pane .ratio-nav button,
         .left-pane .canvas-actions button {
             flex: 0 0 auto;
@@ -2321,6 +2388,11 @@
                     </div>
                 </div>
             </div>
+            <div class="canvas-zoom-control" id="canvas-zoom-control">
+                <button type="button" class="cz-btn" onclick="resetCanvasZoom()" title="适应画布 (100%)" aria-label="适应画布">⤢</button>
+                <input type="range" class="cz-slider" id="canvas-zoom-slider" min="0.3" max="2.5" step="0.05" value="1" aria-label="画布缩放" oninput="setCanvasZoom(parseFloat(this.value))">
+                <span class="cz-value" id="canvas-zoom-value">100%</span>
+            </div>
         </div>
 
         <div class="canvas-wrapper" id="canvas-wrapper">
@@ -2463,6 +2535,7 @@
     };
     let currentArtboardId = 'head';
     let currentRatio = 'head'; let currentScale = 1; let exportFormat = 'png';
+    let zoomLevel = 1; // 画布显示缩放倍率（1 = 适配画布），范围 0.3 ~ 2.5
     let activeLayerIds = [];
     let layerSelectionAnchorId = null;
     let _contextMenuLayerId = null;
@@ -3595,7 +3668,7 @@
     // getDisplayMedia 只能由一次真实点击直接触发。模板保存需先输入名称，若等 await
     // askText 返回后才发起捕获，浏览器会判定用户手势已失效。这个专用对话框会在
     // “确定”按钮的同一点击栈中立刻进入原生捕获。
-    function askTextAndCaptureNativePreview(title, defaultValue = '') {
+    function askTextAndCaptureNativePreview(title, defaultValue = '', captureFactory) {
         return new Promise(resolve => {
             const overlay = ensureMiniDialog();
             const titleEl = document.getElementById('mini-dialog-title');
@@ -3620,7 +3693,7 @@
                 const name = input.value.trim() || defaultValue;
                 cleanup();
                 // 这一行必须在 click 回调内同步执行，不能移到 await 之后。
-                const capturePromise = captureNativePreviewDataUrl();
+                const capturePromise = (captureFactory || captureNativePreviewDataUrl)();
                 resolve({ name, capturePromise });
             };
             ok.onclick = confirmAndCapture;
@@ -3635,6 +3708,13 @@
                 if (e.key === 'Escape') { e.preventDefault(); cancel.click(); }
             };
         });
+    }
+    async function askTextForPreview(title, defaultValue, requiresNativeCapture, captureFactory) {
+        if (requiresNativeCapture) {
+            return await askTextAndCaptureNativePreview(title, defaultValue, captureFactory);
+        }
+        const name = await askText(title, defaultValue);
+        return name ? { name: name, capturePromise: null } : null;
     }
     function askConfirm(messageText) {
         return new Promise(resolve => {
@@ -3754,7 +3834,8 @@
         });
         return [...groups.values()].map(group => ({ ...group, fonts: group.fonts.sort((a, b) => a.weight - b.weight) }));
     }
-    // 获取默认字体：优先匹配名称中含 "HT" 的自定义字体，否则退回 Arial Black
+    // 获取默认字体：DIY 模板统一只用 HT / dela 两类自定义字体。
+    // 优先级：HT → dela → sans-serif（无可用自定义字体时的中性兜底）。
     function getDefaultFont() {
         var families = getCustomFontFamilies();
         for (var i = 0; i < families.length; i++) {
@@ -3762,7 +3843,12 @@
                 return cssFontFamily(families[i].familyId);
             }
         }
-        return 'Arial Black, sans-serif';
+        for (var i = 0; i < families.length; i++) {
+            if (families[i].familyName && /dela/i.test(families[i].familyName)) {
+                return cssFontFamily(families[i].familyId);
+            }
+        }
+        return 'sans-serif';
     }
     function getHTFont() {
         var families = getCustomFontFamilies();
@@ -3771,7 +3857,12 @@
                 return cssFontFamily(families[i].familyId);
             }
         }
-        return 'Arial Black, sans-serif';
+        for (var i = 0; i < families.length; i++) {
+            if (families[i].familyName && /dela/i.test(families[i].familyName)) {
+                return cssFontFamily(families[i].familyId);
+            }
+        }
+        return 'sans-serif';
     }
     function getDelaFont() {
         var families = getCustomFontFamilies();
@@ -3780,7 +3871,22 @@
                 return cssFontFamily(families[i].familyId);
             }
         }
-        return 'Arial Black, sans-serif';
+        for (var i = 0; i < families.length; i++) {
+            if (families[i].familyName && families[i].familyName.toUpperCase().indexOf('HT') !== -1) {
+                return cssFontFamily(families[i].familyId);
+            }
+        }
+        return 'sans-serif';
+    }
+    // 把请求的字重校正到字体家族真实存在的字重，避免浏览器对单字重字体做「合成加粗」。
+    // fontValue 匹配不到自定义字体家族时原样返回请求值（系统字体本身有多字重）。
+    function resolveFontWeight(fontValue, requested) {
+        const family = getCustomFontFamilies().find(item => cssFontFamily(item.familyId) === fontValue);
+        const target = Number(requested) || 400;
+        if (!family || !family.fonts || family.fonts.length === 0) return target;
+        const weights = family.fonts.map(item => Number(item.weight) || 400);
+        if (weights.indexOf(target) !== -1) return target;
+        return weights.reduce((best, w) => Math.abs(w - target) < Math.abs(best - target) ? w : best, weights[0]);
     }
     function getFontWeightOptions(fontValue, selectedWeight) {
         const family = getCustomFontFamilies().find(item => cssFontFamily(item.familyId) === fontValue);
@@ -3800,7 +3906,10 @@
         saveHistory(); renderCanvas(); renderProperties();
     };
     function isCustomFont(fontValue = '') { return String(fontValue).includes('CF_'); }
-    function getTagFontWeight(l) { return l.fontWeight !== undefined ? l.fontWeight : (isCustomFont(l.font) ? 400 : 900); }
+    function getTagFontWeight(l) {
+        var base = l.fontWeight !== undefined ? l.fontWeight : (isCustomFont(l.font) ? 400 : 900);
+        return isCustomFont(l.font) ? resolveFontWeight(l.font, base) : base;
+    }
     function normalizeAlpha(value) {
         const n = Number(value);
         if(!Number.isFinite(n)) return 1;
@@ -4710,15 +4819,15 @@
         if(l.type === 'text') {
             var txt = String(l.text || 'T').slice(0, 8);
             var fs = Math.min(13, Math.max(7, 26 / Math.max(1, txt.length)));
-            return '<span style="font-family:' + (l.font || 'Arial Black, sans-serif') + ';font-weight:' + (Number(l.fontWeight)||900) + ';font-size:' + fs + 'px;color:' + (l.textCol || '#333') + ';white-space:nowrap;line-height:1;overflow:hidden;max-width:100%;">' + escapeHtml(txt) + '</span>';
+            return '<span style="font-family:' + (l.font || 'sans-serif') + ';font-weight:' + (Number(l.fontWeight)||900) + ';font-size:' + fs + 'px;color:' + (l.textCol || '#333') + ';white-space:nowrap;line-height:1;overflow:hidden;max-width:100%;">' + escapeHtml(txt) + '</span>';
         }
         if(l.type === 'discountTag') {
             var txt2 = String(l.mainText || 'OFF').slice(0, 5);
-            return '<span style="font-family:' + (l.font || 'Arial Black, sans-serif') + ';font-weight:900;font-size:10px;color:' + (l.textCol || '#fff') + ';background:' + (l.bgCol || '#ef4444') + ';padding:2px 5px;border-radius:3px;white-space:nowrap;line-height:1.2;">' + escapeHtml(txt2) + '</span>';
+            return '<span style="font-family:' + (l.font || 'sans-serif') + ';font-weight:900;font-size:10px;color:' + (l.textCol || '#fff') + ';background:' + (l.bgCol || '#ef4444') + ';padding:2px 5px;border-radius:3px;white-space:nowrap;line-height:1.2;">' + escapeHtml(txt2) + '</span>';
         }
         if(l.type === 'tag') {
             var txt3 = String(l.text || '#').slice(0, 5);
-            return '<span style="font-family:' + (l.font || '-apple-system, sans-serif') + ';font-weight:800;font-size:10px;color:' + (l.textCol || '#fff') + ';background:' + (l.bgCol || '#333') + ';padding:2px 6px;border-radius:3px;white-space:nowrap;line-height:1.2;">' + escapeHtml(txt3) + '</span>';
+            return '<span style="font-family:' + (l.font || 'sans-serif') + ';font-weight:800;font-size:10px;color:' + (l.textCol || '#fff') + ';background:' + (l.bgCol || '#333') + ';padding:2px 6px;border-radius:3px;white-space:nowrap;line-height:1.2;">' + escapeHtml(txt3) + '</span>';
         }
         if(l.type === 'arc') {
             return '<svg width="28" height="28" viewBox="0 0 40 40"><circle cx="20" cy="20" r="13" fill="none" stroke="' + (l.cIn || '#FFCC00') + '" stroke-width="5"/><circle cx="20" cy="20" r="20" fill="none" stroke="' + (l.cOut || '#00D06C') + '" stroke-width="4"/></svg>';
@@ -5146,9 +5255,19 @@
         const linkedDock = document.getElementById('linked-artboard-dock');
         const dockSpace = !document.body.classList.contains('vf-native-capture-mode') && linkedDock?.classList.contains('show') ? 92 : 0;
         const scale = Math.min((pane.clientWidth - capturePadding) / w, (pane.clientHeight - capturePadding - dockSpace) / h);
-        currentScale = scale; wrap.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        const effectiveZoom = document.body.classList.contains('vf-native-capture-mode') ? 1 : zoomLevel;
+        currentScale = scale * effectiveZoom; wrap.style.transform = `translate(-50%, -50%) scale(${currentScale})`;
         syncSafeGuide();
     }
+    function setCanvasZoom(v) {
+        zoomLevel = Math.min(2.5, Math.max(0.3, Number(v) || 1));
+        const slider = document.getElementById('canvas-zoom-slider');
+        if(slider) slider.value = zoomLevel;
+        const label = document.getElementById('canvas-zoom-value');
+        if(label) label.textContent = Math.round(zoomLevel * 100) + '%';
+        resizeCanvas();
+    }
+    function resetCanvasZoom() { setCanvasZoom(1); }
     window.addEventListener('resize', resizeCanvas);
 
     function openSettingsModal() { renderSettings(); document.getElementById('settings-modal').style.display = 'flex'; }
@@ -5703,8 +5822,8 @@
             else if (!useBoxCenterAnchor && legacyAnchorAlign === 'right') { tx = '-100%'; tOrigin = 'right center'; }
             wrapper.style.transform = `translate(${tx}, ${ty}) rotate(${l.rotation || 0}deg) scale(${l.scale || 1})`;
             wrapper.style.transformOrigin = tOrigin;
-            wrapper.style.fontFamily = l.font || 'Arial Black, sans-serif';
-            wrapper.style.fontWeight = Number(l.fontWeight) || 900;
+            wrapper.style.fontFamily = l.font || getDefaultFont();
+            wrapper.style.fontWeight = isCustomFont(l.font) ? resolveFontWeight(l.font, Number(l.fontWeight) || 900) : (Number(l.fontWeight) || 900);
             wrapper.style.fontSize = `${Number(l.fontSize) || 88}px`;
             wrapper.style.lineHeight = Number(l.lineHeight) || 0.95;
             wrapper.style.letterSpacing = `${Number(l.letterSpacing) || 0}px`;
@@ -5741,7 +5860,7 @@
         else if(l.type === 'tag') {
             wrapper.className = 'layer-tag-wrapper layer-base';
             wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation}deg) scale(${l.scale})`;
-            wrapper.style.fontFamily = l.font || '-apple-system, sans-serif';
+            wrapper.style.fontFamily = l.font || getDefaultFont();
             wrapper.style.fontWeight = getTagFontWeight(l);
             wrapper.style.letterSpacing = (l.letterSpacing ?? 0) + 'px';
             const thick = l.shadowThickness !== undefined ? l.shadowThickness : 12;
@@ -5762,7 +5881,7 @@
             normalizeDiscountTagLayer(l);
             wrapper.className = 'layer-tag-wrapper layer-base';
             wrapper.style.transform = `translate(-50%, -50%) rotate(${l.rotation}deg) scale(${l.scale})`;
-            wrapper.style.fontFamily = l.font || 'Arial Black, sans-serif';
+            wrapper.style.fontFamily = l.font || getDefaultFont();
             wrapper.style.fontWeight = getTagFontWeight(l);
             wrapper.style.letterSpacing = (l.letterSpacing ?? -3) + 'px';
             const thick = l.shadowThickness !== undefined ? l.shadowThickness : 12;
@@ -5781,7 +5900,7 @@
             const safeBottom = escapeHtml(l.bottomText);
             const isAr = l.discountLang === 'ar';
             // inline style 中用单引号，避免 cssFontFamily 的双引号破坏 HTML 属性解析
-            const mainFont = isAr ? getDelaFont().replace(/"/g, "'") : '';
+            const mainFont = getDelaFont().replace(/"/g, "'");
             const topFont = isAr ? getHTFont().replace(/"/g, "'") : '';
             const bottomFont = isAr ? getDelaFont().replace(/"/g, "'") : '';
             const mainFontStyle = mainFont ? `font-family:${mainFont}; font-weight:400;` : '';
@@ -5877,22 +5996,28 @@
         const actions = [
             { label:'图片图层', icon:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.4"/><path d="m4 18 5-5 3.5 3.5 2.5-2.5 5 4"/></svg>', run:function() { document.getElementById('bg-upload')?.click(); } },
             { label:'文本', icon:'<svg viewBox="0 0 24 24"><path d="M4 5V3h16v2M12 3v18M8 21h8"/></svg>', run:function() { addLayer('text'); } },
-            { label:'添加Logo', logoMenu:true, icon:'<svg viewBox="0 0 24 24"><path d="M4 19h16M6 16V5h12v11M9 9h6M9 12h6"/></svg>' },
+            { label:'添加Logo', icon:'<svg viewBox="0 0 24 24"><path d="M4 19h16M6 16V5h12v11M9 9h6M9 12h6"/></svg>', menu:[
+                ['pair','左右组合','<svg viewBox="0 0 24 24"><rect x="3" y="6" width="7" height="12" rx="1.5"/><rect x="14" y="6" width="7" height="12" rx="1.5"/><line x1="11" y1="12" x2="13" y2="12"/></svg>'],
+                ['single','单一Logo','<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3"/><circle cx="12" cy="12" r="4"/></svg>'],
+                ['matrix','Logo矩阵','<svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>']
+            ], menuRun:function(key) { addLogoLayout(key); } },
             { label:'圆弧', icon:'<svg viewBox="0 0 24 24"><path d="M4 17a8 8 0 0 1 16 0"/><path d="M4 20a11 11 0 0 1 16 0"/></svg>', run:function() { addLayer('arc'); } },
-            { label:'标签', icon:'<svg viewBox="0 0 24 24"><path d="M3 11V5a2 2 0 0 1 2-2h6l10 10-8 8L3 11Z"/><circle cx="7.5" cy="7.5" r="1"/></svg>', run:function() { addLayer('tag'); } },
-            { label:'折扣标签', icon:'<svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="m8 15 8-6M8 9h.01M16 15h.01"/></svg>', run:function() { addLayer('discountTag'); } }
+            { label:'标签', icon:'<svg viewBox="0 0 24 24"><path d="M3 11V5a2 2 0 0 1 2-2h6l10 10-8 8L3 11Z"/><circle cx="7.5" cy="7.5" r="1"/></svg>', menu:[
+                ['tag','常规标签','<svg viewBox="0 0 24 24"><path d="M3 11V5a2 2 0 0 1 2-2h6l10 10-8 8L3 11Z"/><circle cx="7.5" cy="7.5" r="1"/></svg>'],
+                ['discountTag','折扣标签','<svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="m8 15 8-6M8 9h.01M16 15h.01"/></svg>']
+            ], menuRun:function(key) { addLayer(key); } }
         ];
         actions.forEach(function(action) {
-            if(action.logoMenu) {
+            if(action.menu) {
                 const wrap = document.createElement('div'); wrap.className = 'quick-logo-menu-wrap';
                 const button = document.createElement('button');
-                button.type = 'button'; button.className = 'quick-add-action'; button.title = '添加 Logo';
+                button.type = 'button'; button.className = 'quick-add-action'; button.title = action.label;
                 button.innerHTML = '<span class="quick-add-icon">' + action.icon + '</span><span class="quick-add-label">' + action.label + '</span>';
                 const menu = document.createElement('div'); menu.className = 'quick-logo-menu';
-                [['pair','左右组合','<svg viewBox="0 0 24 24"><rect x="3" y="6" width="7" height="12" rx="1.5"/><rect x="14" y="6" width="7" height="12" rx="1.5"/><line x1="11" y1="12" x2="13" y2="12"/></svg>'], ['single','单一Logo','<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3"/><circle cx="12" cy="12" r="4"/></svg>'], ['matrix','Logo矩阵','<svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>']].forEach(function(item) {
+                action.menu.forEach(function(item) {
                     const option = document.createElement('button'); option.type = 'button';
                     option.innerHTML = '<span class="quick-add-icon">' + item[2] + '</span><span class="quick-add-label">' + item[1] + '</span>';
-                    option.onclick = function(event) { event.preventDefault(); event.stopPropagation(); menu.classList.remove('open'); addLogoLayout(item[0]); };
+                    option.onclick = function(event) { event.preventDefault(); event.stopPropagation(); menu.classList.remove('open'); action.menuRun(item[0]); };
                     menu.appendChild(option);
                 });
                 let closeTimer = null;
@@ -5916,7 +6041,9 @@
         toggle.className = 'quick-add-dock-toggle';
         toggle.title = linkedArtboardDockExpanded ? '收起快捷添加栏' : '展开快捷添加栏';
         toggle.setAttribute('aria-label', toggle.title);
-        toggle.textContent = linkedArtboardDockExpanded ? '⌄' : '⌃';
+        toggle.innerHTML = linkedArtboardDockExpanded
+            ? '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>'
+            : '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg>';
         toggle.onclick = function(event) {
             event.preventDefault();
             event.stopPropagation();
@@ -6568,8 +6695,8 @@
         }
 
         const l = layers.find(x => x.id === activeLayerIds[0]); if(!l) return;
-        // 字体列表由 JS 运行时动态填充，包含系统字体和用户通过设置面板上传的自定义字体。
-        let fontOptions = `<option value="-apple-system, sans-serif">系统默认字体</option><option value="Arial Black, sans-serif">Arial Black (超粗体)</option>`;
+        // 字体列表由 JS 运行时动态填充，仅包含用户上传的自定义字体（HT / dela 等），不再内置系统字体。
+        let fontOptions = '';
         getCustomFontFamilies().forEach(group => { fontOptions += `<option value='${cssFontFamily(group.familyId)}'>${escapeHtml(group.familyName)}</option>`; });
         if(l.font && String(l.font).includes('CF_') && !getCustomFontFamilies().some(group => cssFontFamily(group.familyId) === l.font)) {
             fontOptions += `<option value='${escapeHtml(l.font)}'>已使用的旧版自定义字体</option>`;
@@ -6656,7 +6783,7 @@
         }
         else if(l.type === 'tag') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="handleColorPresetClick(event,'tag','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;" title="双击编辑并同步"></div>`; });
-            area.innerHTML = `<label class="label">文案内容</label><input type="text" class="input-text" value="${escapeHtml(l.text)}" oninput="updateProp('text', this.value)" onchange="saveHistory()"><label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();"><option value="300" ${(l.fontWeight||900)===300?'selected':''}>细体</option><option value="400" ${(l.fontWeight||900)===400?'selected':''}>常规</option><option value="700" ${(l.fontWeight||900)===700?'selected':''}>加粗</option><option value="900" ${(l.fontWeight||900)===900?'selected':''}>黑体</option></select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">标签高度</span><input type="range" min="10" max="300" step="1" value="${l.tagHeight || 60}" oninput="updateProp('tagHeight', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagHeight">${l.tagHeight || 60}px</span></div><div class="slider-row"><span class="s-label">圆角</span><input type="range" min="0" max="150" step="1" value="${l.borderRadius !== undefined && l.borderRadius !== null ? l.borderRadius : Math.round((l.tagHeight || 60)/2)}" oninput="updateProp('borderRadius', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-borderRadius">${l.borderRadius !== undefined && l.borderRadius !== null ? l.borderRadius : Math.round((l.tagHeight || 60)/2)}px</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-50" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">内边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingX ?? 36}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 36}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="30" step="1" value="${l.shadowThickness||12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness||12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 1)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 1)*100)}%</span></div>`;
+            area.innerHTML = `<label class="label">文案内容</label><input type="text" class="input-text" value="${escapeHtml(l.text)}" oninput="updateProp('text', this.value)" onchange="saveHistory()"><label class="label">字体选择</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();">${selectedWeightInfo.html}</select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">标签高度</span><input type="range" min="10" max="300" step="1" value="${l.tagHeight || 60}" oninput="updateProp('tagHeight', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagHeight">${l.tagHeight || 60}px</span></div><div class="slider-row"><span class="s-label">圆角</span><input type="range" min="0" max="150" step="1" value="${l.borderRadius !== undefined && l.borderRadius !== null ? l.borderRadius : Math.round((l.tagHeight || 60)/2)}" oninput="updateProp('borderRadius', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-borderRadius">${l.borderRadius !== undefined && l.borderRadius !== null ? l.borderRadius : Math.round((l.tagHeight || 60)/2)}px</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-50" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">内边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingX ?? 36}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 36}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="30" step="1" value="${l.shadowThickness||12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness||12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 1)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 1)*100)}%</span></div>`;
         } 
         else if(l.type === 'discountTag') {
             normalizeDiscountTagLayer(l);
@@ -6666,7 +6793,7 @@
             const subtitleToggleBtn = `<button type="button" onclick="toggleDiscountSubtitle()" style="padding:8px 16px; font-size:12px; font-weight:600; border-radius:8px; border:1px solid var(--border); background:${hasSubtitle ? 'var(--primary)' : '#f3f4f6'}; color:${hasSubtitle ? '#fff' : '#6b7280'}; cursor:pointer; width:100%; margin-bottom:${hasSubtitle ? '8px' : '0'}; transition:all .2s;">${hasSubtitle ? '✕ 移除副标题' : '+ 添加副标题'}</button>`;
             const subPos = l.subtitlePosition || 'bottom';
             const subtitleControls = hasSubtitle ? `<label class="label">副标题文字</label><input type="text" class="input-text" value="${escapeHtml(l.subtitle || '')}" oninput="updateProp('subtitle', this.value)" onchange="saveHistory()"><div style="display:flex; gap:6px; margin-bottom:10px;"><button type="button" onclick="updateProp('subtitlePosition','top');saveHistory();renderProperties();" style="flex:1;padding:6px 10px;font-size:12px;font-weight:600;border-radius:7px;border:1px solid var(--border);background:${subPos==='top'?'var(--primary)':'#f3f4f6'};color:${subPos==='top'?'#fff':'#6b7280'};cursor:pointer;">↑ 顶部</button><button type="button" onclick="updateProp('subtitlePosition','bottom');saveHistory();renderProperties();" style="flex:1;padding:6px 10px;font-size:12px;font-weight:600;border-radius:7px;border:1px solid var(--border);background:${subPos==='bottom'?'var(--primary)':'#f3f4f6'};color:${subPos==='bottom'?'#fff':'#6b7280'};cursor:pointer;">↓ 底部</button></div><div class="slider-row"><span class="s-label">位置偏移</span><input type="range" min="-80" max="80" step="1" value="${l.subtitleOffsetY ?? 8}" oninput="updateProp('subtitleOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-subtitleOffsetY">${l.subtitleOffsetY ?? 8}px</span></div><div class="slider-row"><span class="s-label">字体大小</span><input type="range" min="8" max="48" step="1" value="${l.subtitleFontSize ?? 14}" oninput="updateProp('subtitleFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-subtitleFontSize">${l.subtitleFontSize ?? 14}px</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('subtitleFontWeight',parseInt(this.value));saveHistory();"><option value="300" ${(l.subtitleFontWeight||700)===300?'selected':''}>细体 (300)</option><option value="400" ${(l.subtitleFontWeight||700)===400?'selected':''}>常规 (400)</option><option value="700" ${(l.subtitleFontWeight||700)===700?'selected':''}>加粗 (700)</option><option value="900" ${(l.subtitleFontWeight||700)===900?'selected':''}>黑体 (900)</option></select></div><div></div></div><div class="slider-row"><span class="s-label">白边粗细</span><input type="range" min="0" max="6" step="0.5" value="${l.subtitleStrokeWidth ?? 2}" oninput="updateProp('subtitleStrokeWidth', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-subtitleStrokeWidth">${l.subtitleStrokeWidth ?? 2}px</span></div>` : '';
-            area.innerHTML = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;"><span style="font-size:11px; font-weight:700; color:#6b7280;">语言格式</span><button type="button" onclick="toggleDiscountLang()" style="display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#f3f4f6; padding:0; cursor:pointer;"><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:7px 0 0 7px; transition:all .15s; ${!isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">EN</span><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:0 7px 7px 0; transition:all .15s; ${isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">AR</span></button></div><label class="label">主文字</label><input type="text" class="input-text" value="${escapeHtml(l.mainText)}" oninput="updateProp('mainText', this.value)" onchange="saveHistory()"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><div><label class="label">右上角</label><input type="text" class="input-text" value="${escapeHtml(l.topText)}" oninput="updateProp('topText', this.value)" onchange="saveHistory()"></div><div><label class="label">右下角</label><input type="text" class="input-text" value="${escapeHtml(l.bottomText)}" oninput="updateProp('bottomText', this.value)" onchange="saveHistory()"></div></div>${subtitleToggleBtn}${subtitleControls}<label class="label">字体选择</label><select class="input-select" onchange="updateProp('font', this.value); saveHistory();">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();"><option value="300" ${(l.fontWeight||900)===300?'selected':''}>细体 (300)</option><option value="400" ${(l.fontWeight||900)===400?'selected':''}>常规 (400)</option><option value="700" ${(l.fontWeight||900)===700?'selected':''}>加粗 (700)</option><option value="900" ${(l.fontWeight||900)===900?'selected':''}>黑体 (900)</option></select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">主字大小</span><input type="range" min="48" max="150" step="1" value="${l.mainFontSize ?? 96}" oninput="updateProp('mainFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-mainFontSize">${l.mainFontSize ?? 96}px</span></div><div class="slider-row"><span class="s-label">%大小</span><input type="range" min="20" max="90" step="1" value="${l.topFontSize ?? l.sideFontSize ?? 52}" oninput="updateProp('topFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-topFontSize">${l.topFontSize ?? l.sideFontSize ?? 52}px</span></div><div class="slider-row"><span class="s-label">Off大小</span><input type="range" min="16" max="80" step="1" value="${l.bottomFontSize ?? l.sideFontSize ?? 42}" oninput="updateProp('bottomFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-bottomFontSize">${l.bottomFontSize ?? l.sideFontSize ?? 42}px</span></div><div class="slider-row"><span class="s-label">左右间距</span><input type="range" min="-8" max="32" step="1" value="${l.sideGap ?? 8}" oninput="updateProp('sideGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideGap">${l.sideGap ?? 8}px</span></div><div class="slider-row"><span class="s-label">%/Off间距</span><input type="range" min="-18" max="48" step="1" value="${l.sideLineGap ?? -2}" oninput="updateProp('sideLineGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideLineGap">${l.sideLineGap ?? -2}px</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="18" step="0.5" value="${l.letterSpacing ?? -3}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? -3}px</span></div><div class="slider-row"><span class="s-label">左右边距</span><input type="range" min="8" max="90" step="1" value="${l.tagPaddingX ?? 34}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 34}px</span></div><div class="slider-row"><span class="s-label">上下边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingY ?? 15}" oninput="updateProp('tagPaddingY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingY">${l.tagPaddingY ?? 15}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="36" step="1" value="${l.shadowThickness ?? 12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness ?? 12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 0.45)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 0.45)*100)}%</span></div>`;
+            area.innerHTML = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;"><span style="font-size:11px; font-weight:700; color:#6b7280;">语言格式</span><button type="button" onclick="toggleDiscountLang()" style="display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#f3f4f6; padding:0; cursor:pointer;"><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:7px 0 0 7px; transition:all .15s; ${!isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">EN</span><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:0 7px 7px 0; transition:all .15s; ${isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">AR</span></button></div><label class="label">主文字</label><input type="text" class="input-text" value="${escapeHtml(l.mainText)}" oninput="updateProp('mainText', this.value)" onchange="saveHistory()"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><div><label class="label">右上角</label><input type="text" class="input-text" value="${escapeHtml(l.topText)}" oninput="updateProp('topText', this.value)" onchange="saveHistory()"></div><div><label class="label">右下角</label><input type="text" class="input-text" value="${escapeHtml(l.bottomText)}" oninput="updateProp('bottomText', this.value)" onchange="saveHistory()"></div></div>${subtitleToggleBtn}${subtitleControls}<label class="label">字体选择</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();">${selectedWeightInfo.html}</select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">主字大小</span><input type="range" min="48" max="150" step="1" value="${l.mainFontSize ?? 96}" oninput="updateProp('mainFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-mainFontSize">${l.mainFontSize ?? 96}px</span></div><div class="slider-row"><span class="s-label">%大小</span><input type="range" min="20" max="90" step="1" value="${l.topFontSize ?? l.sideFontSize ?? 52}" oninput="updateProp('topFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-topFontSize">${l.topFontSize ?? l.sideFontSize ?? 52}px</span></div><div class="slider-row"><span class="s-label">Off大小</span><input type="range" min="16" max="80" step="1" value="${l.bottomFontSize ?? l.sideFontSize ?? 42}" oninput="updateProp('bottomFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-bottomFontSize">${l.bottomFontSize ?? l.sideFontSize ?? 42}px</span></div><div class="slider-row"><span class="s-label">左右间距</span><input type="range" min="-8" max="32" step="1" value="${l.sideGap ?? 8}" oninput="updateProp('sideGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideGap">${l.sideGap ?? 8}px</span></div><div class="slider-row"><span class="s-label">%/Off间距</span><input type="range" min="-18" max="48" step="1" value="${l.sideLineGap ?? -2}" oninput="updateProp('sideLineGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideLineGap">${l.sideLineGap ?? -2}px</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="18" step="0.5" value="${l.letterSpacing ?? -3}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? -3}px</span></div><div class="slider-row"><span class="s-label">左右边距</span><input type="range" min="8" max="90" step="1" value="${l.tagPaddingX ?? 34}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 34}px</span></div><div class="slider-row"><span class="s-label">上下边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingY ?? 15}" oninput="updateProp('tagPaddingY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingY">${l.tagPaddingY ?? 15}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="36" step="1" value="${l.shadowThickness ?? 12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness ?? 12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 0.45)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 0.45)*100)}%</span></div>`;
         }
         else if(l.type === 'arc') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; arcColorPresets.forEach(p => { const isActive = l.cIn === p.cIn && l.cOut === p.cOut; presetHtml += `<div onclick="handleColorPresetClick(event,'arc','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.cIn}; border: 4px solid ${p.cOut}; box-shadow: 0 0 0 ${isActive ? '2px' : '0'} var(--text-main); cursor:pointer;" title="双击编辑并同步"></div>`; });
@@ -7101,7 +7228,8 @@
                         var fs = Math.max(4, (l.fontSize || 32) * scale);
                         var previewText = String(l.text ?? l.content ?? '');
                         var previewDirection = getEffectiveTextDirection(l);
-                        ctx.font = (l.fontWeight || 'normal') + ' ' + fs + 'px ' + (l.font || 'sans-serif');
+                        var previewWeight = l.fontWeight !== undefined ? resolveFontWeight(l.font, l.fontWeight) : 'normal';
+                        ctx.font = previewWeight + ' ' + fs + 'px ' + (l.font || 'sans-serif');
                         ctx.fillStyle = l.textCol || l.color || '#000000';
                         ctx.direction = previewDirection;
                         ctx.textAlign = getEffectiveTextAlign(l, previewDirection);
@@ -7113,7 +7241,8 @@
                         var tfs = Math.max(4, (l.fontSize || 24) * scale);
                         var tagText = String(l.text ?? l.content ?? '');
                         var tagDirection = detectTextDirection(tagText);
-                        ctx.font = (l.fontWeight || 'bold') + ' ' + tfs + 'px ' + (l.font || 'sans-serif');
+                        var tagWeight = l.fontWeight !== undefined ? resolveFontWeight(l.font, l.fontWeight) : 'bold';
+                        ctx.font = tagWeight + ' ' + tfs + 'px ' + (l.font || 'sans-serif');
                         ctx.direction = tagDirection;
                         var tw = ctx.measureText(tagText).width + 12 * scale;
                         var th = tfs * 1.6;
@@ -7133,13 +7262,32 @@
         return drawLayers().then(function() { return canvas.toDataURL('image/png'); });
     }
 
+    let lastNativePreviewCaptureError = '';
+    function isUsablePreviewDataUrl(value) {
+        // PNG 对小尺寸、纯色组合的压缩率非常高，Data URL 小于 1500
+        // 字符仍可能是完整图片。这里只校验数据协议和最小载荷，
+        // 因为原生捕获路径已在 canvas.toBlob 阶段校验过编码结果。
+        return typeof value === 'string'
+            && /^data:image\/(?:png|jpe?g|webp|svg\+xml)[;,]/i.test(value)
+            && value.length > 64;
+    }
+    function nativePreviewFailureMessage(subject) {
+        return lastNativePreviewCaptureError
+            ? subject + '失败：' + lastNativePreviewCaptureError
+            : '未生成' + subject + '，已取消保存；请重新保存并选择当前标签页';
+    }
     async function capturePreviewForSync(options = {}) {
         // 保存模板的预览图与 PNG 导出统一走原生标签页捕获，避免 html2canvas 重新
         // 排版任意字体（尤其是 HT 的空格和问号）。
         if (options.nativeCapture) {
-            try { return await (options.capturePromise || captureNativePreviewDataUrl()); }
+            try {
+                const result = await (options.capturePromise || captureNativePreviewDataUrl());
+                lastNativePreviewCaptureError = '';
+                return result;
+            }
             catch (error) {
-                showToast('❌ 原生预览捕获失败：' + (error?.message || '请重新保存并选择当前标签页'), true);
+                lastNativePreviewCaptureError = error?.message || '请重新保存并选择当前标签页';
+                console.warn('原生预览捕获失败：', error);
                 return null;
             }
         }
@@ -7285,7 +7433,7 @@
             // 截取当前画布作为预览图
             var previewDataUrl = await capturePreviewForSync();
             // 降级：渲染失败则用文字占位图
-            if (!previewDataUrl || previewDataUrl.length < 1500) {
+            if (!isUsablePreviewDataUrl(previewDataUrl)) {
                 var labelMap = { layout: '版式', pack: '套组', tagcombo: '标签组', logo: 'Logo' };
                 previewDataUrl = generatePlaceholderPreview(preset.name, labelMap[templateType] || templateType);
             }
@@ -7606,7 +7754,7 @@
         try {
             showSyncStatus('uploading');
             var previewDataUrl = await capturePreviewForSync();
-            if (!previewDataUrl || previewDataUrl.length < 1500) {
+            if (!isUsablePreviewDataUrl(previewDataUrl)) {
                 previewDataUrl = generatePlaceholderPreview(preset.name, '标签组');
             }
             notifyParent({ type: 'vf:save-template', templateType: 'tagcombo', name: preset.name, data: { elements: preset.elements }, previewDataUrl: previewDataUrl || '' });
@@ -7618,7 +7766,7 @@
         try {
             showSyncStatus('uploading');
             var previewDataUrl = (logo.src && logo.src.startsWith('data:')) ? logo.src : '';
-            if (!previewDataUrl || previewDataUrl.length < 1500) {
+            if (!isUsablePreviewDataUrl(previewDataUrl)) {
                 previewDataUrl = generatePlaceholderPreview(logo.name, 'Logo');
             }
             notifyParent({ type: 'vf:save-template', templateType: 'logo', name: logo.name, data: { src: logo.src }, previewDataUrl: previewDataUrl });
@@ -8551,35 +8699,123 @@
         viewport.appendChild(canvas);
         return viewport;
     }
-    async function captureGroupPreview(elements) {
-        // 按组合实际大小裁剪预览，只显示组合内的图层
-        var bounds = getGroupBounds(elements);
-        if (!bounds) return null;
-        var padding = 48;
-        var stageW = Math.max(120, bounds.w + padding * 2);
-        var stageH = Math.max(80, bounds.h + padding * 2);
-        var maxDim = 480;
-        var scale = Math.min(1, maxDim / Math.max(stageW, stageH));
-        // 创建离屏容器
-        var container = document.createElement('div');
-        container.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + stageW + 'px;height:' + stageH + 'px;overflow:hidden;background:#FFFFFF;z-index:-1;';
-        document.body.appendChild(container);
-        try {
-            elements.slice().sort(function(a, b) { return (a.zIndex || 0) - (b.zIndex || 0); }).forEach(function(layer) {
-                var cloned = cloneData(layer);
-                cloned.x = (Number(cloned.x) || 0) - bounds.x1 + padding;
-                cloned.y = (Number(cloned.y) || 0) - bounds.y1 + padding;
-                container.appendChild(createLayerElement(cloned, { active: false, interactive: false, idPrefix: 'gprev_' + genId('gp') + '_' }));
+    function getNativeGroupCaptureBounds(group) {
+        const boxes = (group || []).map(function(layer) {
+            const box = getLayerBounds(layer);
+            const angle = (Number(layer.rotation) || 0) * Math.PI / 180;
+            const rotatedW = Math.abs(box.w * Math.cos(angle)) + Math.abs(box.h * Math.sin(angle));
+            const rotatedH = Math.abs(box.w * Math.sin(angle)) + Math.abs(box.h * Math.cos(angle));
+            const shadow = ['tag', 'discountTag', 'tagPill'].includes(layer?.type)
+                ? Math.max(0, Number(layer.shadowThickness) || 0)
+                : 0;
+            const stroke = layer?.type === 'text' ? Math.max(0, Number(layer.textStrokeWidth) || 0) : 0;
+            const effectBleed = Math.max(shadow, stroke);
+            return {
+                x1: box.cx - rotatedW / 2 - effectBleed,
+                y1: box.cy - rotatedH / 2 - effectBleed,
+                x2: box.cx + rotatedW / 2 + effectBleed,
+                y2: box.cy + rotatedH / 2 + effectBleed
+            };
+        });
+        if (!boxes.length) return null;
+        const x1 = Math.min(...boxes.map(function(box) { return box.x1; }));
+        const y1 = Math.min(...boxes.map(function(box) { return box.y1; }));
+        const x2 = Math.max(...boxes.map(function(box) { return box.x2; }));
+        const y2 = Math.max(...boxes.map(function(box) { return box.y2; }));
+        return { x1: x1, y1: y1, x2: x2, y2: y2, w: x2 - x1, h: y2 - y1 };
+    }
+    function measureRenderedGroupBounds(group) {
+        const canvas = document.getElementById('canvas-wrapper');
+        const canvasRect = canvas?.getBoundingClientRect();
+        const logicalSize = SIZES[currentRatio];
+        if (!canvasRect || !logicalSize || canvasRect.width < 1 || canvasRect.height < 1) return null;
+        const scaleX = canvasRect.width / Math.max(1, logicalSize.w);
+        const scaleY = canvasRect.height / Math.max(1, logicalSize.h);
+        const rects = [];
+        (group || []).forEach(function(layer) {
+            const root = document.getElementById(layer?.id);
+            if (!root) return;
+            [root, ...root.querySelectorAll('*')].forEach(function(node) {
+                if (!(node instanceof HTMLElement || node instanceof SVGElement)) return;
+                const style = getComputedStyle(node);
+                if (style.display === 'none' || style.visibility === 'hidden') return;
+                const rect = node.getBoundingClientRect();
+                if (rect.width > 0 || rect.height > 0) rects.push(rect);
             });
-            await new Promise(function(r) { setTimeout(r, 200); });
-            if (typeof html2canvas !== 'function') return null;
-            var cvs = await html2canvas(container, { backgroundColor: '#FFFFFF', scale: scale, useCORS: true, allowTaint: true, logging: false });
-            return cvs.toDataURL('image/png');
-        } catch(e) {
-            return null;
-        } finally {
-            if (container.parentNode) container.parentNode.removeChild(container);
-        }
+        });
+        if (!rects.length) return null;
+        // DOM 尺寸已包含真实字体宽度、字距、旋转、缩放、标签投影
+        // 和折扣标签副标题。换算回画板逻辑坐标后再留出效果安全边距，
+        // 避免字体抗锯齿、文字描边的半像素超出 DOM 几何框。
+        const safety = 12;
+        const x1 = Math.floor((Math.min(...rects.map(function(rect) { return rect.left; })) - canvasRect.left) / scaleX - safety);
+        const y1 = Math.floor((Math.min(...rects.map(function(rect) { return rect.top; })) - canvasRect.top) / scaleY - safety);
+        const x2 = Math.ceil((Math.max(...rects.map(function(rect) { return rect.right; })) - canvasRect.left) / scaleX + safety);
+        const y2 = Math.ceil((Math.max(...rects.map(function(rect) { return rect.bottom; })) - canvasRect.top) / scaleY + safety);
+        if (![x1, y1, x2, y2].every(Number.isFinite) || x2 <= x1 || y2 <= y1) return null;
+        return { x1: x1, y1: y1, x2: x2, y2: y2, w: x2 - x1, h: y2 - y1 };
+    }
+    function captureNativeGroupPreviewDataUrl(elements) {
+        const group = cloneData(elements || []);
+        // 优先读取当前网页中已完成排版的真实节点边界。只在 DOM
+        // 节点不可用时才回退到图层数据估算，避免特殊字体宽度被低估。
+        const bounds = measureRenderedGroupBounds(group) || getNativeGroupCaptureBounds(group);
+        if (!bounds) return Promise.reject(new Error('没有可截取的组合内容'));
+
+        // 原生截屏只能裁当前画板。截图前将编辑器切换到一个不写入
+        // artboards 的临时空白画板：画板尺寸等于组合边界，图层只做平移。
+        // 无论用户取消共享、截图失败还是转码失败，finally 都会恢复原画板。
+        const edgeBleed = 2;
+        const temporaryRatio = 'vf-group-capture-' + genId('ratio');
+        const temporarySize = {
+            w: Math.max(1, Math.ceil(bounds.w + edgeBleed * 2)),
+            h: Math.max(1, Math.ceil(bounds.h + edgeBleed * 2))
+        };
+        const originalState = {
+            currentRatio: currentRatio,
+            layers: cloneData(layers),
+            activeLayerIds: [...activeLayerIds],
+            layerSelectionAnchorId: layerSelectionAnchorId,
+            overviewMode: overviewMode
+        };
+        const safeGuide = document.getElementById('safe-guide');
+        const oldGuideDisplay = safeGuide ? safeGuide.style.display : '';
+        const wasCaptureMode = document.body.classList.contains('vf-native-capture-mode');
+
+        SIZES[temporaryRatio] = temporarySize;
+        currentRatio = temporaryRatio;
+        layers = group.map(function(layer) {
+            const cloned = cloneData(layer);
+            cloned.x = (Number(cloned.x) || 0) - bounds.x1 + edgeBleed;
+            cloned.y = (Number(cloned.y) || 0) - bounds.y1 + edgeBleed;
+            return cloned;
+        });
+        activeLayerIds = [];
+        layerSelectionAnchorId = null;
+        overviewMode = false;
+        document.getElementById('left-pane')?.classList.remove('overview-mode');
+        document.body.classList.add('vf-native-capture-mode');
+        resizeCanvas(); renderCanvas(); renderLayersList(); renderProperties();
+        if (safeGuide) safeGuide.style.display = 'none';
+
+        // 这里不能在 captureNativeArtboardBlob 前 await：getDisplayMedia 必须仍处在
+        // 命名对话框“确定”按钮的用户手势调用栈中。
+        const capturePromise = captureNativeArtboardBlob(getTemplatePreviewCaptureScale());
+        return Promise.resolve(capturePromise)
+            .then(blobToDataUrl)
+            .finally(function() {
+                delete SIZES[temporaryRatio];
+                currentRatio = originalState.currentRatio;
+                layers = originalState.layers;
+                activeLayerIds = originalState.activeLayerIds;
+                layerSelectionAnchorId = originalState.layerSelectionAnchorId;
+                overviewMode = originalState.overviewMode;
+                if (!wasCaptureMode) document.body.classList.remove('vf-native-capture-mode');
+                if (safeGuide) safeGuide.style.display = oldGuideDisplay;
+                document.getElementById('left-pane')?.classList.toggle('overview-mode', overviewMode);
+                syncRatioNav();
+                resizeCanvas(); renderCanvas(); renderLayersList(); renderProperties(); syncSafeGuide();
+            });
     }
     function createPackHoverPreview(pack) {
         const wrap = document.createElement('div');
@@ -8713,7 +8949,8 @@
             return saveLinkedArtboardSet();
         }
         if(layers.length === 0) return showToast('画板为空', true);
-        const saveRequest = await askTextAndCaptureNativePreview('命名版式', `版式 ${formatPresetTime()}`); if(!saveRequest) return;
+        const requiresNativePreview = hasTextOrTagLayer(layers);
+        const saveRequest = await askTextForPreview('命名版式', `版式 ${formatPresetTime()}`, requiresNativePreview); if(!saveRequest) return;
         const name = saveRequest.name;
         var elements = JSON.parse(JSON.stringify(layers));
         var tempId = genId('p');
@@ -8722,13 +8959,12 @@
         renderAssetLibrary();
         showToast('正在保存到素材库...');
         // 截取预览图，上传到 Supabase
-        var requiresNativePreview = true;
-        var previewDataUrl = await capturePreviewForSync({ nativeCapture: true, capturePromise: saveRequest.capturePromise });
-        if (!previewDataUrl || previewDataUrl.length < 1500) {
+        var previewDataUrl = await capturePreviewForSync({ nativeCapture: requiresNativePreview, capturePromise: saveRequest.capturePromise });
+        if (!isUsablePreviewDataUrl(previewDataUrl)) {
             if (requiresNativePreview) {
                 presetLibrary = presetLibrary.filter(function(item) { return item.id !== tempId; });
                 renderAssetLibrary();
-                showToast('未生成原生预览图，已取消保存；请重新保存并选择当前标签页', true);
+                showToast(nativePreviewFailureMessage('版式的原生预览图'), true);
                 return;
             }
             previewDataUrl = generatePlaceholderPreview(name, '版式');
@@ -8757,7 +8993,8 @@
         const primaryId = boardIds[0];
         // 套组的封面始终来自第一张画板，确保素材库预览有稳定的主视觉。
         if (primaryId !== currentArtboardId) loadArtboard(primaryId, false);
-        const saveRequest = await askTextAndCaptureNativePreview('命名关联画板模板', `关联模板 ${formatPresetTime()}`);
+        const requiresNativePreview = boardIds.some(function(id) { return hasTextOrTagLayer(artboards[id]?.layers); });
+        const saveRequest = await askTextForPreview('命名关联画板模板', `关联模板 ${formatPresetTime()}`, requiresNativePreview);
         if (!saveRequest) {
             if (originalId !== currentArtboardId) loadArtboard(originalId, false);
             return;
@@ -8783,12 +9020,15 @@
         const pack = { id:tempId, kind:'pack', linked:true, linkedArtboardIds:cloneData(boardIds), linkedArtboardGroupId:linkedArtboardGroupId, artboards:packArtboards, name:name, _pending:true };
         presetLibrary.push(pack); activeTemplatePackId = pack.id;
         renderAssetLibrary(); showToast('正在保存关联模板到素材库...');
-        const previewDataUrl = await capturePreviewForSync({ nativeCapture:true, capturePromise:saveRequest.capturePromise });
-        if (!previewDataUrl || previewDataUrl.length < 1500) {
-            presetLibrary = presetLibrary.filter(function(item) { return item.id !== tempId; });
-            renderAssetLibrary();
-            if (originalId !== currentArtboardId) loadArtboard(originalId, false);
-            return showToast('未生成原生预览图，已取消保存；请重新保存并选择当前标签页', true);
+        let previewDataUrl = await capturePreviewForSync({ nativeCapture:requiresNativePreview, capturePromise:saveRequest.capturePromise });
+        if (!isUsablePreviewDataUrl(previewDataUrl)) {
+            if (requiresNativePreview) {
+                presetLibrary = presetLibrary.filter(function(item) { return item.id !== tempId; });
+                renderAssetLibrary();
+                if (originalId !== currentArtboardId) loadArtboard(originalId, false);
+                return showToast(nativePreviewFailureMessage('关联画板的原生预览图'), true);
+            }
+            previewDataUrl = generatePlaceholderPreview(name, '套组');
         }
         pack.previewUrl = previewDataUrl;
         renderAssetLibrary();
@@ -8799,7 +9039,10 @@
         saveCurrentArtboardState();
         const hasAnyLayer = getFixedArtboardPresets().some(preset => (artboards[preset.id]?.layers || []).length > 0);
         if(!hasAnyLayer) return showToast('三块画板都是空的，无法保存套组', true);
-        const saveRequest = await askTextAndCaptureNativePreview('命名三画板套组', `套组 ${formatPresetTime()}`); if(!saveRequest) return;
+        const requiresNativePreview = getFixedArtboardPresets().some(function(preset) {
+            return hasTextOrTagLayer(artboards[preset.id]?.layers);
+        });
+        const saveRequest = await askTextForPreview('命名三画板套组', `套组 ${formatPresetTime()}`, requiresNativePreview); if(!saveRequest) return;
         const name = saveRequest.name;
         const packArtboards = {};
         getFixedArtboardPresets().forEach(preset => {
@@ -8815,13 +9058,12 @@
         activeTemplatePackId = pack.id;
         renderAssetLibrary();
         showToast('正在保存到素材库...');
-        var requiresNativePreview = true;
-        var previewDataUrl = await capturePreviewForSync({ nativeCapture: true, capturePromise: saveRequest.capturePromise });
-        if (!previewDataUrl || previewDataUrl.length < 1500) {
+        var previewDataUrl = await capturePreviewForSync({ nativeCapture: requiresNativePreview, capturePromise: saveRequest.capturePromise });
+        if (!isUsablePreviewDataUrl(previewDataUrl)) {
             if (requiresNativePreview) {
                 presetLibrary = presetLibrary.filter(function(item) { return item.id !== tempId; });
                 renderAssetLibrary();
-                showToast('未生成原生预览图，已取消保存；请重新保存并选择当前标签页', true);
+                showToast(nativePreviewFailureMessage('套组的原生预览图'), true);
                 return;
             }
             previewDataUrl = generatePlaceholderPreview(name, '套组');
@@ -8853,16 +9095,23 @@
     async function saveTagComboPreset() {
         const tags = getSelectedTagLayers();
         if(tags.length === 0) return showToast('请先选择一个或多个标签图层', true);
-        const name = await askText('命名标签组合', `标签组合 ${formatPresetTime()}`); if(!name) return;
+        const elements = cloneData(tags);
+        const saveRequest = await askTextAndCaptureNativePreview(
+            '命名标签组合',
+            `标签组合 ${formatPresetTime()}`,
+            function() { return captureNativeGroupPreviewDataUrl(elements); }
+        );
+        if(!saveRequest) return;
+        const name = saveRequest.name;
+        const previewDataUrl = await capturePreviewForSync({ nativeCapture: true, capturePromise: saveRequest.capturePromise });
+        if (!isUsablePreviewDataUrl(previewDataUrl)) {
+            return showToast(nativePreviewFailureMessage('标签组合的原生预览图'), true);
+        }
         var tempId = genId('tp');
-        var preset = { id: tempId, name, elements: JSON.parse(JSON.stringify(tags)), _pending: true };
+        var preset = { id: tempId, name, elements: elements, _pending: true, previewUrl: previewDataUrl };
         tagPresetLibrary.push(preset);
         renderAssetLibrary();
         showToast('正在保存到素材库...');
-        var previewDataUrl = await capturePreviewForSync();
-        if (!previewDataUrl || previewDataUrl.length < 1500) previewDataUrl = generatePlaceholderPreview(name, '标签组');
-        preset.previewUrl = previewDataUrl;
-        renderAssetLibrary();
         notifyParent({ type: 'vf:save-template', templateType: 'tagcombo', name: name, data: { elements: preset.elements }, previewDataUrl: previewDataUrl || '', tempId: tempId });
     }
     function applyTagComboPreset(id) {
@@ -8913,21 +9162,23 @@
     async function saveGroupCombo() {
         var selected = activeLayerIds.map(function(id) { return layers.find(function(l) { return l.id === id; }); }).filter(Boolean);
         if (selected.length < 2) return showToast('请至少选择两个图层', true);
-        var name = await askText('命名组合', '组合 ' + formatPresetTime());
-        if (!name) return;
-        var elements = JSON.parse(JSON.stringify(selected));
+        var elements = cloneData(selected);
+        var saveRequest = await askTextAndCaptureNativePreview(
+            '命名组合',
+            '组合 ' + formatPresetTime(),
+            function() { return captureNativeGroupPreviewDataUrl(elements); }
+        );
+        if (!saveRequest) return;
+        var name = saveRequest.name;
+        var previewDataUrl = await capturePreviewForSync({ nativeCapture: true, capturePromise: saveRequest.capturePromise });
+        if (!isUsablePreviewDataUrl(previewDataUrl)) {
+            return showToast(nativePreviewFailureMessage('组合的原生预览图'), true);
+        }
         var tempId = genId('gp');
-        var preset = { id: tempId, name: name, elements: elements, _pending: true, subTag: '组合' };
+        var preset = { id: tempId, name: name, elements: elements, _pending: true, subTag: '组合', previewUrl: previewDataUrl };
         groupPresets.push(preset);
         renderAssetLibrary();
         showToast('正在保存到素材库...');
-        // 按组合实际范围裁剪预览图
-        var previewDataUrl = await captureGroupPreview(elements);
-        if (!previewDataUrl || previewDataUrl.length < 1500) {
-            previewDataUrl = generatePlaceholderPreview(name, '组合');
-        }
-        preset.previewUrl = previewDataUrl;
-        renderAssetLibrary();
         notifyParent({ type: 'vf:save-template', templateType: 'groupcombo', name: name, data: { elements: elements }, previewDataUrl: previewDataUrl || '', tempId: tempId, subTag: '组合' });
     }
     function applyGroupCombo(id) {
@@ -9593,7 +9844,7 @@
                     }
                 }
                 var preview = await renderPresetPreview(previewElements, previewRatio);
-                if (!preview || preview.length < 1500) preview = generatePlaceholderPreview(lp.name || '导入版式', labelMap[pType] || pType);
+                if (!isUsablePreviewDataUrl(preview)) preview = generatePlaceholderPreview(lp.name || '导入版式', labelMap[pType] || pType);
                 notifyParent({ type: 'vf:save-template', templateType: pType, name: lp.name || '导入版式', data: { size: lp.size || '', elements: lp.elements || [], artboards: lp.artboards }, previewDataUrl: preview, tempId: genId('p') });
             }
             for (var j = 0; j < tagCombos.length; j++) {
@@ -10298,7 +10549,7 @@
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520">'
             + '<rect width="960" height="520" fill="#ffffff"/>'
             + '<rect x="28" y="28" width="904" height="464" rx="22" fill="#f7f7f9"/>'
-            + '<text x="76" y="275" fill="#17191d" font-family="Arial, sans-serif" font-size="58" font-weight="' + (Number(weight) || 400) + '">' + label + '</text>'
+            + '<text x="76" y="275" fill="#17191d" font-family="sans-serif" font-size="58" font-weight="' + (Number(weight) || 400) + '">' + label + '</text>'
             + '</svg>';
         return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
     }
@@ -10989,6 +11240,13 @@
             return layer?.type === 'text' && getCustomFontAssetsForCss(layer.font, layer.fontWeight).length > 0;
         });
     }
+    function hasTextOrTagLayer(sourceLayers = layers) {
+        // 普通文字与标签都依赖浏览器真实的 DOM/CSS 排版。即使没有 HT
+        // 字体，html2canvas 也可能改变标签内容的字距、投影和组合尺寸。
+        return (sourceLayers || []).some(function(layer) {
+            return ['text', 'tag', 'discountTag', 'tagPill'].includes(layer?.type);
+        });
+    }
     function getCurrentExportSize(scale) {
         const preset = getArtboardPreset(currentArtboardId);
         const currentSize = SIZES[currentRatio] || preset;
@@ -11541,9 +11799,9 @@
     async function exportPNG(scale) {
         scale = scale || 3;
         if(layers.length === 0) return showToast('画板为空，无法导出', true);
-        const requiresNativeCapture = hasHTHeliopolisTextLayer();
-        // 只要画板使用上传的 HT 字体，就不能再走 html2canvas 的普通 PNG 路径。
-        // 从原有倍率菜单点击也会直接进入当前标签页捕获，避免用户误选旧回退导出。
+        const requiresNativeCapture = hasTextOrTagLayer();
+        // 只要画板包含普通文字或标签组件，就保留浏览器的真实 DOM/CSS
+        // 排版并改用当前标签页截取；纯图片/图形画板仍使用常规高清导出。
         if (requiresNativeCapture) {
             exportNativeCapturePNG(scale);
             return;
@@ -11587,8 +11845,8 @@
     async function exportJPG(scale) {
         scale = scale || 3;
         if (layers.length === 0) return showToast('画板为空，无法导出', true);
-        const requiresNativeCapture = hasHTHeliopolisTextLayer();
-        // HT 字体走原生截图 + canvas 转 JPG，避免 html2canvas 文字错乱
+        const requiresNativeCapture = hasTextOrTagLayer();
+        // 文字/标签走原生截图 + canvas 转 JPG，避免 html2canvas 重新排版。
         if (requiresNativeCapture) {
             const oldActive2 = [...activeLayerIds];
             const safeGuide2 = document.getElementById('safe-guide');

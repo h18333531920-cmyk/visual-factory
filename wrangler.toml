@@ -1,5 +1,5 @@
 name = "visual-factory"
-compatibility_date = "2026-06-04"
+compatibility_date = "2026-05-03"
 pages_build_output_dir = "./dist"
 send_metrics = false
 
