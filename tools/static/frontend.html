@@ -10794,14 +10794,19 @@
                 headers: { 'Authorization': 'Bearer ' + jimengSessionId, 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             });
-            updateAIProgress('即梦正在生成图片，请耐心等待…', 55);
             if(!res.ok) {
                 var errText = '';
                 try { var ej = await res.json(); errText = ej.message || ej.errmsg || ''; } catch(_) {}
                 throw new Error('即梦 API 返回 HTTP ' + res.status + (errText ? '：' + errText : ''));
             }
             var payload = await res.json();
-            var items = payload && payload.data ? payload.data : [];
+            var items = [];
+            if(payload && payload.pending && payload.taskId) {
+                updateAIProgress('任务已提交，即梦正在生成图片…', 55);
+                items = await pollJimengTask(payload.taskId);
+            } else {
+                items = payload && payload.data ? payload.data : [];
+            }
             var images = [];
             for(var j = 0; j < items.length; j++) {
                 var item = items[j];
@@ -10839,6 +10844,31 @@
         }
     }
     
+    async function pollJimengTask(taskId) {
+        if(!taskId) throw new Error('缺少即梦任务编号');
+        const maxAttempts = 120; // 约 5 分钟
+        for(let i = 0; i < maxAttempts; i += 1) {
+            await new Promise(resolve => setTimeout(resolve, i < 3 ? 1800 : 3000));
+            updateAIProgress('即梦正在生成图片，请耐心等待…', Math.min(88, 52 + Math.round((i / maxAttempts) * 34)));
+            const res = await fetch('/api/jimeng?task_id=' + encodeURIComponent(taskId), {
+                headers: { 'Authorization': 'Bearer ' + jimengSessionId }
+            });
+            if(!res.ok) {
+                let msg = '';
+                try { const j = await res.json(); msg = j.message || j.errmsg || ''; } catch(_) {}
+                throw new Error('即梦查询失败（HTTP ' + res.status + (msg ? '：' + msg : '') + ')');
+            }
+            const payload = await res.json();
+            if(payload && payload.pending === false && payload.data && payload.data.length) {
+                return payload.data;
+            }
+            if(payload && payload.pending === false && payload.message) {
+                throw new Error(payload.message);
+            }
+        }
+        throw new Error('即梦生成时间较长，请稍后重试。');
+    }
+
     // 真扩图：把原图和需要扩展的方向比例交给后端 outpainting 接口。
     async function outpaintAIBG() {
         let targetLayer = null;

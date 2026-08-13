@@ -102,6 +102,16 @@ function uuid() {
   return crypto.randomUUID();
 }
 
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 function unixTimestamp() {
   return Math.floor(Date.now() / 1000);
 }
@@ -622,7 +632,9 @@ async function handleGenerate(token, body) {
     http_common_info: { aid: DEFAULT_ASSISTANT_ID },
   };
 
-  // 调用生成接口
+  // 调用生成接口（只提交任务、拿到 historyId，不在此等待结果。
+  // 结果由前端用 GET /api/jimeng?task_id= 轮询查询，
+  // 避免在单个 Pages Function 里同步轮询数分钟而触发执行时长上限、被强制中断。）
   const { aigc_data } = await jimengRequest(token, 'POST',
     `/mweb/v1/aigc_draft/generate?da_version=${DRAFT_VERSION}&web_component_open_flag=1&web_version=${WEB_VERSION}`,
     requestData
@@ -631,39 +643,35 @@ async function handleGenerate(token, body) {
   const historyId = aigc_data?.history_record_id;
   if (!historyId) throw new Error('即梦未返回记录 ID');
 
-  // 轮询等待结果
+  return { pending: true, taskId: historyId };
+}
+
+async function handleTaskQuery(token, taskId) {
   const PROCESSING = new Set([20, 42, 45]);
   const FAIL = 30;
-  let status = 20;
-  let itemList = [];
-  let retries = 0;
-  const MAX = 90; // 最多 90 次（约 3 分钟）
 
-  while (PROCESSING.has(status) && itemList.length === 0 && retries < MAX) {
-    await new Promise(r => setTimeout(r, 2000)); // 每 2 秒轮询一次
-    retries++;
+  const result = await jimengRequest(token, 'POST', '/mweb/v1/get_history_by_ids', {
+    history_ids: [taskId],
+    image_info: {
+      width: 2048, height: 2048, format: 'webp',
+      image_scene_list: [
+        { scene: 'normal', width: 2400, height: 2400, uniq_key: '2400', format: 'webp' },
+        { scene: 'normal', width: 1080, height: 1080, uniq_key: '1080', format: 'webp' },
+      ],
+    },
+    http_common_info: { aid: DEFAULT_ASSISTANT_ID },
+  });
 
-    const result = await jimengRequest(token, 'POST', '/mweb/v1/get_history_by_ids', {
-      history_ids: [historyId],
-      image_info: {
-        width: 2048, height: 2048, format: 'webp',
-        image_scene_list: [
-          { scene: 'normal', width: 2400, height: 2400, uniq_key: '2400', format: 'webp' },
-          { scene: 'normal', width: 1080, height: 1080, uniq_key: '1080', format: 'webp' },
-        ],
-      },
-      http_common_info: { aid: DEFAULT_ASSISTANT_ID },
-    });
+  const record = result[taskId];
+  if (!record) throw new Error('即梦记录不存在');
 
-    const record = result[historyId];
-    if (!record) throw new Error('即梦记录不存在');
-
-    status = record.status;
-    itemList = record.item_list || [];
-  }
-
-  if (retries >= MAX) throw new Error('即梦生图超时（超过 3 分钟）');
+  const status = record.status;
   if (status === FAIL) throw new Error('即梦生图失败');
+
+  const itemList = record.item_list || [];
+  if (PROCESSING.has(status) && itemList.length === 0) {
+    return { pending: true };
+  }
 
   // 组装返回结果（兼容 OpenAI 图片 API 格式 + b64_json 支持）
   const data = [];
@@ -671,24 +679,21 @@ async function handleGenerate(token, body) {
     const imgUrl = item?.image?.large_images?.[0]?.image_url
       || item?.common_attr?.cover_url
       || '';
+    if (!imgUrl) continue;
 
     const entry = { url: imgUrl };
-
-    if (responseFormat === 'b64_json' && imgUrl) {
-      try {
-        const imgResp = await fetch(imgUrl);
-        const arr = await imgResp.arrayBuffer();
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(arr)));
-        entry.b64_json = b64;
-      } catch (_) {
-        // b64 转换失败，保留 url
-      }
+    try {
+      const imgResp = await fetch(imgUrl);
+      const arr = await imgResp.arrayBuffer();
+      entry.b64_json = arrayBufferToBase64(arr);
+    } catch (_) {
+      // b64 转换失败，保留 url
     }
-
     data.push(entry);
   }
 
-  return { data };
+  if (data.length === 0) return { pending: true };
+  return { pending: false, data };
 }
 
 function buildTextGenerateAbilities(reqKey, prompt, imageRatio, resolutionType, dims, n = 1) {
@@ -758,6 +763,12 @@ export async function onRequest({ request }) {
 
   try {
     if (request.method === 'GET') {
+      const url = new URL(request.url);
+      const taskId = url.searchParams.get('task_id') || url.searchParams.get('taskId') || '';
+      if (taskId) {
+        const result = await handleTaskQuery(token, taskId);
+        return json(result);
+      }
       const health = await handleHealth(token);
       return json(health);
     }
