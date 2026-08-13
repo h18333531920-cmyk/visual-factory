@@ -4304,6 +4304,29 @@
             ratioEl.value = jimengRatio;
         }
     }
+    function describeJimengSessionId(value) {
+        value = value || '';
+        if(!value) return '';
+        var len = value.length;
+        var head = value.substring(0, 8);
+        var tail = len > 8 ? value.substring(len - 4) : '';
+        return '长度 ' + len + ' 位：' + head + '…' + (tail ? '…' + tail : '');
+    }
+    function logJimengCandidates(candidates, source) {
+        if(!Array.isArray(candidates) || !candidates.length) return;
+        try {
+            console.group('[即梦 sessionid 候选] ' + source + ' 共 ' + candidates.length + ' 条');
+            candidates.forEach(function(c, i) {
+                var v = c.value || '';
+                console.log('#' + (i + 1) + ' domain=' + c.domain + ' path=' + c.path + ' len=' + (c.len || v.length) + ' 前8=' + v.substring(0, 8) + '…' + (v.length > 8 ? '…' + v.substring(v.length - 4) : '') + (c.hostOnly ? ' [host-only]' : '') + (i === 0 ? '  ← 当前采用' : ''));
+            });
+            console.table(candidates.map(function(c) {
+                var v = c.value || '';
+                return { domain: c.domain, path: c.path, len: v.length, head: v.substring(0, 8), tail: v.substring(v.length - 4), lastAccessed: c.lastAccessed };
+            }));
+            console.groupEnd();
+        } catch(_) {}
+    }
     const JIMENG_SESSION_ENDPOINTS = [
         '/api/jimeng-session',
         'https://visual-factory.pages.dev/api/jimeng-session'
@@ -4327,9 +4350,10 @@
                     try { localStorage.setItem('jimeng_sessionid', data.sessionid); } catch(_) {}
                     var input = document.getElementById('jimeng-session-input');
                     if(input) input.value = data.sessionid;
+                    logJimengCandidates(data.candidates, '云端 /api/jimeng-session');
                     var updated = data.updatedAt ? '，同步时间 ' + new Date(data.updatedAt).toLocaleString('zh-CN') : '';
-                    updateJimengApiUI({ ready: true, label: '✅ 已获取 Session ID（' + data.sessionid.substring(0, 8) + '…）' + updated });
-                    if(!silent && isNew) showToast('✅ 已获取即梦 Session ID');
+                    updateJimengApiUI({ ready: true, label: '✅ 已获取 Session ID（' + describeJimengSessionId(data.sessionid) + '）' + updated });
+                    if(!silent && isNew) showToast('✅ 已获取即梦 Session ID（' + describeJimengSessionId(data.sessionid) + '）');
                 } else {
                     fetchJimengSessionFromEndpoints(index + 1, silent);
                 }
@@ -4352,8 +4376,9 @@
                 try { localStorage.setItem('jimeng_sessionid', data.sessionId); } catch(_) {}
                 var input = document.getElementById('jimeng-session-input');
                 if(input) input.value = data.sessionId;
-                updateJimengApiUI({ ready: true, label: '✅ 已自动获取 Session ID（' + data.sessionId.substring(0, 8) + '…）' });
-                showToast('✅ 已自动获取即梦 Session ID');
+                logJimengCandidates(data.candidates, '扩展实时读取');
+                updateJimengApiUI({ ready: true, label: '✅ 已自动获取 Session ID（' + describeJimengSessionId(data.sessionId) + '）' });
+                showToast('✅ 已自动获取即梦 Session ID（' + describeJimengSessionId(data.sessionId) + '）');
             } else {
                 updateJimengApiUI({ ready: false, label: '⚠️ 未获取到 sessionid，请确认已在浏览器中登录即梦' });
                 showToast('未获取到 sessionid，请先登录 jimeng.jianying.com', true);

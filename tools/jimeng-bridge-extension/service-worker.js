@@ -77,9 +77,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     }
     if (message?.type === 'vf:get-jimeng-sessionid') {
       try {
-        const cookie = await chrome.cookies.get({ url: 'https://jimeng.jianying.com', name: 'sessionid' });
-        return respond({ sessionId: cookie ? cookie.value : null });
-      } catch (e) { return respond({ sessionId: null, error: e.message }); }
+        const picked = await pickJimengSessionId();
+        return respond({ sessionId: picked.sessionId, candidates: picked.candidates });
+      } catch (e) { return respond({ sessionId: null, candidates: [], error: e.message }); }
     }
     if (message?.type === 'vf:jimeng-ready') {
       const current = await status();
@@ -102,10 +102,45 @@ const JIMENG_SESSION_API = 'https://visual-factory.pages.dev/api/jimeng-session'
 const SYNC_SECRET = 'vf-jimeng-sync-2026';
 const SYNC_INTERVAL_MIN = 30;
 
+// 即梦可能在不同域名/路径下存了多个同名 sessionid。单一 chrome.cookies.get
+// 只会取到其中一条（常是失效的旧值），导致"自动获取的码"和 F12 里真实有效的
+// 码不一致。这里改用 getAll 列出全部候选，并按"最近访问"选取主值，同时把完整
+// 候选列表透传给 DIY 用于诊断。
+async function readJimengSessionCookies() {
+  const list = [];
+  try {
+    const all = await chrome.cookies.getAll({ name: 'sessionid' });
+    for (const c of all) {
+      if (!/jianying\.com$/i.test(c.domain || '')) continue;
+      list.push({
+        domain: c.domain,
+        path: c.path,
+        value: c.value || '',
+        len: (c.value || '').length,
+        lastAccessed: c.lastAccessed || 0,
+        secure: !!c.secure,
+        httpOnly: !!c.httpOnly,
+        hostOnly: !!c.hostOnly,
+      });
+    }
+  } catch (e) {
+    console.warn('[即梦同步] 读取 sessionid 失败：', e && e.message);
+  }
+  // 有效的 sessionid 会随着即梦的每个请求持续刷新 lastAccessed，取最近的那条作主值。
+  list.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+  return list;
+}
+async function pickJimengSessionId() {
+  const candidates = await readJimengSessionCookies();
+  if (!candidates.length) return { sessionId: null, candidates: [] };
+  return { sessionId: candidates[0].value, candidates };
+}
+
 async function syncSessionIdToCloud() {
   try {
-    const cookie = await chrome.cookies.get({ url: 'https://jimeng.jianying.com', name: 'sessionid' });
-    if (!cookie || !cookie.value) {
+    const picked = await pickJimengSessionId();
+    const cookie = picked.sessionId;
+    if (!cookie) {
       console.log('[即梦同步] 未找到 sessionid cookie');
       return;
     }
@@ -115,7 +150,7 @@ async function syncSessionIdToCloud() {
         'Authorization': `Bearer ${SYNC_SECRET}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ sessionid: cookie.value }),
+      body: JSON.stringify({ sessionid: cookie, candidates: picked.candidates }),
     });
     const data = await resp.json();
     if (data.success) {
