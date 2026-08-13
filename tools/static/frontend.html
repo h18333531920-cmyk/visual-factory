@@ -2624,7 +2624,7 @@
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260813-static-ui-v6">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260813-static-ui-v7">
 </head>
 <body>
 
@@ -6275,6 +6275,8 @@
                 const wrap = document.createElement('div'); wrap.className = 'quick-logo-menu-wrap';
                 const button = document.createElement('button');
                 button.type = 'button'; button.className = 'quick-add-action'; button.title = '添加 Logo';
+                button.setAttribute('aria-label', '添加 Logo');
+                button.dataset.tooltip = '添加 Logo';
                 button.innerHTML = '<span class="quick-add-icon">' + action.icon + '</span><span class="quick-add-label">' + action.label + '</span>';
                 const menu = document.createElement('div'); menu.className = 'quick-logo-menu';
                 [['pair','左右组合','<svg viewBox="0 0 24 24"><rect x="3" y="6" width="7" height="12" rx="1.5"/><rect x="14" y="6" width="7" height="12" rx="1.5"/><line x1="11" y1="12" x2="13" y2="12"/></svg>'], ['single','单一Logo','<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3"/><circle cx="12" cy="12" r="4"/></svg>'], ['matrix','Logo矩阵','<svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>']].forEach(function(item) {
@@ -6295,6 +6297,8 @@
             button.type = 'button';
             button.className = 'quick-add-action';
             button.title = '添加' + action.label;
+            button.setAttribute('aria-label', '添加' + action.label);
+            button.dataset.tooltip = '添加' + action.label;
             button.innerHTML = '<span class="quick-add-icon">' + action.icon + '</span><span class="quick-add-label">' + action.label + '</span>';
             button.onclick = action.run;
             dock.appendChild(button);

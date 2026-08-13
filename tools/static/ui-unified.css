@@ -1231,3 +1231,122 @@ html body {
 @media (max-width: 1280px) {
   .editor-layout { --ui-asset-rail-width: 236px; }
 }
+
+/* Bottom dock uses the exact same icon and tooltip language as the sidebar. */
+.linked-artboard-dock.quick-add-dock {
+  height: 48px !important;
+  min-height: 48px !important;
+  gap: 2px !important;
+  padding: 4px !important;
+}
+.quick-logo-menu-wrap { position: relative !important; }
+.quick-add-action,
+.quick-add-icon,
+.quick-logo-menu-wrap > .quick-add-action,
+.quick-logo-menu-wrap > .quick-add-action .quick-add-icon {
+  width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  flex: 0 0 40px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: #94a3b8 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.quick-add-action {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: color 150ms ease, background-color 150ms ease !important;
+}
+.quick-add-icon {
+  display: grid !important;
+  place-items: center !important;
+  color: inherit !important;
+}
+.quick-add-icon svg,
+.quick-logo-menu-wrap > .quick-add-action .quick-add-icon svg {
+  width: 18px !important;
+  height: 18px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+.quick-add-action:hover,
+.quick-add-action:focus-visible {
+  color: #0f172a !important;
+  background: #f8fafc !important;
+  outline: none !important;
+}
+.quick-add-action:active,
+.quick-add-action.active {
+  color: #0f172a !important;
+  background: #f1f5f9 !important;
+}
+.quick-add-action::after {
+  position: absolute !important;
+  z-index: 140 !important;
+  bottom: calc(100% + 8px) !important;
+  left: 50% !important;
+  display: block !important;
+  padding: 5px 8px !important;
+  border-radius: 6px !important;
+  color: #fff !important;
+  background: rgba(15, 23, 42, .96) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  content: attr(data-tooltip) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translate(-50%, 4px) !important;
+  transition: opacity 150ms ease, transform 150ms ease !important;
+}
+.quick-add-action:hover::after,
+.quick-add-action:focus-visible::after {
+  opacity: 1 !important;
+  transform: translate(-50%, 0) !important;
+}
+.quick-logo-menu.open + .quick-add-action::after { opacity: 0 !important; }
+
+.quick-add-dock-toggle {
+  width: 28px !important;
+  height: 40px !important;
+  margin-left: 2px !important;
+  border-left: 1px solid var(--ui-line-soft) !important;
+  border-radius: 0 8px 8px 0 !important;
+  color: #94a3b8 !important;
+}
+.quick-add-dock-toggle:hover,
+.quick-add-dock-toggle:focus-visible {
+  color: #0f172a !important;
+  background: #f8fafc !important;
+  outline: none !important;
+}
+.linked-artboard-dock.quick-add-dock.collapsed {
+  width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 !important;
+}
+.linked-artboard-dock.quick-add-dock.collapsed .quick-add-dock-toggle {
+  width: 38px !important;
+  height: 38px !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+}
+
+/* Logo submenu keeps its explanatory labels; only the main dock is icon-only. */
+.quick-logo-menu .quick-add-label { display: inline !important; }
+.quick-logo-menu button .quick-add-icon {
+  width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  flex-basis: 30px !important;
+  color: var(--ui-text) !important;
+}
