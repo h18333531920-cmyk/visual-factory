@@ -718,17 +718,10 @@ async function handleTaskQuery(token, taskId) {
   for (const item of itemList) {
     const imgUrl = findJimengImageUrl(item);
     if (!imgUrl) continue;
-
-    const entry = { url: imgUrl };
-    try {
-      const imgResp = await fetch(imgUrl);
-      if (!imgResp.ok) throw new Error('HTTP ' + imgResp.status);
-      const arr = await imgResp.arrayBuffer();
-      entry.b64_json = arrayBufferToBase64(arr);
-    } catch (_) {
-      // b64 转换失败，保留 url，交由前端下载兜底
-    }
-    data.push(entry);
+    // 只返回 URL，不在 Cloudflare 函数里下载 2K/4K 大图并转 base64——
+    // 下载大图极易超过免费版 ~30s 执行时长上限，导致整个查询被强制中断，
+    // 前端表现为「Failed to fetch」。图片下载与 dataURL 转换交由浏览器端完成。
+    data.push({ url: imgUrl });
   }
 
   if (data.length === 0) {

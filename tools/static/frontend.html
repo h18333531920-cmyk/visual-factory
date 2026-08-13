@@ -10789,6 +10789,37 @@
             } else { showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true); }
         } catch(e) { showToast('❌ ' + (e.message || '无法连接服务器'), true); } finally { updateAIProgress('正在应用到画布...', 96); stopAIProgress(); if(btn) { btn.innerText = ogText; btn.disabled = false; } }
     }
+    async function downloadJimengImageAsDataUrl(url) {
+        // 1) 优先 fetch 下载（即梦图片 CDN 通常允许跨域）
+        try {
+            var r = await fetch(url);
+            if(r.ok) {
+                var blob = await r.blob();
+                return await new Promise(function(resolve, reject) {
+                    var reader = new FileReader();
+                    reader.onload = function() { resolve(reader.result); };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+        } catch(_) {}
+        // 2) 兜底：<img> + canvas 读像素转 dataURL（绕过 fetch 的 CORS 限制）
+        try {
+            var img = new Image();
+            img.crossOrigin = 'anonymous';
+            await new Promise(function(resolve, reject) {
+                img.onload = resolve; img.onerror = reject; img.src = url;
+            });
+            var canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || img.width;
+            canvas.height = img.naturalHeight || img.height;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            return canvas.toDataURL('image/png');
+        } catch(_) {}
+        // 3) 最终兜底：直接用原始 URL（图层将以 <img src> 显示）
+        return url;
+    }
     async function generateWithJimeng(prompt) {
         if(!jimengSessionId) return showToast('请先在生图面板中粘贴并保存即梦 Session ID', true);
         const button = document.getElementById('ai-submit-btn');
@@ -10838,16 +10869,7 @@
                 if(item.b64_json) {
                     images.push('data:image/png;base64,' + item.b64_json);
                 } else if(item.url) {
-                    try {
-                        var imgRes = await fetch(item.url);
-                        var blob = await imgRes.blob();
-                        var src = await new Promise(function(resolve) {
-                            var reader = new FileReader();
-                            reader.onload = function() { resolve(reader.result); };
-                            reader.readAsDataURL(blob);
-                        });
-                        images.push(src);
-                    } catch(_) { /* skip failed downloads */ }
+                    images.push(await downloadJimengImageAsDataUrl(item.url));
                 }
             }
             if(images.length) {
