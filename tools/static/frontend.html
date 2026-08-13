@@ -1631,6 +1631,65 @@
             color: #059669;
         }
 
+        .save-template-menu-wrap { position: relative; }
+        .save-template-dropdown-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 10px);
+            z-index: 60;
+            min-width: 158px;
+            padding: 7px;
+            border: 1px solid rgba(16, 19, 24, 0.10);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 20px 48px rgba(16, 19, 24, 0.14);
+            backdrop-filter: blur(16px);
+        }
+        .save-template-dropdown-menu.open { display: block; }
+        .save-template-dropdown-menu button {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            width: 100%;
+            height: 36px;
+            padding: 0 12px;
+            border: 0;
+            border-radius: 12px;
+            background: transparent;
+            color: var(--text-main);
+            font-size: 13px;
+            font-weight: 760;
+            text-align: left;
+            cursor: pointer;
+        }
+        .save-template-dropdown-menu button:hover { background: rgba(16, 19, 24, 0.06); }
+        .save-template-dropdown-menu button .lang-badge { margin-left: auto; }
+        .lang-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 22px;
+            height: 16px;
+            padding: 0 5px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 900;
+            line-height: 1;
+            letter-spacing: .5px;
+            color: #fff;
+            pointer-events: none;
+            box-sizing: border-box;
+        }
+        .lang-badge.lang-en { background: #2563eb; }
+        .lang-badge.lang-ar { background: #d97706; }
+        .lang-badge.lang-overlay {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            z-index: 6;
+            box-shadow: 0 1px 3px rgba(0,0,0,.25);
+        }
         .export-dropdown-wrap { position: relative; }
         .export-dropdown-menu {
             display: none;
@@ -2363,13 +2422,18 @@
         <button type="button" id="asset-context-add-reference" onclick="addAssetContextReferenceToAI(); closeAssetContextMenu();">加入生图参考图</button>
         <button type="button" id="asset-context-template-bookmark" onclick="openAssetContextTemplateBookmarkEditor(); closeAssetContextMenu();" hidden>模板编组</button>
         <button type="button" id="asset-context-rename" onclick="renameAssetContextItem(); closeAssetContextMenu();" hidden>重命名素材</button>
+        <button type="button" id="asset-context-set-lang-en" onclick="setAssetContextLanguage('EN'); closeAssetContextMenu();" hidden>设为 EN</button>
+        <button type="button" id="asset-context-set-lang-ar" onclick="setAssetContextLanguage('AR'); closeAssetContextMenu();" hidden>设为 AR</button>
         <button type="button" id="asset-context-delete" onclick="deleteAssetContextItem(); closeAssetContextMenu();" hidden>删除</button>
     </div>
     <label class="asset-pane-collapse-handle" for="asset-pane-collapse-toggle" title="折叠资产库" aria-label="折叠或展开资产库"></label>
 <div class="left-pane" id="left-pane">
         <div class="canvas-toolbar">
             <div class="canvas-actions">
-                <button type="button" class="save-template-btn" onclick="saveActiveAsset()" id="canvas-save-btn">保存模版</button>
+                <div class="save-template-menu-wrap">
+                    <button type="button" class="save-template-btn" onclick="toggleSaveTemplateMenu(event)" id="canvas-save-btn">保存模版 ⌄</button>
+                    <div class="save-template-dropdown-menu" id="save-template-dropdown-menu"></div>
+                </div>
                 <div class="resize-menu-wrap">
                     <button type="button" onclick="toggleResizeMenu(event)">修改尺寸 ⌄</button>
                     <div class="resize-dropdown-menu" id="resize-dropdown-menu"></div>
@@ -2466,6 +2530,7 @@
                         <div class="jimeng-setting-group">
                             <span class="jimeng-setting-label">模型</span>
                             <select class="jimeng-setting-select" id="jimeng-model-select" onchange="onJimengSettingChange()">
+                                <option value="jimeng-image-5.0-pro">5.0 Pro</option>
                                 <option value="jimeng-image-5.0-lite">5.0 Lite</option>
                                 <option value="jimeng-image-4.7">4.7</option>
                                 <option value="jimeng-image-4.6">4.6</option>
@@ -5938,7 +6003,10 @@
             const autoAngle = Math.atan2(thick, approxW) * (180/Math.PI);
             const leftClip = Math.round(Math.max(34, Math.min(approxW * 0.18, approxH * 0.78)));
             const transformOriginX = Math.round(Math.max(28, approxH * 0.42));
-            const inner = `<span class="discount-main" style="font-size:${mainSize}px; transform:translateY(${textOffsetY}px); ${mainFontStyle}">${safeMain}</span><span class="discount-side" style="gap:${sideLineGap}px; transform:translateY(${textOffsetY}px);"><span style="font-size:${topSize}px; ${topFontStyle}">${safeTop}</span><span style="font-size:${bottomSize}px; ${bottomFontStyle}">${safeBottom}</span></span>`;
+            const mainSpan = `<span class="discount-main" style="font-size:${mainSize}px; transform:translateY(${textOffsetY}px); ${mainFontStyle}">${safeMain}</span>`;
+            const sideSpan = `<span class="discount-side" style="gap:${sideLineGap}px; transform:translateY(${textOffsetY}px);"><span style="font-size:${topSize}px; ${topFontStyle}">${safeTop}</span><span style="font-size:${bottomSize}px; ${bottomFontStyle}">${safeBottom}</span></span>`;
+            // 阿拉伯语为 RTL：小字列放到数字左边；其他语言保持数字在左、小字在右。
+            const inner = isAr ? (sideSpan + mainSpan) : (mainSpan + sideSpan);
             const pillStyle = `gap:${sideGap}px; padding:${paddingY}px ${paddingX}px; border-radius:999px;`;
             const isSubtitleTop = l.subtitlePosition === 'top';
             const subOffset = l.subtitleOffsetY || 8;
@@ -7134,8 +7202,41 @@
         // 资产库切换仅影响左侧内容，不能改变右上角的主操作。
         // 组件不再通过这里上传，任何普通分类下均保存当前画板为模板。
         btn.style.display = '';
-        btn.textContent = '保存模版';
+        btn.textContent = '保存模版 ⌄';
         btn.disabled = currentAssetTab === 'recycle';
+    }
+    function createLangBadge(lang, overlay) {
+        if (lang !== 'EN' && lang !== 'AR') return null;
+        const badge = document.createElement('span');
+        badge.className = 'lang-badge lang-' + (lang === 'EN' ? 'en' : 'ar') + (overlay ? ' lang-overlay' : '');
+        badge.textContent = lang;
+        badge.title = lang === 'EN' ? '英文版' : '阿拉伯语版';
+        return badge;
+    }
+    function toggleSaveTemplateMenu(e) {
+        e?.stopPropagation();
+        buildSaveTemplateMenu();
+        document.getElementById('save-template-dropdown-menu')?.classList.toggle('open');
+    }
+    function closeSaveTemplateMenu() {
+        document.getElementById('save-template-dropdown-menu')?.classList.remove('open');
+    }
+    function buildSaveTemplateMenu() {
+        const menu = document.getElementById('save-template-dropdown-menu');
+        if (!menu) return;
+        menu.innerHTML = '';
+        function option(label, lang) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            const text = document.createElement('span'); text.textContent = label;
+            btn.appendChild(text);
+            if (lang) { const badge = createLangBadge(lang, false); if (badge) btn.appendChild(badge); }
+            btn.onclick = function() { closeSaveTemplateMenu(); saveActiveAsset(lang); };
+            menu.appendChild(btn);
+        }
+        option('保存 EN 模版', 'EN');
+        option('保存 AR 模版', 'AR');
+        option('保存（不打标）', '');
     }
     function toggleAddMenu(e) { e.stopPropagation(); document.getElementById('add-menu')?.classList.toggle('open'); }
     function closeAddMenu() { document.getElementById('add-menu')?.classList.remove('open'); }
@@ -7147,7 +7248,7 @@
     function closeToolbarMore() {
         document.getElementById('toolbar-more-menu')?.classList.remove('open');
     }
-    document.addEventListener('click', e => { if(!e.target.closest('.toolbar-more-wrap')) closeToolbarMore(); if(!e.target.closest('.export-dropdown-wrap')) closeExportMenu(); if(!e.target.closest('.resize-menu-wrap')) closeResizeMenu(); });
+    document.addEventListener('click', e => { if(!e.target.closest('.toolbar-more-wrap')) closeToolbarMore(); if(!e.target.closest('.export-dropdown-wrap')) closeExportMenu(); if(!e.target.closest('.resize-menu-wrap')) closeResizeMenu(); if(!e.target.closest('.save-template-menu-wrap')) closeSaveTemplateMenu(); });
     document.addEventListener('click', e => { if(!e.target.closest('.new-artboard-menu-wrap')) closeNewArtboardMenu(); });
     // ===== 模版同步到素材库 =====
     function notifyParent(msg) {
@@ -7490,6 +7591,10 @@
                     var item = arr.find(function(x) { return x.cloudId === pid; });
                     if (item) item.previewUrl = pUrl;
                 });
+                // 关联模板预览到达后，按显式语言标签重新选择书签封面。
+                // 这一步也会把旧书签曾按名称选中的 coverTemplateId 迁移为标签判断结果。
+                const bookmarkCoverChanged = refreshTemplateBookmarkCoversForTemplate(pid, true);
+                if (bookmarkCoverChanged) renderAssetLibrary();
                 // 精准更新对应卡片的预览图，避免全量 renderAssetLibrary 导致滚动重置和 hover 闪烁
                 var card = document.querySelector('.asset-item[data-asset-id="' + CSS.escape(pid) + '"]');
                 if (card) {
@@ -7523,9 +7628,13 @@
             var packMeta = event.data.data || {};
             var packItem = presetLibrary.find(function(item) { return item.cloudId === metaId || item.id === metaId; });
             if (packItem) {
+                var bookmarkCoverChangedAfterMetadata = false;
                 if (packItem.kind === 'bookmark') {
                     packItem.templateRefs = normalizeTemplateBookmarkRefs(packMeta.templateRefs || []);
                     packItem.coverTemplateId = packMeta.coverTemplateId || '';
+                    // 书签关联关系通常晚于成员模板的预览图到达。必须在这里再次按标签选封面，
+                    // 否则前面的预览事件看不到成员关系，卡片会一直停留在旧的 AR 静态封面。
+                    bookmarkCoverChangedAfterMetadata = updateTemplateBookmarkCoverFromTags(packItem, true);
                 } else if (packItem.kind === 'pack') {
                     packItem.artboardPresets = packMeta.artboardPresets || [];
                     packItem.linkedArtboardIds = packMeta.linkedArtboardIds || [];
@@ -7537,6 +7646,7 @@
                 }
                 packItem._metadataLoaded = true;
                 packItem._metadataLoading = false;
+                if (bookmarkCoverChangedAfterMetadata) renderAssetLibrary();
                 // 精准更新对应卡片，避免全量 renderAssetLibrary 导致 hover 闪烁和滚动重置
                 var card = document.querySelector('.asset-item[data-asset-id="' + CSS.escape(metaId) + '"]');
                 if (card) {
@@ -7580,6 +7690,7 @@
                 if (tdata.artboardPresets) item.artboardPresets = tdata.artboardPresets;
                 if (tdata.templateRefs) item.templateRefs = normalizeTemplateBookmarkRefs(tdata.templateRefs);
                 if (tdata.coverTemplateId) item.coverTemplateId = tdata.coverTemplateId;
+                if (item.kind === 'bookmark' && item.templateRefs.length) updateTemplateBookmarkCoverFromTags(item, true);
                 if (tdata.linkedArtboardGroupId) item.linkedArtboardGroupId = tdata.linkedArtboardGroupId;
                 if (tdata.linkedArtboardIds) item.linkedArtboardIds = tdata.linkedArtboardIds;
                 if (tdata.linked) item.linked = true;
@@ -7639,6 +7750,44 @@
             if (failedBookmark) failedBookmark._pending = false;
             renderAssetLibrary();
             showToast('❌ 模板编组更新失败：' + (event.data.error || '请稍后重试'), true);
+        } else if (event.data.type === 'vf:template-renamed') {
+            // 素材库或书签弹窗里重命名后，同步本地名称（含各书签缓存的关联模板 name）。
+            const renamedId = event.data.id;
+            const renamedName = event.data.name || '';
+            [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
+                arr.forEach(function(item) {
+                    if (item.cloudId === renamedId || item.id === renamedId) item.name = renamedName;
+                });
+            });
+            presetLibrary.forEach(function(b) {
+                if (b.kind !== 'bookmark') return;
+                (b.templateRefs || []).forEach(function(ref) {
+                    if (ref && ref.templateId === renamedId) ref.name = renamedName;
+                });
+            });
+            renderAssetLibrary();
+        } else if (event.data.type === 'vf:template-language-set') {
+            // 云端确认语言标签后，幂等同步本地模板的 tags，保证刷新后与素材库一致。
+            const langId = event.data.id;
+            const langTags = event.data.tags || [];
+            [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
+                arr.forEach(function(item) {
+                    if (item.cloudId === langId || item.id === langId) item.tags = langTags;
+                });
+            });
+            refreshTemplateBookmarkCoversForTemplate(langId, true);
+            renderAssetLibrary();
+        } else if (event.data.type === 'vf:template-tags-updated') {
+            // 素材库编辑模板标签时也实时同步到 DIY，并重新计算其所在书签的封面。
+            const taggedTemplateId = event.data.id;
+            const updatedTags = Array.isArray(event.data.tags) ? event.data.tags : [];
+            [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
+                arr.forEach(function(item) {
+                    if (item.cloudId === taggedTemplateId || item.id === taggedTemplateId) item.tags = updatedTags;
+                });
+            });
+            refreshTemplateBookmarkCoversForTemplate(taggedTemplateId, true);
+            renderAssetLibrary();
         } else if (event.data.type === 'vf:apply-template') {
             var d = event.data.data || {};
             if (d.schema === 'vf-layout-preset/v1' && d.elements) {
@@ -7777,11 +7926,11 @@
     }
     // ===== 模版同步结束 =====
 
-    async function saveActiveAsset() {
+    async function saveActiveAsset(language) {
         if(currentAssetTab === 'recycle') return;
         // 无论当前浏览模板或组件资产，右上角均保存当前画板为模板；
         // 上传字体、Logo 等入口不再复用这个按钮。
-        return await saveToPreset();
+        return await saveToPreset(language);
     }
     var diySubtagFilter = '全部';
     var diySelectedSubtag = '全部'; // 真正选中的分类，影响保存时的 tag2
@@ -7932,7 +8081,12 @@
         if(currentAssetTab === 'layout') {
             // 书签是模板页的固定快捷入口：无论当前筛选为何条件，都始终放在模板列表最前面。
             const bookmarks = presetLibrary.filter(function(p) { return p.kind === 'bookmark'; });
+            // 被书签收录的模板在资产库与素材库都隐藏，只留书签卡片：算出所有书签引用的模板 id。
+            const bookmarkedIds = new Set();
+            bookmarks.forEach(function(b) { normalizeTemplateBookmarkRefs(b.templateRefs).forEach(function(r) { bookmarkedIds.add(r.templateId); }); });
             const regularItems = presetLibrary.filter(function(p) { return p.kind !== 'bookmark'; }).filter(function(p) {
+                return !bookmarkedIds.has(p.cloudId) && !bookmarkedIds.has(p.id);
+            }).filter(function(p) {
                 if (diySubtagFilter === '全部') return true;
                 // 按 name 或标签粗略匹配
                 return (p.name || '').indexOf(diySubtagFilter) !== -1;
@@ -8069,6 +8223,15 @@
         var ph = Number(asset?.previewH) || 0;
         if (pw > 0 && ph > 0) thumb.style.aspectRatio = pw + ' / ' + ph;
         renderAssetPreview(thumb, { type, asset, img });
+        // 模板预览图左上角显示 EN/AR 语言图标（书签本身不标语言）。
+        if (type === 'layout' || type === 'pack') {
+            const lang = templateLanguage(asset);
+            if (lang) {
+                thumb.style.position = 'relative';
+                const badge = createLangBadge(lang, true);
+                if (badge) thumb.appendChild(badge);
+            }
+        }
         let packHover = null;
         if(type === 'layout' || type === 'pack' || type === 'bookmark') {
             const canvasInfo = getTemplatePreviewCanvasInfo(asset);
@@ -8193,7 +8356,17 @@
         if(referenceButton) referenceButton.hidden = !target?.canUseAsAIReference;
         if(bookmarkButton) bookmarkButton.hidden = !(target?.type === 'layout' || target?.type === 'bookmark');
         if(renameButton) renameButton.hidden = !target?.renameable;
-        if(deleteButton) deleteButton.hidden = !target?.onDelete;
+        if(deleteButton) {
+            deleteButton.hidden = !target?.onDelete;
+            // 书签是“引用”而非“包含”：右键“删除”会让人误以为会删掉关联模板，改成“释放编组”。
+            deleteButton.textContent = target?.type === 'bookmark' ? '释放编组' : '删除';
+        }
+        // 语言标签只对单画板模板 / 套组有意义。
+        const setLangEnButton = document.getElementById('asset-context-set-lang-en');
+        const setLangArButton = document.getElementById('asset-context-set-lang-ar');
+        const isLanguageSettable = target?.type === 'layout' || target?.type === 'pack';
+        if(setLangEnButton) setLangEnButton.hidden = !isLanguageSettable;
+        if(setLangArButton) setLangArButton.hidden = !isLanguageSettable;
         menu.style.left = event.clientX + 'px';
         menu.style.top = event.clientY + 'px';
         menu.classList.add('open');
@@ -8217,6 +8390,21 @@
         const asset = assetContextTarget?.asset;
         if (!asset) return;
         openTemplateBookmarkEditor(asset.kind === 'bookmark' ? asset : null, asset.kind === 'bookmark' ? null : asset);
+    }
+    function setAssetContextLanguage(lang) {
+        const asset = assetContextTarget?.asset;
+        if (!asset) return;
+        setTemplateLanguage(asset, lang);
+    }
+    function setTemplateLanguage(template, lang) {
+        if (!template) return;
+        template.tags = setTemplateLanguageTag(template.tags, lang);
+        const cloudId = template.cloudId || template.id;
+        if (cloudId) notifyParent({ type: 'vf:set-template-language', id: cloudId, language: lang || '' });
+        // 模板语言标签变化会直接影响其所在书签的封面优先级。
+        refreshTemplateBookmarkCoversForTemplate(cloudId, true);
+        renderAssetLibrary();
+        showToast(lang === 'EN' ? '已标记为 EN' : (lang === 'AR' ? '已标记为 AR' : '已取消语言标记'));
     }
     // ===== 模板快捷书签 =====
     // 书签仅保存独立模板的稳定 ID；不会保存或复制任何图层，因此和旧的多画板套组互不影响。
@@ -8251,12 +8439,82 @@
         }).filter(Boolean);
     }
     function getTemplateBookmarkCover(bookmark) {
-        const refs = normalizeTemplateBookmarkRefs(bookmark?.templateRefs);
-        const preferred = refs.find(function(ref) { return ref.templateId === bookmark?.coverTemplateId; });
-        const preferredTemplate = preferred && findTemplateBookmarkMember(preferred);
-        if (preferredTemplate) return preferredTemplate;
-        const firstLive = getLiveTemplateBookmarkMembers(bookmark)[0];
-        return firstLive?.template || null;
+        const liveMembers = getLiveTemplateBookmarkMembers(bookmark);
+        // 封面始终依据当前模板标签重新计算，不再让旧的 coverTemplateId
+        // 把书签锁定在曾经通过名称关键词选出的封面上。
+        const taggedCover = chooseTemplateBookmarkCoverTemplate(liveMembers.map(function(m) { return m.template; }));
+        return taggedCover || (liveMembers[0]?.template || null);
+    }
+    function templateLanguage(template) {
+        // 语言标签显式存在 tags 里（vf:lang:EN / vf:lang:AR）；未标记返回空串。
+        var tags = (template && template.tags) || [];
+        if (tags.indexOf('vf:lang:AR') !== -1) return 'AR';
+        if (tags.indexOf('vf:lang:EN') !== -1) return 'EN';
+        return '';
+    }
+    function setTemplateLanguageTag(tags, lang) {
+        var next = (Array.isArray(tags) ? tags : []).filter(function(t) {
+            return t !== 'vf:lang:EN' && t !== 'vf:lang:AR';
+        });
+        if (lang === 'EN') next.push('vf:lang:EN');
+        else if (lang === 'AR') next.push('vf:lang:AR');
+        return next;
+    }
+    function isNineSixteenCanvas(width, height) {
+        var w = Math.round(Number(width) || 0);
+        var h = Math.round(Number(height) || 0);
+        if (!w || !h || w >= h) return false;
+        return Math.abs(w / h - 9 / 16) < 0.05;
+    }
+    function chooseTemplateBookmarkCoverTemplate(templates) {
+        // 书签封面优选「9:16 尺寸 + EN 标签」→「9:16 任意语言」→「EN 标签任意尺寸」→ 原顺序第一个。
+        // 语言按显式标签（vf:lang:EN/AR）判断，不再按名字关键词。
+        var list = (templates || []).slice();
+        if (!list.length) return null;
+        function nine16(t) { var r = templateBookmarkRefFromTemplate(t); return isNineSixteenCanvas(r.canvasW, r.canvasH); }
+        function english(t) { return templateLanguage(t) === 'EN'; }
+        var hit = list.find(function(t) { return nine16(t) && english(t); });
+        if (hit) return hit;
+        hit = list.find(nine16);
+        if (hit) return hit;
+        hit = list.find(english);
+        if (hit) return hit;
+        return list[0];
+    }
+    function updateTemplateBookmarkCoverFromTags(bookmark, persist) {
+        if (!bookmark || bookmark.kind !== 'bookmark') return false;
+        const members = getLiveTemplateBookmarkMembers(bookmark);
+        const cover = chooseTemplateBookmarkCoverTemplate(members.map(function(member) { return member.template; }));
+        if (!cover) return false;
+        const nextCoverId = cover.cloudId || cover.id || '';
+        if (!nextCoverId) return false;
+        const coverIdChanged = nextCoverId !== bookmark.coverTemplateId;
+        const previewChanged = !!cover.previewUrl && cover.previewUrl !== bookmark.previewUrl;
+        if (!coverIdChanged && !previewChanged) return false;
+        bookmark.coverTemplateId = nextCoverId;
+        if (cover.previewUrl) bookmark.previewUrl = cover.previewUrl;
+        if (persist && bookmark.cloudId && cover.previewUrl) {
+            notifyParent({
+                type: 'vf:update-template-bookmark',
+                id: bookmark.cloudId,
+                name: bookmark.name,
+                data: { templateRefs: normalizeTemplateBookmarkRefs(bookmark.templateRefs), coverTemplateId: nextCoverId },
+                previewDataUrl: cover.previewUrl
+            });
+        }
+        return true;
+    }
+    function refreshTemplateBookmarkCoversForTemplate(templateId, persist) {
+        if (!templateId) return false;
+        var changed = false;
+        presetLibrary.forEach(function(bookmark) {
+            if (bookmark.kind !== 'bookmark') return;
+            const containsTemplate = normalizeTemplateBookmarkRefs(bookmark.templateRefs).some(function(ref) {
+                return ref.templateId === templateId;
+            });
+            if (containsTemplate && updateTemplateBookmarkCoverFromTags(bookmark, persist)) changed = true;
+        });
+        return changed;
     }
     function templateBookmarkRefFromTemplate(template) {
         const info = getTemplatePreviewCanvasInfo(template) || {};
@@ -8356,6 +8614,7 @@
         header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px;padding:19px 22px;border-bottom:1px solid #e5e7eb;';
         const heading = document.createElement('div');
         heading.textContent = title;
+        heading.className = 'template-bookmark-dialog-heading';
         heading.style.cssText = 'font-size:18px;font-weight:900;color:#17191d;';
         const close = document.createElement('button');
         close.type = 'button'; close.textContent = '×'; close.setAttribute('aria-label', '关闭');
@@ -8415,19 +8674,22 @@
             if (!ids.length) return showToast('请至少选择 1 个模板', true);
             const templates = ids.map(function(id) { return candidates.find(function(item) { return (item.cloudId || item.id) === id; }); }).filter(Boolean);
             const refs = templates.map(templateBookmarkRefFromTemplate);
+            const coverTemplate = chooseTemplateBookmarkCoverTemplate(templates);
+            const coverTemplateId = coverTemplate ? (coverTemplate.cloudId || coverTemplate.id) : (refs[0]?.templateId || '');
+            const coverPreviewUrl = coverTemplate?.previewUrl || templates[0]?.previewUrl || '';
             if (bookmark) {
                 bookmark.templateRefs = refs;
-                bookmark.coverTemplateId = refs[0]?.templateId || '';
-                bookmark.previewUrl = getTemplateBookmarkCover(bookmark)?.previewUrl || bookmark.previewUrl || '';
+                bookmark.coverTemplateId = coverTemplateId;
+                bookmark.previewUrl = coverPreviewUrl || bookmark.previewUrl || '';
                 bookmark._pending = true;
-                notifyParent({ type: 'vf:update-template-bookmark', id: bookmark.cloudId || bookmark.id, name: bookmark.name, data: { templateRefs: refs, coverTemplateId: bookmark.coverTemplateId } });
+                notifyParent({ type: 'vf:update-template-bookmark', id: bookmark.cloudId || bookmark.id, name: bookmark.name, data: { templateRefs: refs, coverTemplateId: coverTemplateId }, previewDataUrl: coverPreviewUrl || '' });
                 showToast('正在更新模板编组...');
             } else {
                 const name = (templates[0]?.name || '未命名模板') + '套组';
                 const tempId = genId('template_bookmark');
-                const created = { id: tempId, kind: 'bookmark', name: name, templateRefs: refs, coverTemplateId: refs[0]?.templateId || '', previewUrl: templates[0]?.previewUrl || generatePlaceholderPreview(name, '模板书签'), _pending: true };
+                const created = { id: tempId, kind: 'bookmark', name: name, templateRefs: refs, coverTemplateId: coverTemplateId, previewUrl: coverPreviewUrl || generatePlaceholderPreview(name, '模板书签'), _pending: true };
                 presetLibrary.unshift(created);
-                notifyParent({ type: 'vf:save-template', templateType: 'bookmark', name: name, data: { templateRefs: refs, coverTemplateId: created.coverTemplateId }, previewDataUrl: created.previewUrl || '', tempId: tempId });
+                notifyParent({ type: 'vf:save-template', templateType: 'bookmark', name: name, data: { templateRefs: refs, coverTemplateId: coverTemplateId }, previewDataUrl: created.previewUrl || '', tempId: tempId });
                 showToast('正在创建模板编组...');
             }
             closeTemplateBookmarkDialog();
@@ -8435,6 +8697,7 @@
         };
         footer.append(cancel, confirm); shell.body.appendChild(footer);
     }
+    var bookmarkLanguageFilter = 'EN'; // 书签弹窗的语言分组滑块，默认 EN
     function openTemplateBookmarkPicker(bookmarkId) {
         const bookmark = presetLibrary.find(function(item) { return item.id === bookmarkId; });
         if (!bookmark) return;
@@ -8444,30 +8707,205 @@
             notifyParent({ type: 'vf:request-template-data', id: bookmark.cloudId || bookmark.id });
             return;
         }
-        const members = getLiveTemplateBookmarkMembers(bookmark);
-        const shell = createTemplateBookmarkDialogShell(bookmark.name || '模板编组', '选择一个关联模板打开。书签本身不会修改这些原模板。');
-        if (!members.length) {
-            const empty = document.createElement('div'); empty.textContent = '暂无可用关联模板'; empty.style.cssText = 'padding:18px;border-radius:12px;background:#f8fafc;color:#667085;text-align:center;font-size:13px;font-weight:700;'; shell.body.appendChild(empty);
-            return;
+        const allMembers = getLiveTemplateBookmarkMembers(bookmark);
+        const shell = createTemplateBookmarkDialogShell(bookmark.name || '模板编组', '点击预览图打开模板；右键可重命名 / 释放到组外 / 删除模板 / 设为 EN 或 AR。未标记的模板会同时出现在 EN 与 AR 分组。');
+        shell.dialog.style.width = 'min(760px,calc(100vw - 36px))';
+        // 头部工具栏：EN/AR 滑块 + 重命名书签 + 解散书签
+        const toolbar = document.createElement('div');
+        toolbar.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;';
+        const langToggle = document.createElement('div');
+        langToggle.style.cssText = 'display:inline-flex;border:1px solid #d0d5dd;border-radius:9px;overflow:hidden;';
+        const langEnBtn = document.createElement('button');
+        const langArBtn = document.createElement('button');
+        function langBtnCss(active) {
+            return 'padding:6px 14px;border:none;font-size:12px;font-weight:700;cursor:pointer;' + (active ? 'background:#111827;color:#fff;' : 'background:#fff;color:#6b7280;');
         }
-        const list = document.createElement('div'); list.style.cssText = 'display:grid;gap:8px;';
-        members.forEach(function(member) {
-            const template = member.template;
-            const info = templateBookmarkDisplayInfo(member.ref, template);
-            const button = document.createElement('button'); button.type = 'button';
-            button.style.cssText = 'display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;padding:10px 11px;border:1px solid #e6e9ef;border-radius:12px;background:#fff;color:#17191d;text-align:left;cursor:pointer;';
-            appendTemplateBookmarkSizeIcon(button, info);
-            const copy = document.createElement('span'); copy.style.cssText = 'min-width:0;display:block;';
-            const name = document.createElement('span'); name.textContent = template.name || member.ref.name || '未命名模板'; name.style.cssText = 'display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:850;';
-            const size = document.createElement('span'); size.textContent = info ? (info.ratio + ' · ' + info.width + ' × ' + info.height + ' px') : '实际尺寸读取中'; size.style.cssText = 'display:block;margin-top:3px;font-size:11px;color:#667085;font-weight:650;';
-            const arrow = document.createElement('span'); arrow.textContent = '›'; arrow.style.cssText = 'font-size:23px;line-height:1;color:#98a2b3;';
-            copy.append(name, size); button.append(copy, arrow);
-            button.onmouseenter = function() { button.style.background = '#f8fafc'; };
-            button.onmouseleave = function() { button.style.background = '#fff'; };
-            button.onclick = function() { closeTemplateBookmarkDialog(); applyLayoutPreset(template.id); };
-            list.appendChild(button);
-        });
-        shell.body.appendChild(list);
+        function buildLangBtn(btn, label, value) {
+            btn.type = 'button'; btn.textContent = label;
+            btn.onclick = function() { bookmarkLanguageFilter = value; renderGrid(bookmarkLanguageFilter); };
+            langToggle.appendChild(btn);
+        }
+        buildLangBtn(langEnBtn, 'EN', 'EN');
+        buildLangBtn(langArBtn, 'AR', 'AR');
+        function refreshLangToggle() {
+            langEnBtn.style.cssText = langBtnCss(bookmarkLanguageFilter === 'EN');
+            langArBtn.style.cssText = langBtnCss(bookmarkLanguageFilter === 'AR');
+        }
+        const renameBookmarkBtn = document.createElement('button');
+        renameBookmarkBtn.type = 'button'; renameBookmarkBtn.textContent = '重命名书签'; renameBookmarkBtn.className = 'btn btn-outline';
+        renameBookmarkBtn.onclick = function() { renameBookmarkInPicker(bookmark); };
+        const dissolveBtn = document.createElement('button');
+        dissolveBtn.type = 'button'; dissolveBtn.textContent = '解散书签'; dissolveBtn.className = 'btn btn-outline';
+        dissolveBtn.style.cssText = 'color:#dc2626;border-color:#fca5a5;';
+        dissolveBtn.onclick = function() { closeTemplateBookmarkDialog(); dissolveTemplateBookmark(bookmark); };
+        toolbar.append(langToggle, renameBookmarkBtn, dissolveBtn);
+        shell.body.appendChild(toolbar);
+        const grid = document.createElement('div');
+        shell.body.appendChild(grid);
+        function renderGrid(filterLang) {
+            refreshLangToggle();
+            grid.innerHTML = '';
+            const members = allMembers.filter(function(m) {
+                const l = templateLanguage(m.template);
+                return !l || l === filterLang; // 未标记的模板两边都显示
+            });
+            if (!members.length) {
+                const empty = document.createElement('div');
+                empty.textContent = allMembers.length ? '该分组暂无模板（未标记的模板会同时出现在 EN 与 AR 下）' : '暂无可用关联模板';
+                empty.style.cssText = 'padding:18px;border-radius:12px;background:#f8fafc;color:#667085;text-align:center;font-size:13px;font-weight:700;';
+                grid.appendChild(empty);
+                return;
+            }
+            const list = document.createElement('div'); list.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;';
+            members.forEach(function(member) {
+                const template = member.template;
+                const info = templateBookmarkDisplayInfo(member.ref, template);
+                const card = document.createElement('div');
+                card.style.cssText = 'cursor:pointer;';
+                // 大图预览（点击打开）
+                const thumb = document.createElement('div');
+                thumb.style.cssText = 'border-radius:12px;overflow:hidden;background:#f7f8fa;position:relative;box-shadow:inset 0 0 0 1px #eef0f3;';
+                if (info && info.width && info.height) thumb.style.aspectRatio = info.width + ' / ' + info.height;
+                else thumb.style.aspectRatio = '3 / 4';
+                renderAssetPreview(thumb, { type: 'layout', asset: template, img: template.previewUrl || '' });
+                const lang = templateLanguage(template);
+                if (lang) { const badge = createLangBadge(lang, true); if (badge) thumb.appendChild(badge); }
+                thumb.title = '打开 ' + (template.name || '');
+                card.appendChild(thumb);
+                // 名称 + 尺寸
+                const name = document.createElement('div');
+                name.textContent = template.name || member.ref.name || '未命名模板';
+                name.style.cssText = 'margin-top:8px;font-size:13px;font-weight:850;color:#17191d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+                const size = document.createElement('div');
+                size.textContent = info ? (info.ratio + ' · ' + info.width + ' × ' + info.height + ' px') : '实际尺寸读取中';
+                size.style.cssText = 'margin-top:3px;font-size:11px;color:#667085;font-weight:650;';
+                card.append(name, size);
+                // 点击打开、右键菜单
+                card.onclick = function() { closeTemplateBookmarkDialog(); applyLayoutPreset(template.id); };
+                card.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); showBookmarkMemberContextMenu(e, bookmark, member, template, name); };
+                list.appendChild(card);
+            });
+            grid.appendChild(list);
+        }
+        renderGrid(bookmarkLanguageFilter);
+    }
+    function renameBookmarkInPicker(bookmark) {
+        const overlay = document.getElementById('template-bookmark-dialog');
+        if (!overlay) return;
+        const heading = overlay.querySelector('.template-bookmark-dialog-heading');
+        if (!heading) return;
+        const oldName = bookmark.name || '';
+        const input = document.createElement('input');
+        input.type = 'text'; input.value = oldName;
+        input.style.cssText = 'font-size:18px;font-weight:900;color:#17191d;border:1px solid #0d9488;border-radius:6px;padding:4px 8px;width:100%;font-family:inherit;background:#fff;';
+        heading.replaceWith(input);
+        input.focus(); input.select();
+        input.onblur = function() { commitBookmarkRename(input, heading, bookmark, oldName); };
+        input.onkeydown = function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+            if (e.key === 'Escape') { input.value = oldName; input.blur(); }
+        };
+    }
+    function commitBookmarkRename(input, heading, bookmark, oldName) {
+        const newName = input.value.trim();
+        if (!newName || newName === oldName) { input.replaceWith(heading); return; }
+        bookmark.name = newName;
+        heading.textContent = newName;
+        input.replaceWith(heading);
+        renderAssetLibrary();
+        const cloudId = bookmark.cloudId || bookmark.id;
+        if (cloudId) notifyParent({ type: 'vf:rename-template', id: cloudId, name: newName });
+    }
+    function beginBookmarkMemberRename(bookmark, member, template, nameEl) {
+        const oldName = template.name || member.ref.name || '';
+        const input = document.createElement('input');
+        input.type = 'text'; input.value = oldName;
+        input.style.cssText = 'width:100%;border:1px solid #0d9488;border-radius:4px;padding:2px 6px;font-size:12px;font-weight:680;color:var(--text-main);font-family:inherit;background:#fff;';
+        nameEl.replaceWith(input);
+        input.focus(); input.select();
+        input.onblur = function() { commitBookmarkMemberRename(input, nameEl, bookmark, member, template, oldName); };
+        input.onkeydown = function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+            if (e.key === 'Escape') { input.value = oldName; input.blur(); }
+        };
+    }
+    function commitBookmarkMemberRename(input, nameEl, bookmark, member, template, oldName) {
+        const newName = input.value.trim();
+        if (!newName || newName === oldName) { input.replaceWith(nameEl); return; }
+        template.name = newName;
+        if (member.ref) member.ref.name = newName; // 同步书签缓存的 name
+        nameEl.textContent = newName;
+        input.replaceWith(nameEl);
+        renderAssetLibrary();
+        const cloudId = template.cloudId || template.id;
+        if (cloudId) notifyParent({ type: 'vf:rename-template', id: cloudId, name: newName });
+    }
+    function closeBookmarkMemberContextMenu() {
+        document.querySelectorAll('.bookmark-member-context-menu').forEach(function(el) { el.remove(); });
+    }
+    function showBookmarkMemberContextMenu(event, bookmark, member, template, nameEl) {
+        closeBookmarkMemberContextMenu();
+        const menu = document.createElement('div');
+        menu.className = 'bookmark-member-context-menu';
+        menu.style.cssText = 'position:fixed;z-index:10020;min-width:150px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 12px 40px rgba(15,23,42,.18);padding:6px;';
+        function item(label, danger, onClick) {
+            const btn = document.createElement('button');
+            btn.type = 'button'; btn.textContent = label;
+            btn.style.cssText = 'display:block;width:100%;text-align:left;padding:8px 11px;border:0;border-radius:8px;background:transparent;font-size:13px;font-weight:650;cursor:pointer;color:' + (danger ? '#dc2626' : '#17191d') + ';';
+            btn.onmouseenter = function() { btn.style.background = '#f3f4f6'; };
+            btn.onmouseleave = function() { btn.style.background = 'transparent'; };
+            btn.onclick = function() { closeBookmarkMemberContextMenu(); onClick(); };
+            menu.appendChild(btn);
+        }
+        item('重命名', false, function() { beginBookmarkMemberRename(bookmark, member, template, nameEl); });
+        item('设为 EN', false, function() { setBookmarkMemberLanguage(bookmark, template, 'EN'); });
+        item('设为 AR', false, function() { setBookmarkMemberLanguage(bookmark, template, 'AR'); });
+        item('释放到组外', false, function() { releaseBookmarkMember(bookmark, member); });
+        item('删除模板', true, function() { deleteBookmarkMemberTemplate(bookmark, member, template); });
+        document.body.appendChild(menu);
+        menu.style.left = Math.min(event.clientX, window.innerWidth - 170) + 'px';
+        menu.style.top = Math.min(event.clientY, window.innerHeight - 130) + 'px';
+        setTimeout(function() {
+            document.addEventListener('click', closeBookmarkMemberContextMenu, { once: true });
+        }, 0);
+    }
+    function setBookmarkMemberLanguage(bookmark, template, lang) {
+        setTemplateLanguage(template, lang);
+        // 语言标签变化会影响分组，重新打开弹窗以刷新分组与图标。
+        openTemplateBookmarkPicker(bookmark.id);
+    }
+    function releaseBookmarkMember(bookmark, member) {
+        const templateId = member.ref.templateId;
+        const refs = normalizeTemplateBookmarkRefs(bookmark.templateRefs).filter(function(r) { return r.templateId !== templateId; });
+        const remainingTemplates = refs.map(function(r) { return findTemplateBookmarkMember(r); }).filter(Boolean);
+        const cover = chooseTemplateBookmarkCoverTemplate(remainingTemplates);
+        bookmark.templateRefs = refs;
+        bookmark.coverTemplateId = cover ? (cover.cloudId || cover.id) : (refs[0]?.templateId || '');
+        bookmark.previewUrl = cover?.previewUrl || remainingTemplates[0]?.previewUrl || bookmark.previewUrl || '';
+        bookmark._pending = true;
+        const cloudId = bookmark.cloudId || bookmark.id;
+        if (cloudId) notifyParent({ type: 'vf:update-template-bookmark', id: cloudId, name: bookmark.name, data: { templateRefs: refs, coverTemplateId: bookmark.coverTemplateId }, previewDataUrl: cover?.previewUrl || '' });
+        renderAssetLibrary();
+        showToast('已释放到组外');
+        openTemplateBookmarkPicker(bookmark.id);
+    }
+    function deleteBookmarkMemberTemplate(bookmark, member, template) {
+        const name = template.name || member.ref.name || '该模板';
+        if (!confirm('确定删除模板「' + name + '」？此操作不可恢复，删除后所有引用它的书签都会移除该成员。')) return;
+        moveAssetToRecycle('layout', template);
+        renderAssetLibrary();
+        showToast('模板已删除');
+        openTemplateBookmarkPicker(bookmark.id);
+    }
+    function dissolveTemplateBookmark(bookmark) {
+        if (!bookmark) return;
+        const count = getLiveTemplateBookmarkMembers(bookmark).length;
+        if (!confirm('解散后「' + (bookmark.name || '') + '」会被删除，' + count + ' 个关联模板将恢复显示在资产库和素材库。确定解散？')) return;
+        presetLibrary = presetLibrary.filter(function(p) { return p !== bookmark; });
+        renderAssetLibrary();
+        const cloudId = bookmark.cloudId || bookmark.id;
+        if (cloudId) notifyParent({ type: 'vf:dissolve-template-bookmark', id: cloudId });
+        showToast('正在解散书签...');
     }
     document.addEventListener('click', function(event) {
         if(!event.target.closest('.asset-context-menu') && !event.target.closest('.asset-item')) closeAssetContextMenu();
@@ -8912,7 +9350,7 @@
         var preset = presetLibrary.find(function(p) { return p.id === id; });
         moveAssetToRecycle('layout', preset);
     }
-    async function saveToPreset() {
+    async function saveToPreset(language) {
         if (linkedArtboardGroupId && linkedArtboardIds.filter(function(id) { return isLinkedArtboard(id); }).length > 1) {
             return saveLinkedArtboardSet();
         }
@@ -8922,7 +9360,7 @@
         const name = saveRequest.name;
         var elements = JSON.parse(JSON.stringify(layers));
         var tempId = genId('p');
-        var preset = { id: tempId, name, size: currentRatio, elements: elements, _pending: true };
+        var preset = { id: tempId, name, size: currentRatio, elements: elements, _pending: true, tags: language ? ['vf:lang:' + language] : [] };
         presetLibrary.push(preset);
         renderAssetLibrary();
         showToast('正在保存到素材库...');
@@ -8944,7 +9382,7 @@
         var subTag = (diySelectedSubtag && layoutSubtags.indexOf(diySelectedSubtag) !== -1 && diySelectedSubtag !== '全部') ? diySelectedSubtag : '社媒物料';
         // 保存模板时也必须使用当前实际画布尺寸，而不是仍可能为 head 的固定画板预设。
         var canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
-        notifyParent({ type: 'vf:save-template', templateType: 'layout', name: name, data: { size: currentRatio, canvasW: canvasSize.w, canvasH: canvasSize.h, elements: elements }, previewDataUrl: previewDataUrl || '', tempId: tempId, subTag: subTag });
+        notifyParent({ type: 'vf:save-template', templateType: 'layout', name: name, data: { size: currentRatio, canvasW: canvasSize.w, canvasH: canvasSize.h, elements: elements }, previewDataUrl: previewDataUrl || '', tempId: tempId, subTag: subTag, language: language || '' });
     }
     async function saveLinkedArtboardSet() {
         saveCurrentArtboardState();
@@ -10848,29 +11286,24 @@
             if(aiReferenceImages.length) {
                 body.images = aiReferenceImages.map(function(item) { return item.src; });
             }
-            updateAIProgress('正在提交生成请求到即梦（同步出图，通常需 10~40 秒）…', 30);
-            // 直连 jimeng-free-api 代理（OpenAI 风格同步接口），绕过 Cloudflare 函数 30s 限制。
-            // 代理内部会自行轮询即梦直到出图，这里 await 一次即可拿到最终结果。
-            const controller = new AbortController();
-            const timeoutId = setTimeout(function() { controller.abort(); }, 160000);
-            var res, payload;
-            try {
-                res = await fetch(JIMENG_API_URL + '/v1/images/generations', {
-                    method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + jimengSessionId, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body),
-                    signal: controller.signal
-                });
-            } finally {
-                clearTimeout(timeoutId);
+            updateAIProgress('正在提交生成请求到即梦…', 30);
+            // 异步流程：提交（快）→ 轮询（快）。每次 HTTP 请求都很短，绕开 Cloudflare 隧道 100s 超时。
+            // 代理在后台持续轮询即梦直到出图，这里只负责短请求查询任务状态。
+            const submitRes = await fetch(JIMENG_API_URL + '/v1/images/generations/async', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + jimengSessionId, 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if(!submitRes.ok) {
+                var subErr = '';
+                try { var se = await submitRes.json(); subErr = se.message || se.errmsg || ''; } catch(_) {}
+                throw new Error('即梦提交失败 HTTP ' + submitRes.status + (subErr ? '：' + subErr : ''));
             }
-            if(!res.ok) {
-                var errText = '';
-                try { var ej = await res.json(); errText = ej.message || ej.errmsg || ej.error || ''; } catch(_) {}
-                throw new Error('即梦 API 返回 HTTP ' + res.status + (errText ? '：' + errText : ''));
-            }
-            payload = await res.json();
-            var items = payload && payload.data ? payload.data : [];
+            const submitPayload = await submitRes.json();
+            const taskId = submitPayload && submitPayload.task_id;
+            if(!taskId) throw new Error('即梦未返回任务编号');
+            updateAIProgress('任务已提交，即梦正在生成图片…', 45);
+            var items = await pollJimengAsyncTask(taskId);
             var images = [];
             for(var j = 0; j < items.length; j++) {
                 var item = items[j];
@@ -10885,7 +11318,7 @@
                 for(var i = 0; i < images.length; i++) { addAIImageLayer(images[i]); }
                 showToast('✅ 即梦已生成 ' + images.length + ' 张图片');
             } else {
-                showToast('❌ ' + (payload.message || payload.errmsg || '即梦未返回图片'), true);
+                showToast('❌ ' + (submitPayload.message || '即梦未返回图片'), true);
             }
         } catch(e) {
             var jmErr = e && e.message ? e.message : '';
@@ -10900,18 +11333,14 @@
         }
     }
     
-    async function pollJimengTask(taskId) {
+    async function pollJimengAsyncTask(taskId) {
         if(!taskId) throw new Error('缺少即梦任务编号');
-        const maxAttempts = 120; // 约 5 分钟
+        const maxAttempts = 90; // 每 3s 一次，约 4.5 分钟
         for(let i = 0; i < maxAttempts; i += 1) {
-            await new Promise(resolve => setTimeout(resolve, i < 3 ? 1800 : 3000));
-            updateAIProgress('即梦正在生成图片，请耐心等待…', Math.min(88, 52 + Math.round((i / maxAttempts) * 34)));
-            var queryHeaders = { 'Authorization': 'Bearer ' + jimengSessionId };
-            if(jimengCookies && Object.keys(jimengCookies).length) {
-                queryHeaders['X-Jimeng-Cookies'] = JSON.stringify(jimengCookies);
-            }
-            const res = await fetch('/api/jimeng?task_id=' + encodeURIComponent(taskId), {
-                headers: queryHeaders
+            await new Promise(resolve => setTimeout(resolve, i < 3 ? 2000 : 3000));
+            updateAIProgress('即梦正在生成图片，请耐心等待…', Math.min(88, 50 + Math.round((i / maxAttempts) * 36)));
+            const res = await fetch(JIMENG_API_URL + '/v1/images/generations/async?task_id=' + encodeURIComponent(taskId), {
+                headers: { 'Authorization': 'Bearer ' + jimengSessionId }
             });
             if(!res.ok) {
                 let msg = '';
@@ -10919,11 +11348,15 @@
                 throw new Error('即梦查询失败（HTTP ' + res.status + (msg ? '：' + msg : '') + ')');
             }
             const payload = await res.json();
-            if(payload && payload.pending === false && payload.data && payload.data.length) {
+            const status = payload && payload.status;
+            if(status === 'done' && payload.data && payload.data.length) {
                 return payload.data;
             }
-            if(payload && payload.pending === false && payload.message) {
-                throw new Error(payload.message);
+            if(status === 'failed') {
+                throw new Error(payload.message || '即梦生成失败');
+            }
+            if(status === 'not_found') {
+                throw new Error('即梦任务已过期或不存在');
             }
         }
         throw new Error('即梦生成时间较长，请稍后重试。');

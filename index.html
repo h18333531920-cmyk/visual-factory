@@ -460,6 +460,34 @@
     .favorite-btn.active {
       color: #fbbf24;
     }
+    /* 模板快捷书签卡片：左上角数量角标（对齐 DIY 资产库） */
+    .library-bookmark-summary {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 5;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px 3px 8px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      pointer-events: none;
+    }
+    .library-bookmark-badge {
+      font-size: 13px;
+      line-height: 1;
+    }
+    .library-bookmark-count {
+      min-width: 14px;
+      text-align: center;
+    }
     /* 覆盖旧的文件标签和收藏按钮样式 */
     .file-pill { display: none !important; }
     .favorite-btn {
