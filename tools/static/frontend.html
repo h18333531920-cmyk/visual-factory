@@ -2624,7 +2624,7 @@
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260813-static-ui-v8">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260813-static-ui-v9">
 </head>
 <body>
 
@@ -2876,17 +2876,28 @@
                         <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
                         <div class="ai-reference-hint">上传参考图，或输入文字描述想生成的图片。</div>
                     </div>
-                    <div class="prompt-tag-list" id="prompt-tag-list"></div>
                     <div class="ai-prompt-shell">
-                        <textarea class="textarea" id="ai-prompt-input" rows="4" placeholder="上传参考图、输入文字或 @ 主体，描述你想生成的图片。"></textarea>
+                        <textarea class="textarea" id="ai-prompt-input" rows="4" placeholder="上传参考图、输入文字描述或 @ 使用功能"></textarea>
                     </div>
                     <div class="ai-control-bar">
                         <div class="ai-menu-wrap">
-                            <button class="ai-menu-btn active" type="button" onclick="toggleAIMenu('feature', event)"><span>▣</span><strong id="ai-feature-label">图片生成</strong><span class="chev">⌄</span></button>
-                            <div class="ai-dropdown" id="ai-feature-menu">
-                                <button type="button" data-ai-feature="generate" onclick="selectAIFeature('generate')">图片生成</button>
-                                <button type="button" data-ai-feature="outpaint" onclick="selectAIFeature('outpaint')">智能扩图</button>
-                                <button type="button" data-ai-feature="upscale" onclick="selectAIFeature('upscale')">图片清晰</button>
+                            <button class="ai-menu-btn active" type="button" onclick="toggleAIMenu('skill', event)"><span>✦</span><strong id="ai-skill-label">Skills</strong><span class="chev">⌄</span></button>
+                            <div class="ai-dropdown" id="ai-skill-menu">
+                                <button type="button" data-ai-skill="replace-food" onclick="selectAISkill('replace-food')">一键替换食物</button>
+                                <button type="button" data-ai-skill="upscale" onclick="selectAISkill('upscale')">一键高清</button>
+                                <button type="button" data-ai-skill="outpaint" onclick="selectAISkill('outpaint')">智能扩图</button>
+                            </div>
+                        </div>
+                        <div class="ai-menu-wrap">
+                            <button class="ai-menu-btn" type="button" onclick="toggleAIMenu('size', event)"><span class="ai-ratio-icon"></span><strong id="ai-size-label">1:1</strong><span class="chev">⌄</span></button>
+                            <div class="ai-dropdown ai-size-dropdown" id="ai-size-menu">
+                                <button type="button" data-ai-size="1:1" onclick="selectAISize('1:1')">1:1</button>
+                                <button type="button" data-ai-size="3:4" onclick="selectAISize('3:4')">3:4</button>
+                                <button type="button" data-ai-size="4:3" onclick="selectAISize('4:3')">4:3</button>
+                                <button type="button" data-ai-size="9:16" onclick="selectAISize('9:16')">9:16</button>
+                                <button type="button" data-ai-size="16:9" onclick="selectAISize('16:9')">16:9</button>
+                                <button type="button" data-ai-size="2:3" onclick="selectAISize('2:3')">2:3</button>
+                                <button type="button" data-ai-size="3:2" onclick="selectAISize('3:2')">3:2</button>
                             </div>
                         </div>
                         <div class="ai-menu-wrap">
@@ -2999,9 +3010,11 @@
         { id: 'kw_clean', name: '干净背景', prompt: '干净背景，画面简洁，留出版式和文字空间' },
         { id: 'kw_vivid', name: '鲜艳色彩', prompt: '高饱和色彩，明亮活泼，社交媒体广告风格' }
     ];
-    const AI_FEATURE_LABELS = { generate: '图片生成', outpaint: '智能扩图', upscale: '图片清晰' };
+    const AI_SKILL_LABELS = { generate: 'Skills', 'replace-food': '一键替换食物', outpaint: '智能扩图', upscale: '一键高清' };
     const AI_PROVIDER_LABELS = { openai: 'GPT 大模型', volc: '火山大模型', jimeng: '即梦本机' };
     let aiFeatureMode = 'generate';
+    let selectedAISkill = 'generate';
+    let aiGenerationSize = '1:1';
     let aiProvider = 'openai';
     const JIMENG_API_URL = '';
     let jimengApiReady = false;
@@ -4578,10 +4591,10 @@
     }
     function getPromptText() {
         const manual = document.getElementById('ai-prompt-input')?.value.trim() || '';
-        const tagPrompts = selectedKeywordTagIds
-            .map(id => keywordTags.find(t => t.id === id)?.prompt?.trim())
-            .filter(Boolean);
-        return [manual, ...tagPrompts].filter(Boolean).join('，');
+        const skillPrompt = selectedAISkill === 'replace-food'
+            ? '保留原图构图、背景和光影，仅替换画面中的食物主体'
+            : '';
+        return [manual, skillPrompt].filter(Boolean).join('，');
     }
     function getOutpaintExpand(imgW, imgH, targetW, targetH) {
         const imgRatio = imgW / imgH;
@@ -4599,7 +4612,7 @@
         return expand;
     }
     function getGenerationRatio() {
-        return getArtboardPreset(currentArtboardId)?.apiRatio || currentRatio;
+        return aiGenerationSize || getArtboardPreset(currentArtboardId)?.apiRatio || currentRatio;
     }
     function setPromptText(text) {
         const input = document.getElementById('ai-prompt-input');
@@ -4712,12 +4725,13 @@
         }
     });
     function closeAIMenus() {
-        document.getElementById('ai-feature-menu')?.classList.remove('open');
+        document.getElementById('ai-skill-menu')?.classList.remove('open');
+        document.getElementById('ai-size-menu')?.classList.remove('open');
         document.getElementById('ai-provider-menu')?.classList.remove('open');
     }
     function toggleAIMenu(type, event) {
         event?.stopPropagation?.();
-        const id = type === 'feature' ? 'ai-feature-menu' : 'ai-provider-menu';
+        const id = ({ skill: 'ai-skill-menu', size: 'ai-size-menu', provider: 'ai-provider-menu' })[type];
         const target = document.getElementById(id);
         if(!target) return;
         const willOpen = !target.classList.contains('open');
@@ -4725,17 +4739,27 @@
         target.classList.toggle('open', willOpen);
     }
     function refreshAIConsole() {
-        const featureLabel = document.getElementById('ai-feature-label');
+        const skillLabel = document.getElementById('ai-skill-label');
+        const sizeLabel = document.getElementById('ai-size-label');
         const providerLabel = document.getElementById('ai-provider-label');
-        if(featureLabel) featureLabel.textContent = AI_FEATURE_LABELS[aiFeatureMode] || '图片生成';
+        if(skillLabel) skillLabel.textContent = 'Skills';
+        if(sizeLabel) sizeLabel.textContent = aiGenerationSize;
         if(providerLabel) providerLabel.textContent = AI_PROVIDER_LABELS[aiProvider] || 'GPT 大模型';
-        document.querySelectorAll('[data-ai-feature]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiFeature === aiFeatureMode));
+        document.querySelectorAll('[data-ai-skill]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiSkill === selectedAISkill));
+        document.querySelectorAll('[data-ai-size]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiSize === aiGenerationSize));
         document.querySelectorAll('[data-ai-provider]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiProvider === aiProvider));
         renderAIReferenceImage();
         updateJimengApiUI();
     }
-    function selectAIFeature(value) {
-        aiFeatureMode = value || 'generate';
+    function selectAISkill(value) {
+        selectedAISkill = value || 'generate';
+        aiFeatureMode = selectedAISkill === 'upscale' || selectedAISkill === 'outpaint' ? selectedAISkill : 'generate';
+        closeAIMenus();
+        refreshAIConsole();
+    }
+    function selectAISize(value) {
+        aiGenerationSize = value || '1:1';
+        if(aiProvider === 'jimeng') jimengRatio = aiGenerationSize;
         closeAIMenus();
         refreshAIConsole();
     }
@@ -4748,25 +4772,19 @@
     function renderAIReferenceImage() {
         const strip = document.getElementById('ai-reference-strip');
         if(!strip) return;
-        const spreadStep = 64;
-        const expandedWidth = Math.min(520, Math.max(96, 78 + Math.max(0, aiReferenceImages.length - 1) * spreadStep));
         const cards = aiReferenceImages.map((item, index) => {
-            const stackX = Math.min(index * 8, 28);
-            const stackRot = [-7, 5, -3, 7, -5, 4, -2, 6][index % 8];
-            const spreadRot = [-7, -3, 4, -5, 3, -2, 5, -4][index % 8];
-            const stackZ = aiReferenceImages.length - index + 2;
             return `
-            <div class="ai-reference-card" draggable="true" data-ai-ref-index="${index}" style="--stack-x:${stackX}px;--stack-rot:${stackRot}deg;--spread-x:${index * spreadStep}px;--spread-rot:${spreadRot}deg;--stack-z:${stackZ};">
+            <div class="ai-reference-card" draggable="true" data-ai-ref-index="${index}">
                 <img src="${item.src}" alt="">
                 <button type="button" draggable="false" onclick="event.stopPropagation(); removeAIReferenceImage(${index})" title="移除参考图">×</button>
             </div>
         `}).join('');
         const hint = aiReferenceImages.length
-            ? `<div class="ai-reference-hint">已添加参考图<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div></div>`
-            : '<div class="ai-reference-hint">拖拽或上传参考图，最多 8 张；也可以只输入文字描述。</div>';
+            ? `<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div>`
+            : '<div class="ai-reference-hint">最多 8 张参考图</div>';
         strip.innerHTML = `
             <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
-            ${aiReferenceImages.length ? `<div class="ai-reference-stack ${aiReferenceImages.length > 1 ? 'has-many' : ''}" id="ai-reference-stack" style="--expanded-width:${expandedWidth}px">${cards}</div>` : ''}
+            ${aiReferenceImages.length ? `<div class="ai-reference-stack" id="ai-reference-stack">${cards}</div>` : ''}
             ${hint}
         `;
         setupAIReferenceSort();
@@ -11584,6 +11602,12 @@
         });
     }
     document.addEventListener('click', e => { if(!e.target.closest('.ai-menu-wrap')) closeAIMenus(); });
+    document.getElementById('ai-prompt-input')?.addEventListener('input', event => {
+        if(/@(?:[^@\s]*)$/.test(event.target.value)) {
+            closeAIMenus();
+            document.getElementById('ai-skill-menu')?.classList.add('open');
+        }
+    });
     bootApp();
 
 </script>

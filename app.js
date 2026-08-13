@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260813-sidebar-static-v254';
+const TOOL_UI_VERSION = '20260813-unified-composer-v255';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -678,21 +678,25 @@ const TOOL_UI_VERSION = '20260813-sidebar-static-v254';
     let referenceFiles = [];
     const renderReferences = files => {
       if (!references) return;
+      const nextFiles = [...referenceFiles.map(entry => entry.file), ...Array.from(files || [])].slice(0, 8);
       referenceFiles.forEach(file => {
         if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
       });
-      referenceFiles = Array.from(files || []).slice(0, 4).map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
+      referenceFiles = nextFiles.map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
       references.innerHTML = referenceFiles.map((entry, index) => {
         const file = entry.file;
         return `<span class="home-command-reference" title="${escapeAttr(file.name)}"><img src="${escapeAttr(entry.previewUrl)}" alt="参考图 ${index + 1}"></span>`;
       }).join('');
       references.classList.toggle('has-references', referenceFiles.length > 0);
-      const addButton = referenceFiles.length < 4 ? `<button type="button" class="home-command-add-reference" aria-label="${state.lang === 'zh' ? '添加参考图' : 'Add reference'}">+</button>` : '';
+      const addButton = referenceFiles.length < 8 ? `<button type="button" class="home-command-add-reference" aria-label="${state.lang === 'zh' ? '添加参考图，最多 8 张' : 'Add references, up to 8'}">+</button>` : '';
       references.insertAdjacentHTML('beforeend', addButton);
       references.querySelector('.home-command-add-reference')?.addEventListener('click', () => upload?.click());
     };
 
-    upload?.addEventListener('change', event => renderReferences(event.target.files));
+    upload?.addEventListener('change', event => {
+      renderReferences(event.target.files);
+      event.target.value = '';
+    });
     sizeTrigger?.addEventListener('click', event => {
       event.stopPropagation();
       const open = !!sizeMenu?.hidden;
@@ -704,6 +708,12 @@ const TOOL_UI_VERSION = '20260813-sidebar-static-v254';
       const open = !!skillsMenu?.hidden;
       closeHomeMenus(skillsMenu);
       setMenuState(skillsMenu, skillsTrigger, open);
+    });
+    prompt?.addEventListener('input', () => {
+      if (/@(?:[^@\s]*)$/.test(prompt.value)) {
+        closeHomeMenus(skillsMenu);
+        setMenuState(skillsMenu, skillsTrigger, true);
+      }
     });
     modelTrigger?.addEventListener('click', event => {
       event.stopPropagation();
@@ -909,8 +919,9 @@ const TOOL_UI_VERSION = '20260813-sidebar-static-v254';
               <div class="home-prompt-menu-wrap">
                 <button class="home-control-button" id="home-skills-trigger" type="button" aria-expanded="false"><span aria-hidden="true">✦</span>Skills<svg class="home-menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.25 3.5 3.5 3.5-3.5"/></svg></button>
                 <div class="home-prompt-menu" id="home-skills-menu" hidden>
+                  <label class="home-skill-option"><span>${state.lang === 'zh' ? '一键替换食物' : 'Replace food'}</span><input type="checkbox" data-home-skill="replace-food"></label>
                   <label class="home-skill-option"><span>${state.lang === 'zh' ? '一键高清' : 'Upscale'}</span><input type="checkbox" data-home-skill="upscale"></label>
-                  <label class="home-skill-option"><span>${state.lang === 'zh' ? '一键换菜品' : 'Replace dish'}</span><input type="checkbox" data-home-skill="replace-dish"></label>
+                  <label class="home-skill-option"><span>${state.lang === 'zh' ? '智能扩图' : 'Outpaint'}</span><input type="checkbox" data-home-skill="outpaint"></label>
                 </div>
               </div>
               <div class="home-size-wrap">
@@ -920,11 +931,11 @@ const TOOL_UI_VERSION = '20260813-sidebar-static-v254';
                 </div>
               </div>
               <div class="home-prompt-menu-wrap home-model-wrap">
-                <button class="home-control-button home-model-trigger" id="home-model-trigger" type="button" aria-expanded="false"><svg class="home-model-spark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.15c.38 0 .69.31.69.69a5.47 5.47 0 0 0 5.47 5.47.69.69 0 1 1 0 1.38A5.47 5.47 0 0 0 8.69 14.16a.69.69 0 1 1-1.38 0A5.47 5.47 0 0 0 1.84 8.69a.69.69 0 1 1 0-1.38 5.47 5.47 0 0 0 5.47-5.47c0-.38.31-.69.69-.69Z"/></svg><strong>GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}</strong><svg class="home-menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.25 3.5 3.5 3.5-3.5"/></svg></button>
+                <button class="home-control-button home-model-trigger" id="home-model-trigger" type="button" aria-expanded="false"><svg class="home-model-spark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.15c.38 0 .69.31.69.69a5.47 5.47 0 0 0 5.47 5.47.69.69 0 1 1 0 1.38A5.47 5.47 0 0 0 8.69 14.16a.69.69 0 1 1-1.38 0A5.47 5.47 0 0 0 1.84 8.69a.69.69 0 1 1 0-1.38 5.47 5.47 0 0 0 5.47-5.47c0-.38.31-.69.69-.69Z"/></svg><strong>GPT ${state.lang === 'zh' ? '大模型' : 'Model'}</strong><svg class="home-menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.25 3.5 3.5 3.5-3.5"/></svg></button>
                 <div class="home-prompt-menu home-model-menu" id="home-model-menu" hidden>
-                  <button type="button" class="is-selected"><span>GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}</span><span class="home-option-check">✓</span></button>
-                  <button type="button"><span>Gemini ${state.lang === 'zh' ? '图像模型' : 'Image'}</span><span class="home-option-check"></span></button>
-                  <button type="button"><span>${state.lang === 'zh' ? '火山图像模型' : 'Volc Image'}</span><span class="home-option-check"></span></button>
+                  <button type="button" class="is-selected"><span>GPT ${state.lang === 'zh' ? '大模型' : 'Model'}</span><span class="home-option-check">✓</span></button>
+                  <button type="button"><span>${state.lang === 'zh' ? '火山大模型' : 'Volc Model'}</span><span class="home-option-check"></span></button>
+                  <button type="button"><span>${state.lang === 'zh' ? '即梦本机' : 'Jimeng Local'}</span><span class="home-option-check"></span></button>
                 </div>
               </div>
               <button class="home-command-submit" type="submit" aria-label="${state.lang === 'zh' ? '发送' : 'Send'}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg></button>

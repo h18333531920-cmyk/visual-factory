@@ -1426,3 +1426,83 @@ html body {
   font-size: inherit !important;
   font-weight: inherit !important;
 }
+
+/* Home composer, compacted for the static DIY inspector without changing its model. */
+.right-pane .prompt-tag-list { display: none !important; }
+.right-pane .ai-reference-strip {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-height: 40px !important;
+  height: 40px !important;
+  margin: 0 0 8px !important;
+  overflow: hidden !important;
+}
+.right-pane .ai-reference-add {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  min-height: 38px !important;
+  border-radius: 9px !important;
+  transform: none !important;
+}
+.right-pane .ai-reference-stack {
+  position: static !important;
+  display: flex !important;
+  flex: 1 1 auto !important;
+  gap: 5px !important;
+  width: auto !important;
+  height: 38px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+}
+.right-pane .ai-reference-stack::-webkit-scrollbar { display: none !important; }
+.right-pane .ai-reference-card {
+  position: relative !important;
+  inset: auto !important;
+  flex: 0 0 38px !important;
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 8px !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+.right-pane .ai-reference-card img { width: 100% !important; height: 100% !important; object-fit: cover !important; }
+.right-pane .ai-reference-card button {
+  top: 2px !important;
+  right: 2px !important;
+  width: 14px !important;
+  height: 14px !important;
+  font-size: 10px !important;
+}
+.right-pane .ai-reference-hint { color: var(--ui-faint) !important; font-size: 10px !important; line-height: 1.2 !important; }
+.right-pane .ai-reference-count { flex: 0 0 auto !important; margin: 0 !important; color: var(--ui-faint) !important; font-size: 10px !important; }
+.right-pane .ai-prompt-shell { padding: 7px !important; margin-bottom: 8px !important; border-radius: 10px !important; }
+.right-pane .ai-prompt-shell .textarea { min-height: 68px !important; padding: 4px !important; font-size: 11px !important; line-height: 1.55 !important; }
+.right-pane .ai-control-bar {
+  grid-template-columns: 66px 52px minmax(0, 1fr) 32px !important;
+  gap: 5px !important;
+}
+.right-pane .ai-menu-btn {
+  height: 32px !important;
+  min-width: 0 !important;
+  padding: 0 7px !important;
+  gap: 4px !important;
+  border-radius: 8px !important;
+  font-size: 10px !important;
+}
+.right-pane .ai-menu-btn strong { min-width: 0 !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+.right-pane .ai-submit-btn { width: 32px !important; height: 32px !important; min-width: 32px !important; }
+.right-pane .ai-ratio-icon {
+  display: inline-block !important;
+  width: 10px !important;
+  height: 10px !important;
+  border: 1.4px solid currentColor !important;
+  border-radius: 2px !important;
+}
+.right-pane .ai-dropdown {
+  min-width: 120px !important;
+  max-height: 230px !important;
+  overflow-y: auto !important;
+}

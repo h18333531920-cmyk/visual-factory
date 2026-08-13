@@ -2384,7 +2384,7 @@ html body #app-shell button[aria-expanded="true"] .home-menu-chevron {
 
 html body #app-shell #home-skills-menu.home-prompt-menu {
   width: 176px !important;
-  height: 80px !important;
+  height: 114px !important;
   padding: 6px !important;
   border-radius: 12px !important;
 }
