@@ -208,7 +208,7 @@ const FAKE_HEADERS = {
 };
 
 const MODEL_MAP = {
-  'jimeng-image-5.0-pro': 'high_aes_general_v50',
+  'jimeng-image-5.0-pro': 'high_aes_general_v50p_large',
   'jimeng-image-5.0-lite': 'high_aes_general_v50',
   'jimeng-image-4.7': 'high_aes_general_v43',
   'jimeng-image-4.6': 'high_aes_general_v42',
@@ -260,12 +260,19 @@ function isHighResModel(modelName) {
 // 即梦 API 请求
 // ---------------------------------------------------------------------------
 
-function buildCookie(token, cookies) {
+// 设备指纹 webId：优先用扩展读到的真实 _tea_web_id，否则按 sessionid 确定性派生。
+// 同一 sessionid 每次请求保持一致，且 query 参数里的 webId 必须和 cookie 里 _tea_web_id
+// 一致，否则即梦风控会判为异常会话（表现为「第一张能出、第二张被拦」）。
+function getEffectiveWebId(token, cookies) {
+  const c = cookies || {};
+  return c._tea_web_id || getWebId(token);
+}
+
+function buildCookie(token, cookies, webId) {
   const c = cookies || {};
   // 优先使用扩展从浏览器读到的真实 cookie（尤其 sid_guard / sessionid_ss，这些是
   // 即梦服务端签发、用于防重放的，伪造值时间戳每次跳变会被风控拉黑）；缺省时回退到
   // 确定性伪造值，保证同一 sessionid 每次请求一致。
-  const webId = c._tea_web_id || getWebId(token);
   const uid = c.uid_tt || getUserId(token);
   const sidGuard = c.sid_guard || `${token}%7C${SID_GUARD_TS}%7C5184000%7CMon%2C+03-Feb-2025+08%3A17%3A09+GMT`;
   return [
@@ -282,21 +289,34 @@ function buildCookie(token, cookies) {
   ].join('; ');
 }
 
-async function jimengRequest(token, method, uri, data, cookies) {
+async function jimengRequest(token, method, uri, data, cookies, query = {}) {
   const deviceTime = unixTimestamp();
+  // Sign 只对「纯路径末 7 位」做摘要，不能包含 query 串；上游代理正是这样算的。
   const sign = md5(`9e2c|${uri.slice(-7)}|${PLATFORM_CODE}|${VERSION_CODE}|${deviceTime}||11ac`);
 
+  const webId = getEffectiveWebId(token, cookies);
   const url = `https://jimeng.jianying.com${uri}`;
   const headers = {
     ...FAKE_HEADERS,
-    'Cookie': buildCookie(token, cookies),
+    'Cookie': buildCookie(token, cookies, webId),
     'Device-Time': String(deviceTime),
     'Sign': sign,
     'Sign-Ver': '1',
     'Content-Type': 'application/json',
   };
 
-  const resp = await fetch(url, { method, headers, body: JSON.stringify(data) });
+  // 即梦每个请求都要求带这几个查询参数；尤其 webId 必须和 cookie 里 _tea_web_id 一致，
+  // 否则设备指纹对不上，风控会拦（表现为「第一张能出、第二张被拦」）。
+  const params = new URLSearchParams({
+    aid: String(DEFAULT_ASSISTANT_ID),
+    device_platform: 'web',
+    region: 'CN',
+    webId,
+    ...query,
+  });
+  const fullUrl = url + (url.includes('?') ? '&' : '?') + params.toString();
+
+  const resp = await fetch(fullUrl, { method, headers, body: JSON.stringify(data) });
   const json = await resp.json();
 
   if (!resp.ok) {
@@ -508,7 +528,7 @@ async function uploadImageToJimeng(token, imageDataUrl, cookies) {
 async function handleHealth(token, cookies) {
   // 用 account info 接口验证 token 有效性
   try {
-    const result = await jimengRequest(token, 'POST', '/passport/account/info/v2', {}, cookies);
+    const result = await jimengRequest(token, 'POST', '/passport/account/info/v2', {}, cookies, { account_sdk_source: 'web' });
     const userId = result?.user_id;
     const valid = Boolean(userId);
     return {
@@ -697,9 +717,10 @@ async function handleGenerate(token, body) {
   // 结果由前端用 GET /api/jimeng?task_id= 轮询查询，
   // 避免在单个 Pages Function 里同步轮询数分钟而触发执行时长上限、被强制中断。）
   const { aigc_data } = await jimengRequest(token, 'POST',
-    `/mweb/v1/aigc_draft/generate?da_version=${DRAFT_VERSION}&web_component_open_flag=1&web_version=${WEB_VERSION}`,
+    '/mweb/v1/aigc_draft/generate',
     requestData,
-    cookies
+    cookies,
+    { da_version: DRAFT_VERSION, web_component_open_flag: '1', web_version: WEB_VERSION }
   );
 
   const historyId = aigc_data?.history_record_id;
