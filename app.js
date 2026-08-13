@@ -1000,7 +1000,7 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
           <aside id="library-inspector" class="library-inspector"></aside>
         </section>
 
-        ${canUpload ? renderUploadModal() : ''}
+        ${canUpload || homeMode ? renderUploadModal() : ''}
         ${renderEditModal()}
         ${renderBatchEditModal()}
         ${renderLibraryDetailModal()}
@@ -1055,6 +1055,10 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
       <div id="library-upload-modal" class="modal-backdrop" hidden>
         <section class="modal library-modal">
           <div class="modal-head">
+            <h3>${state.lang === 'zh' ? '上传素材入库' : 'Upload asset'}</h3>
+            <button class="icon-btn" id="close-library-upload" type="button" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+            </button>
           </div>
           <form id="library-upload-form" class="library-form">
             <input type="hidden" name="library_kind" id="library-upload-kind" value="${defaultKind}">
@@ -2458,7 +2462,7 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
       <article class="library-card ${isTemplateArtwork ? 'template-preview-card' : ''} ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
         <div class="library-thumb-wrap">
           <div class="multi-check"></div>
-          <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded')" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
+          <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t){t.classList.add('img-loaded');if(this.naturalWidth&&this.naturalHeight)t.style.setProperty('--preview-ratio',this.naturalWidth+' / '+this.naturalHeight)}" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
           ${isTemplateArtwork ? `<div class="library-template-size-hover" data-template-size-source="${escapeAttr(source.id)}"><span class="library-template-size-ratio">${escapeHtml(templateSizeInfo?.ratio || '—')}</span><span class="library-template-size-pixels">${escapeHtml(templateSizeInfo?.pixels || '读取真实画板尺寸中…')}</span></div>` : ''}
           <div class="library-card-icons">
             <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
@@ -6397,9 +6401,9 @@ function libraryTagsForForm(formData, kind) {
   }
 
   function previewAspectStyle(preview) {
-    if (!preview?.width || !preview?.height) return '';
+    if (!preview?.width || !preview?.height) return '--preview-ratio: 3 / 4; aspect-ratio: 3 / 4;';
     const ratio = preview.width / preview.height;
-    return `aspect-ratio: ${ratio.toFixed(3)};`;
+    return `--preview-ratio: ${preview.width} / ${preview.height}; aspect-ratio: ${ratio.toFixed(3)};`;
   }
 
   function showLoginMessage(message, isError) {

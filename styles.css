@@ -10320,3 +10320,278 @@ html body #app-shell.app-shell[data-route="home"] .kind-tab-indicator {
 @media (max-width: 760px) {
   html body #app-shell.app-shell[data-route="home"] { padding-left: 0 !important; }
 }
+
+/* Demo fidelity pass: natural-ratio masonry, compact taxonomy, upload surface. */
+html body #app-shell.app-shell[data-route="home"] .library-control-strip {
+  min-height: 0 !important;
+  row-gap: 8px !important;
+  padding: 8px 0 10px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs,
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button {
+  height: 36px !important;
+  min-height: 36px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button {
+  padding-bottom: 7px !important;
+  font-size: 15px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-tag-rows {
+  gap: 6px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-tag-row,
+html body #app-shell.app-shell[data-route="home"] .library-tag-row > div {
+  min-height: 28px !important;
+  gap: 6px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-tag-row button {
+  height: 28px !important;
+  min-height: 28px !important;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-board {
+  margin-top: 16px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-grid {
+  display: block !important;
+  columns: 4 !important;
+  column-gap: 16px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card {
+  display: inline-flex !important;
+  width: 100% !important;
+  margin: 0 0 16px !important;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+  vertical-align: top !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-thumb-wrap {
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-thumb {
+  position: relative !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: var(--preview-ratio, 3 / 4) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-thumb img {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+@media (max-width: 980px) {
+  html body #app-shell.app-shell[data-route="home"] .library-grid { columns: 3 !important; }
+}
+
+@media (max-width: 760px) {
+  html body #app-shell.app-shell[data-route="home"] .library-grid { columns: 2 !important; column-gap: 12px !important; }
+  html body #app-shell.app-shell[data-route="home"] .library-card { margin-bottom: 12px !important; }
+}
+
+@media (max-width: 520px) {
+  html body #app-shell.app-shell[data-route="home"] .library-grid { columns: 1 !important; }
+}
+
+#library-upload-modal {
+  z-index: 200 !important;
+  display: grid;
+  align-items: center !important;
+  justify-items: center !important;
+  padding: 16px !important;
+  background: rgba(15, 23, 42, 0.25) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+#library-upload-modal[hidden] { display: none !important; }
+
+#library-upload-modal .library-modal {
+  display: flex !important;
+  width: min(620px, calc(100vw - 32px)) !important;
+  max-height: calc(100dvh - 32px) !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  border-radius: 16px !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 20px 48px -16px rgba(15, 23, 42, 0.28) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+
+#library-upload-modal .modal-head {
+  display: flex !important;
+  min-height: 52px !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin: 0 !important;
+  padding: 14px 18px 10px !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  background: transparent !important;
+}
+
+#library-upload-modal .modal-head h3 {
+  margin: 0 !important;
+  color: #0f172a !important;
+  font-size: 14px !important;
+  font-weight: 650 !important;
+}
+
+#library-upload-modal .modal-head .icon-btn {
+  display: grid !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  place-items: center !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: #94a3b8 !important;
+  background: transparent !important;
+}
+
+#library-upload-modal .modal-head .icon-btn:hover { color: #334155 !important; background: #f1f5f9 !important; }
+#library-upload-modal .modal-head .icon-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+
+#library-upload-modal .library-upload-scroll {
+  gap: 12px !important;
+  padding: 14px 18px !important;
+}
+
+#library-upload-modal .library-upload-section,
+#library-upload-modal .library-form label,
+#library-upload-modal .upload-tag-picker {
+  gap: 5px !important;
+}
+
+#library-upload-modal .library-upload-section > span,
+#library-upload-modal .library-form label > span,
+#library-upload-modal .upload-tag-picker > span {
+  margin: 0 !important;
+  color: #64748b !important;
+  font-size: 11px !important;
+  font-weight: 550 !important;
+  line-height: 1.25 !important;
+}
+
+#library-upload-modal .library-kind-card-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+#library-upload-modal .library-kind-card {
+  min-height: 42px !important;
+  height: 42px !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  color: #64748b !important;
+  background: rgba(241, 245, 249, 0.8) !important;
+  box-shadow: none !important;
+}
+
+#library-upload-modal .library-kind-card:hover { background: #f1f5f9 !important; }
+
+#library-upload-modal .library-kind-card.active {
+  color: #ffffff !important;
+  background: #0f172a !important;
+}
+
+#library-upload-modal .library-kind-card strong { font-size: 12px !important; font-weight: 650 !important; }
+
+#library-upload-modal .library-upload-tags,
+#library-upload-modal .library-form-grid.two {
+  gap: 12px !important;
+}
+
+#library-upload-modal .library-form input,
+#library-upload-modal .library-form select,
+#library-upload-modal .upload-tag-trigger {
+  min-height: 36px !important;
+  height: 36px !important;
+  padding: 0 11px !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  border-radius: 8px !important;
+  color: #334155 !important;
+  background: #ffffff !important;
+  font-size: 12px !important;
+  box-shadow: none !important;
+}
+
+#library-upload-modal .upload-tag-trigger strong { font-size: 12px !important; font-weight: 550 !important; }
+
+#library-upload-modal .upload-tag-menu {
+  z-index: 220 !important;
+  padding: 6px !important;
+  border-radius: 12px !important;
+}
+
+#library-upload-modal .library-drop-zone {
+  min-height: 108px !important;
+  padding: 14px !important;
+  border: 1px dashed #cbd5e1 !important;
+  border-radius: 12px !important;
+  background: rgba(248, 250, 252, 0.65) !important;
+  box-shadow: none !important;
+}
+
+#library-upload-modal .library-drop-zone:hover { border-color: #94a3b8 !important; background: #f8fafc !important; }
+#library-upload-modal .library-drop-zone span { color: #334155 !important; font-size: 12px !important; font-weight: 600 !important; }
+#library-upload-modal .library-drop-zone strong { color: #94a3b8 !important; font-size: 11px !important; font-weight: 500 !important; }
+#library-upload-modal .library-drop-zone small { color: #cbd5e1 !important; font-size: 10px !important; }
+
+#library-upload-modal .library-upload-footer {
+  display: flex !important;
+  min-height: 60px !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 11px 18px 14px !important;
+  border-top: 1px solid #f1f5f9 !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: none !important;
+}
+
+#library-upload-modal .modal-actions { display: flex !important; width: auto !important; gap: 8px !important; }
+
+#library-upload-modal .modal-actions .primary-btn,
+#library-upload-modal .modal-actions .ghost-btn {
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 16px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+#library-upload-modal .modal-actions .primary-btn { border-color: #0f172a !important; background: #0f172a !important; color: #ffffff !important; }
+#library-upload-modal .modal-actions .ghost-btn { border-color: #e2e8f0 !important; background: #ffffff !important; color: #475569 !important; }
+
+@media (max-width: 640px) {
+  #library-upload-modal .library-modal { width: 100% !important; }
+  #library-upload-modal .library-kind-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  #library-upload-modal .library-upload-tags,
+  #library-upload-modal .library-form-grid.two { grid-template-columns: 1fr !important; }
+}
