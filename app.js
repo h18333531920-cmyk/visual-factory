@@ -920,7 +920,7 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
                 </div>
               </div>
               <div class="home-prompt-menu-wrap home-model-wrap">
-                <button class="home-control-button home-model-trigger" id="home-model-trigger" type="button" aria-expanded="false"><span aria-hidden="true">◇</span><strong>GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}</strong><svg class="home-menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.25 3.5 3.5 3.5-3.5"/></svg></button>
+                <button class="home-control-button home-model-trigger" id="home-model-trigger" type="button" aria-expanded="false"><svg class="home-model-spark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.15c.38 0 .69.31.69.69a5.47 5.47 0 0 0 5.47 5.47.69.69 0 1 1 0 1.38A5.47 5.47 0 0 0 8.69 14.16a.69.69 0 1 1-1.38 0A5.47 5.47 0 0 0 1.84 8.69a.69.69 0 1 1 0-1.38 5.47 5.47 0 0 0 5.47-5.47c0-.38.31-.69.69-.69Z"/></svg><strong>GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}</strong><svg class="home-menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.25 3.5 3.5 3.5-3.5"/></svg></button>
                 <div class="home-prompt-menu home-model-menu" id="home-model-menu" hidden>
                   <button type="button" class="is-selected"><span>GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}</span><span class="home-option-check">✓</span></button>
                   <button type="button"><span>Gemini ${state.lang === 'zh' ? '图像模型' : 'Image'}</span><span class="home-option-check"></span></button>

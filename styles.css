@@ -10152,6 +10152,40 @@ html body #app-shell.app-shell[data-route="home"] .filter-dropdown-wrap > .ghost
   transform: none !important;
 }
 
+/* Homepage icon refinement: optical centering and font-independent model glyph. */
+html body #app-shell.app-shell[data-route="home"] .sidebar-brand .brand-mark .brand-bolt-icon {
+  width: 17px !important;
+  height: 17px !important;
+  overflow: visible !important;
+  fill: #ffffff !important;
+  stroke: none !important;
+  transform: translate(0.5px, -0.5px) !important;
+  transform-origin: center !important;
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .sidebar-brand .brand-mark:hover .brand-bolt-icon {
+  transform: translate(0.5px, -0.5px) scale(1.07) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-model-spark {
+  display: block !important;
+  width: 14px !important;
+  height: 14px !important;
+  flex: 0 0 14px !important;
+  overflow: visible !important;
+  fill: #64748b !important;
+  stroke: none !important;
+  transform: translateY(-0.25px) !important;
+  transition: fill 150ms ease, transform 180ms ease !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-model-trigger:hover .home-model-spark,
+html body #app-shell.app-shell[data-route="home"] .home-model-trigger[aria-expanded="true"] .home-model-spark {
+  fill: #0f172a !important;
+  transform: translateY(-0.25px) scale(1.04) !important;
+}
+
 html body #app-shell.app-shell[data-route="home"] .library-grid {
   display: grid !important;
   columns: auto !important;
