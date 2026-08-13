@@ -10186,6 +10186,162 @@ html body #app-shell.app-shell[data-route="home"] .home-model-trigger[aria-expan
   transform: translateY(-0.25px) scale(1.04) !important;
 }
 
+/* Demo v2 thin navigation — shared by every workspace route. */
+html body #app-shell.app-shell {
+  padding-left: 64px !important;
+}
+
+html body #app-shell.app-shell .sidebar {
+  width: 64px !important;
+  overflow: visible !important;
+  border-right: 1px solid rgba(226, 232, 240, 0.75) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+html body #app-shell.app-shell .sidebar-brand {
+  display: grid !important;
+  min-height: 64px !important;
+  padding: 18px 0 8px !important;
+  place-items: center !important;
+}
+
+html body #app-shell.app-shell .sidebar-brand > div:last-child { display: none !important; }
+
+html body #app-shell.app-shell .sidebar-brand .brand-mark {
+  display: grid !important;
+  width: 36px !important;
+  height: 36px !important;
+  place-items: center !important;
+  margin: 0 !important;
+  border: 1px solid rgba(30, 41, 59, 0.88) !important;
+  border-radius: 10px !important;
+  background: #020617 !important;
+  box-shadow: 0 4px 12px -3px rgba(15, 23, 42, 0.34), inset 0 1px 0 rgba(255,255,255,.07) !important;
+}
+
+html body #app-shell.app-shell .sidebar-brand .brand-mark::after { display: none !important; }
+
+html body #app-shell.app-shell .sidebar-brand .brand-mark .brand-bolt-icon {
+  width: 17px !important;
+  height: 17px !important;
+  fill: #fff !important;
+  stroke: none !important;
+  transform: translate(.5px, -.5px) !important;
+}
+
+html body #app-shell.app-shell .nav-list {
+  display: flex !important;
+  overflow: visible !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 20px 12px 8px !important;
+}
+
+html body #app-shell.app-shell .nav-item {
+  position: relative !important;
+  display: flex !important;
+  width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  flex: 0 0 40px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: #94a3b8 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: color 150ms ease, background-color 150ms ease !important;
+}
+
+html body #app-shell.app-shell .nav-item .nav-label { display: none !important; }
+html body #app-shell.app-shell .nav-item .nav-icon { color: inherit !important; }
+html body #app-shell.app-shell .nav-item .nav-icon svg {
+  width: 18px !important;
+  height: 18px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 2 !important;
+}
+
+html body #app-shell.app-shell .nav-item:hover { color: #0f172a !important; background: #f8fafc !important; }
+html body #app-shell.app-shell .nav-item.active { color: #0f172a !important; background: #f1f5f9 !important; }
+html body #app-shell.app-shell .nav-item::before { display: none !important; }
+
+html body #app-shell.app-shell .nav-item::after {
+  position: absolute !important;
+  z-index: 300 !important;
+  top: 50% !important;
+  left: calc(100% + 10px) !important;
+  display: block !important;
+  padding: 5px 8px !important;
+  border-radius: 6px !important;
+  color: #fff !important;
+  background: rgba(15, 23, 42, .96) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  content: attr(aria-label) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translate(-4px, -50%) !important;
+  transition: opacity 150ms ease, transform 150ms ease !important;
+}
+
+html body #app-shell.app-shell .nav-item:hover::after,
+html body #app-shell.app-shell .nav-item:focus-visible::after {
+  opacity: 1 !important;
+  transform: translate(0, -50%) !important;
+}
+
+html body #app-shell.app-shell .sidebar-footer {
+  display: flex !important;
+  margin-top: auto !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  padding: 10px 12px 18px !important;
+}
+
+html body #app-shell.app-shell .sidebar-footer::before {
+  width: 24px !important;
+  height: 1px !important;
+  margin: 0 auto !important;
+  background: rgba(226, 232, 240, .8) !important;
+  content: "" !important;
+  order: 2 !important;
+}
+
+html body #app-shell.app-shell .sidebar-footer .ghost-btn {
+  width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: #94a3b8 !important;
+  background: transparent !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+html body #app-shell.app-shell #lang-toggle { order: 1 !important; }
+html body #app-shell.app-shell #sign-out-btn { order: 3 !important; font-size: 0 !important; }
+html body #app-shell.app-shell #sign-out-btn::after { color: currentColor; font-size: 16px; content: "↗"; }
+html body #app-shell.app-shell #sign-out-btn:hover { color: #dc2626 !important; background: #fef2f2 !important; }
+
+@media (max-width: 760px) {
+  html body #app-shell.app-shell { padding-left: 0 !important; }
+}
+
 html body #app-shell.app-shell[data-route="home"] .library-grid {
   display: grid !important;
   columns: auto !important;
