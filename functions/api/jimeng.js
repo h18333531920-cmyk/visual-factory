@@ -112,6 +112,45 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
+// 递归查找即梦历史记录里的图片 URL。历史记录字段结构可能随版本变化，不写死路径。
+function findJimengImageUrl(value, depth = 0, seen = new Set()) {
+  if (!value || typeof value !== 'object' || depth > 6 || seen.has(value)) return '';
+  seen.add(value);
+  const urlKeys = ['image_url', 'image_uri', 'cover_url', 'origin_url', 'original_url', 'download_url', 'uri', 'url'];
+  for (const key of urlKeys) {
+    const v = value[key];
+    if (typeof v === 'string' && /^https?:\/\//i.test(v)) return v;
+  }
+  for (const v of Object.values(value)) {
+    if (typeof v === 'string' && /^https?:\/\/[^\s"'<>]+\.(?:jpe?g|png|webp|heic|avif)/i.test(v)) return v;
+    const found = findJimengImageUrl(v, depth + 1, seen);
+    if (found) return found;
+  }
+  return '';
+}
+
+// 提取记录结构摘要（字段名 + 值类型 + 短字符串），用于在解析不到图片时帮助定位。
+function summarizeRecordShape(record) {
+  try {
+    const shape = {};
+    const walk = (obj, out, depth) => {
+      if (!obj || typeof obj !== 'object' || depth > 4) return;
+      for (const [k, v] of Object.entries(obj)) {
+        if (typeof v === 'string') out[k] = v.length > 60 ? v.slice(0, 60) + '…' : v;
+        else if (typeof v === 'number' || typeof v === 'boolean' || v === null) out[k] = v;
+        else if (Array.isArray(v)) {
+          out[k] = 'array(' + v.length + ')';
+          if (v[0] && typeof v[0] === 'object') { out[k + '[0]'] = {}; walk(v[0], out[k + '[0]'], depth + 1); }
+        } else if (typeof v === 'object') { out[k] = {}; walk(v, out[k], depth + 1); }
+      }
+    };
+    walk(record, shape, 0);
+    return JSON.stringify(shape).slice(0, 800);
+  } catch (_) {
+    return JSON.stringify(record).slice(0, 800);
+  }
+}
+
 function unixTimestamp() {
   return Math.floor(Date.now() / 1000);
 }
@@ -673,26 +712,33 @@ async function handleTaskQuery(token, taskId) {
     return { pending: true };
   }
 
-  // 组装返回结果（兼容 OpenAI 图片 API 格式 + b64_json 支持）
+  // 组装返回结果（兼容 OpenAI 图片 API 格式 + b64_json 支持）。
+  // 图片字段不写死路径，递归查找，兼容即梦历史记录结构变化。
   const data = [];
   for (const item of itemList) {
-    const imgUrl = item?.image?.large_images?.[0]?.image_url
-      || item?.common_attr?.cover_url
-      || '';
+    const imgUrl = findJimengImageUrl(item);
     if (!imgUrl) continue;
 
     const entry = { url: imgUrl };
     try {
       const imgResp = await fetch(imgUrl);
+      if (!imgResp.ok) throw new Error('HTTP ' + imgResp.status);
       const arr = await imgResp.arrayBuffer();
       entry.b64_json = arrayBufferToBase64(arr);
     } catch (_) {
-      // b64 转换失败，保留 url
+      // b64 转换失败，保留 url，交由前端下载兜底
     }
     data.push(entry);
   }
 
-  if (data.length === 0) return { pending: true };
+  if (data.length === 0) {
+    // 生成已完成（或已出 item），但解析不到图片地址——返回结构摘要帮助定位，
+    // 而不是让前端一直轮询到超时。
+    return {
+      pending: false,
+      message: '即梦已生成，但暂未解析到图片地址（status=' + status + '，item_list=' + itemList.length + '）。记录结构：' + summarizeRecordShape(record)
+    };
+  }
   return { pending: false, data };
 }
 
