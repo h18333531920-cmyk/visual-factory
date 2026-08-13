@@ -165,12 +165,26 @@ const PLATFORM_CODE = '7';
 const DRAFT_VERSION = '3.3.20';
 const WEB_VERSION = '7.5.0';
 const MIN_VERSION = '3.0.2';
+// sid_guard 第三段固定时间戳，对应 Mon, 03-Feb-2025 08:17:09 GMT（与第四段一致），
+// 仅作为无真实 sid_guard 时的回退值，避免每次请求时间戳跳变触发风控。
+const SID_GUARD_TS = 1738657029;
 
-// 延迟初始化（避免 Cloudflare Workers 全局作用域限制）
-let _webId = null;
-let _userId = null;
-function getWebId() { if (!_webId) _webId = String(Math.floor(Math.random() * 999999999999999999) + 7000000000000000000); return _webId; }
-function getUserId() { if (!_userId) _userId = uuid().replace(/-/g, ''); return _userId; }
+// 设备 ID / 用户 ID 由 sessionid 确定性派生：同一 sessionid 每次请求生成相同的值，
+// 避免 Cloudflare 无状态下每次随机、被即梦风控判定为异常会话。
+function hashString(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(16);
+}
+function getWebId(token) {
+  const h = hashString((token || 'jimeng') + ':webid');
+  return String(7000000000000000000 + (parseInt(h.slice(0, 12), 16) % 999999999999999999));
+}
+function getUserId(token) {
+  return 'uid' + hashString((token || 'jimeng') + ':tt').slice(0, 20);
+}
 
 const FAKE_HEADERS = {
   'Accept': 'application/json, text/plain, */*',
@@ -246,29 +260,36 @@ function isHighResModel(modelName) {
 // 即梦 API 请求
 // ---------------------------------------------------------------------------
 
-function buildCookie(token) {
+function buildCookie(token, cookies) {
+  const c = cookies || {};
+  // 优先使用扩展从浏览器读到的真实 cookie（尤其 sid_guard / sessionid_ss，这些是
+  // 即梦服务端签发、用于防重放的，伪造值时间戳每次跳变会被风控拉黑）；缺省时回退到
+  // 确定性伪造值，保证同一 sessionid 每次请求一致。
+  const webId = c._tea_web_id || getWebId(token);
+  const uid = c.uid_tt || getUserId(token);
+  const sidGuard = c.sid_guard || `${token}%7C${SID_GUARD_TS}%7C5184000%7CMon%2C+03-Feb-2025+08%3A17%3A09+GMT`;
   return [
-    `_tea_web_id=${getWebId()}`,
+    `_tea_web_id=${webId}`,
     'is_staff_user=false',
     'store-region=cn-gd',
     'store-region-src=uid',
-    `sid_guard=${token}%7C${unixTimestamp()}%7C5184000%7CMon%2C+03-Feb-2025+08%3A17%3A09+GMT`,
-    `uid_tt=${getUserId()}`,
-    `uid_tt_ss=${getUserId()}`,
-    `sid_tt=${token}`,
+    `sid_guard=${sidGuard}`,
+    `uid_tt=${uid}`,
+    `uid_tt_ss=${c.uid_tt_ss || uid}`,
+    `sid_tt=${c.sid_tt || token}`,
     `sessionid=${token}`,
-    `sessionid_ss=${token}`,
+    `sessionid_ss=${c.sessionid_ss || token}`,
   ].join('; ');
 }
 
-async function jimengRequest(token, method, uri, data) {
+async function jimengRequest(token, method, uri, data, cookies) {
   const deviceTime = unixTimestamp();
   const sign = md5(`9e2c|${uri.slice(-7)}|${PLATFORM_CODE}|${VERSION_CODE}|${deviceTime}||11ac`);
 
   const url = `https://jimeng.jianying.com${uri}`;
   const headers = {
     ...FAKE_HEADERS,
-    'Cookie': buildCookie(token),
+    'Cookie': buildCookie(token, cookies),
     'Device-Time': String(deviceTime),
     'Sign': sign,
     'Sign-Ver': '1',
@@ -381,7 +402,7 @@ async function generateAWSAuthorizationHeader(accessKeyID, secretAccessKey, sess
 // 参考图上传到即梦 CDN（字节跳动 imagex）
 // ---------------------------------------------------------------------------
 
-async function uploadImageToJimeng(token, imageDataUrl) {
+async function uploadImageToJimeng(token, imageDataUrl, cookies) {
   // 1. 解析图片数据
   let fileData;
   const isBase64 = /^data:/.test(imageDataUrl);
@@ -407,7 +428,7 @@ async function uploadImageToJimeng(token, imageDataUrl) {
   }
 
   // 2. 获取上传令牌
-  const uploadAuth = await jimengRequest(token, 'POST', '/mweb/v1/get_upload_token?aid=513695&da_version=3.2.2&aigc_features=app_lip_sync', { scene: 2 });
+  const uploadAuth = await jimengRequest(token, 'POST', '/mweb/v1/get_upload_token?aid=513695&da_version=3.2.2&aigc_features=app_lip_sync', { scene: 2 }, cookies);
   if (!uploadAuth?.access_key_id) throw new Error('获取上传凭证失败，账号可能已掉线');
 
   // 3. 计算 CRC32
@@ -484,10 +505,10 @@ async function uploadImageToJimeng(token, imageDataUrl) {
 // 健康检测 (GET)
 // ---------------------------------------------------------------------------
 
-async function handleHealth(token) {
+async function handleHealth(token, cookies) {
   // 用 account info 接口验证 token 有效性
   try {
-    const result = await jimengRequest(token, 'POST', '/passport/account/info/v2', {});
+    const result = await jimengRequest(token, 'POST', '/passport/account/info/v2', {}, cookies);
     const userId = result?.user_id;
     const valid = Boolean(userId);
     return {
@@ -509,6 +530,7 @@ async function handleHealth(token) {
 // ---------------------------------------------------------------------------
 
 async function handleGenerate(token, body) {
+  const cookies = (body.cookies && typeof body.cookies === 'object') ? body.cookies : {};
   const model = body.model || 'jimeng-image-5.0-pro';
   const prompt = body.prompt || '';
   const n = body.n || 1;
@@ -545,7 +567,7 @@ async function handleGenerate(token, body) {
   if (images.length > 0) {
     for (const img of images) {
       try {
-        const uri = await uploadImageToJimeng(token, img);
+        const uri = await uploadImageToJimeng(token, img, cookies);
         uploadIDs.push(uri);
       } catch (e) {
         throw new Error(`参考图上传失败：${e.message}`);
@@ -676,7 +698,8 @@ async function handleGenerate(token, body) {
   // 避免在单个 Pages Function 里同步轮询数分钟而触发执行时长上限、被强制中断。）
   const { aigc_data } = await jimengRequest(token, 'POST',
     `/mweb/v1/aigc_draft/generate?da_version=${DRAFT_VERSION}&web_component_open_flag=1&web_version=${WEB_VERSION}`,
-    requestData
+    requestData,
+    cookies
   );
 
   const historyId = aigc_data?.history_record_id;
@@ -685,7 +708,7 @@ async function handleGenerate(token, body) {
   return { pending: true, taskId: historyId };
 }
 
-async function handleTaskQuery(token, taskId) {
+async function handleTaskQuery(token, taskId, cookies) {
   const PROCESSING = new Set([20, 42, 45]);
   const FAIL = 30;
 
@@ -699,7 +722,7 @@ async function handleTaskQuery(token, taskId) {
       ],
     },
     http_common_info: { aid: DEFAULT_ASSISTANT_ID },
-  });
+  }, cookies);
 
   const record = result[taskId];
   if (!record) throw new Error('即梦记录不存在');
@@ -800,20 +823,30 @@ export async function onRequest({ request }) {
     return json({ message: '请先设置即梦 Session ID' }, 401);
   }
 
+  // 从 X-Jimeng-Cookies header 解析扩展读取的真实 cookie（GET 查询时由前端传入）。
+  // 用它替换后端伪造的 sid_guard 等，避免每次请求特征跳变被即梦风控拉黑。
+  let headerCookies = {};
+  try {
+    const raw = request.headers.get('X-Jimeng-Cookies') || '';
+    if (raw) headerCookies = JSON.parse(raw);
+  } catch (_) {}
+
   try {
     if (request.method === 'GET') {
       const url = new URL(request.url);
       const taskId = url.searchParams.get('task_id') || url.searchParams.get('taskId') || '';
       if (taskId) {
-        const result = await handleTaskQuery(token, taskId);
+        const result = await handleTaskQuery(token, taskId, headerCookies);
         return json(result);
       }
-      const health = await handleHealth(token);
+      const health = await handleHealth(token, headerCookies);
       return json(health);
     }
 
     if (request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
+      // POST 优先用 body.cookies（前端生成时带上），否则回退 header。
+      if (!body.cookies || typeof body.cookies !== 'object') body.cookies = headerCookies;
       const result = await handleGenerate(token, body);
       return json(result);
     }

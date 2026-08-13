@@ -41,6 +41,7 @@ export async function onRequest({ request, env }) {
       return json({
         found: true,
         sessionid: data.sessionid,
+        cookies: data.cookies || {},
         candidates: data.candidates || [],
         updatedAt: data.updatedAt,
       });
@@ -65,6 +66,7 @@ export async function onRequest({ request, env }) {
 
       await env.VF_KV.put(KV_KEY, JSON.stringify({
         sessionid,
+        cookies: (body.cookies && typeof body.cookies === 'object') ? body.cookies : {},
         candidates: Array.isArray(body.candidates) ? body.candidates : [],
         updatedAt: new Date().toISOString(),
       }));

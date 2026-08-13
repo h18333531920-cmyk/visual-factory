@@ -77,9 +77,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     }
     if (message?.type === 'vf:get-jimeng-sessionid') {
       try {
-        const picked = await pickJimengSessionId();
-        return respond({ sessionId: picked.sessionId, candidates: picked.candidates });
-      } catch (e) { return respond({ sessionId: null, candidates: [], error: e.message }); }
+        const picked = await pickJimengSession();
+        return respond({ sessionId: picked.sessionId, cookies: picked.cookies, candidates: picked.candidates });
+      } catch (e) { return respond({ sessionId: null, cookies: {}, candidates: [], error: e.message }); }
     }
     if (message?.type === 'vf:jimeng-ready') {
       const current = await status();
@@ -130,15 +130,30 @@ async function readJimengSessionCookies() {
   list.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
   return list;
 }
-async function pickJimengSessionId() {
+const JIMENG_AUTH_COOKIE_NAMES = ['sessionid', 'sessionid_ss', 'sid_guard', 'sid_tt', 'uid_tt', 'uid_tt_ss', '_tea_web_id'];
+
+// 读取即梦真实的关键认证 cookie（尤其 sid_guard——后端伪造的 sid_guard 时间戳每次
+// 请求都在跳变，会被即梦风控判定为异常会话）。原样透传给后端，后端不再自己伪造。
+async function readJimengAuthCookies() {
+  const cookies = {};
+  for (const name of JIMENG_AUTH_COOKIE_NAMES) {
+    try {
+      const c = await chrome.cookies.get({ url: 'https://jimeng.jianying.com', name });
+      if (c && c.value) cookies[name] = c.value;
+    } catch (_) { /* 某些 cookie 可能不存在，忽略 */ }
+  }
+  return cookies;
+}
+async function pickJimengSession() {
   const candidates = await readJimengSessionCookies();
-  if (!candidates.length) return { sessionId: null, candidates: [] };
-  return { sessionId: candidates[0].value, candidates };
+  const cookies = await readJimengAuthCookies();
+  const sessionId = cookies.sessionid || (candidates.length ? candidates[0].value : null);
+  return { sessionId, cookies, candidates };
 }
 
 async function syncSessionIdToCloud() {
   try {
-    const picked = await pickJimengSessionId();
+    const picked = await pickJimengSession();
     const cookie = picked.sessionId;
     if (!cookie) {
       console.log('[即梦同步] 未找到 sessionid cookie');
@@ -150,7 +165,7 @@ async function syncSessionIdToCloud() {
         'Authorization': `Bearer ${SYNC_SECRET}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ sessionid: cookie, candidates: picked.candidates }),
+      body: JSON.stringify({ sessionid: cookie, cookies: picked.cookies, candidates: picked.candidates }),
     });
     const data = await resp.json();
     if (data.success) {
