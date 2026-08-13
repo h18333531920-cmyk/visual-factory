@@ -2624,7 +2624,7 @@
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260813-static-ui-v10">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260813-static-ui-v11">
 </head>
 <body>
 
@@ -2865,12 +2865,15 @@
                 <div class="card-title"><div class="card-title-wrap">生图</div></div>
                 <div class="ai-console">
                     <div class="jimeng-api-row" id="jimeng-api-row" hidden>
-                        <span class="jimeng-api-dot" id="jimeng-api-dot"></span>
-                        <span class="jimeng-api-status" id="jimeng-api-status">即梦 API 未检测</span>
-                        <input class="jimeng-session-input" id="jimeng-session-input" type="password" placeholder="粘贴即梦 sessionid…" autocomplete="off">
-                        <button class="jimeng-api-action" type="button" onclick="saveJimengSessionId()">保存</button>
-                        <button class="jimeng-api-action" type="button" onclick="requestJimengSessionId()" title="通过浏览器扩展自动读取即梦 Cookie">自动获取</button>
-                        <button class="jimeng-api-action" type="button" onclick="checkJimengApiHealth()">检测</button>
+                        <div class="jimeng-session-head">
+                            <span class="jimeng-session-title"><span class="jimeng-api-dot" id="jimeng-api-dot"></span><span class="jimeng-api-status" id="jimeng-api-status">即梦 API 未检测</span></span>
+                            <button class="jimeng-api-action jimeng-check-action" type="button" onclick="checkJimengApiHealth()">检测连接</button>
+                        </div>
+                        <input class="jimeng-session-input" id="jimeng-session-input" type="password" placeholder="粘贴即梦 Session ID" autocomplete="off">
+                        <div class="jimeng-session-actions">
+                            <button class="jimeng-api-action" type="button" onclick="saveJimengSessionId()">保存凭证</button>
+                            <button class="jimeng-api-action" type="button" onclick="requestJimengSessionId()" title="通过浏览器扩展自动读取即梦 Cookie">自动获取</button>
+                        </div>
                     </div>
                     <div class="ai-reference-strip" id="ai-reference-strip">
                         <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
@@ -2880,8 +2883,9 @@
                         <textarea class="textarea" id="ai-prompt-input" rows="4" placeholder="上传参考图、输入文字描述或 @ 使用功能"></textarea>
                     </div>
                     <div class="ai-control-bar">
+                        <div class="ai-control-icons">
                         <div class="ai-menu-wrap">
-                            <button class="ai-menu-btn active" type="button" onclick="toggleAIMenu('skill', event)"><span>✦</span><strong id="ai-skill-label">Skills</strong><span class="chev">⌄</span></button>
+                            <button class="ai-menu-btn ai-menu-icon-btn active" type="button" onclick="toggleAIMenu('skill', event)" data-tooltip="Skills 技能" aria-label="Skills 技能"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.15 3.35L16.5 7.5l-3.35 1.15L12 12l-1.15-3.35L7.5 7.5l3.35-1.15L12 3Z"></path><path d="M18.5 13.5l.72 2.03 2.03.72-2.03.72L18.5 19l-.72-2.03-2.03-.72 2.03-.72.72-2.03Z"></path><path d="M6 14l.58 1.67 1.67.58-1.67.58L6 19.5l-.58-1.67-1.67-.58 1.67-.58L6 14Z"></path></svg><strong id="ai-skill-label">Skills</strong></button>
                             <div class="ai-dropdown" id="ai-skill-menu">
                                 <button type="button" data-ai-skill="replace-food" onclick="selectAISkill('replace-food')">一键替换食物</button>
                                 <button type="button" data-ai-skill="upscale" onclick="selectAISkill('upscale')">一键高清</button>
@@ -2889,7 +2893,7 @@
                             </div>
                         </div>
                         <div class="ai-menu-wrap">
-                            <button class="ai-menu-btn" type="button" onclick="toggleAIMenu('size', event)"><span class="ai-ratio-icon"></span><strong id="ai-size-label">1:1</strong><span class="chev">⌄</span></button>
+                            <button class="ai-menu-btn ai-menu-icon-btn" type="button" onclick="toggleAIMenu('size', event)" data-tooltip="生成尺寸 · 1:1" aria-label="生成尺寸 1:1"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M8 9h8M8 15h8"></path></svg><strong id="ai-size-label">1:1</strong></button>
                             <div class="ai-dropdown ai-size-dropdown" id="ai-size-menu">
                                 <button type="button" data-ai-size="1:1" onclick="selectAISize('1:1')">1:1</button>
                                 <button type="button" data-ai-size="3:4" onclick="selectAISize('3:4')">3:4</button>
@@ -2901,12 +2905,13 @@
                             </div>
                         </div>
                         <div class="ai-menu-wrap">
-                            <button class="ai-menu-btn" type="button" onclick="toggleAIMenu('provider', event)"><span>⬡</span><strong id="ai-provider-label">GPT 大模型</strong><span class="chev">⌄</span></button>
+                            <button class="ai-menu-btn ai-menu-icon-btn" type="button" onclick="toggleAIMenu('provider', event)" data-tooltip="模型 · GPT 大模型" aria-label="模型 GPT 大模型"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7 4v10l-7 4-7-4V7l7-4Z"></path><path d="m5 7 7 4 7-4M12 11v10"></path></svg><strong id="ai-provider-label">GPT 大模型</strong></button>
                             <div class="ai-dropdown" id="ai-provider-menu">
                                 <button type="button" data-ai-provider="openai" onclick="selectAIProvider('openai')">GPT 大模型</button>
                                 <button type="button" data-ai-provider="volc" onclick="selectAIProvider('volc')">火山大模型</button>
                                 <button type="button" data-ai-provider="jimeng" onclick="selectAIProvider('jimeng')">即梦本机</button>
                             </div>
+                        </div>
                         </div>
                         <button class="ai-submit-btn" id="ai-submit-btn" type="button" onclick="runSelectedAIAction()" title="开始生成">↑</button>
                     </div>
@@ -2928,7 +2933,7 @@
                                 <option value="4k">4K</option>
                             </select>
                         </div>
-                        <div class="jimeng-setting-group">
+                        <div class="jimeng-setting-group jimeng-setting-full">
                             <span class="jimeng-setting-label">尺寸</span>
                             <select class="jimeng-setting-select" id="jimeng-ratio-select" onchange="onJimengSettingChange()">
                                 <option value="">自动（跟画板）</option>
@@ -4745,6 +4750,26 @@
         if(skillLabel) skillLabel.textContent = 'Skills';
         if(sizeLabel) sizeLabel.textContent = aiGenerationSize;
         if(providerLabel) providerLabel.textContent = AI_PROVIDER_LABELS[aiProvider] || 'GPT 大模型';
+        const skillButton = skillLabel?.closest('.ai-menu-icon-btn');
+        const sizeButton = sizeLabel?.closest('.ai-menu-icon-btn');
+        const providerButton = providerLabel?.closest('.ai-menu-icon-btn');
+        if(skillButton) {
+            const skillName = AI_SKILL_LABELS[selectedAISkill] || 'Skills';
+            skillButton.dataset.tooltip = `Skills · ${skillName}`;
+            skillButton.setAttribute('aria-label', `Skills ${skillName}`);
+            skillButton.classList.toggle('has-value', selectedAISkill !== 'generate');
+        }
+        if(sizeButton) {
+            sizeButton.dataset.tooltip = `生成尺寸 · ${aiGenerationSize}`;
+            sizeButton.setAttribute('aria-label', `生成尺寸 ${aiGenerationSize}`);
+            sizeButton.classList.add('has-value');
+        }
+        if(providerButton) {
+            const providerName = AI_PROVIDER_LABELS[aiProvider] || 'GPT 大模型';
+            providerButton.dataset.tooltip = `模型 · ${providerName}`;
+            providerButton.setAttribute('aria-label', `模型 ${providerName}`);
+            providerButton.classList.toggle('has-value', aiProvider !== 'openai');
+        }
         document.querySelectorAll('[data-ai-skill]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiSkill === selectedAISkill));
         document.querySelectorAll('[data-ai-size]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiSize === aiGenerationSize));
         document.querySelectorAll('[data-ai-provider]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiProvider === aiProvider));

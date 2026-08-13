@@ -1537,3 +1537,145 @@ html body {
 .left-pane .canvas-actions > div {
   flex-shrink: 0 !important;
 }
+
+/* Compact AI composer controls: the three selectors share the sidebar icon language. */
+.right-pane .ai-control-bar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+}
+.right-pane .ai-control-icons {
+  display: flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+}
+.right-pane .ai-control-icons .ai-menu-wrap { flex: 0 0 32px !important; width: 32px !important; }
+.right-pane .ai-menu-icon-btn {
+  position: relative !important;
+  display: grid !important;
+  place-items: center !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  padding: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  color: var(--ui-muted) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.right-pane .ai-menu-icon-btn:hover,
+.right-pane .ai-menu-icon-btn:focus-visible,
+.right-pane .ai-menu-icon-btn.active {
+  color: var(--ui-ink) !important;
+  border-color: transparent !important;
+  background: #f1f5f9 !important;
+  outline: none !important;
+}
+.right-pane .ai-menu-icon-btn svg {
+  width: 18px !important;
+  height: 18px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.8 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+.right-pane .ai-menu-icon-btn strong { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; white-space: nowrap !important; }
+.right-pane .ai-menu-icon-btn.has-value::after {
+  position: absolute !important;
+  top: 5px !important;
+  right: 5px !important;
+  width: 4px !important;
+  height: 4px !important;
+  border-radius: 50% !important;
+  background: var(--ui-ink) !important;
+  content: "" !important;
+}
+.right-pane .ai-menu-icon-btn::before {
+  position: absolute !important;
+  z-index: 90 !important;
+  bottom: calc(100% + 7px) !important;
+  left: 50% !important;
+  padding: 5px 7px !important;
+  border-radius: 6px !important;
+  color: #fff !important;
+  background: rgba(15, 23, 42, .96) !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  content: attr(data-tooltip) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translate(-50%, 3px) !important;
+  transition: opacity .14s ease, transform .14s ease !important;
+}
+.right-pane .ai-menu-icon-btn:hover::before,
+.right-pane .ai-menu-icon-btn:focus-visible::before { opacity: 1 !important; transform: translate(-50%, 0) !important; }
+.right-pane .ai-menu-wrap:has(.ai-dropdown.open) .ai-menu-icon-btn::before { opacity: 0 !important; }
+.right-pane .ai-control-icons .ai-dropdown { right: auto !important; width: max-content !important; min-width: 138px !important; }
+.right-pane .ai-control-icons .ai-menu-wrap:nth-child(3) .ai-dropdown { left: auto !important; right: 0 !important; }
+
+/* Jimeng local settings: status and credentials first, generation parameters second. */
+.right-pane .jimeng-api-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 7px !important;
+  margin: 0 0 9px !important;
+  padding: 9px !important;
+  border: 1px solid var(--ui-line-soft) !important;
+  border-radius: 10px !important;
+  color: var(--ui-muted) !important;
+  background: #fff !important;
+}
+.right-pane .jimeng-api-row[hidden] { display: none !important; }
+.right-pane .jimeng-session-head { grid-column: 1 / -1 !important; display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important; }
+.right-pane .jimeng-session-title { display: flex !important; align-items: center !important; min-width: 0 !important; gap: 6px !important; }
+.right-pane .jimeng-api-status { min-width: 0 !important; color: var(--ui-muted) !important; font-size: 10.5px !important; font-weight: 550 !important; }
+.right-pane .jimeng-session-input {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 30px !important;
+  margin: 0 !important;
+  padding: 0 9px !important;
+  font-size: 10.5px !important;
+}
+.right-pane .jimeng-session-actions { display: flex !important; align-items: center !important; gap: 4px !important; }
+.right-pane .jimeng-api-action {
+  height: 26px !important;
+  padding: 0 7px !important;
+  border: 1px solid var(--ui-line-soft) !important;
+  border-radius: 6px !important;
+  color: var(--ui-muted) !important;
+  background: #f8fafc !important;
+  font-size: 10px !important;
+  font-weight: 550 !important;
+  text-decoration: none !important;
+}
+.right-pane .jimeng-api-action:hover { color: var(--ui-ink) !important; border-color: var(--ui-line) !important; background: #fff !important; text-decoration: none !important; }
+.right-pane .jimeng-check-action { height: 24px !important; background: transparent !important; }
+.right-pane .jimeng-settings-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap: 8px !important;
+  margin: 9px 0 0 !important;
+  padding: 9px !important;
+  border: 1px solid var(--ui-line-soft) !important;
+  border-radius: 10px !important;
+  background: rgba(248, 250, 252, .82) !important;
+}
+.right-pane .jimeng-settings-row[hidden] { display: none !important; }
+.right-pane .jimeng-setting-group { display: flex !important; flex-direction: column !important; align-items: stretch !important; min-width: 0 !important; gap: 4px !important; }
+.right-pane .jimeng-setting-full { grid-column: 1 / -1 !important; }
+.right-pane .jimeng-setting-label { color: var(--ui-faint) !important; font-size: 9.5px !important; font-weight: 600 !important; }
+.right-pane .jimeng-setting-select {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 30px !important;
+  margin: 0 !important;
+  padding: 0 8px !important;
+  border-radius: 7px !important;
+  font-size: 10.5px !important;
+}
