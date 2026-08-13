@@ -11081,3 +11081,155 @@ html body #app-shell.app-shell[data-route="home"] .library-card-icons svg {
   width: 15px !important;
   height: 15px !important;
 }
+
+/* Homepage typography hierarchy: restrained five-level system. */
+html body #app-shell.app-shell[data-route="home"] {
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: geometricPrecision !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-title,
+html body #app-shell.app-shell[data-route="home"] .home-command-title span,
+html body #app-shell.app-shell[data-route="home"] .home-command-title strong {
+  font-size: 22px !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.025em !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-title span {
+  color: #0f172a !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-title strong {
+  color: #334155 !important;
+  background: none !important;
+  -webkit-background-clip: initial !important;
+  background-clip: initial !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-main textarea {
+  color: #334155 !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.6 !important;
+  letter-spacing: -0.005em !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-main textarea::placeholder {
+  color: #94a3b8 !important;
+  font-weight: 400 !important;
+  opacity: 1 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-control-button,
+html body #app-shell.app-shell[data-route="home"] .home-model-trigger strong,
+html body #app-shell.app-shell[data-route="home"] .home-size-trigger strong {
+  color: #334155 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 16px !important;
+  letter-spacing: 0 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button {
+  color: #64748b !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  line-height: 18px !important;
+  letter-spacing: -0.01em !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button.active {
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button small {
+  margin-left: 3px !important;
+  color: #94a3b8 !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  font-variant-numeric: tabular-nums !important;
+  letter-spacing: 0 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button.active small {
+  color: #64748b !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-tag-row button {
+  color: #64748b !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 16px !important;
+  letter-spacing: 0 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-tag-row button.active {
+  color: #ffffff !important;
+  font-weight: 500 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-tag-row button small {
+  margin-left: 4px !important;
+  font-size: 10px !important;
+  font-weight: 400 !important;
+  font-variant-numeric: tabular-nums !important;
+  opacity: 0.62 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] #library-filter-panel .filter-section {
+  margin-bottom: 14px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] #library-filter-panel .filter-section h4 {
+  margin-bottom: 7px !important;
+  color: #64748b !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 15px !important;
+  letter-spacing: 0.015em !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] #library-filter-panel .filter-capsules {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] #library-filter-panel .filter-capsule {
+  height: 26px !important;
+  min-height: 26px !important;
+  padding: 0 10px !important;
+  border-color: transparent !important;
+  border-radius: 7px !important;
+  color: #475569 !important;
+  background: rgba(241, 245, 249, 0.72) !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 14px !important;
+  letter-spacing: 0 !important;
+  box-shadow: none !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] #library-filter-panel .filter-capsule:hover {
+  color: #1e293b !important;
+  background: #e9eef4 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] #library-filter-panel .filter-capsule.active {
+  border-color: #0f172a !important;
+  color: #ffffff !important;
+  background: #0f172a !important;
+  font-weight: 500 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-upload-pill,
+html body #app-shell.app-shell[data-route="home"] .filter-dropdown-wrap > .ghost-btn {
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+}
