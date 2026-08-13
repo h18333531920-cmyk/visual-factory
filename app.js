@@ -648,6 +648,10 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
     const references = document.getElementById('home-command-references');
     const sizeTrigger = document.getElementById('home-size-trigger');
     const sizeMenu = document.getElementById('home-size-menu');
+    const skillsTrigger = document.getElementById('home-skills-trigger');
+    const skillsMenu = document.getElementById('home-skills-menu');
+    const modelTrigger = document.getElementById('home-model-trigger');
+    const modelMenu = document.getElementById('home-model-menu');
 
     document.querySelectorAll('.home-command-stage [data-route]').forEach(button => {
       button.addEventListener('click', () => {
@@ -678,7 +682,30 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
     upload?.addEventListener('change', event => renderReferences(event.target.files));
     sizeTrigger?.addEventListener('click', event => {
       event.stopPropagation();
+      skillsMenu?.setAttribute('hidden', '');
+      modelMenu?.setAttribute('hidden', '');
       sizeMenu?.toggleAttribute('hidden');
+    });
+    skillsTrigger?.addEventListener('click', event => {
+      event.stopPropagation();
+      sizeMenu?.setAttribute('hidden', '');
+      modelMenu?.setAttribute('hidden', '');
+      skillsMenu?.toggleAttribute('hidden');
+    });
+    modelTrigger?.addEventListener('click', event => {
+      event.stopPropagation();
+      sizeMenu?.setAttribute('hidden', '');
+      skillsMenu?.setAttribute('hidden', '');
+      modelMenu?.toggleAttribute('hidden');
+    });
+    modelMenu?.querySelectorAll('button').forEach(button => {
+      button.addEventListener('click', event => {
+        event.stopPropagation();
+        const label = button.textContent.replace('✓', '').trim();
+        modelTrigger.querySelector('strong').textContent = label;
+        modelMenu.querySelectorAll('button').forEach(item => item.classList.toggle('is-selected', item === button));
+        modelMenu.hidden = true;
+      });
     });
     sizeMenu?.querySelectorAll('[data-home-size]').forEach(button => {
       button.addEventListener('click', () => {
@@ -691,6 +718,8 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
     if (window.__vfHomeSizeMenuHandler) document.removeEventListener('click', window.__vfHomeSizeMenuHandler);
     window.__vfHomeSizeMenuHandler = event => {
       if (sizeMenu && !sizeMenu.hidden && !event.target.closest('.home-size-wrap')) sizeMenu.hidden = true;
+      if (skillsMenu && !skillsMenu.hidden && !event.target.closest('.home-prompt-menu-wrap')) skillsMenu.hidden = true;
+      if (modelMenu && !modelMenu.hidden && !event.target.closest('.home-model-wrap')) modelMenu.hidden = true;
     };
     document.addEventListener('click', window.__vfHomeSizeMenuHandler);
     form?.addEventListener('submit', event => {
@@ -853,10 +882,7 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
         ${homeMode ? `
         <section class="library-hero home-command-stage">
           <div class="home-command-kicker">GCC CREATIVE WORKSPACE</div>
-          <div class="library-hero-title home-command-title">
-            <span>hey，</span>
-            <strong>${state.lang === 'zh' ? '你的高效设计伙伴' : 'Your efficient design partner'}</strong>
-          </div>
+          <div class="library-hero-title home-command-title"><span>hey，</span><strong>${state.lang === 'zh' ? '你的高效设计伙伴' : 'Your efficient design partner'}</strong></div>
           <form id="home-command-form" class="home-command-composer" aria-label="${state.lang === 'zh' ? '创作需求输入' : 'Creative brief'}">
             <div class="home-command-main">
               <div id="home-command-references" class="home-command-references"></div>
@@ -867,7 +893,13 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
               <textarea id="library-hero-search" rows="4" placeholder="${state.lang === 'zh' ? '上传参考图、输入文字描述或 @ 使用功能' : 'Upload a reference, enter a brief, or use @ tools'}">${escapeHtml(state.libraryFilters.query)}</textarea>
             </div>
             <div class="home-command-controls">
-              <button class="home-control-button home-control-primary" type="button" data-route="static"><span aria-hidden="true">✦</span>${state.lang === 'zh' ? '静态设计' : 'Static design'}<span aria-hidden="true">⌄</span></button>
+              <div class="home-prompt-menu-wrap">
+                <button class="home-control-button" id="home-skills-trigger" type="button"><span aria-hidden="true">✦</span>Skills<span aria-hidden="true">⌄</span></button>
+                <div class="home-prompt-menu" id="home-skills-menu" hidden>
+                  <button type="button" data-route="static">${state.lang === 'zh' ? '一键高清' : 'Upscale'}</button>
+                  <button type="button" data-route="static">${state.lang === 'zh' ? '一键换菜品' : 'Replace dish'}</button>
+                </div>
+              </div>
               <div class="home-size-wrap">
                 <button class="home-control-button home-size-trigger" id="home-size-trigger" type="button"><span class="home-ratio-icon" aria-hidden="true"></span><strong>1:1</strong><span aria-hidden="true">⌄</span></button>
                 <div class="home-size-menu" id="home-size-menu" hidden>
@@ -875,9 +907,15 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
                   <div>${['16:9', '3:2', '4:3', '1:1', '3:4', '2:3', '9:16'].map(size => `<button type="button" data-home-size="${size}"><i class="home-ratio-icon" style="--ratio:${size.replace(':', '/')}"></i>${size}</button>`).join('')}</div>
                 </div>
               </div>
-              <span class="home-command-divider"></span>
-              <button class="home-control-button home-library-shortcut" type="button" data-route="library"><span aria-hidden="true">⌕</span>${state.lang === 'zh' ? '素材库' : 'Library'}</button>
-              <button class="home-command-submit" type="submit" aria-label="${state.lang === 'zh' ? '搜索素材与模板' : 'Search library'}">↑</button>
+              <div class="home-prompt-menu-wrap home-model-wrap">
+                <button class="home-control-button home-model-trigger" id="home-model-trigger" type="button"><span aria-hidden="true">◇</span><strong>GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}</strong><span aria-hidden="true">⌄</span></button>
+                <div class="home-prompt-menu home-model-menu" id="home-model-menu" hidden>
+                  <button type="button" class="is-selected">GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}<span>✓</span></button>
+                  <button type="button">Gemini ${state.lang === 'zh' ? '图像模型' : 'Image'}</button>
+                  <button type="button">${state.lang === 'zh' ? '火山图像模型' : 'Volc Image'}</button>
+                </div>
+              </div>
+              <button class="home-command-submit" type="submit" aria-label="${state.lang === 'zh' ? '发送' : 'Send'}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg></button>
             </div>
           </form>
         </section>` : `
@@ -911,7 +949,7 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
             </div>
           </div>
           <div class="library-upload-area">
-            ${canUpload ? `<button class="library-upload-pill" type="button" id="open-upload-modal">${state.lang === 'zh' ? '上传素材 +' : 'Upload +'}</button>` : ''}
+            ${canUpload || homeMode ? `<button class="library-upload-pill" type="button" id="open-upload-modal">＋ ${state.lang === 'zh' ? '上传素材' : 'Upload'}</button>` : ''}
           </div>
           <div class="filter-dropdown-wrap">
             <button class="ghost-btn" type="button" id="library-filter-btn">${state.lang === 'zh' ? '筛选 ▾' : 'Filter ▾'}</button>

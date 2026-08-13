@@ -2652,6 +2652,320 @@ select:focus {
   }
 }
 
+/* Unified Demo v2 exact homepage contract. Keep this final block last. */
+html body #app-shell.app-shell[data-route="home"] {
+  grid-template-columns: 64px minmax(0, 1fr) !important;
+  padding-left: 0 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .sidebar {
+  position: fixed !important;
+  inset: 0 auto 0 0 !important;
+  z-index: 50 !important;
+  width: 64px !important;
+  background: rgba(255, 255, 255, .94) !important;
+  border-right: 1px solid rgba(226, 232, 240, .75) !important;
+  backdrop-filter: blur(20px) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .main-area {
+  grid-column: 2 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .content {
+  background: #f5f6f8 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-page-home {
+  width: min(100%, 1240px) !important;
+  max-width: 1240px !important;
+  margin: 0 auto !important;
+  padding: 24px 32px 64px !important;
+  background: transparent !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-title {
+  min-height: 26px !important;
+  margin: 31px auto 36px !important;
+  gap: 0 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-title span,
+html body #app-shell.app-shell[data-route="home"] .home-command-title strong {
+  color: #0f172a !important;
+  font-size: 26px !important;
+  line-height: 1 !important;
+  font-weight: 600 !important;
+  letter-spacing: -.035em !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-composer {
+  width: min(100%, 768px) !important;
+  min-height: 190px !important;
+  margin: 0 auto 36px !important;
+  border: 1px solid rgba(0, 0, 0, .06) !important;
+  border-radius: 16px !important;
+  background: #fff !important;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .04), 0 1px 3px rgba(0, 0, 0, .02) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-main {
+  min-height: 132px !important;
+  padding: 16px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-upload {
+  width: 56px !important;
+  height: 72px !important;
+  flex-basis: 56px !important;
+  align-self: center !important;
+  margin-right: 14px !important;
+  border: 1px dashed #dbe2ea !important;
+  border-radius: 8px !important;
+  background: #fafbfc !important;
+  color: #94a3b8 !important;
+  transform: rotate(-4deg) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-main textarea {
+  min-height: 96px !important;
+  padding: 4px !important;
+  color: #334155 !important;
+  font-size: 14px !important;
+  line-height: 24px !important;
+  font-weight: 400 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-controls {
+  min-height: 58px !important;
+  padding: 8px 14px !important;
+  gap: 6px !important;
+  border-top: 1px solid rgba(241, 245, 249, .8) !important;
+  border-radius: 0 0 16px 16px !important;
+  background: rgba(248, 250, 252, .4) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-control-button {
+  min-height: 36px !important;
+  height: 36px !important;
+  padding: 0 12px !important;
+  border: 1px solid rgba(226, 232, 240, .8) !important;
+  border-radius: 8px !important;
+  color: #334155 !important;
+  background: #fff !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  font-weight: 500 !important;
+}
+
+.home-prompt-menu-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.home-prompt-menu {
+  position: absolute;
+  z-index: 80;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 176px;
+  padding: 6px;
+  border: 1px solid rgba(226, 232, 240, .8);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, .06);
+  backdrop-filter: blur(12px);
+}
+
+.home-prompt-menu[hidden] { display: none !important; }
+
+.home-prompt-menu button {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #475569;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.home-prompt-menu button:hover,
+.home-prompt-menu button.is-selected { color: #0f172a; background: #f8fafc; }
+
+html body #app-shell.app-shell[data-route="home"] .home-model-wrap {
+  margin-left: auto;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-model-trigger {
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-model-trigger:hover { background: #fff !important; }
+html body #app-shell.app-shell[data-route="home"] .home-model-trigger strong { font-size: 12px; font-weight: 500; }
+.home-model-menu { right: 0; left: auto; width: 192px; }
+
+html body #app-shell.app-shell[data-route="home"] .home-command-submit {
+  width: 36px !important;
+  height: 36px !important;
+  flex: 0 0 36px !important;
+  margin-left: 0 !important;
+  border-radius: 50% !important;
+  background: #020617 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .home-command-submit svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  transform: rotate(90deg);
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-control-strip {
+  grid-template-columns: minmax(0, 1fr) auto auto !important;
+  align-items: end !important;
+  gap: 6px !important;
+  margin: 0 !important;
+  padding: 12px 0 18px !important;
+  border-bottom: 1px solid rgba(226, 232, 240, .7) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs {
+  gap: 28px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button {
+  min-height: 40px !important;
+  padding: 0 0 10px !important;
+  color: #94a3b8 !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button.active {
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .kind-tab-indicator {
+  height: 2px !important;
+  border-radius: 999px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-search-pill {
+  width: 224px !important;
+  min-height: 32px !important;
+  border: 1px solid rgba(226, 232, 240, .7) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, .8) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-upload-area { order: 2 !important; }
+html body #app-shell.app-shell[data-route="home"] .filter-dropdown-wrap { order: 3 !important; }
+
+html body #app-shell.app-shell[data-route="home"] .library-upload-pill,
+html body #app-shell.app-shell[data-route="home"] .filter-dropdown-wrap .ghost-btn {
+  min-height: 32px !important;
+  height: 32px !important;
+  padding: 0 10px !important;
+  border: 1px solid rgba(226, 232, 240, .7) !important;
+  border-radius: 8px !important;
+  color: #64748b !important;
+  background: rgba(255, 255, 255, .72) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-board {
+  margin: 36px 0 0 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-grid {
+  display: grid !important;
+  columns: auto !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card {
+  margin: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid #f1f5f9 !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card:hover {
+  transform: none !important;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, .08) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-thumb-wrap,
+html body #app-shell.app-shell[data-route="home"] .library-thumb {
+  aspect-ratio: 3 / 4 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  border-radius: 11px 11px 0 0 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-thumb img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card-overlay {
+  position: absolute !important;
+  inset: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-end !important;
+  padding: 16px !important;
+  color: #fff !important;
+  background: linear-gradient(180deg, transparent 48%, rgba(15, 23, 42, .66) 100%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity .2s ease !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card:hover .library-card-overlay { opacity: 1 !important; }
+html body #app-shell.app-shell[data-route="home"] .library-card-overlay h4 { color: #fff !important; font-size: 12px !important; }
+html body #app-shell.app-shell[data-route="home"] .library-card-overlay p { color: rgba(255,255,255,.78) !important; font-size: 10px !important; }
+html body #app-shell.app-shell[data-route="home"] .library-card-actions { display: none !important; }
+
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta {
+  min-height: 40px !important;
+  padding: 9px 12px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta strong { display: none !important; }
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta span { margin: 0 !important; font-size: 10px !important; }
+
+@media (max-width: 980px) {
+  html body #app-shell.app-shell[data-route="home"] .library-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+
+@media (max-width: 760px) {
+  html body #app-shell.app-shell[data-route="home"] { display: block !important; }
+  html body #app-shell.app-shell[data-route="home"] .sidebar { display: none !important; }
+  html body #app-shell.app-shell[data-route="home"] .library-page-home { padding: 24px 16px 52px !important; }
+  html body #app-shell.app-shell[data-route="home"] .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  html body #app-shell.app-shell[data-route="home"] .home-model-trigger strong { display: none; }
+}
+
+@media (max-width: 520px) {
+  html body #app-shell.app-shell[data-route="home"] .library-grid { grid-template-columns: 1fr !important; }
+}
+
 /* V1 polish: fast, image-first library wall */
 .tool-frame-mount {
   min-height: 0;
@@ -6296,22 +6610,22 @@ body .home26-recent {
 }
 
 /* 2026 home polish v4: keep original layout and white background. */
-body .app-shell[data-route="home"] .main-area,
-body .app-shell[data-route="home"] .content,
-body .app-shell[data-route="home"] .library-page-home {
+html body #app-shell.app-shell[data-route="home"] .main-area,
+html body #app-shell.app-shell[data-route="home"] .content,
+html body #app-shell.app-shell[data-route="home"] .library-page-home {
   background:
     linear-gradient(180deg, #ffffff 0%, #f8f9f6 58%, #ffffff 100%);
 }
 
-body .app-shell[data-route="home"] .library-page-home {
+html body #app-shell.app-shell[data-route="home"] .library-page-home {
   padding-top: 42px;
 }
 
-body .app-shell[data-route="home"] .library-hero {
+html body #app-shell.app-shell[data-route="home"] .library-hero {
   padding: 28px 0 22px;
 }
 
-body .app-shell[data-route="home"] .library-hero-panel {
+html body #app-shell.app-shell[data-route="home"] .library-hero-panel {
   width: min(1040px, 72vw);
   min-height: clamp(186px, 18vw, 244px);
   border: 1px solid rgba(15, 18, 24, 0.08);
@@ -6324,7 +6638,7 @@ body .app-shell[data-route="home"] .library-hero-panel {
   box-shadow: 0 28px 80px rgba(17, 24, 39, 0.08);
 }
 
-body .app-shell[data-route="home"] .library-hero-panel::before {
+html body #app-shell.app-shell[data-route="home"] .library-hero-panel::before {
   left: 7%;
   top: 22%;
   width: 34%;
@@ -6335,7 +6649,7 @@ body .app-shell[data-route="home"] .library-hero-panel::before {
   transform: rotate(-7deg);
 }
 
-body .app-shell[data-route="home"] .library-hero-panel::after {
+html body #app-shell.app-shell[data-route="home"] .library-hero-panel::after {
   right: 9%;
   bottom: 17%;
   width: 158px;
@@ -6348,7 +6662,7 @@ body .app-shell[data-route="home"] .library-hero-panel::after {
   transform: rotate(-9deg);
 }
 
-body .app-shell[data-route="home"] .library-hero-badge {
+html body #app-shell.app-shell[data-route="home"] .library-hero-badge {
   min-height: 34px;
   border-color: rgba(17, 24, 39, 0.10);
   background: rgba(255, 255, 255, 0.74);
@@ -6356,15 +6670,15 @@ body .app-shell[data-route="home"] .library-hero-badge {
   box-shadow: 0 12px 32px rgba(17, 24, 39, 0.06);
 }
 
-body .app-shell[data-route="home"] .library-hero-title {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title {
   color: #101218;
 }
 
-body .app-shell[data-route="home"] .library-hero-title span {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title span {
   color: #6c747f;
 }
 
-body .app-shell[data-route="home"] .library-hero-title i {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title i {
   border-radius: 24px;
   background:
     linear-gradient(135deg, rgba(216, 255, 79, 0.96), rgba(216, 255, 79, 0.18) 42%),
@@ -6373,24 +6687,24 @@ body .app-shell[data-route="home"] .library-hero-title i {
   box-shadow: inset 0 0 0 1px rgba(11, 13, 18, 0.08), 0 18px 42px rgba(17, 24, 39, 0.08);
 }
 
-body .app-shell[data-route="home"] .library-hero-command {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command {
   border-color: rgba(17, 24, 39, 0.10);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.86);
   box-shadow: 0 22px 60px rgba(17, 24, 39, 0.08);
 }
 
-body .app-shell[data-route="home"] .library-hero-command input {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command input {
   color: #12151c;
 }
 
-body .app-shell[data-route="home"] .library-hero-command button {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command button {
   background: #11151c;
   color: #ffffff;
   box-shadow: 0 12px 28px rgba(17, 24, 39, 0.16);
 }
 
-body .app-shell[data-route="home"] .library-module-row button {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button {
   min-height: 72px;
   height: 72px;
   border: 1px solid rgba(17, 24, 39, 0.08);
@@ -6400,18 +6714,18 @@ body .app-shell[data-route="home"] .library-module-row button {
   box-shadow: 0 18px 50px rgba(17, 24, 39, 0.06);
 }
 
-body .app-shell[data-route="home"] .library-module-row button::after {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button::after {
   opacity: 0.75;
 }
 
-body .app-shell[data-route="home"] .library-module-row button:hover {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button:hover {
   background: #ffffff !important;
   border-color: rgba(17, 24, 39, 0.14);
   transform: translateY(-2px);
   box-shadow: 0 24px 64px rgba(17, 24, 39, 0.10);
 }
 
-body .app-shell[data-route="home"] .library-control-strip {
+html body #app-shell.app-shell[data-route="home"] .library-control-strip {
   border: 1px solid rgba(17, 24, 39, 0.07);
   border-radius: 24px;
   padding: 18px 20px;
@@ -6419,23 +6733,23 @@ body .app-shell[data-route="home"] .library-control-strip {
   box-shadow: 0 18px 60px rgba(17, 24, 39, 0.06);
 }
 
-body .app-shell[data-route="home"] .library-kind-tabs button,
-body .app-shell[data-route="home"] .library-tag-row button {
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs button,
+html body #app-shell.app-shell[data-route="home"] .library-tag-row button {
   border-radius: 999px;
 }
 
-body .app-shell[data-route="home"] .library-kind-tabs button.active {
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs button.active {
   color: #11151c;
 }
 
-body .app-shell[data-route="home"] .library-kind-tabs button.active::after {
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs button.active::after {
   border-radius: 999px;
   background: #11151c;
 }
 
-body .app-shell[data-route="home"] .library-search-pill,
-body .app-shell[data-route="home"] .library-upload-pill,
-body .app-shell[data-route="home"] #library-favorite-filter {
+html body #app-shell.app-shell[data-route="home"] .library-search-pill,
+html body #app-shell.app-shell[data-route="home"] .library-upload-pill,
+html body #app-shell.app-shell[data-route="home"] #library-favorite-filter {
   min-height: 44px;
   border-radius: 14px;
   border: 1px solid rgba(17, 24, 39, 0.08);
@@ -6443,46 +6757,46 @@ body .app-shell[data-route="home"] #library-favorite-filter {
   box-shadow: 0 10px 28px rgba(17, 24, 39, 0.045);
 }
 
-body .app-shell[data-route="home"] .library-upload-pill {
+html body #app-shell.app-shell[data-route="home"] .library-upload-pill {
   background: #11151c;
   color: #ffffff;
 }
 
-body .app-shell[data-route="home"] .library-card {
+html body #app-shell.app-shell[data-route="home"] .library-card {
   border-radius: 18px;
   background: #ffffff;
   box-shadow: 0 18px 46px rgba(17, 24, 39, 0.08);
 }
 
-body .app-shell[data-route="home"] .library-thumb,
-body .app-shell[data-route="home"] .library-thumb img {
+html body #app-shell.app-shell[data-route="home"] .library-thumb,
+html body #app-shell.app-shell[data-route="home"] .library-thumb img {
   border-radius: 18px;
 }
 
-body .app-shell[data-route="home"] .library-card:hover,
-body .app-shell[data-route="home"] .library-card.selected {
+html body #app-shell.app-shell[data-route="home"] .library-card:hover,
+html body #app-shell.app-shell[data-route="home"] .library-card.selected {
   box-shadow: 0 28px 76px rgba(17, 24, 39, 0.14);
 }
 
-body .app-shell[data-route="home"] .library-card-actions button,
-body .app-shell[data-route="home"] .library-load-more {
+html body #app-shell.app-shell[data-route="home"] .library-card-actions button,
+html body #app-shell.app-shell[data-route="home"] .library-load-more {
   border-radius: 12px;
 }
 
 @media (max-width: 760px) {
-  body .app-shell[data-route="home"] .library-hero-panel,
-  body .app-shell[data-route="home"] .library-module-row {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-panel,
+  html body #app-shell.app-shell[data-route="home"] .library-module-row {
     width: 100%;
   }
 
-  body .app-shell[data-route="home"] .library-control-strip {
+  html body #app-shell.app-shell[data-route="home"] .library-control-strip {
     border-radius: 18px;
     padding: 14px;
   }
 }
 
 /* 2026 home polish v5: consistent typography, icons, spacing, and controls. */
-body .app-shell[data-route="home"] {
+html body #app-shell.app-shell[data-route="home"] {
   --home-ink: #101318;
   --home-muted: #69717c;
   --home-soft: #f6f7f3;
@@ -6492,16 +6806,16 @@ body .app-shell[data-route="home"] {
   --home-accent: #d8ff4f;
 }
 
-body .app-shell[data-route="home"] .library-page-home {
+html body #app-shell.app-shell[data-route="home"] .library-page-home {
   padding-top: 34px;
 }
 
-body .app-shell[data-route="home"] .library-hero {
+html body #app-shell.app-shell[data-route="home"] .library-hero {
   gap: 18px;
   padding: 12px 0 28px;
 }
 
-body .app-shell[data-route="home"] .library-hero-panel {
+html body #app-shell.app-shell[data-route="home"] .library-hero-panel {
   width: min(1060px, 72vw);
   min-height: 236px;
   border: 1px solid var(--home-line);
@@ -6513,7 +6827,7 @@ body .app-shell[data-route="home"] .library-hero-panel {
   box-shadow: var(--home-shadow-md);
 }
 
-body .app-shell[data-route="home"] .library-hero-badge {
+html body #app-shell.app-shell[data-route="home"] .library-hero-badge {
   top: 24px;
   min-height: 30px;
   padding-inline: 18px;
@@ -6525,7 +6839,7 @@ body .app-shell[data-route="home"] .library-hero-badge {
   font-weight: 760;
 }
 
-body .app-shell[data-route="home"] .library-hero-title {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title {
   gap: 18px;
   margin-top: 22px;
   color: var(--home-ink);
@@ -6534,22 +6848,22 @@ body .app-shell[data-route="home"] .library-hero-title {
   line-height: 1;
 }
 
-body .app-shell[data-route="home"] .library-hero-title span {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title span {
   color: #717985;
   font-weight: 850;
 }
 
-body .app-shell[data-route="home"] .library-hero-title strong {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
   font-weight: 930;
 }
 
-body .app-shell[data-route="home"] .library-hero-title i {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title i {
   width: clamp(68px, 5.8vw, 98px);
   height: clamp(68px, 5.8vw, 98px);
   border-radius: 24px;
 }
 
-body .app-shell[data-route="home"] .library-hero-command {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command {
   width: min(820px, calc(100% - 120px));
   min-height: 82px;
   grid-template-columns: minmax(0, 1fr) 50px;
@@ -6559,14 +6873,14 @@ body .app-shell[data-route="home"] .library-hero-command {
   box-shadow: var(--home-shadow-sm);
 }
 
-body .app-shell[data-route="home"] .library-hero-command input {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command input {
   min-height: 62px;
   color: var(--home-ink);
   font-size: 14px;
   font-weight: 680;
 }
 
-body .app-shell[data-route="home"] .library-hero-command button {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command button {
   width: 44px;
   height: 44px;
   border-radius: 14px;
@@ -6576,13 +6890,13 @@ body .app-shell[data-route="home"] .library-hero-command button {
   box-shadow: 0 12px 30px rgba(16, 19, 24, 0.18);
 }
 
-body .app-shell[data-route="home"] .library-module-row {
+html body #app-shell.app-shell[data-route="home"] .library-module-row {
   width: min(1060px, 72vw);
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 
-body .app-shell[data-route="home"] .library-module-row button {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button {
   position: relative;
   min-height: 92px;
   height: auto;
@@ -6601,7 +6915,7 @@ body .app-shell[data-route="home"] .library-module-row button {
   box-shadow: var(--home-shadow-sm);
 }
 
-body .app-shell[data-route="home"] .library-module-row button::after {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button::after {
   content: "";
   position: absolute;
   right: -20px;
@@ -6613,19 +6927,19 @@ body .app-shell[data-route="home"] .library-module-row button::after {
   transform: rotate(-10deg);
 }
 
-body .app-shell[data-route="home"] .library-module-row button:nth-child(2)::after {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button:nth-child(2)::after {
   background: linear-gradient(100deg, rgba(220, 232, 255, 0.74), rgba(181, 247, 220, 0.40), transparent);
 }
 
-body .app-shell[data-route="home"] .library-module-row button:nth-child(3)::after {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button:nth-child(3)::after {
   background: repeating-linear-gradient(100deg, rgba(216, 255, 79, 0.66) 0 7px, rgba(220, 232, 255, 0.72) 7px 14px, transparent 14px 21px);
 }
 
-body .app-shell[data-route="home"] .library-module-row button:nth-child(4)::after {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button:nth-child(4)::after {
   background: linear-gradient(100deg, rgba(216, 255, 79, 0.78), rgba(255, 255, 255, 0.12), transparent);
 }
 
-body .app-shell[data-route="home"] .library-module-row i {
+html body #app-shell.app-shell[data-route="home"] .library-module-row i {
   grid-row: 1 / 3;
   width: 38px;
   height: 38px;
@@ -6636,7 +6950,7 @@ body .app-shell[data-route="home"] .library-module-row i {
   color: var(--home-ink);
 }
 
-body .app-shell[data-route="home"] .library-module-row svg {
+html body #app-shell.app-shell[data-route="home"] .library-module-row svg {
   width: 20px;
   height: 20px;
   fill: none;
@@ -6644,7 +6958,7 @@ body .app-shell[data-route="home"] .library-module-row svg {
   stroke-width: 1.8;
 }
 
-body .app-shell[data-route="home"] .library-module-row strong {
+html body #app-shell.app-shell[data-route="home"] .library-module-row strong {
   position: relative;
   z-index: 2;
   overflow: hidden;
@@ -6656,7 +6970,7 @@ body .app-shell[data-route="home"] .library-module-row strong {
   white-space: nowrap;
 }
 
-body .app-shell[data-route="home"] .library-module-row small {
+html body #app-shell.app-shell[data-route="home"] .library-module-row small {
   position: relative;
   z-index: 2;
   color: var(--home-muted);
@@ -6665,7 +6979,7 @@ body .app-shell[data-route="home"] .library-module-row small {
   font-weight: 650;
 }
 
-body .app-shell[data-route="home"] .library-module-row span {
+html body #app-shell.app-shell[data-route="home"] .library-module-row span {
   position: relative;
   z-index: 2;
   grid-column: 3;
@@ -6678,14 +6992,14 @@ body .app-shell[data-route="home"] .library-module-row span {
   font-weight: 850;
 }
 
-body .app-shell[data-route="home"] .library-module-row button:hover {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button:hover {
   background: #ffffff !important;
   border-color: rgba(16, 19, 24, 0.14);
   box-shadow: var(--home-shadow-md);
   transform: translateY(-2px);
 }
 
-body .app-shell[data-route="home"] .library-control-strip {
+html body #app-shell.app-shell[data-route="home"] .library-control-strip {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 380px) auto auto;
   gap: 14px 18px;
@@ -6697,12 +7011,12 @@ body .app-shell[data-route="home"] .library-control-strip {
   box-shadow: var(--home-shadow-md);
 }
 
-body .app-shell[data-route="home"] .library-kind-tabs {
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs {
   gap: 10px;
 }
 
-body .app-shell[data-route="home"] .library-kind-tabs button,
-body .app-shell[data-route="home"] .library-tag-row button {
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs button,
+html body #app-shell.app-shell[data-route="home"] .library-tag-row button {
   min-height: 34px;
   padding: 0 13px;
   border-radius: 999px;
@@ -6711,52 +7025,52 @@ body .app-shell[data-route="home"] .library-tag-row button {
   font-weight: 720;
 }
 
-body .app-shell[data-route="home"] .library-kind-tabs button.active,
-body .app-shell[data-route="home"] .library-tag-row button.active {
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs button.active,
+html body #app-shell.app-shell[data-route="home"] .library-tag-row button.active {
   background: var(--home-ink);
   color: #ffffff;
 }
 
-body .app-shell[data-route="home"] .library-kind-tabs button.active::after {
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs button.active::after {
   display: none;
 }
 
-body .app-shell[data-route="home"] .library-tag-rows {
+html body #app-shell.app-shell[data-route="home"] .library-tag-rows {
   gap: 8px;
   grid-column: 1 / -1;
 }
 
-body .app-shell[data-route="home"] .library-tag-row {
+html body #app-shell.app-shell[data-route="home"] .library-tag-row {
   gap: 8px;
   min-height: 38px;
 }
 
-body .app-shell[data-route="home"] .library-tag-row > span {
+html body #app-shell.app-shell[data-route="home"] .library-tag-row > span {
   min-width: 58px;
   color: var(--home-ink);
   font-size: 14px;
   font-weight: 780;
 }
 
-body .app-shell[data-route="home"] .library-search-pill {
+html body #app-shell.app-shell[data-route="home"] .library-search-pill {
   min-height: 44px;
   border-radius: 14px;
   background: #f7f8f5;
 }
 
 /* Supplied GCC Unified Demo v2 — homepage pixel-match pass. */
-body .app-shell[data-route="home"] .content {
+html body #app-shell.app-shell[data-route="home"] .content {
   background: #f5f6f8 !important;
 }
 
-body .app-shell[data-route="home"] .sidebar-brand .brand-mark {
+html body #app-shell.app-shell[data-route="home"] .sidebar-brand .brand-mark {
   position: relative;
   color: transparent !important;
   background: #020617 !important;
   border-radius: 9px !important;
 }
 
-body .app-shell[data-route="home"] .sidebar-brand .brand-mark::after {
+html body #app-shell.app-shell[data-route="home"] .sidebar-brand .brand-mark::after {
   content: "ϟ";
   position: absolute;
   inset: 0;
@@ -6768,40 +7082,40 @@ body .app-shell[data-route="home"] .sidebar-brand .brand-mark::after {
   font-weight: 800;
 }
 
-body .app-shell[data-route="home"] .library-page-home {
+html body #app-shell.app-shell[data-route="home"] .library-page-home {
   width: min(100%, 1240px) !important;
   padding: 24px 32px 64px !important;
   background: transparent !important;
 }
 
-body .app-shell[data-route="home"] .library-hero {
+html body #app-shell.app-shell[data-route="home"] .library-hero {
   gap: 0 !important;
   padding: 0 !important;
 }
 
-body .app-shell[data-route="home"] .home-command-title {
+html body #app-shell.app-shell[data-route="home"] .home-command-title {
   min-height: auto !important;
   gap: 0 !important;
   margin: 30px auto 36px !important;
 }
 
-body .app-shell[data-route="home"] .home-command-title span,
-body .app-shell[data-route="home"] .home-command-title strong {
+html body #app-shell.app-shell[data-route="home"] .home-command-title span,
+html body #app-shell.app-shell[data-route="home"] .home-command-title strong {
   font-size: 26px !important;
   line-height: 1 !important;
   font-weight: 600 !important;
   letter-spacing: -.035em !important;
 }
 
-body .app-shell[data-route="home"] .home-command-title span {
+html body #app-shell.app-shell[data-route="home"] .home-command-title span {
   color: #111827 !important;
 }
 
-body .app-shell[data-route="home"] .home-command-title strong {
+html body #app-shell.app-shell[data-route="home"] .home-command-title strong {
   color: #0f172a !important;
 }
 
-body .app-shell[data-route="home"] .home-command-composer {
+html body #app-shell.app-shell[data-route="home"] .home-command-composer {
   width: min(100%, 768px) !important;
   min-height: 190px !important;
   margin: 0 auto 36px !important;
@@ -6811,12 +7125,12 @@ body .app-shell[data-route="home"] .home-command-composer {
   box-shadow: 0 10px 30px -10px rgba(15, 23, 42, .05) !important;
 }
 
-body .app-shell[data-route="home"] .home-command-main {
+html body #app-shell.app-shell[data-route="home"] .home-command-main {
   min-height: 136px !important;
   padding: 16px !important;
 }
 
-body .app-shell[data-route="home"] .home-command-upload {
+html body #app-shell.app-shell[data-route="home"] .home-command-upload {
   width: 56px !important;
   height: 72px !important;
   flex-basis: 56px !important;
@@ -6827,7 +7141,7 @@ body .app-shell[data-route="home"] .home-command-upload {
   transform: rotate(-4deg) !important;
 }
 
-body .app-shell[data-route="home"] .home-command-main textarea {
+html body #app-shell.app-shell[data-route="home"] .home-command-main textarea {
   min-height: 96px !important;
   padding-top: 3px !important;
   color: #334155 !important;
@@ -6836,7 +7150,7 @@ body .app-shell[data-route="home"] .home-command-main textarea {
   font-weight: 400 !important;
 }
 
-body .app-shell[data-route="home"] .home-command-controls {
+html body #app-shell.app-shell[data-route="home"] .home-command-controls {
   min-height: 54px !important;
   padding: 8px 14px !important;
   border-top: 1px solid #f1f5f9 !important;
@@ -6844,41 +7158,41 @@ body .app-shell[data-route="home"] .home-command-controls {
   background: rgba(248, 250, 252, .42) !important;
 }
 
-body .app-shell[data-route="home"] .home-control-button {
+html body #app-shell.app-shell[data-route="home"] .home-control-button {
   min-height: 36px !important;
   padding: 0 12px !important;
   border-radius: 8px !important;
   font-size: 12px !important;
 }
 
-body .app-shell[data-route="home"] .home-control-primary {
+html body #app-shell.app-shell[data-route="home"] .home-control-primary {
   color: #475569 !important;
 }
 
-body .app-shell[data-route="home"] .home-command-submit {
+html body #app-shell.app-shell[data-route="home"] .home-command-submit {
   width: 36px !important;
   height: 36px !important;
   background: #020617 !important;
 }
 
-body .app-shell[data-route="home"] .library-control-strip {
+html body #app-shell.app-shell[data-route="home"] .library-control-strip {
   grid-template-columns: minmax(0, 1fr) auto auto !important;
   margin-top: 0 !important;
   padding: 0 0 36px !important;
   border-bottom: 1px solid rgba(226, 232, 240, .8) !important;
 }
 
-body .app-shell[data-route="home"] .library-kind-tabs {
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs {
   gap: 28px !important;
 }
 
-body .app-shell[data-route="home"] .library-kind-tabs > button {
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button {
   min-height: 40px !important;
   padding-bottom: 10px !important;
   font-size: 15px !important;
 }
 
-body .app-shell[data-route="home"] .library-search-pill {
+html body #app-shell.app-shell[data-route="home"] .library-search-pill {
   width: 224px !important;
   min-height: 32px !important;
   border: 1px solid #e2e8f0 !important;
@@ -6886,10 +7200,10 @@ body .app-shell[data-route="home"] .library-search-pill {
   background: rgba(255, 255, 255, .8) !important;
 }
 
-body .app-shell[data-route="home"] .library-upload-area { order: 2; }
-body .app-shell[data-route="home"] .filter-dropdown-wrap { order: 3; }
+html body #app-shell.app-shell[data-route="home"] .library-upload-area { order: 2; }
+html body #app-shell.app-shell[data-route="home"] .filter-dropdown-wrap { order: 3; }
 
-body .app-shell[data-route="home"] .library-upload-pill {
+html body #app-shell.app-shell[data-route="home"] .library-upload-pill {
   min-height: 32px !important;
   padding: 0 11px !important;
   color: #64748b !important;
@@ -6899,18 +7213,18 @@ body .app-shell[data-route="home"] .library-upload-pill {
   font-size: 11px !important;
 }
 
-body .app-shell[data-route="home"] .filter-dropdown-wrap .ghost-btn {
+html body #app-shell.app-shell[data-route="home"] .filter-dropdown-wrap .ghost-btn {
   min-height: 32px !important;
   border-radius: 8px !important;
   font-size: 11px !important;
 }
 
-body .app-shell[data-route="home"] .library-board {
+html body #app-shell.app-shell[data-route="home"] .library-board {
   margin-top: 0 !important;
   padding-top: 0 !important;
 }
 
-body .app-shell[data-route="home"] .library-grid {
+html body #app-shell.app-shell[data-route="home"] .library-grid {
   display: grid !important;
   columns: auto !important;
   column-gap: 16px !important;
@@ -6922,7 +7236,7 @@ body .app-shell[data-route="home"] .library-grid {
   display: none;
 }
 
-body .app-shell[data-route="home"] .library-card {
+html body #app-shell.app-shell[data-route="home"] .library-card {
   overflow: hidden !important;
   border: 1px solid #eef0f3 !important;
   border-radius: 12px !important;
@@ -6931,21 +7245,21 @@ body .app-shell[data-route="home"] .library-card {
   box-shadow: none !important;
 }
 
-body .app-shell[data-route="home"] .library-card:hover {
+html body #app-shell.app-shell[data-route="home"] .library-card:hover {
   transform: translateY(-2px) !important;
   border-color: #dde2e8 !important;
   box-shadow: 0 14px 32px rgba(15, 23, 42, .08) !important;
 }
 
-body .app-shell[data-route="home"] .library-card-icons .card-download-btn {
+html body #app-shell.app-shell[data-route="home"] .library-card-icons .card-download-btn {
   display: none !important;
 }
 
-body .app-shell[data-route="home"] .library-thumb-wrap {
+html body #app-shell.app-shell[data-route="home"] .library-thumb-wrap {
   border-radius: 11px 11px 0 0 !important;
 }
 
-body .app-shell[data-route="home"] .library-home-card-meta {
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta {
   display: flex;
   min-height: 62px;
   align-items: center;
@@ -6955,31 +7269,31 @@ body .app-shell[data-route="home"] .library-home-card-meta {
   border-top: 1px solid #f1f3f5;
 }
 
-body .app-shell[data-route="home"] .library-home-card-meta > div {
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta > div {
   min-width: 0;
 }
 
-body .app-shell[data-route="home"] .library-home-card-meta strong,
-body .app-shell[data-route="home"] .library-home-card-meta span {
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta strong,
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta span {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-body .app-shell[data-route="home"] .library-home-card-meta strong {
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta strong {
   color: #334155;
   font-size: 12px;
   font-weight: 600;
 }
 
-body .app-shell[data-route="home"] .library-home-card-meta span {
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta span {
   margin-top: 5px;
   color: #94a3b8;
   font-size: 10px;
 }
 
-body .app-shell[data-route="home"] .library-home-card-meta button {
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta button {
   width: 28px;
   height: 28px;
   flex: 0 0 28px;
@@ -6989,36 +7303,36 @@ body .app-shell[data-route="home"] .library-home-card-meta button {
   background: transparent;
 }
 
-body .app-shell[data-route="home"] .library-home-card-meta button:hover {
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta button:hover {
   color: #0f172a;
   background: #f1f5f9;
 }
 
 @media (max-width: 980px) {
-  body .app-shell[data-route="home"] .library-grid {
+  html body #app-shell.app-shell[data-route="home"] .library-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
 
 @media (max-width: 760px) {
-  body .app-shell[data-route="home"] .library-page-home { padding: 22px 16px 48px !important; }
-  body .app-shell[data-route="home"] .home-command-title { margin: 18px auto 26px !important; }
-  body .app-shell[data-route="home"] .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  html body #app-shell.app-shell[data-route="home"] .library-page-home { padding: 22px 16px 48px !important; }
+  html body #app-shell.app-shell[data-route="home"] .home-command-title { margin: 18px auto 26px !important; }
+  html body #app-shell.app-shell[data-route="home"] .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }
 
 @media (max-width: 520px) {
-  body .app-shell[data-route="home"] .library-grid { grid-template-columns: 1fr !important; }
-  body .app-shell[data-route="home"] .library-kind-tabs { gap: 14px !important; }
+  html body #app-shell.app-shell[data-route="home"] .library-grid { grid-template-columns: 1fr !important; }
+  html body #app-shell.app-shell[data-route="home"] .library-kind-tabs { gap: 14px !important; }
 }
 
-body .app-shell[data-route="home"] .library-search-pill input {
+html body #app-shell.app-shell[data-route="home"] .library-search-pill input {
   color: var(--home-ink);
   font-size: 13px;
   font-weight: 680;
 }
 
-body .app-shell[data-route="home"] .library-upload-pill,
-body .app-shell[data-route="home"] #library-favorite-filter {
+html body #app-shell.app-shell[data-route="home"] .library-upload-pill,
+html body #app-shell.app-shell[data-route="home"] #library-favorite-filter {
   min-height: 44px;
   border-radius: 14px;
   padding-inline: 16px;
@@ -7026,38 +7340,38 @@ body .app-shell[data-route="home"] #library-favorite-filter {
   font-weight: 780;
 }
 
-body .app-shell[data-route="home"] .library-status {
+html body #app-shell.app-shell[data-route="home"] .library-status {
   padding-inline: 4px;
 }
 
-body .app-shell[data-route="home"] .library-stat strong {
+html body #app-shell.app-shell[data-route="home"] .library-stat strong {
   color: #7a828d;
   font-size: 12px;
   font-weight: 720;
 }
 
 @media (max-width: 980px) {
-  body .app-shell[data-route="home"] .library-module-row {
+  html body #app-shell.app-shell[data-route="home"] .library-module-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  body .app-shell[data-route="home"] .library-control-strip {
+  html body #app-shell.app-shell[data-route="home"] .library-control-strip {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 640px) {
-  body .app-shell[data-route="home"] .library-module-row {
+  html body #app-shell.app-shell[data-route="home"] .library-module-row {
     grid-template-columns: 1fr;
   }
 
-  body .app-shell[data-route="home"] .library-hero-title {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title {
     font-size: 36px;
   }
 }
 
 /* 2026 home polish v6: remove decorative artwork, keep clean white layout. */
-body .app-shell[data-route="home"] .library-hero-panel {
+html body #app-shell.app-shell[data-route="home"] .library-hero-panel {
   display: grid;
   align-content: center;
   justify-items: center;
@@ -7065,21 +7379,21 @@ body .app-shell[data-route="home"] .library-hero-panel {
   background: #ffffff;
 }
 
-body .app-shell[data-route="home"] .library-hero-panel::before,
-body .app-shell[data-route="home"] .library-hero-panel::after,
-body .app-shell[data-route="home"] .library-hero-badge,
-body .app-shell[data-route="home"] .library-hero-title span,
-body .app-shell[data-route="home"] .library-hero-title i,
-body .app-shell[data-route="home"] .library-module-row button::after {
+html body #app-shell.app-shell[data-route="home"] .library-hero-panel::before,
+html body #app-shell.app-shell[data-route="home"] .library-hero-panel::after,
+html body #app-shell.app-shell[data-route="home"] .library-hero-badge,
+html body #app-shell.app-shell[data-route="home"] .library-hero-title span,
+html body #app-shell.app-shell[data-route="home"] .library-hero-title i,
+html body #app-shell.app-shell[data-route="home"] .library-module-row button::after {
   display: none;
 }
 
-body .app-shell[data-route="home"] .library-hero-title {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title {
   margin-top: 0;
   text-align: center;
 }
 
-body .app-shell[data-route="home"] .library-hero-title strong {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
   display: block;
   max-width: 760px;
   color: var(--home-ink);
@@ -7089,20 +7403,20 @@ body .app-shell[data-route="home"] .library-hero-title strong {
   letter-spacing: 0;
 }
 
-body .app-shell[data-route="home"] .library-hero-command {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command {
   margin-top: 18px;
 }
 
-body .app-shell[data-route="home"] .library-module-row button {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button {
   overflow: visible;
   background: #ffffff !important;
 }
 
-body .app-shell[data-route="home"] .library-module-row i {
+html body #app-shell.app-shell[data-route="home"] .library-module-row i {
   background: #f3f4f1;
 }
 
-body .app-shell[data-route="home"] .library-module-row span {
+html body #app-shell.app-shell[data-route="home"] .library-module-row span {
   width: 30px;
   height: 30px;
   display: grid;
@@ -7113,22 +7427,22 @@ body .app-shell[data-route="home"] .library-module-row span {
   font-size: 18px;
 }
 
-body .app-shell[data-route="home"] .library-module-row button:hover span {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button:hover span {
   background: var(--home-ink);
   color: #ffffff;
 }
 
 /* 2026 home polish v7: mature hero typography and command spacing. */
-body .app-shell[data-route="home"] .library-page-home {
+html body #app-shell.app-shell[data-route="home"] .library-page-home {
   padding-top: 28px;
 }
 
-body .app-shell[data-route="home"] .library-hero {
+html body #app-shell.app-shell[data-route="home"] .library-hero {
   gap: 16px;
   padding: 10px 0 28px;
 }
 
-body .app-shell[data-route="home"] .library-hero-panel {
+html body #app-shell.app-shell[data-route="home"] .library-hero-panel {
   width: min(1000px, 68vw);
   min-height: 188px;
   padding: 32px 42px;
@@ -7137,12 +7451,12 @@ body .app-shell[data-route="home"] .library-hero-panel {
   box-shadow: 0 18px 54px rgba(16, 19, 24, 0.07);
 }
 
-body .app-shell[data-route="home"] .library-hero-title {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title {
   display: block;
   margin: 0;
 }
 
-body .app-shell[data-route="home"] .library-hero-title strong {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
   max-width: 720px;
   font-size: clamp(36px, 3vw, 48px);
   line-height: 1.08;
@@ -7150,7 +7464,7 @@ body .app-shell[data-route="home"] .library-hero-title strong {
   letter-spacing: 0;
 }
 
-body .app-shell[data-route="home"] .library-hero-command {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command {
   width: min(720px, 100%);
   min-height: 58px;
   grid-template-columns: minmax(0, 1fr) 42px;
@@ -7161,7 +7475,7 @@ body .app-shell[data-route="home"] .library-hero-command {
   box-shadow: 0 14px 36px rgba(16, 19, 24, 0.06);
 }
 
-body .app-shell[data-route="home"] .library-hero-command input {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command input {
   min-height: 42px;
   padding: 0;
   color: #59616c;
@@ -7170,7 +7484,7 @@ body .app-shell[data-route="home"] .library-hero-command input {
   font-weight: 650;
 }
 
-body .app-shell[data-route="home"] .library-hero-command button {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command button {
   width: 40px;
   height: 40px;
   border-radius: 12px;
@@ -7178,23 +7492,23 @@ body .app-shell[data-route="home"] .library-hero-command button {
   box-shadow: none;
 }
 
-body .app-shell[data-route="home"] .library-module-row {
+html body #app-shell.app-shell[data-route="home"] .library-module-row {
   width: min(1000px, 68vw);
 }
 
 @media (max-width: 980px) {
-  body .app-shell[data-route="home"] .library-hero-panel,
-  body .app-shell[data-route="home"] .library-module-row {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-panel,
+  html body #app-shell.app-shell[data-route="home"] .library-module-row {
     width: 100%;
   }
 }
 
 @media (max-width: 640px) {
-  body .app-shell[data-route="home"] .library-hero-panel {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-panel {
     padding: 26px 20px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-title strong {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
     font-size: 32px;
   }
 }
@@ -7452,16 +7766,16 @@ textarea:focus,
   display: none;
 }
 
-body .app-shell[data-route="home"] .library-page-home {
+html body #app-shell.app-shell[data-route="home"] .library-page-home {
   padding: 30px 32px 26px;
 }
 
-body .app-shell[data-route="home"] .library-hero {
+html body #app-shell.app-shell[data-route="home"] .library-hero {
   gap: 18px;
   padding: 0 0 30px;
 }
 
-body .app-shell[data-route="home"] .library-hero-panel {
+html body #app-shell.app-shell[data-route="home"] .library-hero-panel {
   width: min(960px, 68vw);
   min-height: 180px;
   padding: 34px 44px;
@@ -7471,7 +7785,7 @@ body .app-shell[data-route="home"] .library-hero-panel {
   box-shadow: var(--shadow);
 }
 
-body .app-shell[data-route="home"] .library-hero-title strong {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
   max-width: 700px;
   color: var(--text);
   font-size: clamp(36px, 2.75vw, 46px);
@@ -7479,7 +7793,7 @@ body .app-shell[data-route="home"] .library-hero-title strong {
   font-weight: 860;
 }
 
-body .app-shell[data-route="home"] .library-hero-command {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command {
   width: min(700px, 100%);
   min-height: 58px;
   margin-top: 18px;
@@ -7489,24 +7803,24 @@ body .app-shell[data-route="home"] .library-hero-command {
   box-shadow: var(--shadow-soft);
 }
 
-body .app-shell[data-route="home"] .library-hero-command input {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command input {
   color: #5f6772;
   font-size: 13px;
   font-weight: 650;
 }
 
-body .app-shell[data-route="home"] .library-hero-command button {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command button {
   background: var(--primary);
   color: #ffffff;
   border-radius: 12px;
 }
 
-body .app-shell[data-route="home"] .library-module-row {
+html body #app-shell.app-shell[data-route="home"] .library-module-row {
   width: min(960px, 68vw);
   gap: 14px;
 }
 
-body .app-shell[data-route="home"] .library-module-row button,
+html body #app-shell.app-shell[data-route="home"] .library-module-row button,
 .library-card,
 .request-steps article {
   border: 1px solid var(--border);
@@ -7515,34 +7829,34 @@ body .app-shell[data-route="home"] .library-module-row button,
   box-shadow: var(--shadow-soft);
 }
 
-body .app-shell[data-route="home"] .library-module-row button {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button {
   min-height: 88px;
   padding: 18px;
   grid-template-columns: 42px minmax(0, 1fr) 30px;
   gap: 14px;
 }
 
-body .app-shell[data-route="home"] .library-module-row i {
+html body #app-shell.app-shell[data-route="home"] .library-module-row i {
   width: 42px;
   height: 42px;
   border-radius: 14px;
   background: var(--surface-2);
 }
 
-body .app-shell[data-route="home"] .library-module-row strong {
+html body #app-shell.app-shell[data-route="home"] .library-module-row strong {
   color: var(--text);
   font-size: 16px;
   font-weight: 820;
 }
 
-body .app-shell[data-route="home"] .library-module-row small {
+html body #app-shell.app-shell[data-route="home"] .library-module-row small {
   margin-top: 4px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 650;
 }
 
-body .app-shell[data-route="home"] .library-module-row span {
+html body #app-shell.app-shell[data-route="home"] .library-module-row span {
   width: 30px;
   height: 30px;
   border-radius: 999px;
@@ -7550,7 +7864,7 @@ body .app-shell[data-route="home"] .library-module-row span {
   color: var(--text);
 }
 
-body .app-shell[data-route="home"] .library-control-strip,
+html body #app-shell.app-shell[data-route="home"] .library-control-strip,
 .library-control-strip {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 390px) auto;
@@ -7723,12 +8037,12 @@ body .app-shell[data-route="home"] .library-control-strip,
     border-bottom: 1px solid var(--border);
   }
 
-  body .app-shell[data-route="home"] .library-hero-panel,
-  body .app-shell[data-route="home"] .library-module-row {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-panel,
+  html body #app-shell.app-shell[data-route="home"] .library-module-row {
     width: 100%;
   }
 
-  body .app-shell[data-route="home"] .library-control-strip,
+  html body #app-shell.app-shell[data-route="home"] .library-control-strip,
   .library-control-strip {
     grid-template-columns: 1fr;
   }
@@ -7737,40 +8051,40 @@ body .app-shell[data-route="home"] .library-control-strip,
 @media (max-width: 640px) {
   .login-view,
   .library-page:not(.library-page-home),
-  body .app-shell[data-route="home"] .library-page-home,
+  html body #app-shell.app-shell[data-route="home"] .library-page-home,
   .request-page,
   .panel-page {
     padding: 18px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-panel {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-panel {
     padding: 26px 22px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-title strong {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
     font-size: 32px;
   }
 }
 
 /* 2026 home clean layout v1: remove helper copy and rebalance the first screen. */
-body .app-shell[data-route="home"] .library-hero {
+html body #app-shell.app-shell[data-route="home"] .library-hero {
   gap: 16px;
   padding-bottom: 28px;
 }
 
-body .app-shell[data-route="home"] .library-hero-panel {
+html body #app-shell.app-shell[data-route="home"] .library-hero-panel {
   width: min(920px, 66vw);
   min-height: 166px;
   padding: 30px 40px 34px;
 }
 
-body .app-shell[data-route="home"] .library-hero-title strong {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
   max-width: 680px;
   font-size: clamp(38px, 3vw, 50px);
   line-height: 1.04;
 }
 
-body .app-shell[data-route="home"] .library-hero-command {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command {
   width: min(640px, 100%);
   min-height: 56px;
   margin-top: 22px;
@@ -7778,20 +8092,20 @@ body .app-shell[data-route="home"] .library-hero-command {
   padding: 7px 7px 7px 16px;
 }
 
-body .app-shell[data-route="home"] .library-hero-command input {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command input {
   min-height: 40px;
 }
 
-body .app-shell[data-route="home"] .library-hero-command input::placeholder {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command input::placeholder {
   color: transparent;
 }
 
-body .app-shell[data-route="home"] .library-module-row {
+html body #app-shell.app-shell[data-route="home"] .library-module-row {
   width: min(920px, 66vw);
   gap: 14px;
 }
 
-body .app-shell[data-route="home"] .library-module-row button {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button {
   min-height: 78px;
   grid-template-columns: 42px minmax(0, 1fr) 30px;
   align-items: center;
@@ -7799,7 +8113,7 @@ body .app-shell[data-route="home"] .library-module-row button {
   padding: 16px 16px 16px 18px;
 }
 
-body .app-shell[data-route="home"] .library-module-row strong {
+html body #app-shell.app-shell[data-route="home"] .library-module-row strong {
   min-width: 0;
   overflow: visible;
   color: var(--text);
@@ -7810,59 +8124,59 @@ body .app-shell[data-route="home"] .library-module-row strong {
   text-overflow: clip;
 }
 
-body .app-shell[data-route="home"] .library-module-row small {
+html body #app-shell.app-shell[data-route="home"] .library-module-row small {
   display: none;
 }
 
-body .app-shell[data-route="home"] .library-module-row i {
+html body #app-shell.app-shell[data-route="home"] .library-module-row i {
   width: 42px;
   height: 42px;
   border-radius: 14px;
 }
 
-body .app-shell[data-route="home"] .library-module-row span {
+html body #app-shell.app-shell[data-route="home"] .library-module-row span {
   justify-self: end;
 }
 
 @media (max-width: 980px) {
-  body .app-shell[data-route="home"] .library-hero-panel,
-  body .app-shell[data-route="home"] .library-module-row {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-panel,
+  html body #app-shell.app-shell[data-route="home"] .library-module-row {
     width: 100%;
   }
 }
 
 @media (max-width: 640px) {
-  body .app-shell[data-route="home"] .library-hero-panel {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-panel {
     min-height: 154px;
     padding: 26px 20px 28px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-command {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-command {
     margin-top: 18px;
   }
 
-  body .app-shell[data-route="home"] .library-module-row {
+  html body #app-shell.app-shell[data-route="home"] .library-module-row {
     grid-template-columns: 1fr;
   }
 }
 
 /* 2026 home kiki workstation v1: reference-inspired GCC home, not a copied page. */
-body .app-shell[data-route="home"] .content {
+html body #app-shell.app-shell[data-route="home"] .content {
   background: #f7f8fb;
 }
 
-body .app-shell[data-route="home"] .library-page-home {
+html body #app-shell.app-shell[data-route="home"] .library-page-home {
   min-height: 100%;
   padding: 28px clamp(28px, 4vw, 64px) 34px;
   background: #f7f8fb;
 }
 
-body .app-shell[data-route="home"] .library-hero {
+html body #app-shell.app-shell[data-route="home"] .library-hero {
   gap: 24px;
   padding: 0 0 34px;
 }
 
-body .app-shell[data-route="home"] .library-hero-panel {
+html body #app-shell.app-shell[data-route="home"] .library-hero-panel {
   width: min(1500px, 100%);
   min-height: auto;
   display: grid;
@@ -7875,7 +8189,7 @@ body .app-shell[data-route="home"] .library-hero-panel {
   box-shadow: none;
 }
 
-body .app-shell[data-route="home"] .library-hero-badge {
+html body #app-shell.app-shell[data-route="home"] .library-hero-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -7893,7 +8207,7 @@ body .app-shell[data-route="home"] .library-hero-badge {
   backdrop-filter: blur(14px);
 }
 
-body .app-shell[data-route="home"] .library-hero-title {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title {
   position: relative;
   display: flex;
   width: min(980px, 100%);
@@ -7905,7 +8219,7 @@ body .app-shell[data-route="home"] .library-hero-title {
   text-align: center;
 }
 
-body .app-shell[data-route="home"] .library-hero-title span {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title span {
   display: inline-block;
   color: #676e78;
   font-size: clamp(46px, 4.8vw, 74px);
@@ -7913,7 +8227,7 @@ body .app-shell[data-route="home"] .library-hero-title span {
   font-weight: 820;
 }
 
-body .app-shell[data-route="home"] .library-hero-kiki {
+html body #app-shell.app-shell[data-route="home"] .library-hero-kiki {
   display: block;
   width: clamp(84px, 8.2vw, 132px);
   height: clamp(84px, 8.2vw, 132px);
@@ -7923,7 +8237,7 @@ body .app-shell[data-route="home"] .library-hero-kiki {
   filter: drop-shadow(0 18px 26px rgba(109, 74, 8, 0.16));
 }
 
-body .app-shell[data-route="home"] .library-hero-title strong {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
   display: inline-block;
   max-width: none;
   color: #101318;
@@ -7933,7 +8247,7 @@ body .app-shell[data-route="home"] .library-hero-title strong {
   white-space: nowrap;
 }
 
-body .app-shell[data-route="home"] .library-hero-command {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command {
   width: min(1500px, 100%);
   min-height: 238px;
   display: grid;
@@ -7949,7 +8263,7 @@ body .app-shell[data-route="home"] .library-hero-command {
   backdrop-filter: blur(16px);
 }
 
-body .app-shell[data-route="home"] .library-hero-command input {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command input {
   width: 100%;
   min-height: 48px;
   align-self: start;
@@ -7963,11 +8277,11 @@ body .app-shell[data-route="home"] .library-hero-command input {
   box-shadow: none;
 }
 
-body .app-shell[data-route="home"] .library-hero-command input::placeholder {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command input::placeholder {
   color: #9aa3ae;
 }
 
-body .app-shell[data-route="home"] .library-hero-command button {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command button {
   align-self: end;
   justify-self: end;
   width: 56px;
@@ -7980,23 +8294,23 @@ body .app-shell[data-route="home"] .library-hero-command button {
   box-shadow: none;
 }
 
-body .app-shell[data-route="home"] .library-hero-command:focus-within {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command:focus-within {
   border-color: rgba(16, 19, 24, 0.18);
   box-shadow: 0 28px 80px rgba(61, 76, 107, 0.11);
 }
 
-body .app-shell[data-route="home"] .library-hero-command:focus-within button {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command:focus-within button {
   background: #101318;
 }
 
-body .app-shell[data-route="home"] .library-module-row {
+html body #app-shell.app-shell[data-route="home"] .library-module-row {
   width: min(1500px, 100%);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 18px;
 }
 
-body .app-shell[data-route="home"] .library-module-row button {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button {
   position: relative;
   min-height: 78px;
   display: grid;
@@ -8013,7 +8327,7 @@ body .app-shell[data-route="home"] .library-module-row button {
   box-shadow: 0 16px 40px rgba(63, 86, 20, 0.12);
 }
 
-body .app-shell[data-route="home"] .library-module-row button::before {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -8021,18 +8335,18 @@ body .app-shell[data-route="home"] .library-module-row button::before {
   pointer-events: none;
 }
 
-body .app-shell[data-route="home"] .library-module-row button:hover {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button:hover {
   transform: translateY(-2px);
   box-shadow: 0 20px 48px rgba(63, 86, 20, 0.16);
 }
 
-body .app-shell[data-route="home"] .library-module-row strong,
-body .app-shell[data-route="home"] .library-module-row span {
+html body #app-shell.app-shell[data-route="home"] .library-module-row strong,
+html body #app-shell.app-shell[data-route="home"] .library-module-row span {
   position: relative;
   z-index: 1;
 }
 
-body .app-shell[data-route="home"] .library-module-row strong {
+html body #app-shell.app-shell[data-route="home"] .library-module-row strong {
   color: #101318;
   font-size: clamp(18px, 1.45vw, 26px);
   line-height: 1;
@@ -8040,7 +8354,7 @@ body .app-shell[data-route="home"] .library-module-row strong {
   white-space: nowrap;
 }
 
-body .app-shell[data-route="home"] .library-module-row span {
+html body #app-shell.app-shell[data-route="home"] .library-module-row span {
   width: auto;
   height: auto;
   justify-self: end;
@@ -8051,7 +8365,7 @@ body .app-shell[data-route="home"] .library-module-row span {
   font-weight: 600;
 }
 
-body .app-shell[data-route="home"] .library-control-strip {
+html body #app-shell.app-shell[data-route="home"] .library-control-strip {
   width: min(1500px, 100%);
   margin: 0 auto;
   border-radius: 26px;
@@ -8059,136 +8373,136 @@ body .app-shell[data-route="home"] .library-control-strip {
 }
 
 @media (max-width: 1180px) {
-  body .app-shell[data-route="home"] .library-hero-title {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title {
     flex-wrap: wrap;
     gap: 16px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-title strong {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
     white-space: normal;
   }
 
-  body .app-shell[data-route="home"] .library-module-row {
+  html body #app-shell.app-shell[data-route="home"] .library-module-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 640px) {
-  body .app-shell[data-route="home"] .library-page-home {
+  html body #app-shell.app-shell[data-route="home"] .library-page-home {
     padding: 18px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-badge {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-badge {
     font-size: 13px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-title {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title {
     min-height: auto;
   }
 
-  body .app-shell[data-route="home"] .library-hero-title span,
-  body .app-shell[data-route="home"] .library-hero-title strong {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title span,
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
     font-size: 34px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-kiki {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-kiki {
     width: 76px;
     height: 76px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-command {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-command {
     min-height: 160px;
     border-radius: 24px;
     padding: 24px 20px 20px;
   }
 
-  body .app-shell[data-route="home"] .library-module-row {
+  html body #app-shell.app-shell[data-route="home"] .library-module-row {
     grid-template-columns: 1fr;
   }
 }
 
 /* 2026 home kiki refinement v2: cleaner title and black neon module cards. */
-body .app-shell[data-route="home"] .library-hero-badge {
+html body #app-shell.app-shell[data-route="home"] .library-hero-badge {
   display: none;
 }
 
-body .app-shell[data-route="home"] .library-hero-title {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title {
   min-height: 96px;
   gap: 22px;
 }
 
-body .app-shell[data-route="home"] .library-hero-title span {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title span {
   font-size: clamp(40px, 4vw, 62px);
 }
 
-body .app-shell[data-route="home"] .library-hero-kiki {
+html body #app-shell.app-shell[data-route="home"] .library-hero-kiki {
   width: clamp(76px, 7vw, 112px);
   height: clamp(76px, 7vw, 112px);
   margin-bottom: -8px;
 }
 
-body .app-shell[data-route="home"] .library-hero-title strong {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
   font-size: clamp(38px, 3.8vw, 60px);
   line-height: 1.02;
 }
 
-body .app-shell[data-route="home"] .library-hero-command {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command {
   margin-top: 14px;
 }
 
-body .app-shell[data-route="home"] .library-module-row button {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button {
   background:
     radial-gradient(circle at 84% 22%, rgba(216, 255, 79, 0.18), transparent 24%),
     linear-gradient(112deg, #101318 0%, #101318 60%, #050608 100%);
   box-shadow: 0 18px 42px rgba(16, 19, 24, 0.18);
 }
 
-body .app-shell[data-route="home"] .library-module-row button::before {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button::before {
   background: linear-gradient(90deg, rgba(216, 255, 79, 0.08), transparent 50%, rgba(216, 255, 79, 0.14));
 }
 
-body .app-shell[data-route="home"] .library-module-row button:hover {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button:hover {
   box-shadow: 0 22px 52px rgba(16, 19, 24, 0.24);
 }
 
-body .app-shell[data-route="home"] .library-module-row strong,
-body .app-shell[data-route="home"] .library-module-row span {
+html body #app-shell.app-shell[data-route="home"] .library-module-row strong,
+html body #app-shell.app-shell[data-route="home"] .library-module-row span {
   color: #d8ff4f;
 }
 
 @media (max-width: 640px) {
-  body .app-shell[data-route="home"] .library-hero-title span,
-  body .app-shell[data-route="home"] .library-hero-title strong {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title span,
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
     font-size: 32px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-kiki {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-kiki {
     width: 70px;
     height: 70px;
   }
 }
 
 /* 2026 home kiki refinement v3: centered, lighter, true black cards. */
-body .app-shell[data-route="home"] .library-page-home {
+html body #app-shell.app-shell[data-route="home"] .library-page-home {
   padding-top: 34px;
   background: #f7f8fb;
 }
 
-body .app-shell[data-route="home"] .library-hero {
+html body #app-shell.app-shell[data-route="home"] .library-hero {
   gap: 18px;
   padding-bottom: 34px;
 }
 
-body .app-shell[data-route="home"] .library-hero-panel {
+html body #app-shell.app-shell[data-route="home"] .library-hero-panel {
   width: min(1080px, 100%);
   margin: 0 auto;
 }
 
-body .app-shell[data-route="home"] .library-hero-badge {
+html body #app-shell.app-shell[data-route="home"] .library-hero-badge {
   display: none !important;
 }
 
-body .app-shell[data-route="home"] .library-hero-title {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title {
   width: min(720px, 100%);
   min-height: 76px;
   gap: 18px;
@@ -8196,21 +8510,21 @@ body .app-shell[data-route="home"] .library-hero-title {
   align-items: center;
 }
 
-body .app-shell[data-route="home"] .library-hero-title span {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title span {
   color: #6d7480;
   font-size: clamp(34px, 3vw, 46px);
   line-height: 1;
   font-weight: 760;
 }
 
-body .app-shell[data-route="home"] .library-hero-kiki {
+html body #app-shell.app-shell[data-route="home"] .library-hero-kiki {
   width: clamp(58px, 5.4vw, 78px);
   height: clamp(58px, 5.4vw, 78px);
   margin: 0 -2px -5px;
   filter: drop-shadow(0 12px 18px rgba(109, 74, 8, 0.14));
 }
 
-body .app-shell[data-route="home"] .library-hero-title strong {
+html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
   color: #101318;
   font-size: clamp(34px, 3.25vw, 50px);
   line-height: 1.02;
@@ -8218,7 +8532,7 @@ body .app-shell[data-route="home"] .library-hero-title strong {
   white-space: nowrap;
 }
 
-body .app-shell[data-route="home"] .library-hero-command {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command {
   width: min(1080px, 100%);
   min-height: 174px;
   margin: 0 auto;
@@ -8231,7 +8545,7 @@ body .app-shell[data-route="home"] .library-hero-command {
   box-shadow: 0 18px 54px rgba(61, 76, 107, 0.07);
 }
 
-body .app-shell[data-route="home"] .library-hero-command input {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command input {
   min-height: 36px;
   color: #1f252d;
   font-size: 16px;
@@ -8239,11 +8553,11 @@ body .app-shell[data-route="home"] .library-hero-command input {
   font-weight: 560;
 }
 
-body .app-shell[data-route="home"] .library-hero-command input::placeholder {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command input::placeholder {
   color: #a7b0bb;
 }
 
-body .app-shell[data-route="home"] .library-hero-command button {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command button {
   width: 46px;
   height: 46px;
   align-self: end;
@@ -8254,18 +8568,18 @@ body .app-shell[data-route="home"] .library-hero-command button {
   font-weight: 700;
 }
 
-body .app-shell[data-route="home"] .library-hero-command:focus-within button {
+html body #app-shell.app-shell[data-route="home"] .library-hero-command:focus-within button {
   background: #101318;
 }
 
-body .app-shell[data-route="home"] .library-module-row {
+html body #app-shell.app-shell[data-route="home"] .library-module-row {
   width: min(1080px, 100%);
   margin: 0 auto;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
-body .app-shell[data-route="home"] .library-module-row button {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button {
   min-height: 58px;
   padding: 0 16px 0 18px;
   grid-template-columns: minmax(0, 1fr) 18px;
@@ -8275,73 +8589,73 @@ body .app-shell[data-route="home"] .library-module-row button {
   box-shadow: 0 14px 34px rgba(16, 19, 24, 0.14);
 }
 
-body .app-shell[data-route="home"] .library-module-row button::before {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button::before {
   background:
     linear-gradient(90deg, rgba(216, 255, 79, 0.08), transparent 44%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent);
 }
 
-body .app-shell[data-route="home"] .library-module-row button:hover {
+html body #app-shell.app-shell[data-route="home"] .library-module-row button:hover {
   background: #080a0d !important;
   border-color: rgba(216, 255, 79, 0.26);
   box-shadow: 0 18px 42px rgba(16, 19, 24, 0.2);
 }
 
-body .app-shell[data-route="home"] .library-module-row strong {
+html body #app-shell.app-shell[data-route="home"] .library-module-row strong {
   color: #d8ff4f;
   font-size: clamp(15px, 1.05vw, 18px);
   line-height: 1;
   font-weight: 660;
 }
 
-body .app-shell[data-route="home"] .library-module-row span {
+html body #app-shell.app-shell[data-route="home"] .library-module-row span {
   color: #d8ff4f;
   font-size: 22px;
   font-weight: 540;
 }
 
-body .app-shell[data-route="home"] .library-control-strip {
+html body #app-shell.app-shell[data-route="home"] .library-control-strip {
   width: min(1080px, 100%);
   margin-top: 0;
 }
 
 @media (max-width: 1180px) {
-  body .app-shell[data-route="home"] .library-hero-title {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title {
     width: 100%;
   }
 
-  body .app-shell[data-route="home"] .library-hero-title strong {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
     white-space: normal;
   }
 }
 
 @media (max-width: 760px) {
-  body .app-shell[data-route="home"] .library-module-row {
+  html body #app-shell.app-shell[data-route="home"] .library-module-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 640px) {
-  body .app-shell[data-route="home"] .library-hero-title {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title {
     gap: 10px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-title span,
-  body .app-shell[data-route="home"] .library-hero-title strong {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title span,
+  html body #app-shell.app-shell[data-route="home"] .library-hero-title strong {
     font-size: 30px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-kiki {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-kiki {
     width: 58px;
     height: 58px;
   }
 
-  body .app-shell[data-route="home"] .library-hero-command {
+  html body #app-shell.app-shell[data-route="home"] .library-hero-command {
     min-height: 150px;
     border-radius: 22px;
   }
 
-  body .app-shell[data-route="home"] .library-module-row {
+  html body #app-shell.app-shell[data-route="home"] .library-module-row {
     grid-template-columns: 1fr;
   }
 }
