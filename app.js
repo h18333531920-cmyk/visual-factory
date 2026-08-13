@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
+const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -535,7 +535,7 @@ const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
         button.dataset.route = route.id;
         button.title = t(route.title);
         button.setAttribute('aria-label', t(route.title));
-        button.innerHTML = `<span class="nav-icon" aria-hidden="true">${navIcon(route.icon)}</span><span>${t(route.title)}</span>`;
+        button.innerHTML = `<span class="nav-icon" aria-hidden="true">${navIcon(route.icon)}</span><span class="nav-label">${t(route.title)}</span>`;
         button.addEventListener('click', () => {
           location.hash = route.id;
           navigate(route.id);
@@ -575,13 +575,13 @@ const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
 
   function navIcon(icon) {
     const icons = {
-      home: '<svg viewBox="0 0 24 24"><path d="M4 11.4 12 4l8 7.4"/><path d="M6.7 10.5V20h10.6v-9.5"/><path d="M9.6 20v-5.5h4.8V20"/></svg>',
-      library: '<svg viewBox="0 0 24 24"><path d="M5 6.3h14v11.4H5z"/><path d="M8 3.8h8M8 20.2h8"/><path d="m8.2 15.3 2.4-2.8 2.2 2.2 1.6-1.8 2.7 3.2"/></svg>',
-      static: '<svg viewBox="0 0 24 24"><rect x="4" y="4.8" width="16" height="14.4" rx="3"/><path d="M8 8.2h5.5M8 11h8"/><path d="M8 15.5h3.6l1.8-2 1.8 2H18"/></svg>',
-      dynamic: '<svg viewBox="0 0 24 24"><rect x="4.4" y="5" width="15.2" height="14" rx="3"/><path d="M10 9v6l5.2-3L10 9z"/><path d="M7.5 3.8h9"/></svg>',
+      home: '<svg viewBox="0 0 24 24"><path d="M3 12l2-2m0 0 7-7 7 7M5 10v10a1 1 0 001 1h3m10-11 2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>',
+      library: '<svg viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2 1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+      static: '<svg viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+      dynamic: '<svg viewBox="0 0 24 24"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>',
       request: '<svg viewBox="0 0 24 24"><path d="M5 5.5h14v10H8.5L5 19V5.5Z"/><path d="M8.5 9h7M8.5 12h4.5"/></svg>',
-      admin: '<svg viewBox="0 0 24 24"><path d="M12 13.4a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M5.5 20c.9-3.2 3.1-4.8 6.5-4.8s5.6 1.6 6.5 4.8"/></svg>',
-      analytics: '<svg viewBox="0 0 24 24"><rect x="3" y="13" width="4" height="7" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="16" rx="1"/></svg>'
+      admin: '<svg viewBox="0 0 24 24"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>',
+      analytics: '<svg viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>'
     };
     return icons[icon] || '';
   }
@@ -638,6 +638,118 @@ const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
     document.getElementById('home-search-form')?.addEventListener('submit', event => {
       event.preventDefault();
       state.libraryFilters.query = document.getElementById('home-search-input').value.trim();
+      location.hash = 'library';
+      navigate('library');
+    });
+  }
+
+  function wireHomeCommandComposer() {
+    const form = document.getElementById('home-command-form');
+    const prompt = document.getElementById('library-hero-search');
+    const upload = document.getElementById('home-command-upload');
+    const references = document.getElementById('home-command-references');
+    const sizeTrigger = document.getElementById('home-size-trigger');
+    const sizeMenu = document.getElementById('home-size-menu');
+    const skillsTrigger = document.getElementById('home-skills-trigger');
+    const skillsMenu = document.getElementById('home-skills-menu');
+    const modelTrigger = document.getElementById('home-model-trigger');
+    const modelMenu = document.getElementById('home-model-menu');
+
+    const setMenuState = (menu, trigger, open) => {
+      if (!menu || !trigger) return;
+      menu.hidden = !open;
+      trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+      trigger.querySelector('.home-menu-chevron')?.classList.toggle('is-open', open);
+    };
+    const closeHomeMenus = except => {
+      [[skillsMenu, skillsTrigger], [sizeMenu, sizeTrigger], [modelMenu, modelTrigger]].forEach(([menu, trigger]) => {
+        if (menu !== except) setMenuState(menu, trigger, false);
+      });
+    };
+    window.__vfCloseHomeMenus = closeHomeMenus;
+
+    document.querySelectorAll('.home-command-stage [data-route]').forEach(button => {
+      button.addEventListener('click', () => {
+        const route = button.dataset.route;
+        if (!route) return;
+        location.hash = route;
+        navigate(route);
+      });
+    });
+
+    let referenceFiles = [];
+    const renderReferences = files => {
+      if (!references) return;
+      const nextFiles = [...referenceFiles.map(entry => entry.file), ...Array.from(files || [])].slice(0, 8);
+      referenceFiles.forEach(file => {
+        if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
+      });
+      referenceFiles = nextFiles.map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
+      references.innerHTML = referenceFiles.map((entry, index) => {
+        const file = entry.file;
+        return `<span class="home-command-reference" title="${escapeAttr(file.name)}"><img src="${escapeAttr(entry.previewUrl)}" alt="参考图 ${index + 1}"></span>`;
+      }).join('');
+      references.classList.toggle('has-references', referenceFiles.length > 0);
+      const addButton = referenceFiles.length < 8 ? `<button type="button" class="home-command-add-reference" aria-label="${state.lang === 'zh' ? '添加参考图，最多 8 张' : 'Add references, up to 8'}">+</button>` : '';
+      references.insertAdjacentHTML('beforeend', addButton);
+      references.querySelector('.home-command-add-reference')?.addEventListener('click', () => upload?.click());
+    };
+
+    upload?.addEventListener('change', event => {
+      renderReferences(event.target.files);
+      event.target.value = '';
+    });
+    sizeTrigger?.addEventListener('click', event => {
+      event.stopPropagation();
+      const open = !!sizeMenu?.hidden;
+      closeHomeMenus(sizeMenu);
+      setMenuState(sizeMenu, sizeTrigger, open);
+    });
+    skillsTrigger?.addEventListener('click', event => {
+      event.stopPropagation();
+      const open = !!skillsMenu?.hidden;
+      closeHomeMenus(skillsMenu);
+      setMenuState(skillsMenu, skillsTrigger, open);
+    });
+    prompt?.addEventListener('input', () => {
+      if (/@(?:[^@\s]*)$/.test(prompt.value)) {
+        closeHomeMenus(skillsMenu);
+        setMenuState(skillsMenu, skillsTrigger, true);
+      }
+    });
+    modelTrigger?.addEventListener('click', event => {
+      event.stopPropagation();
+      const open = !!modelMenu?.hidden;
+      closeHomeMenus(modelMenu);
+      setMenuState(modelMenu, modelTrigger, open);
+    });
+    modelMenu?.querySelectorAll('button').forEach(button => {
+      button.addEventListener('click', event => {
+        event.stopPropagation();
+        const label = button.textContent.replace('✓', '').trim();
+        modelTrigger.querySelector('strong').textContent = label;
+        modelMenu.querySelectorAll('button').forEach(item => item.classList.toggle('is-selected', item === button));
+        modelMenu.querySelectorAll('.home-option-check').forEach(check => { check.textContent = check.closest('button') === button ? '✓' : ''; });
+        setMenuState(modelMenu, modelTrigger, false);
+      });
+    });
+    sizeMenu?.querySelectorAll('[data-home-size]').forEach(button => {
+      button.addEventListener('click', () => {
+        const size = button.dataset.homeSize || '1:1';
+        sizeTrigger.querySelector('strong').textContent = size;
+        sizeMenu.querySelectorAll('[data-home-size]').forEach(item => item.classList.toggle('is-selected', item === button));
+        sizeMenu.querySelectorAll('.home-option-check').forEach(check => { check.textContent = check.closest('button') === button ? '✓' : ''; });
+        setMenuState(sizeMenu, sizeTrigger, false);
+      });
+    });
+    if (window.__vfHomeSizeMenuHandler) document.removeEventListener('click', window.__vfHomeSizeMenuHandler);
+    window.__vfHomeSizeMenuHandler = event => {
+      if (!event.target.closest('.home-command-controls')) closeHomeMenus();
+    };
+    document.addEventListener('click', window.__vfHomeSizeMenuHandler);
+    form?.addEventListener('submit', event => {
+      event.preventDefault();
+      state.libraryFilters.query = prompt?.value.trim() || '';
       location.hash = 'library';
       navigate('library');
     });
@@ -792,6 +904,46 @@ const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
     }
     els.content.innerHTML = `
       <div class="library-page ${homeMode ? 'library-page-home' : ''}">
+        ${homeMode ? `
+        <section class="library-hero home-command-stage">
+          <div class="home-command-kicker">GCC CREATIVE WORKSPACE</div>
+          <div class="library-hero-title home-command-title"><span>hey，</span><strong>${state.lang === 'zh' ? '你的高效设计伙伴' : 'Your efficient design partner'}</strong></div>
+          <form id="home-command-form" class="home-command-composer" aria-label="${state.lang === 'zh' ? '创作需求输入' : 'Creative brief'}">
+            <div class="home-command-main">
+              <div id="home-command-references" class="home-command-references"></div>
+              <label class="home-command-upload" title="${state.lang === 'zh' ? '添加参考图片' : 'Add references'}">
+                <input id="home-command-upload" type="file" accept="image/png,image/jpeg,image/webp" multiple>
+                <span>+</span>
+              </label>
+              <textarea id="library-hero-search" rows="4" placeholder="${state.lang === 'zh' ? '上传参考图、输入文字描述或 @ 使用功能' : 'Upload a reference, enter a brief, or use @ tools'}">${escapeHtml(state.libraryFilters.query)}</textarea>
+            </div>
+            <div class="home-command-controls">
+              <div class="home-prompt-menu-wrap">
+                <button class="home-control-button" id="home-skills-trigger" type="button" aria-expanded="false"><span aria-hidden="true">✦</span>Skills<svg class="home-menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.25 3.5 3.5 3.5-3.5"/></svg></button>
+                <div class="home-prompt-menu" id="home-skills-menu" hidden>
+                  <label class="home-skill-option"><span>${state.lang === 'zh' ? '一键替换食物' : 'Replace food'}</span><input type="checkbox" data-home-skill="replace-food"></label>
+                  <label class="home-skill-option"><span>${state.lang === 'zh' ? '一键高清' : 'Upscale'}</span><input type="checkbox" data-home-skill="upscale"></label>
+                  <label class="home-skill-option"><span>${state.lang === 'zh' ? '智能扩图' : 'Outpaint'}</span><input type="checkbox" data-home-skill="outpaint"></label>
+                </div>
+              </div>
+              <div class="home-size-wrap">
+                <button class="home-control-button home-size-trigger" id="home-size-trigger" type="button" aria-expanded="false"><span class="home-ratio-icon" aria-hidden="true"></span><strong>1:1</strong><svg class="home-menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.25 3.5 3.5 3.5-3.5"/></svg></button>
+                <div class="home-size-menu" id="home-size-menu" hidden>
+                  <div>${['16:9', '3:2', '4:3', '1:1', '3:4', '2:3', '9:16', '3:3.75'].map(size => `<button type="button" class="${size === '1:1' ? 'is-selected' : ''}" data-home-size="${size}"><i class="home-ratio-icon" style="--ratio:${size.replace(':', '/')}"></i><span>${size}</span><span class="home-option-check">${size === '1:1' ? '✓' : ''}</span></button>`).join('')}</div>
+                </div>
+              </div>
+              <div class="home-prompt-menu-wrap home-model-wrap">
+                <button class="home-control-button home-model-trigger" id="home-model-trigger" type="button" aria-expanded="false"><svg class="home-model-spark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.15c.38 0 .69.31.69.69a5.47 5.47 0 0 0 5.47 5.47.69.69 0 1 1 0 1.38A5.47 5.47 0 0 0 8.69 14.16a.69.69 0 1 1-1.38 0A5.47 5.47 0 0 0 1.84 8.69a.69.69 0 1 1 0-1.38 5.47 5.47 0 0 0 5.47-5.47c0-.38.31-.69.69-.69Z"/></svg><strong>GPT ${state.lang === 'zh' ? '大模型' : 'Model'}</strong><svg class="home-menu-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.25 3.5 3.5 3.5-3.5"/></svg></button>
+                <div class="home-prompt-menu home-model-menu" id="home-model-menu" hidden>
+                  <button type="button" class="is-selected"><span>GPT ${state.lang === 'zh' ? '大模型' : 'Model'}</span><span class="home-option-check">✓</span></button>
+                  <button type="button"><span>${state.lang === 'zh' ? '火山大模型' : 'Volc Model'}</span><span class="home-option-check"></span></button>
+                  <button type="button"><span>${state.lang === 'zh' ? '即梦本机' : 'Jimeng Local'}</span><span class="home-option-check"></span></button>
+                </div>
+              </div>
+              <button class="home-command-submit" type="submit" aria-label="${state.lang === 'zh' ? '发送' : 'Send'}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg></button>
+            </div>
+          </form>
+        </section>` : `
         <section class="library-hero">
           <div class="library-hero-panel">
             <div class="library-hero-badge">${state.lang === 'zh' ? 'GCC Creative 1.1 已上线 ↗' : 'GCC Creative 1.1 is live ↗'}</div>
@@ -805,34 +957,29 @@ const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
               <button type="button" data-route="library" aria-label="${state.lang === 'zh' ? '进入超级库' : 'Open library'}">↑</button>
             </label>
           </div>
-          <div class="library-module-row">
-            <button type="button" data-route="library"><strong>${state.lang === 'zh' ? '超级库' : 'Super Library'}</strong><span>›</span></button>
-            <button type="button" data-route="static"><strong>${state.lang === 'zh' ? '静态设计师' : 'Static Designer'}</strong><span>›</span></button>
-            <button type="button" data-route="dynamic"><strong>${state.lang === 'zh' ? '动态设计师' : 'Motion Designer'}</strong><span>›</span></button>
-            <button type="button" data-route="request"><strong>${state.lang === 'zh' ? '提需流程' : 'Request Flow'}</strong><span>›</span></button>
-          </div>
-        </section>
+        </section>`}
 
         <section class="library-control-strip" style="margin-left:0!important;margin-inline:0!important;padding-left:0!important;padding-right:0!important;background:transparent!important;border:none!important;border-radius:0!important;width:100%!important;grid-template-columns:1fr auto auto!important">
           <div class="library-kind-tabs" role="tablist" style="position:relative;">
             <div class="kind-tab-indicator" style="position:absolute;bottom:0;height:3px;background:#111827;border-radius:999px;transition:left 0.3s ease,width 0.3s ease;pointer-events:none;z-index:1;"></div>
             ${LIBRARY_KIND_TABS.map(tab => `<button type="button" class="${activeKind === tab.id ? 'active' : ''}" data-library-kind="${tab.id}">${escapeHtml(state.lang === 'zh' ? tab.zh : tab.en)}<small> · ${kindCounts[tab.id] || 0}</small></button>`).join('')}
+          </div>
+          <div class="library-control-actions">
             <div class="search-wrap">
-            <label class="library-search-pill" aria-label="${state.lang === 'zh' ? '搜索内容' : 'Search'}" style="margin-left:12px;">
-              <input id="library-search" placeholder="" value="${escapeAttr(state.libraryFilters.query)}">
-              <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg></span>
-            </label>
-            <div id="search-history-dropdown" class="search-history-dropdown" hidden>
-              <div class="search-history-list" id="search-history-list"></div>
+              <label class="library-search-pill" aria-label="${state.lang === 'zh' ? '搜索内容' : 'Search'}">
+                <input id="library-search" placeholder="" value="${escapeAttr(state.libraryFilters.query)}">
+                <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg></span>
+              </label>
+              <div id="search-history-dropdown" class="search-history-dropdown" hidden>
+                <div class="search-history-list" id="search-history-list"></div>
+              </div>
             </div>
+            <div class="library-upload-area">
+              ${canUpload || homeMode ? `<button class="library-upload-pill" type="button" id="open-upload-modal">＋ ${state.lang === 'zh' ? '上传素材' : 'Upload'}</button>` : ''}
             </div>
-          </div>
-          <div class="library-upload-area">
-            ${canUpload ? `<button class="library-upload-pill" type="button" id="open-upload-modal">${state.lang === 'zh' ? '上传素材 +' : 'Upload +'}</button>` : ''}
-          </div>
-          <div class="filter-dropdown-wrap">
-            <button class="ghost-btn" type="button" id="library-filter-btn">${state.lang === 'zh' ? '筛选 ▾' : 'Filter ▾'}</button>
-            <div id="library-filter-panel" class="filter-dropdown" hidden>
+            <div class="filter-dropdown-wrap">
+              <button class="ghost-btn" type="button" id="library-filter-btn">${state.lang === 'zh' ? '筛选 ▾' : 'Filter ▾'}</button>
+              <div id="library-filter-panel" class="filter-dropdown" hidden>
               <div class="filter-section" data-filter-section="country">
                 <h4>${state.lang === 'zh' ? '国家' : 'Country'}</h4>
                 <div class="filter-capsules" data-filter-options="country"></div>
@@ -866,6 +1013,7 @@ const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
               <div class="filter-section" style="border-top:1px solid #e2e8f0;padding-top:10px;margin-top:4px;">
                 <button type="button" id="delete-all-templates-btn" class="ghost-btn" style="color:#dc2626;font-size:12px;width:100%;">🗑 ${state.lang === 'zh' ? '删除全部模版' : 'Delete all templates'}</button>
               </div>
+              </div>
             </div>
           </div>
                   <div id="library-tag-rows" class="library-tag-rows">${renderLibraryTagRows(activeKind)}</div>
@@ -877,7 +1025,7 @@ const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
           <aside id="library-inspector" class="library-inspector"></aside>
         </section>
 
-        ${canUpload ? renderUploadModal() : ''}
+        ${canUpload || homeMode ? renderUploadModal() : ''}
         ${renderEditModal()}
         ${renderBatchEditModal()}
         ${renderLibraryDetailModal()}
@@ -893,6 +1041,7 @@ const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
       </div>
     `;
     wireLibraryShell();
+    if (homeMode) wireHomeCommandComposer();
     await loadLibraryData();
     refreshKindTabCounts();
     if (state.libraryScrollToSource) {
@@ -932,6 +1081,10 @@ const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
       <div id="library-upload-modal" class="modal-backdrop" hidden>
         <section class="modal library-modal">
           <div class="modal-head">
+            <h3>${state.lang === 'zh' ? '上传素材入库' : 'Upload asset'}</h3>
+            <button class="icon-btn" id="close-library-upload" type="button" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+            </button>
           </div>
           <form id="library-upload-form" class="library-form">
             <input type="hidden" name="library_kind" id="library-upload-kind" value="${defaultKind}">
@@ -2334,6 +2487,7 @@ const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
     const isTemplateArtwork = kind === 'template' && !tags.includes('组件');
     // 缩略图会被压缩；hover 只能显示模板 JSON 内记录的真实画板尺寸。
     const templateSizeInfo = isTemplateArtwork ? libraryTemplateDimensionInfo(item) : null;
+    const cardSizeInfo = templateSizeInfo || libraryPreviewDimensionInfo(item);
     const quickUse = kind === 'gallery'
       ? `<button type="button" data-action="use-static">${state.lang === 'zh' ? '静态' : 'Static'}</button><button type="button" data-action="use-dynamic">${state.lang === 'zh' ? '动态' : 'Motion'}</button>`
       : kind === 'template'
@@ -2392,16 +2546,15 @@ const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
       <article class="library-card ${isTemplateArtwork ? 'template-preview-card' : ''} ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
         <div class="library-thumb-wrap">
           <div class="multi-check"></div>
-          <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded')" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
-          ${isTemplateArtwork ? `<div class="library-template-size-hover" data-template-size-source="${escapeAttr(source.id)}"><span class="library-template-size-ratio">${escapeHtml(templateSizeInfo?.ratio || '—')}</span><span class="library-template-size-pixels">${escapeHtml(templateSizeInfo?.pixels || '读取真实画板尺寸中…')}</span></div>` : ''}
+          <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t){t.classList.add('img-loaded');if(this.naturalWidth&&this.naturalHeight)t.style.setProperty('--preview-ratio',this.naturalWidth+' / '+this.naturalHeight)}" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
           <div class="library-card-icons">
-            <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
-            <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}">↓</button>
+            <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}" aria-label="${state.lang === 'zh' ? '收藏' : 'Favorite'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3Z"/></svg></button>
+            <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}" aria-label="${previewLabel}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button>
           </div>
           <div class="library-card-overlay">
-            <div>
-              <h4>${escapeHtml(source.title)}</h4>
-              <p>${escapeHtml([libraryKindLabel(kind), ...tags.slice(0, 2)].filter(Boolean).join(' / '))}</p>
+            <div class="library-hover-dimensions" ${isTemplateArtwork ? `data-template-size-source="${escapeAttr(source.id)}"` : ''}>
+              <span class="library-template-size-ratio">${escapeHtml(cardSizeInfo?.ratio || '—')}</span>
+              <span class="library-template-size-pixels">${escapeHtml(cardSizeInfo?.pixels || (isTemplateArtwork ? '读取真实画板尺寸中…' : '—'))}</span>
             </div>
             <div class="library-card-actions">
               ${quickUse}
@@ -2411,8 +2564,23 @@ const TOOL_UI_VERSION = '20260813-bookmark-cover-load-order-v256';
             </div>
           </div>
         </div>
+        <div class="library-home-card-meta">
+          <div><strong>${escapeHtml(source.title)}</strong><span>${escapeHtml([libraryKindLabel(kind), ...tags.slice(0, 1)].filter(Boolean).join(' · '))}</span></div>
+          <button type="button" data-action="download-preview" aria-label="${previewLabel}">↓</button>
+        </div>
       </article>
     `;
+  }
+
+  function libraryPreviewDimensionInfo(item) {
+    const preview = item?.preview || {};
+    const width = Math.round(Number(preview.width) || 0);
+    const height = Math.round(Number(preview.height) || 0);
+    if (width < 1 || height < 1) return null;
+    let a = width, b = height;
+    while (b) { const remainder = a % b; a = b; b = remainder; }
+    const divisor = a || 1;
+    return { ratio: `${width / divisor}:${height / divisor}`, pixels: `${width} × ${height} px` };
   }
 
   function libraryTemplateDimensionInfo(item) {
@@ -6712,9 +6880,9 @@ function libraryTagsForForm(formData, kind) {
   }
 
   function previewAspectStyle(preview) {
-    if (!preview?.width || !preview?.height) return '';
+    if (!preview?.width || !preview?.height) return '--preview-ratio: 3 / 4; aspect-ratio: 3 / 4;';
     const ratio = preview.width / preview.height;
-    return `aspect-ratio: ${ratio.toFixed(3)};`;
+    return `--preview-ratio: ${preview.width} / ${preview.height}; aspect-ratio: ${ratio.toFixed(3)};`;
   }
 
   function showLoginMessage(message, isError) {
