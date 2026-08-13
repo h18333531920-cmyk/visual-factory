@@ -938,22 +938,23 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
           <div class="library-kind-tabs" role="tablist" style="position:relative;">
             <div class="kind-tab-indicator" style="position:absolute;bottom:0;height:3px;background:#111827;border-radius:999px;transition:left 0.3s ease,width 0.3s ease;pointer-events:none;z-index:1;"></div>
             ${LIBRARY_KIND_TABS.map(tab => `<button type="button" class="${activeKind === tab.id ? 'active' : ''}" data-library-kind="${tab.id}">${escapeHtml(state.lang === 'zh' ? tab.zh : tab.en)}<small> · ${kindCounts[tab.id] || 0}</small></button>`).join('')}
+          </div>
+          <div class="library-control-actions">
             <div class="search-wrap">
-            <label class="library-search-pill" aria-label="${state.lang === 'zh' ? '搜索内容' : 'Search'}" style="margin-left:12px;">
-              <input id="library-search" placeholder="" value="${escapeAttr(state.libraryFilters.query)}">
-              <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg></span>
-            </label>
-            <div id="search-history-dropdown" class="search-history-dropdown" hidden>
-              <div class="search-history-list" id="search-history-list"></div>
+              <label class="library-search-pill" aria-label="${state.lang === 'zh' ? '搜索内容' : 'Search'}">
+                <input id="library-search" placeholder="" value="${escapeAttr(state.libraryFilters.query)}">
+                <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg></span>
+              </label>
+              <div id="search-history-dropdown" class="search-history-dropdown" hidden>
+                <div class="search-history-list" id="search-history-list"></div>
+              </div>
             </div>
+            <div class="library-upload-area">
+              ${canUpload || homeMode ? `<button class="library-upload-pill" type="button" id="open-upload-modal">＋ ${state.lang === 'zh' ? '上传素材' : 'Upload'}</button>` : ''}
             </div>
-          </div>
-          <div class="library-upload-area">
-            ${canUpload || homeMode ? `<button class="library-upload-pill" type="button" id="open-upload-modal">＋ ${state.lang === 'zh' ? '上传素材' : 'Upload'}</button>` : ''}
-          </div>
-          <div class="filter-dropdown-wrap">
-            <button class="ghost-btn" type="button" id="library-filter-btn">${state.lang === 'zh' ? '筛选 ▾' : 'Filter ▾'}</button>
-            <div id="library-filter-panel" class="filter-dropdown" hidden>
+            <div class="filter-dropdown-wrap">
+              <button class="ghost-btn" type="button" id="library-filter-btn">${state.lang === 'zh' ? '筛选 ▾' : 'Filter ▾'}</button>
+              <div id="library-filter-panel" class="filter-dropdown" hidden>
               <div class="filter-section" data-filter-section="country">
                 <h4>${state.lang === 'zh' ? '国家' : 'Country'}</h4>
                 <div class="filter-capsules" data-filter-options="country"></div>
@@ -986,6 +987,7 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
               </div>
               <div class="filter-section" style="border-top:1px solid #e2e8f0;padding-top:10px;margin-top:4px;">
                 <button type="button" id="delete-all-templates-btn" class="ghost-btn" style="color:#dc2626;font-size:12px;width:100%;">🗑 ${state.lang === 'zh' ? '删除全部模版' : 'Delete all templates'}</button>
+              </div>
               </div>
             </div>
           </div>

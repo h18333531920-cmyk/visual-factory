@@ -9868,3 +9868,227 @@ body,
     transition: none !important;
   }
 }
+
+/* Gemini Designer · homepage pixel convergence against Unified Demo v2. */
+html body #app-shell.app-shell[data-route="home"] .home-command-title strong {
+  color: #64748b !important;
+  background: linear-gradient(90deg, #64748b 0%, #0f172a 72%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-control-strip {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 24px !important;
+  min-height: 76px !important;
+  margin: 0 !important;
+  padding: 16px 0 18px !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.82) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs {
+  gap: 28px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button {
+  min-height: 40px !important;
+  padding: 0 0 10px !important;
+  color: #94a3b8 !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button.active {
+  color: #0f172a !important;
+  font-weight: 650 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-kind-tabs > button.active::after,
+html body #app-shell.app-shell[data-route="home"] .kind-tab-indicator {
+  height: 2px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-control-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-control-actions .search-wrap,
+html body #app-shell.app-shell[data-route="home"] .library-control-actions .library-upload-area,
+html body #app-shell.app-shell[data-route="home"] .library-control-actions .filter-dropdown-wrap {
+  order: initial !important;
+  flex: 0 0 auto !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-search-pill {
+  width: 224px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  margin: 0 !important;
+  border-color: rgba(226, 232, 240, 0.92) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-upload-pill,
+html body #app-shell.app-shell[data-route="home"] .filter-dropdown-wrap > .ghost-btn {
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 12px !important;
+  border-color: rgba(226, 232, 240, 0.92) !important;
+  border-radius: 8px !important;
+  color: #64748b !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  transform: none !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-grid {
+  display: grid !important;
+  columns: auto !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card {
+  display: flex !important;
+  overflow: hidden !important;
+  flex-direction: column !important;
+  margin: 0 !important;
+  border: 1px solid #f1f5f9 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-thumb-wrap,
+html body #app-shell.app-shell[data-route="home"] .library-thumb {
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: 3 / 4 !important;
+  border-radius: 11px 11px 0 0 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-thumb img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card-overlay {
+  position: absolute !important;
+  inset: 0 !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  padding: 14px 12px 12px !important;
+  color: #ffffff !important;
+  background: linear-gradient(180deg, transparent 44%, rgba(0, 0, 0, 0.72) 100%) !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card-overlay h4 {
+  color: #ffffff !important;
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+  font-weight: 560 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card-overlay p {
+  display: block !important;
+  margin-top: 5px !important;
+  color: rgba(255, 255, 255, 0.82) !important;
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card-actions,
+html body #app-shell.app-shell[data-route="home"] .library-card-icons .card-download-btn {
+  display: none !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card-icons {
+  top: 8px !important;
+  right: 8px !important;
+  opacity: 1 !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card-icons .favorite-btn {
+  display: grid !important;
+  width: 28px !important;
+  height: 28px !important;
+  place-items: center !important;
+  border: 1px solid rgba(255, 255, 255, 0.64) !important;
+  border-radius: 50% !important;
+  color: #334155 !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  opacity: 1 !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta {
+  display: flex !important;
+  min-height: 40px !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 9px 12px !important;
+  border-top: 1px solid #f8fafc !important;
+  background: #ffffff !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta strong {
+  display: none !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta span {
+  margin: 0 !important;
+  color: #94a3b8 !important;
+  font-size: 10px !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-home-card-meta button {
+  color: #475569 !important;
+}
+
+@media (max-width: 980px) {
+  html body #app-shell.app-shell[data-route="home"] .library-control-strip {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  html body #app-shell.app-shell[data-route="home"] .library-control-actions {
+    justify-content: flex-start !important;
+  }
+
+  html body #app-shell.app-shell[data-route="home"] .library-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  html body #app-shell.app-shell[data-route="home"] .library-control-actions {
+    width: 100% !important;
+  }
+
+  html body #app-shell.app-shell[data-route="home"] .library-control-actions .search-wrap {
+    display: none !important;
+  }
+
+  html body #app-shell.app-shell[data-route="home"] .library-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  html body #app-shell.app-shell[data-route="home"] .library-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
