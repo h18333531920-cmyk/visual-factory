@@ -1679,3 +1679,58 @@ html body {
   border-radius: 7px !important;
   font-size: 10.5px !important;
 }
+
+/* Icon triggers are 32px; their popovers remain full text controls. */
+.right-pane .ai-control-icons,
+.right-pane .ai-control-icons .ai-menu-wrap {
+  overflow: visible !important;
+}
+.right-pane .ai-control-icons .ai-dropdown {
+  z-index: 240 !important;
+  display: none !important;
+  width: 156px !important;
+  min-width: 156px !important;
+  max-width: 156px !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.right-pane .ai-control-icons .ai-dropdown.open {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+.right-pane .ai-control-icons .ai-dropdown > button {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 32px !important;
+  padding: 0 10px !important;
+  overflow: visible !important;
+  color: var(--ui-text) !important;
+  background: transparent !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+  text-align: left !important;
+  text-indent: 0 !important;
+  white-space: nowrap !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+.right-pane .ai-control-icons .ai-dropdown > button:hover,
+.right-pane .ai-control-icons .ai-dropdown > button.active {
+  color: var(--ui-ink) !important;
+  background: #f1f5f9 !important;
+}
+.right-pane .ai-control-icons .ai-dropdown > button.active::after {
+  color: var(--ui-ink) !important;
+  content: "✓" !important;
+  font-size: 11px !important;
+}
+.right-pane .ai-control-icons .ai-menu-wrap:nth-child(3) .ai-dropdown {
+  left: 0 !important;
+  right: auto !important;
+}
