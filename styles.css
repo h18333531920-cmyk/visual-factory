@@ -2327,6 +2327,210 @@ select:focus {
   }
 }
 
+/* Homepage demo parity: typography and compact mutually-exclusive popovers. */
+html body #app-shell .home-command-title,
+html body #app-shell .home-command-title span,
+html body #app-shell .home-command-title strong {
+  font-size: 26px !important;
+  font-weight: 600 !important;
+  line-height: 26px !important;
+  letter-spacing: -0.035em !important;
+}
+
+html body #app-shell .home-command-title span { color: #0f172a !important; }
+html body #app-shell .home-command-title strong { color: #334155 !important; }
+
+html body #app-shell .library-primary-tabs .library-tab {
+  min-height: 36px !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  line-height: 20px !important;
+}
+
+html body #app-shell .library-primary-tabs .library-tab.active { font-weight: 600 !important; }
+
+html body #app-shell .library-card-overlay h4,
+html body #app-shell .library-card-overlay strong {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 16px !important;
+}
+
+html body #app-shell .library-card-overlay p,
+html body #app-shell .library-card-overlay span,
+html body #app-shell .library-card-meta,
+html body #app-shell .library-card-meta span {
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 15px !important;
+}
+
+html body #app-shell .home-command-actions button {
+  height: 36px !important;
+  min-height: 36px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+html body #app-shell .home-menu-chevron {
+  display: inline-flex !important;
+  transition: transform 160ms ease !important;
+  transform-origin: center !important;
+}
+
+html body #app-shell button[aria-expanded="true"] .home-menu-chevron {
+  transform: rotate(180deg) !important;
+}
+
+html body #app-shell #home-skills-menu.home-prompt-menu {
+  width: 176px !important;
+  height: 80px !important;
+  padding: 6px !important;
+  border-radius: 12px !important;
+}
+
+html body #app-shell #home-skills-menu .home-skill-option {
+  display: flex !important;
+  width: 100% !important;
+  height: 32px !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+  color: #334155 !important;
+  background: transparent !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 16px !important;
+  cursor: pointer !important;
+}
+
+html body #app-shell #home-skills-menu .home-skill-option:hover,
+html body #app-shell #home-skills-menu .home-skill-option:has(input:checked) {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html body #app-shell #home-skills-menu input {
+  width: 14px !important;
+  height: 14px !important;
+  margin: 0 !important;
+  accent-color: #0f172a !important;
+}
+
+html body #app-shell #home-size-menu.home-size-menu {
+  display: none;
+  width: 176px !important;
+  height: 224px !important;
+  max-height: 224px !important;
+  padding: 6px !important;
+  overflow-y: auto !important;
+  border-radius: 12px !important;
+}
+
+html body #app-shell #home-size-menu.home-size-menu:not([hidden]) { display: block !important; }
+html body #app-shell #home-size-menu > span { display: none !important; }
+html body #app-shell #home-size-menu > div { display: block !important; padding: 0 !important; background: transparent !important; }
+
+html body #app-shell #home-size-menu button,
+html body #app-shell #home-model-menu button {
+  display: flex !important;
+  width: 100% !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 0 10px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: #475569 !important;
+  background: transparent !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 16px !important;
+  text-align: left !important;
+}
+
+html body #app-shell #home-size-menu button:hover,
+html body #app-shell #home-model-menu button:hover,
+html body #app-shell #home-size-menu button.active,
+html body #app-shell #home-model-menu button.active,
+html body #app-shell #home-size-menu button.is-selected,
+html body #app-shell #home-model-menu button.is-selected {
+  color: #0f172a !important;
+  background: #f8fafc !important;
+}
+
+html body #app-shell #home-size-menu button.active,
+html body #app-shell #home-model-menu button.active,
+html body #app-shell #home-size-menu button.is-selected,
+html body #app-shell #home-model-menu button.is-selected { font-weight: 600 !important; }
+
+html body #app-shell #home-size-menu button > span:nth-child(2),
+html body #app-shell #home-model-menu button > span:first-child { flex: 1 1 auto !important; }
+
+html body #app-shell #home-size-menu .home-ratio-icon {
+  width: 14px !important;
+  height: 14px !important;
+  flex: 0 0 14px !important;
+  transform: none !important;
+}
+
+html body #app-shell .home-option-check {
+  width: 14px !important;
+  flex: 0 0 14px !important;
+  color: #0f172a !important;
+  text-align: right !important;
+}
+
+html body #app-shell #home-model-menu.home-model-menu {
+  width: 192px !important;
+  height: 114px !important;
+  padding: 6px !important;
+  border-radius: 12px !important;
+}
+
+html body #app-shell #library-filter-panel.filter-dropdown {
+  width: min(520px, calc(100vw - 112px)) !important;
+  max-height: min(470px, calc(100vh - 180px)) !important;
+  padding: 20px !important;
+  overflow-y: auto !important;
+  border-radius: 12px !important;
+}
+
+html body #app-shell #library-filter-panel .filter-section { margin: 0 0 16px !important; }
+html body #app-shell #library-filter-panel .filter-section:last-child { margin-bottom: 0 !important; }
+
+html body #app-shell #library-filter-panel .filter-section h4 {
+  margin: 0 0 8px !important;
+  color: #94a3b8 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 14px !important;
+  letter-spacing: 0.04em !important;
+}
+
+html body #app-shell #library-filter-panel .filter-options { gap: 6px !important; }
+
+html body #app-shell #library-filter-panel .filter-options button {
+  min-height: 28px !important;
+  height: 28px !important;
+  padding: 0 10px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: #64748b !important;
+  background: #f8fafc !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 14px !important;
+  box-shadow: none !important;
+}
+
+html body #app-shell #library-filter-panel .filter-options button.active {
+  color: #ffffff !important;
+  background: #0f172a !important;
+}
+
 /* GCC Design V1 product baseline */
 .library-page {
   max-width: none;

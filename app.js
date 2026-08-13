@@ -653,6 +653,19 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
     const modelTrigger = document.getElementById('home-model-trigger');
     const modelMenu = document.getElementById('home-model-menu');
 
+    const setMenuState = (menu, trigger, open) => {
+      if (!menu || !trigger) return;
+      menu.hidden = !open;
+      trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+      trigger.querySelector('.home-menu-chevron')?.classList.toggle('is-open', open);
+    };
+    const closeHomeMenus = except => {
+      [[skillsMenu, skillsTrigger], [sizeMenu, sizeTrigger], [modelMenu, modelTrigger]].forEach(([menu, trigger]) => {
+        if (menu !== except) setMenuState(menu, trigger, false);
+      });
+    };
+    window.__vfCloseHomeMenus = closeHomeMenus;
+
     document.querySelectorAll('.home-command-stage [data-route]').forEach(button => {
       button.addEventListener('click', () => {
         const route = button.dataset.route;
@@ -682,21 +695,21 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
     upload?.addEventListener('change', event => renderReferences(event.target.files));
     sizeTrigger?.addEventListener('click', event => {
       event.stopPropagation();
-      skillsMenu?.setAttribute('hidden', '');
-      modelMenu?.setAttribute('hidden', '');
-      sizeMenu?.toggleAttribute('hidden');
+      const open = !!sizeMenu?.hidden;
+      closeHomeMenus(sizeMenu);
+      setMenuState(sizeMenu, sizeTrigger, open);
     });
     skillsTrigger?.addEventListener('click', event => {
       event.stopPropagation();
-      sizeMenu?.setAttribute('hidden', '');
-      modelMenu?.setAttribute('hidden', '');
-      skillsMenu?.toggleAttribute('hidden');
+      const open = !!skillsMenu?.hidden;
+      closeHomeMenus(skillsMenu);
+      setMenuState(skillsMenu, skillsTrigger, open);
     });
     modelTrigger?.addEventListener('click', event => {
       event.stopPropagation();
-      sizeMenu?.setAttribute('hidden', '');
-      skillsMenu?.setAttribute('hidden', '');
-      modelMenu?.toggleAttribute('hidden');
+      const open = !!modelMenu?.hidden;
+      closeHomeMenus(modelMenu);
+      setMenuState(modelMenu, modelTrigger, open);
     });
     modelMenu?.querySelectorAll('button').forEach(button => {
       button.addEventListener('click', event => {
@@ -704,7 +717,8 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
         const label = button.textContent.replace('✓', '').trim();
         modelTrigger.querySelector('strong').textContent = label;
         modelMenu.querySelectorAll('button').forEach(item => item.classList.toggle('is-selected', item === button));
-        modelMenu.hidden = true;
+        modelMenu.querySelectorAll('.home-option-check').forEach(check => { check.textContent = check.closest('button') === button ? '✓' : ''; });
+        setMenuState(modelMenu, modelTrigger, false);
       });
     });
     sizeMenu?.querySelectorAll('[data-home-size]').forEach(button => {
@@ -712,14 +726,13 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
         const size = button.dataset.homeSize || '1:1';
         sizeTrigger.querySelector('strong').textContent = size;
         sizeMenu.querySelectorAll('[data-home-size]').forEach(item => item.classList.toggle('is-selected', item === button));
-        sizeMenu.hidden = true;
+        sizeMenu.querySelectorAll('.home-option-check').forEach(check => { check.textContent = check.closest('button') === button ? '✓' : ''; });
+        setMenuState(sizeMenu, sizeTrigger, false);
       });
     });
     if (window.__vfHomeSizeMenuHandler) document.removeEventListener('click', window.__vfHomeSizeMenuHandler);
     window.__vfHomeSizeMenuHandler = event => {
-      if (sizeMenu && !sizeMenu.hidden && !event.target.closest('.home-size-wrap')) sizeMenu.hidden = true;
-      if (skillsMenu && !skillsMenu.hidden && !event.target.closest('.home-prompt-menu-wrap')) skillsMenu.hidden = true;
-      if (modelMenu && !modelMenu.hidden && !event.target.closest('.home-model-wrap')) modelMenu.hidden = true;
+      if (!event.target.closest('.home-command-controls')) closeHomeMenus();
     };
     document.addEventListener('click', window.__vfHomeSizeMenuHandler);
     form?.addEventListener('submit', event => {
@@ -894,25 +907,24 @@ const TOOL_UI_VERSION = '20260812-unified-ui-v251';
             </div>
             <div class="home-command-controls">
               <div class="home-prompt-menu-wrap">
-                <button class="home-control-button" id="home-skills-trigger" type="button"><span aria-hidden="true">✦</span>Skills<span aria-hidden="true">⌄</span></button>
+                <button class="home-control-button" id="home-skills-trigger" type="button" aria-expanded="false"><span aria-hidden="true">✦</span>Skills<span class="home-menu-chevron" aria-hidden="true">⌄</span></button>
                 <div class="home-prompt-menu" id="home-skills-menu" hidden>
-                  <button type="button" data-route="static">${state.lang === 'zh' ? '一键高清' : 'Upscale'}</button>
-                  <button type="button" data-route="static">${state.lang === 'zh' ? '一键换菜品' : 'Replace dish'}</button>
+                  <label class="home-skill-option"><span>${state.lang === 'zh' ? '一键高清' : 'Upscale'}</span><input type="checkbox" data-home-skill="upscale"></label>
+                  <label class="home-skill-option"><span>${state.lang === 'zh' ? '一键换菜品' : 'Replace dish'}</span><input type="checkbox" data-home-skill="replace-dish"></label>
                 </div>
               </div>
               <div class="home-size-wrap">
-                <button class="home-control-button home-size-trigger" id="home-size-trigger" type="button"><span class="home-ratio-icon" aria-hidden="true"></span><strong>1:1</strong><span aria-hidden="true">⌄</span></button>
+                <button class="home-control-button home-size-trigger" id="home-size-trigger" type="button" aria-expanded="false"><span class="home-ratio-icon" aria-hidden="true"></span><strong>1:1</strong><span class="home-menu-chevron" aria-hidden="true">⌄</span></button>
                 <div class="home-size-menu" id="home-size-menu" hidden>
-                  <span>${state.lang === 'zh' ? '选择比例' : 'Choose ratio'}</span>
-                  <div>${['16:9', '3:2', '4:3', '1:1', '3:4', '2:3', '9:16'].map(size => `<button type="button" data-home-size="${size}"><i class="home-ratio-icon" style="--ratio:${size.replace(':', '/')}"></i>${size}</button>`).join('')}</div>
+                  <div>${['16:9', '3:2', '4:3', '1:1', '3:4', '2:3', '9:16', '3:3.75'].map(size => `<button type="button" class="${size === '1:1' ? 'is-selected' : ''}" data-home-size="${size}"><i class="home-ratio-icon" style="--ratio:${size.replace(':', '/')}"></i><span>${size}</span><span class="home-option-check">${size === '1:1' ? '✓' : ''}</span></button>`).join('')}</div>
                 </div>
               </div>
               <div class="home-prompt-menu-wrap home-model-wrap">
-                <button class="home-control-button home-model-trigger" id="home-model-trigger" type="button"><span aria-hidden="true">◇</span><strong>GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}</strong><span aria-hidden="true">⌄</span></button>
+                <button class="home-control-button home-model-trigger" id="home-model-trigger" type="button" aria-expanded="false"><span aria-hidden="true">◇</span><strong>GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}</strong><span class="home-menu-chevron" aria-hidden="true">⌄</span></button>
                 <div class="home-prompt-menu home-model-menu" id="home-model-menu" hidden>
-                  <button type="button" class="is-selected">GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}<span>✓</span></button>
-                  <button type="button">Gemini ${state.lang === 'zh' ? '图像模型' : 'Image'}</button>
-                  <button type="button">${state.lang === 'zh' ? '火山图像模型' : 'Volc Image'}</button>
+                  <button type="button" class="is-selected"><span>GPT ${state.lang === 'zh' ? '图像模型' : 'Image'}</span><span class="home-option-check">✓</span></button>
+                  <button type="button"><span>Gemini ${state.lang === 'zh' ? '图像模型' : 'Image'}</span><span class="home-option-check"></span></button>
+                  <button type="button"><span>${state.lang === 'zh' ? '火山图像模型' : 'Volc Image'}</span><span class="home-option-check"></span></button>
                 </div>
               </div>
               <button class="home-command-submit" type="submit" aria-label="${state.lang === 'zh' ? '发送' : 'Send'}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg></button>
