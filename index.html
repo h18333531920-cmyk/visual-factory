@@ -6,7 +6,7 @@
   <title>GCC Design</title>
   <script src="./tools/vendor/supabase-js.js?v=20260805-unified-v76"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="./styles.css?v=20260813-sidebar-static-v88">
+  <link rel="stylesheet" href="./styles.css?v=20260814-sidebar-static-v260">
   <style>
     .library-control-strip {
       margin-left: 0 !important;
@@ -460,6 +460,34 @@
     .favorite-btn.active {
       color: #fbbf24;
     }
+    /* 模板快捷书签卡片：左上角数量角标（对齐 DIY 资产库） */
+    .library-bookmark-summary {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 5;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px 3px 8px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      pointer-events: none;
+    }
+    .library-bookmark-badge {
+      font-size: 13px;
+      line-height: 1;
+    }
+    .library-bookmark-count {
+      min-width: 14px;
+      text-align: center;
+    }
     /* 覆盖旧的文件标签和收藏按钮样式 */
     .file-pill { display: none !important; }
     .favorite-btn {
@@ -812,7 +840,7 @@
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="./config.js?v=20260805-unified-v76"></script>
-    <script src="./app.js?v=20260813-sidebar-static-v258" defer></script>
+    <script src="./app.js?v=20260814-sidebar-static-v260" defer></script>
 </head>
 <body>
   <main id="login-view" class="login-view">

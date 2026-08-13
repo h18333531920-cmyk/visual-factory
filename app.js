@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
+const TOOL_UI_VERSION = '20260814-production-unified-ui-v260';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -172,6 +172,8 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
     libraryPreviews: [],
     libraryItems: [],
     libraryPreviewUrls: {},
+    libraryBookmarkMemberIds: new Set(),
+    libraryBookmarkGroups: [],
     libraryFavorites: new Set(),
     librarySelectedPreviewId: '',
     libraryDataLoaded: false,
@@ -1027,6 +1029,7 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
         ${renderEditModal()}
         ${renderBatchEditModal()}
         ${renderLibraryDetailModal()}
+        ${renderLibraryBookmarkModal()}
         <div id="context-menu" role="menu" aria-label="${state.lang === 'zh' ? '操作菜单' : 'Context menu'}"></div>
         <div id="multi-select-bar">
           <span class="bar-count">${state.lang === 'zh' ? '已选 0 项' : '0 selected'}</span>
@@ -1839,6 +1842,7 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
         await loadLibraryFavorites();
         await loadLibrarySources();
         await loadLibraryPreviews();
+        await loadLibraryBookmarkGroups();
         state.libraryDataLoaded = true;
       })();
       await state.libraryDataPromise;
@@ -1990,6 +1994,29 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
     });
   }
 
+  async function loadLibraryBookmarkGroups() {
+    const memberIds = new Set();
+    const groups = [];
+    const bookmarkSources = state.librarySources.filter(function(source) {
+      return (source.tags || []).includes('模板书签');
+    });
+    for (const source of bookmarkSources) {
+      try {
+        const snapshot = await loadLibraryTemplateSnapshot({ source: source });
+        const refs = Array.isArray(snapshot?.templateRefs) ? snapshot.templateRefs : [];
+        refs.forEach(function(ref) {
+          const id = typeof ref === 'string' ? ref : ref?.templateId;
+          if (id) memberIds.add(id);
+        });
+        groups.push({ source: source, refs: refs, coverTemplateId: snapshot?.coverTemplateId || '' });
+      } catch (_error) {
+        // 单个书签快照读取失败不影响整体；跳过即可。
+      }
+    }
+    state.libraryBookmarkMemberIds = memberIds;
+    state.libraryBookmarkGroups = groups;
+  }
+
   async function signLibraryPreviewUrls(paths) {
     const targetPaths = Array.from(new Set((paths || state.libraryPreviews.map(item => item.preview_path)).filter(Boolean)))
       .filter(path => !state.libraryPreviewUrls[path]);
@@ -2097,6 +2124,7 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
         return { preview: preview, source: src, url: url, thumbUrl: thumbUrl };
       })
       .filter(item => item.source)
+      .filter(item => !state.libraryBookmarkMemberIds.has(item.source.id))
       .filter(item => {
         const kind = libraryKindOfSource(item.source);
         return state.libraryFilters.kind === 'all' || state.libraryFilters.kind === kind;
@@ -2482,6 +2510,38 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
           </div>
         </article>`;
     }
+    if (isBookmarkSource(source)) {
+      const bookmarkGroup = state.libraryBookmarkGroups.find(function(g) { return g.source.id === source.id; });
+      const memberCount = bookmarkGroup ? bookmarkGroup.refs.length : 0;
+      return `
+      <article class="library-card library-bookmark-card ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" data-bookmark-source="${escapeAttr(source.id)}" tabindex="0">
+        <div class="library-thumb-wrap">
+          <div class="multi-check"></div>
+          <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded')" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
+          <div class="library-bookmark-summary">
+            <span class="library-bookmark-badge">📑</span>
+            <span class="library-bookmark-count">${memberCount}</span>
+          </div>
+          <div class="library-card-icons">
+            <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
+            <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}">↓</button>
+          </div>
+          <div class="library-card-overlay">
+            <div>
+              <h4>${escapeHtml(source.title)}</h4>
+              <p>${escapeHtml(state.lang === 'zh' ? '模板快捷书签 · ' + memberCount + ' 个模板' : 'Template bookmark · ' + memberCount + ' templates')}</p>
+            </div>
+            <div class="library-card-actions">
+              <button type="button" data-action="open-bookmark">${state.lang === 'zh' ? '打开' : 'Open'}</button>
+              <button type="button" data-action="download-preview">${previewLabel}</button>
+              ${canSource ? `<button type="button" data-action="download-source">${sourceLabel}</button>` : ''}
+              ${canManage ? `<button type="button" data-action="edit">${state.lang === 'zh' ? '编辑' : 'Edit'}</button><button class="danger" type="button" data-action="delete">${state.lang === 'zh' ? '删除' : 'Delete'}</button>` : ''}
+            </div>
+          </div>
+        </div>
+      </article>
+    `;
+    }
     return `
       <article class="library-card ${isTemplateArtwork ? 'template-preview-card' : ''} ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
         <div class="library-thumb-wrap">
@@ -2583,6 +2643,7 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
         if (event.target.closest('button')) return; // 忽略按钮上的双击
         var item = libraryItemByPreviewId(card.dataset.previewId);
         if (!item || !item.source) return;
+        if (isBookmarkSource(item.source)) { openLibraryBookmarkPopup(item.source.id); return; }
         var kind = libraryKindOfSource(item.source);
         if (kind === 'template') {
           openLibraryTemplate(item).catch(function(e) { alert(e.message); });
@@ -2604,6 +2665,7 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
         const button = event.target.closest('button[data-action]');
         if (!button) {
           var clickItem = libraryItemByPreviewId(card.dataset.previewId);
+          if (clickItem && isBookmarkSource(clickItem.source)) { openLibraryBookmarkPopup(clickItem.source.id); return; }
           if (clickItem && libraryKindOfSource(clickItem.source) === 'template') return; // 模版单击不弹窗，双击打开
           selectLibraryItem(card.dataset.previewId);
           return;
@@ -2632,6 +2694,10 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
         }
         selectLibraryItem(card.dataset.previewId);
       });
+      if (card.dataset.bookmarkSource) {
+        card.addEventListener('mouseenter', function() { showLibraryBookmarkHover(card); });
+        card.addEventListener('mouseleave', hideLibraryBookmarkHover);
+      }
     });
     // 图片懒加载淡入
     var lazyImages = document.querySelectorAll('img.lazy-img:not(.observed)');
@@ -2678,7 +2744,7 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
     }
     items.push({ divider: true });
     if (canManage) {
-      items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 4 14 4"/><path d="M5 4V2.5a1 1 0 011-1h4a1 1 0 011 1V4"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>', label: lang === 'zh' ? '删除' : 'Delete', action: 'delete', danger: true });
+      items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 4 14 4"/><path d="M5 4V2.5a1 1 0 011-1h4a1 1 0 011 1V4"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>', label: isBookmarkSource(source) ? (lang === 'zh' ? '释放编组' : 'Release group') : (lang === 'zh' ? '删除' : 'Delete'), action: 'delete', danger: true });
     }
     items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="14" height="14" rx="3"/><polyline points="4.5 8 7 10.5 11.5 5.5"/></svg>', label: lang === 'zh' ? '多选模式' : 'Multi-select', action: 'multi-select' });
 
@@ -2899,8 +2965,22 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
         if (rawActivity && rawActivity !== 'keep') update.activity_id = rawActivity === 'all' ? null : rawActivity;
         if (hasTagChange) update.tags = tags;
         if (Object.keys(update).length > 0) {
-          var { error } = await state.supabase.from('vf_source_files').update(update).in('id', batch);
-          if (error) throw error;
+          if (hasTagChange) {
+            // 每个模板可能拥有不同的内部语言标签，批量编辑普通标签时必须逐项保留。
+            for (var batchIndex = 0; batchIndex < batch.length; batchIndex += 1) {
+              var batchId = batch[batchIndex];
+              var batchSource = state.librarySources.find(function(item) { return item.id === batchId; });
+              var perSourceUpdate = Object.assign({}, update, {
+                tags: preserveTemplateLanguageTags(tags, batchSource?.tags)
+              });
+              var { error: perSourceError } = await state.supabase.from('vf_source_files').update(perSourceUpdate).eq('id', batchId);
+              if (perSourceError) throw perSourceError;
+              notifyStaticIframe({ type: 'vf:template-tags-updated', id: batchId, tags: perSourceUpdate.tags });
+            }
+          } else {
+            var { error } = await state.supabase.from('vf_source_files').update(update).in('id', batch);
+            if (error) throw error;
+          }
         }
       }
       setMessage(message, state.lang === 'zh' ? '已保存。' : 'Saved.', false, true);
@@ -3000,6 +3080,7 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
     if (action === 'download-source') return downloadLibraryFile(item, 'source');
     if (action === 'use-static') return useLibraryAsset(item, 'static');
     if (action === 'use-dynamic') return useLibraryAsset(item, 'dynamic');
+    if (action === 'open-bookmark') return openLibraryBookmarkPopup(item.source.id);
     if (action === 'edit') return openLibraryEditModal(item.source.id);
     if (action === 'delete') return deleteLibrarySource(item.source.id);
   }
@@ -3103,6 +3184,268 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
     const modal = document.getElementById('library-detail-modal');
     if (modal) modal.hidden = true;
     document.body.style.overflow = '';
+  }
+
+  /* ── 模板快捷书签：素材库卡片 + 关联模板弹窗 ── */
+  function renderLibraryBookmarkModal() {
+    return `
+      <div id="library-bookmark-modal" class="modal-backdrop" hidden>
+        <section class="modal library-modal" style="max-width:560px;padding:24px 26px 20px;">
+          <div class="modal-head" style="margin-bottom:12px;">
+            <h3 id="library-bookmark-title" style="font-size:18px;">${state.lang === 'zh' ? '模板快捷书签' : 'Template bookmark'}</h3>
+            <button class="icon-btn modal-close-circle" id="close-library-bookmark" type="button" aria-label="Close"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>
+          </div>
+          <div id="library-bookmark-toolbar" style="display:flex;gap:8px;margin-bottom:14px;"></div>
+          <div id="library-bookmark-members" style="display:grid;gap:8px;max-height:52vh;overflow:auto;"></div>
+        </section>
+      </div>
+    `;
+  }
+
+  function closeLibraryBookmarkPopup() {
+    const modal = document.getElementById('library-bookmark-modal');
+    if (modal) modal.hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  function libraryBookmarkMemberItems(group) {
+    const sourcesById = new Map(state.librarySources.map(function(s) { return [s.id, s]; }));
+    const previewsBySource = new Map();
+    state.libraryPreviews.forEach(function(p) {
+      if (!previewsBySource.has(p.source_file_id)) previewsBySource.set(p.source_file_id, p);
+    });
+    return (group?.refs || []).map(function(ref) {
+      const id = typeof ref === 'string' ? ref : ref?.templateId;
+      const source = sourcesById.get(id);
+      if (!source) return null;
+      const preview = previewsBySource.get(id);
+      let url = '';
+      let thumbUrl = '';
+      if (preview) {
+        url = state.libraryPreviewUrls[preview.preview_path] || '';
+        const thumbPath = source.source_path ? source.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
+        thumbUrl = state.libraryPreviewUrls[thumbPath] || '';
+      }
+      return { ref: ref, source: source, preview: preview, url: url, thumbUrl: thumbUrl || url };
+    }).filter(Boolean);
+  }
+
+  async function signLibraryBookmarkMemberUrls(group) {
+    const members = libraryBookmarkMemberItems(group);
+    const paths = [];
+    members.forEach(function(m) {
+      if (m.preview && m.preview.preview_path && !state.libraryPreviewUrls[m.preview.preview_path]) paths.push(m.preview.preview_path);
+      if (m.source && m.source.source_path) {
+        const thumbPath = m.source.source_path.replace(/\/[^/]+$/, '/_thumb.jpg');
+        if (thumbPath && !state.libraryPreviewUrls[thumbPath]) paths.push(thumbPath);
+      }
+    });
+    if (paths.length) {
+      try { await signLibraryPreviewUrls(paths); } catch (e) { /* 静默 */ }
+    }
+  }
+
+  function renderLibraryBookmarkHover(card) {
+    const group = state.libraryBookmarkGroups.find(function(g) { return g.source.id === card.dataset.bookmarkSource; });
+    if (!group) return;
+    const members = libraryBookmarkMemberItems(group);
+    let el = document.getElementById('library-bookmark-hover');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'library-bookmark-hover';
+      el.style.cssText = 'position:fixed;z-index:1000;width:230px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 12px 40px rgba(15,23,42,.18);padding:12px;font-size:12px;color:#17191d;';
+      document.body.appendChild(el);
+    }
+    const rows = members.map(function(m) {
+      const w = Math.round(Number(m.ref?.canvasW) || 0);
+      const h = Math.round(Number(m.ref?.canvasH) || 0);
+      const dims = (w && h) ? (w + ' × ' + h + ' px') : '';
+      const name = m.source.title || m.ref?.name || '未命名模板';
+      const thumb = m.thumbUrl
+        ? `<img src="${escapeAttr(m.thumbUrl)}" style="width:28px;height:28px;object-fit:cover;border-radius:5px;background:#f1f5f9;">`
+        : '<span style="width:28px;height:28px;border-radius:5px;background:#f1f5f9;display:inline-block;flex:none;"></span>';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">${thumb}<div style="min-width:0;"><div style="font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(name)}</div><div style="color:#667085;font-size:11px;">${dims}</div></div></div>`;
+    }).join('');
+    el.innerHTML = '<div style="font-weight:850;margin-bottom:4px;">' + escapeHtml(group.source.title || '') + '</div>' + (rows || '<div style="color:#667085;">暂无关联模板</div>');
+    const rect = card.getBoundingClientRect();
+    let left = rect.left - 240;
+    if (left < 8) left = rect.right + 8;
+    left = Math.min(window.innerWidth - el.offsetWidth - 8, Math.max(8, left));
+    const top = Math.max(8, Math.min(rect.top, window.innerHeight - el.offsetHeight - 8));
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+    el.style.display = 'block';
+  }
+
+  function showLibraryBookmarkHover(card) {
+    renderLibraryBookmarkHover(card);
+    const group = state.libraryBookmarkGroups.find(function(g) { return g.source.id === card.dataset.bookmarkSource; });
+    if (group) {
+      signLibraryBookmarkMemberUrls(group).then(function() { renderLibraryBookmarkHover(card); }).catch(function() {});
+    }
+  }
+
+  function hideLibraryBookmarkHover() {
+    const el = document.getElementById('library-bookmark-hover');
+    if (el) el.style.display = 'none';
+  }
+
+  async function openLibraryBookmarkPopup(sourceId) {
+    const group = state.libraryBookmarkGroups.find(function(g) { return g.source.id === sourceId; });
+    if (!group) return;
+    const source = group.source;
+    const modal = document.getElementById('library-bookmark-modal');
+    if (!modal) return;
+    const titleEl = document.getElementById('library-bookmark-title');
+    if (titleEl) titleEl.textContent = source.title || (state.lang === 'zh' ? '模板快捷书签' : 'Template bookmark');
+    const toolbar = document.getElementById('library-bookmark-toolbar');
+    if (toolbar) {
+      toolbar.innerHTML = '';
+      const renameBtn = document.createElement('button');
+      renameBtn.type = 'button'; renameBtn.className = 'ghost-btn';
+      renameBtn.textContent = state.lang === 'zh' ? '重命名书签' : 'Rename bookmark';
+      renameBtn.style.cssText = 'min-height:34px;border-radius:8px;padding:6px 12px;font-size:12px;';
+      renameBtn.onclick = function() { renameLibraryBookmarkInline(sourceId); };
+      const dissolveBtn = document.createElement('button');
+      dissolveBtn.type = 'button'; dissolveBtn.className = 'ghost-btn danger';
+      dissolveBtn.textContent = state.lang === 'zh' ? '解散书签' : 'Dissolve';
+      dissolveBtn.style.cssText = 'min-height:34px;border-radius:8px;padding:6px 12px;font-size:12px;';
+      dissolveBtn.onclick = function() { dissolveLibraryBookmarkFromPopup(sourceId, group); };
+      toolbar.append(renameBtn, dissolveBtn);
+    }
+    const listEl = document.getElementById('library-bookmark-members');
+    if (!listEl) return;
+    listEl.innerHTML = `<div style="color:#667085;font-size:13px;padding:10px 2px;">${state.lang === 'zh' ? '正在读取关联模板…' : 'Loading linked templates…'}</div>`;
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    await signLibraryBookmarkMemberUrls(group);
+    const members = libraryBookmarkMemberItems(group);
+    listEl.innerHTML = '';
+    if (!members.length) {
+      listEl.innerHTML = `<div style="padding:16px;border-radius:12px;background:#f8fafc;color:#667085;text-align:center;font-size:13px;">${state.lang === 'zh' ? '暂无可用关联模板' : 'No linked templates'}</div>`;
+    } else {
+      members.forEach(function(member) {
+        const w = Math.round(Number(member.ref?.canvasW) || 0);
+        const h = Math.round(Number(member.ref?.canvasH) || 0);
+        const dims = (w && h) ? (w + ' × ' + h + ' px') : '';
+        const row = document.createElement('div');
+        row.style.cssText = 'display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:10px;padding:8px 10px;border:1px solid #e6e9ef;border-radius:12px;background:#fff;';
+        const thumb = document.createElement('div');
+        thumb.style.cssText = 'height:44px;border-radius:8px;overflow:hidden;background:#f7f8fa;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+        if (member.thumbUrl) thumb.innerHTML = `<img src="${escapeAttr(member.thumbUrl)}" style="width:100%;height:100%;object-fit:cover;">`;
+        thumb.title = state.lang === 'zh' ? '打开模板' : 'Open template';
+        thumb.onclick = function() { openLibraryTemplate({ source: member.source }).catch(function(e) { alert(e.message); }); };
+        const copy = document.createElement('div'); copy.style.cssText = 'min-width:0;';
+        const nameEl = document.createElement('div'); nameEl.textContent = member.source.title || member.ref?.name || '未命名模板'; nameEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:850;color:#17191d;';
+        const dimEl = document.createElement('div'); dimEl.textContent = dims || (state.lang === 'zh' ? '读取尺寸中' : 'Reading size…'); dimEl.style.cssText = 'margin-top:3px;font-size:11px;color:#667085;font-weight:650;';
+        copy.append(nameEl, dimEl);
+        const ops = document.createElement('div'); ops.style.cssText = 'display:flex;flex-direction:column;gap:5px;';
+        const openBtn = document.createElement('button'); openBtn.type = 'button'; openBtn.className = 'primary-btn'; openBtn.textContent = state.lang === 'zh' ? '打开' : 'Open'; openBtn.style.cssText = 'min-height:30px;border-radius:7px;padding:4px 10px;font-size:12px;';
+        openBtn.onclick = function() { openLibraryTemplate({ source: member.source }).catch(function(e) { alert(e.message); }); };
+        const renameBtn = document.createElement('button'); renameBtn.type = 'button'; renameBtn.className = 'ghost-btn'; renameBtn.textContent = state.lang === 'zh' ? '重命名' : 'Rename'; renameBtn.style.cssText = 'min-height:30px;border-radius:7px;padding:4px 10px;font-size:12px;';
+        renameBtn.onclick = function() { renameLibraryBookmarkMemberInline(member, nameEl); };
+        ops.append(openBtn, renameBtn);
+        row.append(thumb, copy, ops);
+        listEl.appendChild(row);
+      });
+    }
+    const closeBtn = document.getElementById('close-library-bookmark');
+    if (closeBtn) closeBtn.onclick = closeLibraryBookmarkPopup;
+    modal.onclick = function(event) { if (event.target === modal) closeLibraryBookmarkPopup(); };
+  }
+
+  function renameLibraryBookmarkInline(sourceId) {
+    const source = state.librarySources.find(function(s) { return s.id === sourceId; });
+    const titleEl = document.getElementById('library-bookmark-title');
+    if (!source || !titleEl) return;
+    const oldName = source.title || '';
+    const input = document.createElement('input');
+    input.type = 'text'; input.value = oldName;
+    input.style.cssText = 'width:100%;font-size:18px;font-weight:900;color:#17191d;border:1px solid #0d9488;border-radius:6px;padding:4px 8px;font-family:inherit;background:#fff;';
+    titleEl.replaceWith(input);
+    input.focus(); input.select();
+    input.onblur = function() {
+      const newName = input.value.trim();
+      if (!newName || newName === oldName) { input.replaceWith(titleEl); return; }
+      source.title = newName;
+      titleEl.textContent = newName;
+      input.replaceWith(titleEl);
+      state.supabase.from('vf_source_files').update({ title: newName }).eq('id', source.id).then(function(res) {
+        if (res.error) console.warn('Rename bookmark failed:', res.error.message);
+        else notifyStaticIframe({ type: 'vf:template-renamed', id: source.id, name: newName });
+      });
+    };
+    input.onkeydown = function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { input.value = oldName; input.blur(); }
+    };
+  }
+
+  function renameLibraryBookmarkMemberInline(member, nameEl) {
+    const oldName = member.source.title || member.ref?.name || '';
+    const input = document.createElement('input');
+    input.type = 'text'; input.value = oldName;
+    input.style.cssText = 'width:100%;border:1px solid #0d9488;border-radius:4px;padding:2px 6px;font-size:12px;font-weight:700;color:#17191d;font-family:inherit;background:#fff;';
+    nameEl.replaceWith(input);
+    input.focus(); input.select();
+    input.onblur = function() {
+      const newName = input.value.trim();
+      if (!newName || newName === oldName) { input.replaceWith(nameEl); return; }
+      member.source.title = newName;
+      if (member.ref) member.ref.name = newName;
+      nameEl.textContent = newName;
+      input.replaceWith(nameEl);
+      state.supabase.from('vf_source_files').update({ title: newName }).eq('id', member.source.id).then(function(res) {
+        if (res.error) console.warn('Rename member failed:', res.error.message);
+        else notifyStaticIframe({ type: 'vf:template-renamed', id: member.source.id, name: newName });
+      });
+    };
+    input.onkeydown = function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { input.value = oldName; input.blur(); }
+    };
+  }
+
+  function dissolveLibraryBookmarkFromPopup(sourceId, group) {
+    const members = libraryBookmarkMemberItems(group);
+    closeLibraryBookmarkPopup();
+    if (!confirm(state.lang === 'zh'
+      ? `解散「${group.source.title}」？${members.length} 个关联模板会恢复显示在素材库和资产库。`
+      : `Dissolve "${group.source.title}"? ${members.length} linked templates will reappear.`)) return;
+    handleDissolveTemplateBookmark({ id: sourceId }, null);
+  }
+
+  async function handleDissolveTemplateBookmark(msg, sourceWindow) {
+    var sourceId = msg.id || msg.sourceId;
+    if (!sourceId || state.localPreview || !state.supabase) return;
+    try {
+      var source = state.librarySources.find(function(s) { return s.id === sourceId; });
+      if (!source) {
+        var fetched = await state.supabase.from('vf_source_files').select('id, source_path').eq('id', sourceId).limit(1);
+        source = fetched && fetched.data && fetched.data.length ? fetched.data[0] : null;
+      }
+      var paths = [];
+      if (source && source.source_path) paths.push(source.source_path);
+      var previewRes = await state.supabase.from('vf_asset_previews').select('preview_path').eq('source_file_id', sourceId);
+      (previewRes.data || []).forEach(function(p) { if (p.preview_path) paths.push(p.preview_path); });
+      if (paths.length) {
+        var remove = await state.supabase.storage.from(LIBRARY_BUCKET).remove(Array.from(new Set(paths.filter(Boolean))));
+        if (remove.error) {
+          if (sourceWindow) { try { sourceWindow.postMessage({ type: 'vf:bookmark-dissolve-error', id: sourceId, error: remove.error.message }, location.origin); } catch (_e) {} }
+          return;
+        }
+      }
+      var del = await state.supabase.from('vf_source_files').delete().eq('id', sourceId);
+      if (del.error) {
+        if (sourceWindow) { try { sourceWindow.postMessage({ type: 'vf:bookmark-dissolve-error', id: sourceId, error: del.error.message }, location.origin); } catch (_e) {} }
+        return;
+      }
+      await reloadLibraryData();
+      notifyStaticIframe({ type: 'vf:template-deleted', sourceId: sourceId });
+    } catch (error) {
+      console.warn('Dissolve bookmark failed:', error);
+      if (sourceWindow) { try { sourceWindow.postMessage({ type: 'vf:bookmark-dissolve-error', id: sourceId, error: error.message || '解散失败' }, location.origin); } catch (_e) {} }
+    }
   }
 
   function populateDropZoneWithFiles(kind, files) {
@@ -3910,7 +4253,7 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
       const oldKind = source ? libraryKindOfSource(source) : 'source';
       const newKind = form.get('library_kind') || oldKind;
       // 从 picker hidden inputs 读取 tag 值
-      const tags = libraryTagsForForm(form, newKind);
+      const tags = preserveTemplateLanguageTags(libraryTagsForForm(form, newKind), source?.tags);
       var rawCountry = form.get('country');
       var rawActivity = form.get('activity');
       const update = {
@@ -3921,6 +4264,7 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
       };
       const { error } = await state.supabase.from('vf_source_files').update(update).eq('id', id);
       if (error) throw error;
+      notifyStaticIframe({ type: 'vf:template-tags-updated', id: id, tags: tags });
       setMessage(message, state.lang === 'zh' ? '已保存。' : 'Saved.', false, true);
       setTimeout(closeLibraryEditModal, 500);
       await reloadLibraryData();
@@ -4247,6 +4591,10 @@ const TOOL_UI_VERSION = '20260813-production-unified-ui-v259';
     return 'source';
   }
 
+  function isBookmarkSource(source) {
+    return (source?.tags || []).includes('模板书签');
+  }
+
   function libraryKindLabel(kind) {
     const item = LIBRARY_KIND_TABS.find(tab => tab.id === kind);
     return item ? (state.lang === 'zh' ? item.zh : item.en) : kind;
@@ -4331,6 +4679,14 @@ function libraryTagsForForm(formData, kind) {
       }
     });
     return normalizeLibraryTags(kind, tags);
+  }
+
+  function preserveTemplateLanguageTags(tags, existingTags) {
+    const next = Array.isArray(tags) ? tags.slice() : [];
+    (Array.isArray(existingTags) ? existingTags : []).forEach(function(tag) {
+      if ((tag === 'vf:lang:EN' || tag === 'vf:lang:AR') && !next.includes(tag)) next.push(tag);
+    });
+    return next;
   }
 
   function normalizeLibraryTags(kind, tags) {
@@ -5629,12 +5985,19 @@ function libraryTagsForForm(formData, kind) {
       case 'vf:rename-template':
         handleRenameTemplate(msg.id, msg.name, sourceWindow);
         break;
+      case 'vf:set-template-language':
+        await handleSetTemplateLanguage(msg, sourceWindow);
+        break;
       case 'vf:save-font':
         await handleSaveTemplate(msg, sourceWindow);
         refreshLibraryIfOpen();
         break;
       case 'vf:update-template-bookmark':
         await handleUpdateTemplateBookmark(msg, sourceWindow);
+        refreshLibraryIfOpen();
+        break;
+      case 'vf:dissolve-template-bookmark':
+        await handleDissolveTemplateBookmark(msg, sourceWindow);
         refreshLibraryIfOpen();
         break;
       case 'vf:fetch-font-binary':
@@ -5740,11 +6103,15 @@ function libraryTagsForForm(formData, kind) {
         groupcombo: ['组件', msg.subTag || '组合']
       };
       var tagsToUse = tagMap[msg.templateType] || ['模版', '社媒物料'];
+      var normalizedTags = normalizeLibraryTags('template', tagsToUse);
+      // 语言标签（EN/AR）以 vf: 前缀存储，不出现在素材库分类筛选里，但会随 tags 下发给 DIY 用于分组/封面选择。
+      if (msg.language === 'EN') normalizedTags.push('vf:lang:EN');
+      else if (msg.language === 'AR') normalizedTags.push('vf:lang:AR');
       var sourceInsert = await state.supabase.from('vf_source_files').insert([{
         id: sourceId,
         title: finalName,
         country_id: null, activity_id: null, category_id: null,
-        tags: normalizeLibraryTags('template', tagsToUse),
+        tags: normalizedTags,
         visibility: 'all',
         source_path: sourcePath,
         source_filename: finalName + '.json',
@@ -5770,7 +6137,7 @@ function libraryTagsForForm(formData, kind) {
       }
       // 立即更新内存中的 library 数据，切换时无需等 Supabase 复制
       state.librarySources.push({
-        id: sourceId, title: finalName, tags: normalizeLibraryTags('template', tagsToUse),
+        id: sourceId, title: finalName, tags: normalizedTags,
         country_id: null, activity_id: null, category_id: null,
         source_path: sourcePath, source_filename: finalName + '.json',
         source_mime_type: 'application/json', source_size_bytes: jsonBlob.size,
@@ -5862,6 +6229,31 @@ function libraryTagsForForm(formData, kind) {
       if (upload.error) throw upload.error;
       _templateSnapshotCache[source.source_path] = snapshot;
       _templateMetadataCache[msg.id] = { templateRefs: refs, coverTemplateId: snapshot.coverTemplateId };
+      // 封面变化时同步刷新素材库静态预览图，保证素材库与资产库显示一致。
+      if (msg.previewDataUrl) {
+        try {
+          var previewBlob = dataUrlToBlob(msg.previewDataUrl);
+          if (previewBlob && previewBlob.size > 2 * 1024 * 1024) previewBlob = await compressImageBlob(previewBlob, 2 * 1024 * 1024);
+          if (previewBlob) {
+            var userId = state.session.user.id;
+            var previewRes = await state.supabase.from('vf_asset_previews').select('id, preview_path').eq('source_file_id', msg.id).limit(1);
+            var existingPreview = previewRes.data && previewRes.data[0];
+            var previewPath = existingPreview?.preview_path || (userId + '/previews/' + msg.id + '/' + safeStorageName((msg.name || 'bookmark') + '-preview.png'));
+            var previewUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(previewPath, previewBlob, { upsert: true, contentType: previewBlob.type || 'image/png' });
+            if (!previewUpload.error) {
+              var dimensions = await readImageDimensions(new File([previewBlob], 'preview.png', { type: previewBlob.type || 'image/png' }));
+              if (existingPreview) {
+                await state.supabase.from('vf_asset_previews').update({ preview_size_bytes: previewBlob.size, width: dimensions.width, height: dimensions.height }).eq('id', existingPreview.id);
+              } else {
+                await state.supabase.from('vf_asset_previews').insert([{ id: crypto.randomUUID(), source_file_id: msg.id, preview_path: previewPath, preview_filename: (msg.name || 'bookmark') + '-preview.png', preview_mime_type: previewBlob.type || 'image/png', preview_size_bytes: previewBlob.size, width: dimensions.width, height: dimensions.height, sort_order: 10 }]);
+              }
+              state.libraryPreviewUrls[previewPath] = msg.previewDataUrl;
+            }
+          }
+        } catch (_error) {
+          console.warn('Bookmark preview sync failed:', _error);
+        }
+      }
       try {
         sourceWindow.postMessage({ type: 'vf:bookmark-updated', id: msg.id, name: snapshot.name, templateRefs: refs, coverTemplateId: snapshot.coverTemplateId }, location.origin);
       } catch (_error) {}
@@ -6069,6 +6461,25 @@ function libraryTagsForForm(formData, kind) {
       // 通知前端刷新
       try { sourceWindow.postMessage({ type: 'vf:template-renamed', id: id, name: name.trim() }, location.origin); } catch (e) {}
     } catch (e) { console.warn('Rename template failed:', e); }
+  }
+
+  async function handleSetTemplateLanguage(msg, sourceWindow) {
+    if (state.localPreview || !state.supabase || !msg.id) return;
+    try {
+      var { data: rows, error } = await state.supabase.from('vf_source_files')
+        .select('tags').eq('id', msg.id).limit(1);
+      if (error || !rows || !rows.length) throw (error || new Error('模板不存在'));
+      var tags = Array.isArray(rows[0].tags) ? rows[0].tags.slice() : [];
+      // 先移除旧的 EN/AR 语言标签，再写入新标签；空语言表示取消标记。
+      tags = tags.filter(function(t) { return t !== 'vf:lang:EN' && t !== 'vf:lang:AR'; });
+      if (msg.language === 'EN') tags.push('vf:lang:EN');
+      else if (msg.language === 'AR') tags.push('vf:lang:AR');
+      var { error: updateError } = await state.supabase.from('vf_source_files').update({ tags: tags }).eq('id', msg.id);
+      if (updateError) throw updateError;
+      var local = state.librarySources.find(function(s) { return s.id === msg.id; });
+      if (local) local.tags = tags;
+      try { sourceWindow.postMessage({ type: 'vf:template-language-set', id: msg.id, language: msg.language || '', tags: tags }, location.origin); } catch (e) {}
+    } catch (e) { console.warn('Set template language failed:', e); }
   }
 
   async function handleFetchSingleTemplate(id, sourceWindow) {
