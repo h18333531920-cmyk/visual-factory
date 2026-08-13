@@ -988,3 +988,246 @@ html body {
   .drag-handle { opacity: .5 !important; }
   .layer-actions { opacity: 1 !important; pointer-events: auto !important; transform: translateY(-50%) !important; }
 }
+
+/* Precise asset-rail handle anchoring. The handle follows the actual rail width. */
+.editor-layout { --ui-asset-rail-width: 256px; }
+.asset-pane {
+  width: var(--ui-asset-rail-width) !important;
+  flex-basis: var(--ui-asset-rail-width) !important;
+}
+.asset-pane-collapse-handle {
+  left: calc(12px + var(--ui-asset-rail-width) - 1px) !important;
+  top: 50% !important;
+  width: 20px !important;
+  height: 38px !important;
+  border: 1px solid var(--ui-line) !important;
+  border-left: 0 !important;
+  border-radius: 0 8px 8px 0 !important;
+  background: rgba(255, 255, 255, .96) !important;
+  box-shadow: 2px 0 8px rgba(15, 23, 42, .045) !important;
+  transform: translateY(-50%) !important;
+  transition: left .2s ease, color .15s ease, background-color .15s ease !important;
+}
+.asset-pane-collapse-handle::before {
+  color: var(--ui-faint) !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+}
+.asset-pane-collapse-handle:hover {
+  color: var(--ui-ink) !important;
+  background: #f8fafc !important;
+  box-shadow: 2px 0 8px rgba(15, 23, 42, .06) !important;
+}
+#asset-pane-collapse-toggle:checked ~ .asset-pane-collapse-handle {
+  left: 12px !important;
+  border-left: 1px solid var(--ui-line) !important;
+  border-radius: 8px !important;
+}
+#asset-pane-collapse-toggle:checked ~ .asset-pane { width: 0 !important; flex-basis: 0 !important; }
+
+/* Lightweight inspector: preserve every control, reduce repeated visual weight. */
+#prop-edit-area {
+  --ui-property-row-height: 30px;
+}
+#prop-edit-area .label {
+  margin: 0 0 5px !important;
+  color: var(--ui-muted) !important;
+  font-size: 10px !important;
+  font-weight: 550 !important;
+  letter-spacing: .01em !important;
+}
+#prop-edit-area .input-text,
+#prop-edit-area .input-select,
+#prop-edit-area .select {
+  min-height: 32px !important;
+  margin-bottom: 10px !important;
+  border-color: #e3e8ef !important;
+  background: #fbfcfd !important;
+}
+#prop-edit-area .input-text:hover,
+#prop-edit-area .input-select:hover,
+#prop-edit-area .select:hover { border-color: #d5dde7 !important; background: #fff !important; }
+#prop-edit-area .input-text:focus,
+#prop-edit-area .input-select:focus,
+#prop-edit-area .select:focus { border-color: #cbd5e1 !important; background: #fff !important; }
+
+#prop-edit-area .slider-row {
+  display: grid !important;
+  grid-template-columns: 66px minmax(0, 1fr) 44px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: var(--ui-property-row-height) !important;
+  margin: 0 0 5px !important;
+}
+#prop-edit-area .slider-row .s-label {
+  width: auto !important;
+  color: var(--ui-muted) !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  white-space: nowrap !important;
+}
+#prop-edit-area .slider-val {
+  width: auto !important;
+  color: var(--ui-text) !important;
+  font-size: 10px !important;
+  font-weight: 550 !important;
+  font-variant-numeric: tabular-nums !important;
+  text-align: right !important;
+}
+#prop-edit-area input[type="range"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 100% !important;
+  height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  cursor: pointer !important;
+}
+#prop-edit-area input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #dfe5ec !important;
+}
+#prop-edit-area input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  width: 14px !important;
+  height: 14px !important;
+  margin-top: -5.5px !important;
+  border: 2px solid var(--ui-ink) !important;
+  border-radius: 50% !important;
+  background: #fff !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .12) !important;
+  transition: transform .12s ease, box-shadow .12s ease !important;
+}
+#prop-edit-area input[type="range"]:hover::-webkit-slider-thumb,
+#prop-edit-area input[type="range"]:focus::-webkit-slider-thumb {
+  transform: scale(1.12) !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, .16) !important;
+}
+#prop-edit-area input[type="range"]::-moz-range-track {
+  height: 3px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #dfe5ec !important;
+}
+#prop-edit-area input[type="range"]::-moz-range-progress {
+  height: 3px !important;
+  border-radius: 999px !important;
+  background: #7b8796 !important;
+}
+#prop-edit-area input[type="range"]::-moz-range-thumb {
+  width: 12px !important;
+  height: 12px !important;
+  border: 2px solid var(--ui-ink) !important;
+  border-radius: 50% !important;
+  background: #fff !important;
+}
+
+#prop-edit-area input[type="color"] {
+  height: 32px !important;
+  padding: 3px !important;
+  border-color: #e3e8ef !important;
+  border-radius: 8px !important;
+  background: #fbfcfd !important;
+}
+#prop-edit-area .btn {
+  min-height: 30px !important;
+  padding: 0 9px !important;
+  font-size: 10px !important;
+  font-weight: 550 !important;
+}
+#prop-edit-area > div[style*="font-weight:bold"],
+#prop-edit-area > div[style*="font-weight: bold"] {
+  color: var(--ui-muted) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  text-align: left !important;
+  border-bottom: 1px solid var(--ui-line-soft) !important;
+}
+
+/* Lovart-inspired restraint, translated into the current monochrome system. */
+.linked-artboard-dock.quick-add-dock {
+  width: auto !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  max-width: calc(100% - 40px) !important;
+  gap: 3px !important;
+  padding: 5px 6px !important;
+  overflow: visible !important;
+  border: 1px solid rgba(226, 232, 240, .92) !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, .94) !important;
+  box-shadow: 0 14px 34px -22px rgba(15, 23, 42, .28) !important;
+}
+.quick-logo-menu-wrap { display: flex !important; align-items: center !important; }
+.quick-add-action {
+  position: relative !important;
+  width: 34px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  color: var(--ui-text) !important;
+  background: transparent !important;
+}
+.quick-add-icon,
+.quick-logo-menu button .quick-add-icon {
+  width: 34px !important;
+  height: 34px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: currentColor !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.quick-add-icon svg,
+.quick-logo-menu button .quick-add-icon svg { width: 18px !important; height: 18px !important; stroke-width: 1.8 !important; }
+.quick-add-label { display: none !important; }
+.quick-add-action:hover {
+  color: var(--ui-ink) !important;
+  background: #f1f5f9 !important;
+  transform: none !important;
+}
+.quick-add-action:active { color: #fff !important; background: var(--ui-ink) !important; transform: none !important; }
+.quick-add-dock-toggle {
+  position: static !important;
+  width: 26px !important;
+  height: 34px !important;
+  margin-left: 3px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-left: 1px solid var(--ui-line-soft) !important;
+  border-radius: 0 7px 7px 0 !important;
+  color: var(--ui-faint) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  line-height: 1 !important;
+  transform: none !important;
+}
+.quick-add-dock-toggle:hover { color: var(--ui-ink) !important; background: #f8fafc !important; transform: none !important; }
+.linked-artboard-dock.quick-add-dock.collapsed {
+  width: 34px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  border: 1px solid var(--ui-line-soft) !important;
+  border-radius: 10px !important;
+  background: rgba(255,255,255,.94) !important;
+  box-shadow: 0 8px 20px rgba(15,23,42,.08) !important;
+}
+.linked-artboard-dock.quick-add-dock.collapsed .quick-add-dock-toggle {
+  width: 32px !important;
+  height: 32px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+}
+
+@media (max-width: 1280px) {
+  .editor-layout { --ui-asset-rail-width: 236px; }
+}
