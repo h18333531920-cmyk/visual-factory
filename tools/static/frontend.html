@@ -2191,7 +2191,527 @@
         @media (max-width: 1280px) {
             .asset-pane-collapse-handle { left: 240px; }
         }
+
+        /* Unified editor visual layer: preserve runtime behavior, simplify hierarchy. */
+        :root {
+            --primary: #17181b;
+            --primary-hover: #303237;
+            --text-main: #17181b;
+            --text-sub: #727b86;
+            --border: #e5e8eb;
+            --border-strong: #d8dde2;
+            --bg-canvas: #f5f6f7;
+        }
+        body {
+            padding: 0;
+            min-width: 1120px;
+            background: #f5f6f7;
+            color: var(--text-main);
+        }
+        .workspace-tabs {
+            height: 56px;
+            padding: 0 22px;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+            background: #fff;
+        }
+        .workspace-tabs strong,
+        .workspace-tabs button {
+            font-size: 13px;
+            font-weight: 650;
+        }
+        .workspace-tabs strong::after,
+        .workspace-tabs .workspace-overview-tab.active::after {
+            bottom: -17px;
+            width: calc(100% - 18px);
+            height: 2px;
+            background: var(--text-main);
+        }
+        .workspace-tabs button {
+            padding: 0 9px;
+            color: #7b848f;
+        }
+        .workspace-tabs button.active,
+        .workspace-tabs .workspace-overview-tab {
+            color: var(--text-main);
+        }
+        .workspace-tabs .new-artboard-menu-wrap {
+            margin-left: 6px;
+        }
+        .workspace-tabs .new-artboard-trigger {
+            min-width: 94px;
+            height: 32px;
+            padding: 0 14px;
+            border-radius: 8px;
+            color: #fff;
+            background: var(--text-main);
+            box-shadow: none;
+        }
+        .editor-layout {
+            height: calc(100vh - 68px);
+            min-height: 640px;
+            border: 0;
+            border-radius: 0;
+            background: var(--bg-canvas);
+        }
+        .asset-pane {
+            width: 292px;
+            flex-basis: 292px;
+            background: #fff;
+            border-right: 1px solid var(--border);
+        }
+        .asset-pane .asset-library-card {
+            padding: 18px 16px;
+            background: #fff;
+        }
+        .asset-pane .card-title {
+            padding: 0;
+            margin-bottom: 16px;
+            font-size: 17px;
+        }
+        .asset-pane .card-title::before,
+        .right-pane .card-title::before {
+            display: none;
+        }
+        .asset-tabs {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 5px;
+            padding: 4px;
+            margin-bottom: 10px;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            background: #f5f6f7;
+        }
+        .asset-tab {
+            min-height: 30px;
+            padding: 0 4px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: #737c87;
+            font-size: 12px;
+            font-weight: 650;
+        }
+        .asset-tab.active {
+            background: var(--text-main);
+            color: #fff;
+            box-shadow: none;
+        }
+        .asset-search-wrap {
+            margin: 0 0 9px;
+        }
+        .asset-search-input {
+            height: 34px;
+            padding: 0 30px 0 10px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: #fafbfc;
+            font-size: 12px;
+        }
+        #diy-subtag-row {
+            gap: 5px !important;
+            margin: 0 0 10px !important;
+            padding: 0 !important;
+        }
+        .filter-capsule {
+            min-height: 27px;
+            padding: 4px 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: #fff;
+            color: #747d87;
+            font-size: 11px;
+            font-weight: 650;
+            box-shadow: none;
+        }
+        .filter-capsule.active {
+            background: #edf0f3;
+            color: var(--text-main);
+            border-color: #d7dde3;
+        }
+        .asset-list {
+            gap: 10px;
+            padding: 2px 2px 20px 0;
+        }
+        #asset-list-ui:not(:has(.reference-filter)) {
+            gap: 10px;
+        }
+        #asset-list-ui:not(:has(.reference-filter)) .asset-masonry-column {
+            gap: 10px;
+        }
+        .asset-item {
+            border-color: var(--border);
+            border-radius: 9px;
+            background: #fff;
+            box-shadow: none;
+        }
+        .asset-item:hover,
+        .asset-item.current {
+            border-color: #c8ced5;
+            box-shadow: 0 7px 16px rgba(25, 30, 38, .08);
+        }
+        .asset-thumb {
+            border-color: #edf0f2;
+            border-radius: 7px;
+        }
+        .asset-info {
+            padding: 7px 3px 1px;
+        }
+        .asset-name {
+            color: var(--text-main);
+            font-size: 12px;
+            font-weight: 680;
+        }
+        .asset-meta {
+            color: var(--text-sub);
+            font-size: 11px;
+        }
+        .asset-pane-collapse-handle {
+            left: 292px;
+            z-index: 70;
+            width: 18px;
+            height: 54px;
+            border: 1px solid var(--border);
+            border-left: 0;
+            border-radius: 0 8px 8px 0;
+            background: #fff;
+            box-shadow: none;
+        }
+        .asset-pane-collapse-handle::before {
+            color: #78818b;
+            font-size: 18px;
+        }
+        #asset-pane-collapse-toggle:checked ~ .asset-pane-collapse-handle {
+            left: 0;
+        }
+        .left-pane {
+            background: var(--bg-canvas);
+        }
+        .left-pane::before {
+            background-image: radial-gradient(circle, rgba(116, 124, 135, .17) 1px, transparent 1px);
+            background-size: 18px 18px;
+            opacity: .38;
+        }
+        .canvas-toolbar {
+            min-height: 66px;
+        }
+        .left-pane .canvas-actions {
+            top: 16px;
+            right: 20px;
+            gap: 6px;
+        }
+        .left-pane .canvas-actions button {
+            min-width: auto;
+            height: 32px;
+            padding: 0 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: #505862;
+            background: #fff;
+            box-shadow: none;
+            font-size: 12px;
+            font-weight: 650;
+        }
+        .left-pane .canvas-actions button:hover {
+            border-color: #c7cdd4;
+            background: #fafbfc;
+        }
+        .left-pane .canvas-actions button.primary {
+            color: var(--text-main);
+            background: #fff;
+            border-color: var(--border);
+        }
+        .left-pane .canvas-actions .export-dropdown-wrap button.primary {
+            color: #fff;
+            background: var(--text-main);
+            border-color: var(--text-main);
+        }
+        .left-pane .canvas-actions button.save-template-btn {
+            color: #505862;
+            background: #fff;
+            border-color: var(--border);
+        }
+        .left-pane .canvas-actions .toolbar-more-wrap > button {
+            background: transparent;
+            border-color: transparent;
+        }
+        .canvas-wrapper {
+            border: 1px solid #eef0f2;
+            box-shadow: 0 14px 34px rgba(29, 35, 45, .10);
+        }
+        .right-pane {
+            width: 368px;
+            flex-basis: 368px;
+            border-left: 1px solid var(--border);
+            background: #fff;
+        }
+        .pane-header {
+            min-height: 58px;
+            padding: 0 16px;
+            border-bottom-color: var(--border);
+        }
+        .pane-header h2 {
+            color: var(--text-main);
+            font-size: 14px;
+            font-weight: 680;
+            letter-spacing: 0;
+        }
+        .pane-header .btn-icon,
+        .layer-card-actions .btn-icon {
+            min-height: 30px;
+            border: 0;
+            border-radius: 7px;
+            background: transparent;
+            color: #7a838d;
+            box-shadow: none;
+        }
+        .pane-content {
+            padding: 0;
+            gap: 0;
+            background: #fff;
+        }
+        .module-card {
+            padding: 17px 16px 18px;
+            border: 0;
+            border-bottom: 1px solid var(--border);
+            border-radius: 0;
+            background: #fff;
+            box-shadow: none;
+        }
+        .card-title {
+            margin-bottom: 12px;
+            color: var(--text-main);
+            font-size: 15px;
+            font-weight: 680;
+        }
+        .layer-item {
+            min-height: 42px;
+            padding: 8px 9px;
+            border-color: var(--border);
+            border-radius: 7px;
+            background: #fff;
+        }
+        .layer-item.active {
+            border-color: #c4cbd2;
+            background: #f7f8f9;
+            box-shadow: none;
+        }
+        .ai-console {
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: none;
+        }
+        .btn,
+        .btn-icon,
+        .prompt-tag-chip,
+        .p-tab,
+        .add-menu button,
+        .ai-menu-btn,
+        .toolbar-more-menu,
+        .resize-dropdown-menu,
+        .export-dropdown-menu,
+        .ai-dropdown {
+            border-radius: 7px;
+        }
+        .btn-dark,
+        .p-tab.active,
+        .prompt-tag-chip.active {
+            background: var(--text-main);
+            border-color: var(--text-main);
+        }
+        .ai-submit {
+            background: var(--text-main);
+        }
+        @media (max-width: 1280px) {
+            .asset-pane { width: 248px; flex-basis: 248px; }
+            .asset-pane-collapse-handle { left: 248px; }
+            .right-pane { width: 338px; flex-basis: 338px; }
+        }
+
+        /* Workspace hierarchy: the live editor keeps every existing control, but gives each job a clear place. */
+        body {
+            padding: 0 !important;
+            gap: 0 !important;
+            background: #f4f5f7 !important;
+        }
+        .workspace-tabs {
+            width: 100% !important;
+            height: 70px !important;
+            padding: 0 24px !important;
+            gap: 8px !important;
+            border-bottom: 1px solid #e6e8eb !important;
+            background: #fff !important;
+        }
+        .workspace-tabs strong,
+        .workspace-tabs button {
+            min-height: 34px;
+            padding-inline: 11px !important;
+            font-size: 13px !important;
+            font-weight: 680 !important;
+        }
+        .workspace-tabs strong::after,
+        .workspace-tabs .workspace-overview-tab.active::after {
+            bottom: -18px !important;
+            height: 2px !important;
+        }
+        .workspace-tabs .new-artboard-menu-wrap { margin-left: 10px !important; }
+        .workspace-tabs .new-artboard-trigger {
+            height: 34px !important;
+            min-width: 104px !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+        }
+        .editor-layout {
+            box-sizing: border-box;
+            max-width: none !important;
+            height: calc(100vh - 70px) !important;
+            min-height: 620px !important;
+            padding: 16px 20px 20px !important;
+            gap: 16px !important;
+            background: #f4f5f7 !important;
+        }
+        .asset-pane,
+        .right-pane {
+            overflow: hidden !important;
+            border: 1px solid #e5e8eb !important;
+            border-radius: 14px !important;
+            background: #fff !important;
+            box-shadow: 0 8px 24px rgba(23, 28, 38, .035) !important;
+        }
+        .asset-pane {
+            width: 304px !important;
+            flex-basis: 304px !important;
+        }
+        .asset-pane .asset-library-card {
+            display: flex;
+            min-height: 100%;
+            flex: 1;
+            flex-direction: column;
+            padding: 18px 14px 14px !important;
+        }
+        .asset-pane .card-title {
+            margin: 0 0 14px !important;
+            padding: 0 3px !important;
+        }
+        .asset-pane .card-title-wrap {
+            font-size: 16px !important;
+            font-weight: 740 !important;
+        }
+        .asset-tabs {
+            padding: 4px !important;
+            border: 1px solid #e4e7eb !important;
+            border-radius: 10px !important;
+            background: #f5f6f7 !important;
+        }
+        .asset-tab {
+            height: 32px !important;
+            border-radius: 7px !important;
+            font-size: 12px !important;
+        }
+        .asset-search-input {
+            height: 36px !important;
+            background: #fafbfc !important;
+        }
+        .asset-list {
+            flex: 1;
+            min-height: 0;
+            padding-bottom: 4px !important;
+        }
+        .asset-pane-collapse-handle {
+            left: 324px !important;
+            z-index: 90 !important;
+            width: 16px !important;
+            height: 44px !important;
+            border: 1px solid #e2e6ea !important;
+            border-left: 0 !important;
+            border-radius: 0 9px 9px 0 !important;
+            background: #fff !important;
+        }
+        #asset-pane-collapse-toggle:checked ~ .asset-pane-collapse-handle { left: 20px !important; }
+        .left-pane {
+            min-width: 0;
+            border: 1px solid #e5e8eb !important;
+            border-radius: 16px !important;
+            background: #f8f9fa !important;
+            box-shadow: 0 8px 24px rgba(23, 28, 38, .025) !important;
+        }
+        .left-pane::before { opacity: .18 !important; }
+        .canvas-toolbar { min-height: 64px !important; }
+        .left-pane .canvas-actions {
+            top: 16px !important;
+            right: 18px !important;
+            gap: 6px !important;
+        }
+        .left-pane .canvas-actions button {
+            height: 34px !important;
+            min-width: auto !important;
+            padding: 0 13px !important;
+            border: 1px solid #e0e4e8 !important;
+            border-radius: 8px !important;
+            color: #444c55 !important;
+            background: #fff !important;
+            font-size: 12px !important;
+            font-weight: 680 !important;
+            box-shadow: none !important;
+        }
+        .left-pane .canvas-actions button.primary,
+        .left-pane .canvas-actions button.save-template-btn {
+            color: #444c55 !important;
+            background: #fff !important;
+            border-color: #e0e4e8 !important;
+        }
+        .left-pane .canvas-actions .export-dropdown-wrap button.primary {
+            color: #fff !important;
+            background: #17181b !important;
+            border-color: #17181b !important;
+        }
+        .left-pane .canvas-actions .toolbar-more-wrap > button {
+            min-width: 34px !important;
+            padding-inline: 10px !important;
+            color: #76808b !important;
+            background: transparent !important;
+            border-color: transparent !important;
+        }
+        .canvas-wrapper {
+            border: 1px solid rgba(18, 24, 34, .07) !important;
+            box-shadow: 0 18px 38px rgba(23, 29, 38, .10) !important;
+        }
+        .right-pane {
+            width: 360px !important;
+            flex-basis: 360px !important;
+        }
+        .pane-header {
+            min-height: 56px !important;
+            padding-inline: 15px !important;
+            background: #fff !important;
+        }
+        .pane-header h2 {
+            font-size: 14px !important;
+            letter-spacing: .02em !important;
+        }
+        .module-card {
+            padding: 16px 15px 17px !important;
+            border-bottom: 1px solid #e9ebee !important;
+        }
+        .module-card:last-child { border-bottom: 0 !important; }
+        .card-title { margin-bottom: 11px !important; }
+        .card-title-wrap { font-size: 15px !important; font-weight: 730 !important; }
+        .layer-item { border-radius: 8px !important; }
+        .ai-console {
+            padding: 10px !important;
+            border-radius: 10px !important;
+            background: #fafbfc !important;
+        }
+        .ai-prompt-shell { background: #fff !important; }
+        @media (max-width: 1280px) {
+            .asset-pane { width: 264px !important; flex-basis: 264px !important; }
+            .asset-pane-collapse-handle { left: 284px !important; }
+            .right-pane { width: 326px !important; flex-basis: 326px !important; }
+        }
     </style>
+    <link rel="stylesheet" href="./ui-unified.css?v=20260813-static-ui-v12">
 </head>
 <body>
 
@@ -2348,7 +2868,7 @@
                 <button type="button" class="btn-icon" id="refresh-asset-btn" onclick="refreshAssetLibrary()" title="刷新资产库" style="padding:2px 6px;font-size:13px;">↻</button>
             </div>
             <div class="asset-tabs">
-                <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')" style="white-space:nowrap;">模版 <small id="diy-count-layout">· 0</small></button>
+                <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')" style="white-space:nowrap;">模板 <small id="diy-count-layout">· 0</small></button>
                 <button class="asset-tab" data-asset-tab="component" onclick="switchAssetTab('component')" style="white-space:nowrap;">组件 <small id="diy-count-component">· 0</small></button>
                 <button class="asset-tab" data-asset-tab="recycle" onclick="switchAssetTab('recycle')" title="回收站" aria-label="回收站">🗑 <small id="diy-count-recycle">· 0</small></button>
             </div>
@@ -2369,7 +2889,7 @@
 <div class="left-pane" id="left-pane">
         <div class="canvas-toolbar">
             <div class="canvas-actions">
-                <button type="button" class="save-template-btn" onclick="saveActiveAsset()" id="canvas-save-btn">保存模版</button>
+                <button type="button" class="save-template-btn" onclick="saveActiveAsset()" id="canvas-save-btn">保存模板</button>
                 <div class="resize-menu-wrap">
                     <button type="button" onclick="toggleResizeMenu(event)">修改尺寸 ⌄</button>
                     <div class="resize-dropdown-menu" id="resize-dropdown-menu"></div>
@@ -2454,13 +2974,56 @@
             <div class="module-card">
                 <div class="card-title"><div class="card-title-wrap">生图</div></div>
                 <div class="ai-console">
+                    <div class="jimeng-api-row" id="jimeng-api-row" hidden>
+                        <div class="jimeng-session-head">
+                            <span class="jimeng-session-title"><span class="jimeng-api-dot" id="jimeng-api-dot"></span><span class="jimeng-api-status" id="jimeng-api-status">即梦 API 未检测</span></span>
+                            <button class="jimeng-api-action jimeng-check-action" type="button" onclick="checkJimengApiHealth()">检测连接</button>
+                        </div>
+                        <input class="jimeng-session-input" id="jimeng-session-input" type="password" placeholder="粘贴即梦 Session ID" autocomplete="off">
+                        <div class="jimeng-session-actions">
+                            <button class="jimeng-api-action" type="button" onclick="saveJimengSessionId()">保存凭证</button>
+                            <button class="jimeng-api-action" type="button" onclick="requestJimengSessionId()" title="通过浏览器扩展自动读取即梦 Cookie">自动获取</button>
+                        </div>
+                    </div>
                     <div class="ai-reference-strip" id="ai-reference-strip">
                         <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
                         <div class="ai-reference-hint">拖拽或上传参考图，最多 8 张；也可以只输入文字描述。</div>
                     </div>
-                    <div class="prompt-tag-list" id="prompt-tag-list"></div>
                     <div class="ai-prompt-shell">
-                        <textarea class="textarea" id="ai-prompt-input" rows="4" placeholder="上传参考图、输入文字或 @ 主体，描述你想生成的图片。"></textarea>
+                        <textarea class="textarea" id="ai-prompt-input" rows="4" placeholder="上传参考图、输入文字描述或 @ 使用功能"></textarea>
+                    </div>
+                    <div class="ai-control-bar">
+                        <div class="ai-control-icons">
+                        <div class="ai-menu-wrap">
+                            <button class="ai-menu-btn ai-menu-icon-btn active" type="button" onclick="toggleAIMenu('skill', event)" data-tooltip="Skills 技能" aria-label="Skills 技能"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.15 3.35L16.5 7.5l-3.35 1.15L12 12l-1.15-3.35L7.5 7.5l3.35-1.15L12 3Z"></path><path d="M18.5 13.5l.72 2.03 2.03.72-2.03.72L18.5 19l-.72-2.03-2.03-.72 2.03-.72.72-2.03Z"></path><path d="M6 14l.58 1.67 1.67.58-1.67.58L6 19.5l-.58-1.67-1.67-.58 1.67-.58L6 14Z"></path></svg><strong id="ai-skill-label">Skills</strong></button>
+                            <div class="ai-dropdown" id="ai-skill-menu">
+                                <button type="button" data-ai-skill="replace-food" onclick="selectAISkill('replace-food')">一键替换食物</button>
+                                <button type="button" data-ai-skill="upscale" onclick="selectAISkill('upscale')">一键高清</button>
+                                <button type="button" data-ai-skill="outpaint" onclick="selectAISkill('outpaint')">智能扩图</button>
+                            </div>
+                        </div>
+                        <div class="ai-menu-wrap">
+                            <button class="ai-menu-btn ai-menu-icon-btn" type="button" onclick="toggleAIMenu('size', event)" data-tooltip="生成尺寸 · 1:1" aria-label="生成尺寸 1:1"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M8 9h8M8 15h8"></path></svg><strong id="ai-size-label">1:1</strong></button>
+                            <div class="ai-dropdown ai-size-dropdown" id="ai-size-menu">
+                                <button type="button" data-ai-size="1:1" onclick="selectAISize('1:1')">1:1</button>
+                                <button type="button" data-ai-size="3:4" onclick="selectAISize('3:4')">3:4</button>
+                                <button type="button" data-ai-size="4:3" onclick="selectAISize('4:3')">4:3</button>
+                                <button type="button" data-ai-size="9:16" onclick="selectAISize('9:16')">9:16</button>
+                                <button type="button" data-ai-size="16:9" onclick="selectAISize('16:9')">16:9</button>
+                                <button type="button" data-ai-size="2:3" onclick="selectAISize('2:3')">2:3</button>
+                                <button type="button" data-ai-size="3:2" onclick="selectAISize('3:2')">3:2</button>
+                            </div>
+                        </div>
+                        <div class="ai-menu-wrap">
+                            <button class="ai-menu-btn ai-menu-icon-btn" type="button" onclick="toggleAIMenu('provider', event)" data-tooltip="模型 · GPT 大模型" aria-label="模型 GPT 大模型"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7 4v10l-7 4-7-4V7l7-4Z"></path><path d="m5 7 7 4 7-4M12 11v10"></path></svg><strong id="ai-provider-label">GPT 大模型</strong></button>
+                            <div class="ai-dropdown" id="ai-provider-menu">
+                                <button type="button" data-ai-provider="openai" onclick="selectAIProvider('openai')">GPT 大模型</button>
+                                <button type="button" data-ai-provider="volc" onclick="selectAIProvider('volc')">火山大模型</button>
+                                <button type="button" data-ai-provider="jimeng" onclick="selectAIProvider('jimeng')">即梦本机</button>
+                            </div>
+                        </div>
+                        </div>
+                        <button class="ai-submit-btn" id="ai-submit-btn" type="button" onclick="runSelectedAIAction()" title="开始生成">↑</button>
                     </div>
                     <div class="jimeng-settings-row" id="jimeng-settings-row" hidden>
                         <div class="jimeng-setting-group">
@@ -2472,23 +3035,12 @@
                                 <option value="jimeng-image-4.1">4.1</option>
                             </select>
                         </div>
-                        <div class="jimeng-setting-group">
+                        <div class="jimeng-setting-group jimeng-setting-full">
                             <span class="jimeng-setting-label">尺寸</span>
                             <select class="jimeng-setting-select" id="jimeng-ratio-select" onchange="onJimengSettingChange()">
                                 <option value="">自动（跟画板）</option>
                             </select>
                         </div>
-                    </div>
-                    <div class="ai-control-bar">
-                        <div class="ai-menu-wrap">
-                            <button class="ai-menu-btn" type="button" onclick="toggleAIMenu('provider', event)"><span>⬡</span><strong id="ai-provider-label">GPT 大模型</strong><span class="chev">⌄</span></button>
-                            <div class="ai-dropdown" id="ai-provider-menu">
-                                <button type="button" data-ai-provider="openai" onclick="selectAIProvider('openai')">GPT 大模型</button>
-                                <button type="button" data-ai-provider="volc" onclick="selectAIProvider('volc')">火山大模型</button>
-                                <button type="button" data-ai-provider="jimeng" onclick="selectAIProvider('jimeng')">即梦</button>
-                            </div>
-                        </div>
-                        <button class="ai-submit-btn" id="ai-submit-btn" type="button" onclick="generateAIBG()" title="开始生成">↑</button>
                     </div>
                 </div>
             </div>
@@ -2566,9 +3118,11 @@
         { id: 'kw_clean', name: '干净背景', prompt: '干净背景，画面简洁，留出版式和文字空间' },
         { id: 'kw_vivid', name: '鲜艳色彩', prompt: '高饱和色彩，明亮活泼，社交媒体广告风格' }
     ];
-    const AI_FEATURE_LABELS = { generate: '图片生成', outpaint: '智能扩图', upscale: '图片清晰' };
-    const AI_PROVIDER_LABELS = { openai: 'GPT 大模型', volc: '火山大模型', jimeng: '即梦' };
+    const AI_SKILL_LABELS = { generate: 'Skills', 'replace-food': '一键替换食物', outpaint: '智能扩图', upscale: '一键高清' };
+    const AI_PROVIDER_LABELS = { openai: 'GPT 大模型', volc: '火山大模型', jimeng: '即梦本机' };
     let aiFeatureMode = 'generate';
+    let selectedAISkill = 'generate';
+    let aiGenerationSize = '1:1';
     let aiProvider = 'jimeng';
     const JIMENG_API_URL = 'https://threshold-labor-holly-bronze.trycloudflare.com';
     let jimengApiReady = false;
@@ -4203,10 +4757,10 @@
     }
     function getPromptText() {
         const manual = document.getElementById('ai-prompt-input')?.value.trim() || '';
-        const tagPrompts = selectedKeywordTagIds
-            .map(id => keywordTags.find(t => t.id === id)?.prompt?.trim())
-            .filter(Boolean);
-        return [manual, ...tagPrompts].filter(Boolean).join('，');
+        const skillPrompt = selectedAISkill === 'replace-food'
+            ? '保留原图构图、背景和光影，仅替换画面中的食物主体'
+            : '';
+        return [manual, skillPrompt].filter(Boolean).join('，');
     }
     function getOutpaintExpand(imgW, imgH, targetW, targetH) {
         const imgRatio = imgW / imgH;
@@ -4224,7 +4778,7 @@
         return expand;
     }
     function getGenerationRatio() {
-        return getArtboardPreset(currentArtboardId)?.apiRatio || currentRatio;
+        return aiGenerationSize || getArtboardPreset(currentArtboardId)?.apiRatio || currentRatio;
     }
     function setPromptText(text) {
         const input = document.getElementById('ai-prompt-input');
@@ -4393,12 +4947,13 @@
         }
     });
     function closeAIMenus() {
-        document.getElementById('ai-feature-menu')?.classList.remove('open');
+        document.getElementById('ai-skill-menu')?.classList.remove('open');
+        document.getElementById('ai-size-menu')?.classList.remove('open');
         document.getElementById('ai-provider-menu')?.classList.remove('open');
     }
     function toggleAIMenu(type, event) {
         event?.stopPropagation?.();
-        const id = type === 'feature' ? 'ai-feature-menu' : 'ai-provider-menu';
+        const id = ({ skill: 'ai-skill-menu', size: 'ai-size-menu', provider: 'ai-provider-menu' })[type];
         const target = document.getElementById(id);
         if(!target) return;
         const willOpen = !target.classList.contains('open');
@@ -4406,17 +4961,47 @@
         target.classList.toggle('open', willOpen);
     }
     function refreshAIConsole() {
-        const featureLabel = document.getElementById('ai-feature-label');
+        const skillLabel = document.getElementById('ai-skill-label');
+        const sizeLabel = document.getElementById('ai-size-label');
         const providerLabel = document.getElementById('ai-provider-label');
-        if(featureLabel) featureLabel.textContent = AI_FEATURE_LABELS[aiFeatureMode] || '图片生成';
+        if(skillLabel) skillLabel.textContent = 'Skills';
+        if(sizeLabel) sizeLabel.textContent = aiGenerationSize;
         if(providerLabel) providerLabel.textContent = AI_PROVIDER_LABELS[aiProvider] || 'GPT 大模型';
-        document.querySelectorAll('[data-ai-feature]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiFeature === aiFeatureMode));
+        const skillButton = skillLabel?.closest('.ai-menu-icon-btn');
+        const sizeButton = sizeLabel?.closest('.ai-menu-icon-btn');
+        const providerButton = providerLabel?.closest('.ai-menu-icon-btn');
+        if(skillButton) {
+            const skillName = AI_SKILL_LABELS[selectedAISkill] || 'Skills';
+            skillButton.dataset.tooltip = `Skills · ${skillName}`;
+            skillButton.setAttribute('aria-label', `Skills ${skillName}`);
+            skillButton.classList.toggle('has-value', selectedAISkill !== 'generate');
+        }
+        if(sizeButton) {
+            sizeButton.dataset.tooltip = `生成尺寸 · ${aiGenerationSize}`;
+            sizeButton.setAttribute('aria-label', `生成尺寸 ${aiGenerationSize}`);
+            sizeButton.classList.add('has-value');
+        }
+        if(providerButton) {
+            const providerName = AI_PROVIDER_LABELS[aiProvider] || 'GPT 大模型';
+            providerButton.dataset.tooltip = `模型 · ${providerName}`;
+            providerButton.setAttribute('aria-label', `模型 ${providerName}`);
+            providerButton.classList.toggle('has-value', aiProvider !== 'openai');
+        }
+        document.querySelectorAll('[data-ai-skill]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiSkill === selectedAISkill));
+        document.querySelectorAll('[data-ai-size]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiSize === aiGenerationSize));
         document.querySelectorAll('[data-ai-provider]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiProvider === aiProvider));
         renderAIReferenceImage();
         updateJimengApiUI();
     }
-    function selectAIFeature(value) {
-        aiFeatureMode = value || 'generate';
+    function selectAISkill(value) {
+        selectedAISkill = value || 'generate';
+        aiFeatureMode = selectedAISkill === 'upscale' || selectedAISkill === 'outpaint' ? selectedAISkill : 'generate';
+        closeAIMenus();
+        refreshAIConsole();
+    }
+    function selectAISize(value) {
+        aiGenerationSize = value || '1:1';
+        if(aiProvider === 'jimeng') jimengRatio = aiGenerationSize;
         closeAIMenus();
         refreshAIConsole();
     }
@@ -4429,38 +5014,19 @@
     function renderAIReferenceImage() {
         const strip = document.getElementById('ai-reference-strip');
         if(!strip) return;
-        const spreadStep = 64;
-        var html = '';
-        if(aiReferenceImages.length) {
-            // 第一张作为底图，放在原来+号的位置
-            html += `
-            <button class="ai-reference-add ai-reference-base-btn" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考" style="background-image:url(${aiReferenceImages[0].src});background-size:cover;background-position:center;transform:rotate(-7deg);">
-                <span class="ai-reference-base-remove" onclick="event.stopPropagation(); removeAIReferenceImage(0)" title="移除参考图">×</span>
-            </button>`;
-        }
-        if(aiReferenceImages.length > 1) {
-            const remainingCount = aiReferenceImages.length - 1;
-            const expandedWidth = Math.min(520, Math.max(96, 78 + Math.max(0, remainingCount - 1) * spreadStep));
-            const cards = aiReferenceImages.slice(1).map(function(item, index) {
-                var realIndex = index + 1;
-                var stackX = Math.min(index * 8, 28);
-                var stackRot = [-5, 3, -2, 6, -4, 5, -3, 7][index % 8];
-                var spreadRot = [-3, 4, -5, 3, -2, 5, -4, 6][index % 8];
-                var stackZ = remainingCount - index + 2;
-                return `
-                <div class="ai-reference-card" draggable="true" data-ai-ref-index="${realIndex}" style="--stack-x:${stackX}px;--stack-rot:${stackRot}deg;--spread-x:${index * spreadStep}px;--spread-rot:${spreadRot}deg;--stack-z:${stackZ};">
-                    <img src="${item.src}" alt="">
-                    <button type="button" draggable="false" onclick="event.stopPropagation(); removeAIReferenceImage(${realIndex})" title="移除参考图">×</button>
-                </div>
-            `}).join('');
-            html += `<div class="ai-reference-stack has-many" id="ai-reference-stack" style="--expanded-width:${expandedWidth}px">${cards}</div>`;
-        }
-        var hint = aiReferenceImages.length
-            ? `<div class="ai-reference-hint">已添加参考图<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div></div>`
-            : '<div class="ai-reference-hint">拖拽或上传参考图，最多 8 张；也可以只输入文字描述。</div>';
+        const cards = aiReferenceImages.map((item, index) => {
+            return `
+            <div class="ai-reference-card" draggable="true" data-ai-ref-index="${index}">
+                <img src="${item.src}" alt="">
+                <button type="button" draggable="false" onclick="event.stopPropagation(); removeAIReferenceImage(${index})" title="移除参考图">×</button>
+            </div>
+        `}).join('');
+        const hint = aiReferenceImages.length
+            ? `<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div>`
+            : '<div class="ai-reference-hint">最多 8 张参考图</div>';
         strip.innerHTML = `
-            ${aiReferenceImages.length ? '' : '<button class="ai-reference-add" type="button" onclick="document.getElementById(\'ai-reference-upload\').click()" title="添加图片参考">+</button>'}
-            ${html}
+            <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
+            ${aiReferenceImages.length ? `<div class="ai-reference-stack" id="ai-reference-stack">${cards}</div>` : ''}
             ${hint}
         `;
         setupAIReferenceSort();
@@ -4830,6 +5396,23 @@
         if(l.type === 'discountTag') return '折扣标签';
         return '标签';
     }
+    function getLayerTypeLabel(l) {
+        if(l.type === 'solid') return '色块';
+        if(l.type === 'arc') return '圆弧';
+        if(l.type === 'text') return '文本';
+        if(l.type === 'logo') return 'Logo';
+        if(l.type === 'logoLayout') return 'Logo 组合';
+        if(l.type === 'image') return '图片';
+        if(l.type === 'discountTag') return '折扣标签';
+        return '标签';
+    }
+    function getLayerDisplayTitle(l) {
+        if(l.customName) return l.customName;
+        if(l.type === 'text') return String(l.text || '文本').trim().replace(/\s+/g, ' ').slice(0, 18) || '文本';
+        if(l.type === 'tag') return String(l.text || '标签').trim().replace(/\s+/g, ' ').slice(0, 18) || '标签';
+        if(l.type === 'discountTag') return String(l.mainText || '折扣').trim().replace(/\s+/g, ' ').slice(0, 18) || '折扣';
+        return getLayerName(l);
+    }
     function getLayerThumb(l) {
         if(l.type === 'image' || l.type === 'logo') {
             return '<img src="' + (l.src || '') + '" onerror="this.style.display=\'none\';this.parentElement.style.background=\'#e5e7eb\';">';
@@ -4843,17 +5426,13 @@
             return '<div style="width:100%;height:100%;background:' + (l.color || '#00875f') + ';"></div>';
         }
         if(l.type === 'text') {
-            var txt = String(l.text || 'T').slice(0, 8);
-            var fs = Math.min(13, Math.max(7, 26 / Math.max(1, txt.length)));
-            return '<span style="font-family:' + (l.font || 'sans-serif') + ';font-weight:' + (Number(l.fontWeight)||900) + ';font-size:' + fs + 'px;color:' + (l.textCol || '#333') + ';white-space:nowrap;line-height:1;overflow:hidden;max-width:100%;">' + escapeHtml(txt) + '</span>';
+            return '<span class="layer-thumb-glyph layer-thumb-text-glyph">T</span>';
         }
         if(l.type === 'discountTag') {
-            var txt2 = String(l.mainText || 'OFF').slice(0, 5);
-            return '<span style="font-family:' + (l.font || 'sans-serif') + ';font-weight:900;font-size:10px;color:' + (l.textCol || '#fff') + ';background:' + (l.bgCol || '#ef4444') + ';padding:2px 5px;border-radius:3px;white-space:nowrap;line-height:1.2;">' + escapeHtml(txt2) + '</span>';
+            return '<span class="layer-thumb-glyph layer-thumb-discount-glyph">%</span>';
         }
         if(l.type === 'tag') {
-            var txt3 = String(l.text || '#').slice(0, 5);
-            return '<span style="font-family:' + (l.font || 'sans-serif') + ';font-weight:800;font-size:10px;color:' + (l.textCol || '#fff') + ';background:' + (l.bgCol || '#333') + ';padding:2px 6px;border-radius:3px;white-space:nowrap;line-height:1.2;">' + escapeHtml(txt3) + '</span>';
+            return '<span class="layer-thumb-tag-glyph"></span>';
         }
         if(l.type === 'arc') {
             return '<svg width="28" height="28" viewBox="0 0 40 40"><circle cx="20" cy="20" r="13" fill="none" stroke="' + (l.cIn || '#FFCC00') + '" stroke-width="5"/><circle cx="20" cy="20" r="20" fill="none" stroke="' + (l.cOut || '#00D06C') + '" stroke-width="4"/></svg>';
@@ -6018,7 +6597,7 @@
         dock.innerHTML = '';
         dock.classList.add('show');
         dock.classList.add('quick-add-dock');
-        dock.classList.toggle('collapsed', !linkedArtboardDockExpanded);
+        dock.classList.remove('collapsed');
         const actions = [
             { label:'图片图层', icon:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.4"/><path d="m4 18 5-5 3.5 3.5 2.5-2.5 5 4"/></svg>', run:function() { document.getElementById('bg-upload')?.click(); } },
             { label:'文本', icon:'<svg viewBox="0 0 24 24"><path d="M4 5V3h16v2M12 3v18M8 21h8"/></svg>', run:function() { addLayer('text'); } },
@@ -6038,6 +6617,8 @@
                 const wrap = document.createElement('div'); wrap.className = 'quick-logo-menu-wrap';
                 const button = document.createElement('button');
                 button.type = 'button'; button.className = 'quick-add-action'; button.title = action.label;
+                button.setAttribute('aria-label', action.label);
+                button.dataset.tooltip = action.label;
                 button.innerHTML = '<span class="quick-add-icon">' + action.icon + '</span><span class="quick-add-label">' + action.label + '</span>';
                 const menu = document.createElement('div'); menu.className = 'quick-logo-menu';
                 action.menu.forEach(function(item) {
@@ -6050,7 +6631,7 @@
                 const openMenu = function() { clearTimeout(closeTimer); menu.classList.add('open'); };
                 const closeMenu = function() { closeTimer = setTimeout(function() { menu.classList.remove('open'); }, 140); };
                 wrap.onmouseenter = openMenu; wrap.onmouseleave = closeMenu;
-                button.onclick = function(event) { event.preventDefault(); event.stopPropagation(); clearTimeout(closeTimer); menu.classList.toggle('open'); };
+                button.onclick = function(event) { event.preventDefault(); event.stopPropagation(); clearTimeout(closeTimer); menu.classList.add('open'); };
                 wrap.appendChild(menu); wrap.appendChild(button); dock.appendChild(wrap);
                 return;
             }
@@ -6058,25 +6639,12 @@
             button.type = 'button';
             button.className = 'quick-add-action';
             button.title = '添加' + action.label;
+            button.setAttribute('aria-label', '添加' + action.label);
+            button.dataset.tooltip = '添加' + action.label;
             button.innerHTML = '<span class="quick-add-icon">' + action.icon + '</span><span class="quick-add-label">' + action.label + '</span>';
             button.onclick = action.run;
             dock.appendChild(button);
         });
-        const toggle = document.createElement('button');
-        toggle.type = 'button';
-        toggle.className = 'quick-add-dock-toggle';
-        toggle.title = linkedArtboardDockExpanded ? '收起快捷添加栏' : '展开快捷添加栏';
-        toggle.setAttribute('aria-label', toggle.title);
-        toggle.innerHTML = linkedArtboardDockExpanded
-            ? '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>'
-            : '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg>';
-        toggle.onclick = function(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            linkedArtboardDockExpanded = !linkedArtboardDockExpanded;
-            renderLinkedArtboardDock();
-        };
-        dock.appendChild(toggle);
         requestAnimationFrame(resizeCanvas);
     }
 
@@ -6149,7 +6717,7 @@
         [...layers].sort((a,b) => b.zIndex - a.zIndex).forEach(l => {
             const hidden = l.visible === false;
             const li = document.createElement('div');
-            li.className = `layer-item ${activeLayerIds.includes(l.id) ? 'active' : ''} ${hidden ? 'hidden-layer' : ''}`;
+            li.className = `layer-item ${activeLayerIds.includes(l.id) ? 'active' : ''} ${hidden ? 'hidden-layer' : ''} ${l.locked ? 'locked' : ''}`;
             li.draggable = true; li.dataset.id = l.id;
             li.ondragstart = e => {
                 draggingLayerId = l.id;
@@ -6219,16 +6787,20 @@
             };
             var thumb = getLayerThumb(l);
             var eyeIcon = hidden ? ICON_EYE_OFF : ICON_EYE_ON;
-            var eyeCls = hidden ? ' layer-vis-off' : '';
+            var eyeCls = hidden ? ' layer-vis-off is-active-state' : '';
             var lockIcon = l.locked ? ICON_LOCK_CLOSED : ICON_LOCK_OPEN;
-            li.innerHTML = `<div style="display:flex; align-items:center; gap:8px; min-width:0; flex:1;">
-                <span class="drag-handle" style="flex-shrink:0;">⋮⋮</span>
-                <div class="layer-thumb">${thumb}</div>
-                <span class="layer-name-text" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;">${getLayerName(l)}</span>
+            var lockCls = l.locked ? ' is-active-state' : '';
+            li.innerHTML = `<div class="layer-leading">
+                <span class="drag-handle" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                <div class="layer-thumb layer-thumb-${l.type}">${thumb}</div>
+                <div class="layer-info">
+                    <span class="layer-name-text">${escapeHtml(getLayerDisplayTitle(l))}</span>
+                    <span class="layer-type-label">${getLayerTypeLabel(l)}</span>
+                </div>
             </div>
             <div class="layer-actions">
                 <button class="l-btn${eyeCls}" title="${hidden ? '显示图层' : '隐藏图层'}" onclick="event.stopPropagation();toggleLayerVisible('${l.id}')">${eyeIcon}</button>
-                <button class="l-btn" title="${l.locked ? '解锁' : '锁定'}" onclick="event.stopPropagation();toggleLock('${l.id}')">${lockIcon}</button>
+                <button class="l-btn${lockCls}" title="${l.locked ? '解锁' : '锁定'}" onclick="event.stopPropagation();toggleLock('${l.id}')">${lockIcon}</button>
                 <button class="l-btn layer-del-btn" title="删除" onclick="event.stopPropagation();deleteLayer('${l.id}')">${ICON_TRASH}</button>
             </div>`;
             listUI.appendChild(li);
@@ -7134,7 +7706,7 @@
         // 资产库切换仅影响左侧内容，不能改变右上角的主操作。
         // 组件不再通过这里上传，任何普通分类下均保存当前画板为模板。
         btn.style.display = '';
-        btn.textContent = '保存模版';
+        btn.textContent = '保存模板';
         btn.disabled = currentAssetTab === 'recycle';
     }
     function toggleAddMenu(e) { e.stopPropagation(); document.getElementById('add-menu')?.classList.toggle('open'); }
@@ -12045,6 +12617,12 @@
         });
     }
     document.addEventListener('click', e => { if(!e.target.closest('.ai-menu-wrap')) closeAIMenus(); });
+    document.getElementById('ai-prompt-input')?.addEventListener('input', event => {
+        if(/@(?:[^@\s]*)$/.test(event.target.value)) {
+            closeAIMenus();
+            document.getElementById('ai-skill-menu')?.classList.add('open');
+        }
+    });
     bootApp();
 
 </script>
