@@ -11013,3 +11013,71 @@ html body #app-shell.app-shell[data-route="home"] .library-card-icons .favorite-
 html body #app-shell.app-shell[data-route="home"] .library-card-icons .favorite-btn.active svg {
   fill: currentColor !important;
 }
+
+/* Restore the original compact card-hover footer. */
+html body #app-shell.app-shell[data-route="home"] .library-card:not(.library-font-card) .library-card-overlay {
+  min-height: 58px !important;
+  height: 58px !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  padding: 8px 78px 8px 14px !important;
+  background: rgba(13, 35, 31, 0.9) !important;
+  transform: translateY(4px) !important;
+  backdrop-filter: blur(10px) saturate(105%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(105%) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card:not(.library-font-card):hover .library-card-overlay,
+html body #app-shell.app-shell[data-route="home"] .library-card:not(.library-font-card):focus-within .library-card-overlay {
+  transform: translateY(0) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-hover-dimensions {
+  width: 100% !important;
+  align-items: flex-start !important;
+  gap: 2px !important;
+  text-align: left !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-hover-dimensions .library-template-size-ratio {
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  line-height: 16px !important;
+  letter-spacing: 0 !important;
+  text-align: left !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-hover-dimensions .library-template-size-pixels {
+  color: rgba(226, 232, 240, 0.84) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 14px !important;
+  text-align: left !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card:not(.library-font-card) .library-card-icons {
+  right: 12px !important;
+  bottom: 14px !important;
+  gap: 6px !important;
+  transform: translateY(4px) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card:not(.library-font-card):hover .library-card-icons,
+html body #app-shell.app-shell[data-route="home"] .library-card:not(.library-font-card):focus-within .library-card-icons {
+  transform: translateY(0) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card-icons .favorite-btn,
+html body #app-shell.app-shell[data-route="home"] .library-card-icons .card-download-btn {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  border-color: rgba(255, 255, 255, 0.38) !important;
+  background: rgba(0, 0, 0, 0.16) !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-card-icons svg {
+  width: 15px !important;
+  height: 15px !important;
+}
