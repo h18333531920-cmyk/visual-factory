@@ -2624,7 +2624,7 @@
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260813-static-ui-v4">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260813-static-ui-v5">
 </head>
 <body>
 
@@ -5136,6 +5136,23 @@
         if(l.type === 'discountTag') return '折扣标签';
         return '标签';
     }
+    function getLayerTypeLabel(l) {
+        if(l.type === 'solid') return '色块';
+        if(l.type === 'arc') return '圆弧';
+        if(l.type === 'text') return '文本';
+        if(l.type === 'logo') return 'Logo';
+        if(l.type === 'logoLayout') return 'Logo 组合';
+        if(l.type === 'image') return '图片';
+        if(l.type === 'discountTag') return '折扣标签';
+        return '标签';
+    }
+    function getLayerDisplayTitle(l) {
+        if(l.customName) return l.customName;
+        if(l.type === 'text') return String(l.text || '文本').trim().replace(/\s+/g, ' ').slice(0, 18) || '文本';
+        if(l.type === 'tag') return String(l.text || '标签').trim().replace(/\s+/g, ' ').slice(0, 18) || '标签';
+        if(l.type === 'discountTag') return String(l.mainText || '折扣').trim().replace(/\s+/g, ' ').slice(0, 18) || '折扣';
+        return getLayerName(l);
+    }
     function getLayerThumb(l) {
         if(l.type === 'image' || l.type === 'logo') {
             return '<img src="' + (l.src || '') + '" onerror="this.style.display=\'none\';this.parentElement.style.background=\'#e5e7eb\';">';
@@ -5149,17 +5166,13 @@
             return '<div style="width:100%;height:100%;background:' + (l.color || '#00875f') + ';"></div>';
         }
         if(l.type === 'text') {
-            var txt = String(l.text || 'T').slice(0, 8);
-            var fs = Math.min(13, Math.max(7, 26 / Math.max(1, txt.length)));
-            return '<span style="font-family:' + (l.font || 'Arial Black, sans-serif') + ';font-weight:' + (Number(l.fontWeight)||900) + ';font-size:' + fs + 'px;color:' + (l.textCol || '#333') + ';white-space:nowrap;line-height:1;overflow:hidden;max-width:100%;">' + escapeHtml(txt) + '</span>';
+            return '<span class="layer-thumb-glyph layer-thumb-text-glyph">T</span>';
         }
         if(l.type === 'discountTag') {
-            var txt2 = String(l.mainText || 'OFF').slice(0, 5);
-            return '<span style="font-family:' + (l.font || 'Arial Black, sans-serif') + ';font-weight:900;font-size:10px;color:' + (l.textCol || '#fff') + ';background:' + (l.bgCol || '#ef4444') + ';padding:2px 5px;border-radius:3px;white-space:nowrap;line-height:1.2;">' + escapeHtml(txt2) + '</span>';
+            return '<span class="layer-thumb-glyph layer-thumb-discount-glyph">%</span>';
         }
         if(l.type === 'tag') {
-            var txt3 = String(l.text || '#').slice(0, 5);
-            return '<span style="font-family:' + (l.font || '-apple-system, sans-serif') + ';font-weight:800;font-size:10px;color:' + (l.textCol || '#fff') + ';background:' + (l.bgCol || '#333') + ';padding:2px 6px;border-radius:3px;white-space:nowrap;line-height:1.2;">' + escapeHtml(txt3) + '</span>';
+            return '<span class="layer-thumb-tag-glyph"></span>';
         }
         if(l.type === 'arc') {
             return '<svg width="28" height="28" viewBox="0 0 40 40"><circle cx="20" cy="20" r="13" fill="none" stroke="' + (l.cIn || '#FFCC00') + '" stroke-width="5"/><circle cx="20" cy="20" r="20" fill="none" stroke="' + (l.cOut || '#00D06C') + '" stroke-width="4"/></svg>';
@@ -6371,7 +6384,7 @@
         [...layers].sort((a,b) => b.zIndex - a.zIndex).forEach(l => {
             const hidden = l.visible === false;
             const li = document.createElement('div');
-            li.className = `layer-item ${activeLayerIds.includes(l.id) ? 'active' : ''} ${hidden ? 'hidden-layer' : ''}`;
+            li.className = `layer-item ${activeLayerIds.includes(l.id) ? 'active' : ''} ${hidden ? 'hidden-layer' : ''} ${l.locked ? 'locked' : ''}`;
             li.draggable = true; li.dataset.id = l.id;
             li.ondragstart = e => {
                 draggingLayerId = l.id;
@@ -6441,16 +6454,20 @@
             };
             var thumb = getLayerThumb(l);
             var eyeIcon = hidden ? ICON_EYE_OFF : ICON_EYE_ON;
-            var eyeCls = hidden ? ' layer-vis-off' : '';
+            var eyeCls = hidden ? ' layer-vis-off is-active-state' : '';
             var lockIcon = l.locked ? ICON_LOCK_CLOSED : ICON_LOCK_OPEN;
-            li.innerHTML = `<div style="display:flex; align-items:center; gap:8px; min-width:0; flex:1;">
-                <span class="drag-handle" style="flex-shrink:0;">⋮⋮</span>
-                <div class="layer-thumb">${thumb}</div>
-                <span class="layer-name-text" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;">${getLayerName(l)}</span>
+            var lockCls = l.locked ? ' is-active-state' : '';
+            li.innerHTML = `<div class="layer-leading">
+                <span class="drag-handle" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                <div class="layer-thumb layer-thumb-${l.type}">${thumb}</div>
+                <div class="layer-info">
+                    <span class="layer-name-text">${escapeHtml(getLayerDisplayTitle(l))}</span>
+                    <span class="layer-type-label">${getLayerTypeLabel(l)}</span>
+                </div>
             </div>
             <div class="layer-actions">
                 <button class="l-btn${eyeCls}" title="${hidden ? '显示图层' : '隐藏图层'}" onclick="event.stopPropagation();toggleLayerVisible('${l.id}')">${eyeIcon}</button>
-                <button class="l-btn" title="${l.locked ? '解锁' : '锁定'}" onclick="event.stopPropagation();toggleLock('${l.id}')">${lockIcon}</button>
+                <button class="l-btn${lockCls}" title="${l.locked ? '解锁' : '锁定'}" onclick="event.stopPropagation();toggleLock('${l.id}')">${lockIcon}</button>
                 <button class="l-btn layer-del-btn" title="删除" onclick="event.stopPropagation();deleteLayer('${l.id}')">${ICON_TRASH}</button>
             </div>`;
             listUI.appendChild(li);
