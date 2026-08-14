@@ -6,7 +6,7 @@
   <title>GCC Design</title>
   <script src="./tools/vendor/supabase-js.js?v=20260805-unified-v76"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="./styles.css?v=20260814-sidebar-static-v260">
+  <link rel="stylesheet" href="./styles.css?v=20260814-jimeng-tunnel-fix-v263">
   <style>
     .library-control-strip {
       margin-left: 0 !important;
@@ -837,10 +837,42 @@
       background: #1e293b;
       color: #fff;
     }
+    #multi-select-bar .bar-move {
+      background: #f59e0b;
+      color: #fff;
+    }
+    #multi-select-bar .bar-move:hover {
+      background: #d97706;
+    }
+    /* 移动分组弹窗 */
+    .move-group-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .move-group-option {
+      padding: 8px 16px;
+      border-radius: 999px;
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      color: #334155;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .move-group-option:hover {
+      border-color: #94a3b8;
+    }
+    .move-group-option.active {
+      border-color: #0f172a;
+      background: #0f172a;
+      color: #fff;
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="./config.js?v=20260805-unified-v76"></script>
-    <script src="./app.js?v=20260814-sidebar-static-v260" defer></script>
+    <script src="./app.js?v=20260814-jimeng-tunnel-fix-v263" defer></script>
 </head>
 <body>
   <main id="login-view" class="login-view">

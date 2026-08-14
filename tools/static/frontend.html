@@ -411,16 +411,19 @@
         .asset-bookmark-summary .asset-pack-badge { color:#2563eb; }
         .asset-bookmark-summary .asset-pack-count { border-left-color:rgba(37,99,235,.18); }
         .asset-bookmark-empty { display:flex; align-items:center; justify-content:center; width:100%; height:100%; min-height:72px; color:#94a3b8; font-size:11px; font-weight:750; background:#f8fafc; }
-        .template-bookmark-hover { width:300px; padding:14px; }
-        .template-bookmark-hover-title { font-size:13px; font-weight:850; color:var(--text-main); margin-bottom:9px; }
-        .template-bookmark-hover-note { font-size:10px; color:var(--text-sub); margin-bottom:9px; line-height:1.45; }
-        .template-bookmark-hover-list { display:grid; gap:6px; }
-        .template-bookmark-hover-row { display:grid; grid-template-columns:32px minmax(0,1fr); column-gap:8px; align-items:center; min-height:52px; padding:7px 8px; border-radius:9px; background:#f7f8fa; }
-        .template-bookmark-size-icon { width:32px; height:28px; display:flex; align-items:center; justify-content:center; color:#2563eb; }
+        .template-bookmark-hover { width:240px !important; padding:14px 14px 12px !important; background:rgba(255,255,255,0.72) !important; backdrop-filter:blur(20px) saturate(160%) !important; -webkit-backdrop-filter:blur(20px) saturate(160%) !important; border:1px solid rgba(255,255,255,0.6) !important; border-radius:18px !important; box-shadow:0 16px 48px rgba(0,0,0,0.1), 0 4px 16px rgba(0,0,0,0.06) !important; }
+        .template-bookmark-hover-title { font-size:13px; font-weight:800; color:var(--text-main); margin-bottom:12px; letter-spacing:-0.02em; }
+        .template-bookmark-hover-note { display:none; }
+        .template-bookmark-hover-list { display:flex; flex-direction:column; gap:6px; }
+        .template-bookmark-hover-row { display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:8px; padding:7px 10px; border-radius:10px; background:#ffffff; border:1px solid rgba(0,0,0,0.04); transition:all 0.15s ease; }
+        .template-bookmark-hover-row:hover { background:#f8fafc; border-color:rgba(37,99,235,0.1); transform:translateY(-1px); box-shadow:0 2px 8px rgba(0,0,0,0.04); }
+        .template-bookmark-size-icon { width:28px; height:auto; display:flex; align-items:center; justify-content:center; color:#2563eb; flex-shrink:0; }
         .template-bookmark-size-icon i { display:block; border:1.5px solid currentColor; border-radius:2px; box-sizing:border-box; }
-        .template-bookmark-member-name { font-size:11px; font-weight:850; color:var(--text-main); line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .template-bookmark-ratio { font-size:11px; font-weight:850; color:var(--text-main); line-height:1.25; }
-        .template-bookmark-size { margin-top:2px; font-size:10px; font-weight:700; color:var(--text-sub); line-height:1.25; }
+        .template-bookmark-lang-badge { position:absolute; bottom:-4px; right:-5px; background:#17191d; color:#fff; font-size:8px; font-weight:900; line-height:1; padding:2px 4px; border-radius:4px; letter-spacing:0.02em; pointer-events:none; }
+        .template-bookmark-lang-tags { display:flex; gap:3px; align-items:center; }
+        .template-bookmark-lang-tag { font-size:8px; font-weight:800; color:#2563eb; background:#eef2ff; padding:2px 5px; border-radius:4px; line-height:1; letter-spacing:0.01em; }
+        .template-bookmark-ratio { font-size:11px; font-weight:800; color:var(--text-main); line-height:1.3; }
+        .template-bookmark-size { font-size:10px; font-weight:500; color:var(--text-sub); line-height:1.3; white-space:nowrap; }
         .asset-empty { grid-column: 1 / -1; color: var(--text-sub); font-size: 12px; text-align: center; padding: 14px 8px; border: 1px dashed var(--border); border-radius: 10px; background: #FFFFFF; }
         .asset-hover-preview { position: fixed; z-index: 900; width: 465px; padding: 16px; border: 1px solid rgba(16,17,20,0.12); border-radius: 18px; background: rgba(255,255,255,0.96); box-shadow: 0 24px 64px rgba(16,17,20,0.18); opacity: 0; transform: translateY(6px) scale(0.98); transition: opacity 0.14s ease, transform 0.14s ease; pointer-events: none; backdrop-filter: blur(10px); }
         .asset-hover-preview.show { opacity: 1; transform: translateY(0) scale(1); }
@@ -1886,6 +1889,19 @@
         .layer-context-menu button[hidden],
         .asset-context-menu button[hidden] { display: none !important; }
 
+        /* 组件卡片多选（移动分组） */
+        .asset-item.multi-selectable { position: relative; }
+        .asset-multi-check {
+            position: absolute; top: 6px; left: 6px; z-index: 6;
+            width: 18px; height: 18px; border-radius: 5px;
+            border: 1.5px solid #cbd5e1; background: rgba(255,255,255,.92);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 800; color: #fff;
+            pointer-events: none;
+        }
+        .asset-item.multi-selected .asset-multi-check { background: #0d9488; border-color: #0d9488; }
+        .asset-item.multi-selected { outline: 2px solid #0d9488; outline-offset: -2px; }
+
         .custom-board-menu-item {
             display: none !important;
         }
@@ -2770,7 +2786,7 @@
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260813-static-ui-v12">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260814-bookmark-picker-v13">
 </head>
 <body>
 
@@ -2924,6 +2940,7 @@
 <div class="module-card asset-library-card">
             <div class="card-title">
                 <div class="card-title-wrap">资产库</div>
+                <button type="button" class="btn-icon" id="asset-multi-select-btn" onclick="toggleAssetMultiSelect()" title="多选移动分组" style="padding:2px 8px;font-size:12px;">多选</button>
                 <button type="button" class="btn-icon" id="refresh-asset-btn" onclick="refreshAssetLibrary()" title="刷新资产库" style="padding:2px 6px;font-size:13px;">↻</button>
             </div>
             <div class="asset-tabs">
@@ -2933,6 +2950,11 @@
             </div>
             <div class="asset-search-wrap"><input type="text" class="asset-search-input" id="asset-search-input" placeholder="搜索名称、比例或尺寸…" autocomplete="off" oninput="onAssetSearch()"><button type="button" class="asset-search-clear" id="asset-search-clear" onclick="clearAssetSearch()" hidden>✕</button></div>
             <div id="diy-subtag-row" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"></div>
+            <div id="asset-multi-select-bar" style="display:none;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">
+                <span id="asset-ms-count" style="font-size:12px;color:#64748b;font-weight:650;">已选 0 项</span>
+                <button type="button" class="filter-capsule" onclick="openAssetMoveGroupFromBar()" style="font-size:11px;padding:2px 10px;background:#f59e0b;color:#fff;border-color:#f59e0b;">移动分组</button>
+                <button type="button" class="filter-capsule" onclick="exitAssetMultiSelect()" style="font-size:11px;padding:2px 10px;">取消</button>
+            </div>
             <div class="asset-list" id="asset-list-ui"></div>
 
         </div>
@@ -2945,6 +2967,8 @@
         <button type="button" id="asset-context-set-lang-en" onclick="setAssetContextLanguage('EN'); closeAssetContextMenu();" hidden>设为 EN</button>
         <button type="button" id="asset-context-set-lang-ar" onclick="setAssetContextLanguage('AR'); closeAssetContextMenu();" hidden>设为 AR</button>
         <button type="button" id="asset-context-delete" onclick="deleteAssetContextItem(); closeAssetContextMenu();" hidden>删除</button>
+        <button type="button" id="asset-context-multi-select" onclick="enterAssetMultiSelect(); closeAssetContextMenu();" hidden>多选</button>
+        <button type="button" id="asset-context-move-group" onclick="openAssetContextMoveGroup();" hidden>移动分组</button>
     </div>
     <label class="asset-pane-collapse-handle" for="asset-pane-collapse-toggle" title="折叠资产库" aria-label="折叠或展开资产库"></label>
 <div class="left-pane" id="left-pane">
@@ -3189,7 +3213,7 @@
     let selectedAISkill = 'generate';
     let aiGenerationSize = '1:1';
     let aiProvider = 'jimeng';
-    const JIMENG_API_URL = 'https://threshold-labor-holly-bronze.trycloudflare.com';
+    const JIMENG_API_URL = 'https://attributes-royalty-margin-silicon.trycloudflare.com';
     let jimengApiReady = false;
     let jimengSessionId = '';
     let jimengCookies = {};
@@ -7755,6 +7779,7 @@
         currentAssetTab = tab;
         diySubtagFilter = '全部';
         diySelectedSubtag = '全部';
+        if (tab !== 'component' && assetMultiSelect) { assetMultiSelect = false; assetSelectedIds.clear(); updateAssetMultiSelectBar(); }
         document.querySelectorAll('.asset-tab').forEach(b => b.classList.toggle('active', b.dataset.assetTab === tab));
         // 更新搜索框占位文字
         var searchInput = document.getElementById('asset-search-input');
@@ -8510,6 +8535,11 @@
         layout: ['全部', '社媒物料', 'C端物料'],
         component: ['全部', '标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材', '组合']
     };
+    // 「移动分组」功能范围：仅这 5 个组件子分组可移动（背景/LOGO/字体 不参与）。
+    var MOVEABLE_COMPONENT_SUBTAGS = ['标签', '品牌圆弧', 'KIKI', '其他素材', '组合'];
+    var assetMultiSelect = false;
+    var assetSelectedIds = new Set();
+    var assetMoveTargetIds = [];
     function getColorPaletteCards() {
         if(!cloudColorPaletteSnapshot.loaded) return [];
         const tagCards = cloudColorPaletteSnapshot.tagColorPresets.filter(function(preset) { return preset?._cloudSaved === true; }).map(function(preset) {
@@ -8751,8 +8781,16 @@
         const item = document.createElement('div'); item.className = `asset-item ${current ? 'current' : ''} ${type === 'font' ? 'font-asset-card' : ''} ${isTemplateAsset ? 'template-preview-card' : ''}`;
         if (asset?.cloudId) item.dataset.assetId = asset.cloudId;
         else if (asset?.id) item.dataset.assetId = asset.id;
+        if (assetMultiSelect && isMoveableComponent(asset)) {
+            item.classList.add('multi-selectable');
+            var _msCheck = document.createElement('span');
+            _msCheck.className = 'asset-multi-check';
+            if (assetSelectedIds.has(item.dataset.assetId)) { _msCheck.textContent = '✓'; item.classList.add('multi-selected'); }
+            item.appendChild(_msCheck);
+        }
         const canUseAsAIReference = type === 'reference' || (type === 'logo' && getLogoAssetType(asset) === 'image' && !!asset?.src);
         item.onclick = () => {
+            if (assetMultiSelect && isMoveableComponent(asset)) { toggleAssetMultiCard(item.dataset.assetId); return; }
             if(item._isDragging) return;
             if (onRestore) return;
             try {
@@ -8939,6 +8977,10 @@
         const isLanguageSettable = target?.type === 'layout' || target?.type === 'pack';
         if(setLangEnButton) setLangEnButton.hidden = !isLanguageSettable;
         if(setLangArButton) setLangArButton.hidden = !isLanguageSettable;
+        const moveGroupButton = document.getElementById('asset-context-move-group');
+        if(moveGroupButton) moveGroupButton.hidden = !isMoveableComponent(target?.asset);
+        const multiSelectButton = document.getElementById('asset-context-multi-select');
+        if(multiSelectButton) multiSelectButton.hidden = !isMoveableComponent(target?.asset);
         menu.style.left = event.clientX + 'px';
         menu.style.top = event.clientY + 'px';
         menu.classList.add('open');
@@ -8977,6 +9019,135 @@
         refreshTemplateBookmarkCoversForTemplate(cloudId, true);
         renderAssetLibrary();
         showToast(lang === 'EN' ? '已标记为 EN' : (lang === 'AR' ? '已标记为 AR' : '已取消语言标记'));
+    }
+    // ===== 组件移动分组（单件 + 多选批量） =====
+    function getComponentSubTag(item) {
+        if (!item) return '';
+        if (item.subTag || item._subTag) return item.subTag || item._subTag;
+        if (item.tags && Array.isArray(item.tags)) {
+            var t = item.tags;
+            if (t.includes('标签')) return '标签';
+            if (t.includes('背景')) return '背景';
+            if (t.includes('品牌圆弧')) return '品牌圆弧';
+            if (t.includes('LOGO')) return 'LOGO';
+            if (t.includes('KIKI')) return 'KIKI';
+            if (t.includes('字体')) return '字体';
+            if (t.includes('组合')) return '组合';
+            if (t.includes('其他素材')) return '其他素材';
+        }
+        return '';
+    }
+    function isMoveableComponent(item) {
+        return MOVEABLE_COMPONENT_SUBTAGS.indexOf(getComponentSubTag(item)) !== -1;
+    }
+    function toggleAssetMultiSelect() {
+        if (assetMultiSelect) exitAssetMultiSelect();
+        else enterAssetMultiSelect();
+    }
+    function enterAssetMultiSelect() {
+        if (currentAssetTab !== 'component') { switchAssetTab('component'); }
+        assetMultiSelect = true;
+        assetSelectedIds.clear();
+        updateAssetMultiSelectBar();
+        renderAssetLibrary();
+    }
+    function exitAssetMultiSelect() {
+        assetMultiSelect = false;
+        assetSelectedIds.clear();
+        updateAssetMultiSelectBar();
+        if (currentAssetTab === 'component') renderAssetLibrary();
+    }
+    function toggleAssetMultiCard(assetId) {
+        if (!assetMultiSelect || !assetId) return;
+        if (assetSelectedIds.has(assetId)) assetSelectedIds.delete(assetId);
+        else assetSelectedIds.add(assetId);
+        var card = null;
+        try { card = document.querySelector('.asset-item[data-asset-id="' + CSS.escape(assetId) + '"]'); } catch(e) { card = null; }
+        if (card) {
+            card.classList.toggle('multi-selected', assetSelectedIds.has(assetId));
+            var check = card.querySelector('.asset-multi-check');
+            if (check) check.textContent = assetSelectedIds.has(assetId) ? '✓' : '';
+        }
+        updateAssetMultiSelectBar();
+    }
+    function updateAssetMultiSelectBar() {
+        var bar = document.getElementById('asset-multi-select-bar');
+        if (bar) bar.style.display = (assetMultiSelect && currentAssetTab === 'component') ? 'flex' : 'none';
+        var count = document.getElementById('asset-ms-count');
+        if (count) count.textContent = '已选 ' + assetSelectedIds.size + ' 项';
+        var btn = document.getElementById('asset-multi-select-btn');
+        if (btn) btn.textContent = assetMultiSelect ? '完成' : '多选';
+    }
+    function openAssetMoveGroupFromBar() {
+        openAssetMoveGroupDialog(Array.from(assetSelectedIds));
+    }
+    function openAssetContextMoveGroup() {
+        var asset = assetContextTarget?.asset;
+        var id = asset ? (asset.cloudId || asset.id) : null;
+        closeAssetContextMenu();
+        if (id) openAssetMoveGroupDialog([id]);
+    }
+    function ensureAssetMoveGroupDialog() {
+        var overlay = document.getElementById('asset-move-group-dialog');
+        if (overlay) return overlay;
+        overlay = document.createElement('div');
+        overlay.id = 'asset-move-group-dialog';
+        overlay.style.cssText = 'display:none;position:fixed;inset:0;z-index:10011;align-items:center;justify-content:center;padding:24px;background:rgba(17,24,39,.34);backdrop-filter:blur(4px);';
+        document.body.appendChild(overlay);
+        return overlay;
+    }
+    function closeAssetMoveGroupDialog() {
+        assetMoveTargetIds = [];
+        var overlay = document.getElementById('asset-move-group-dialog');
+        if (overlay) { overlay.style.display = 'none'; overlay.replaceChildren(); }
+    }
+    function openAssetMoveGroupDialog(ids) {
+        assetMoveTargetIds = (ids || []).filter(Boolean);
+        if (!assetMoveTargetIds.length) return;
+        var overlay = ensureAssetMoveGroupDialog();
+        overlay.replaceChildren();
+        overlay.style.display = 'flex';
+        var dialog = document.createElement('div');
+        dialog.style.cssText = 'width:min(360px,calc(100vw - 36px));display:flex;flex-direction:column;background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:16px;box-shadow:0 28px 80px rgba(15,23,42,.24);overflow:hidden;';
+        var header = document.createElement('div');
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e5e7eb;';
+        var heading = document.createElement('div');
+        heading.textContent = '移动分组';
+        heading.style.cssText = 'font-size:16px;font-weight:850;color:#17191d;';
+        var close = document.createElement('button');
+        close.type = 'button'; close.textContent = '×'; close.setAttribute('aria-label', '关闭');
+        close.style.cssText = 'width:30px;height:30px;border:0;border-radius:9px;background:transparent;color:#667085;font-size:26px;line-height:1;cursor:pointer;';
+        close.onclick = function() { closeAssetMoveGroupDialog(); };
+        header.append(heading, close);
+        var body = document.createElement('div');
+        body.style.cssText = 'padding:16px 18px;';
+        var tip = document.createElement('div');
+        tip.textContent = '将 ' + assetMoveTargetIds.length + ' 个组件移动到：';
+        tip.style.cssText = 'margin-bottom:12px;color:#667085;font-size:13px;';
+        body.appendChild(tip);
+        var opts = document.createElement('div');
+        opts.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;';
+        MOVEABLE_COMPONENT_SUBTAGS.forEach(function(tag) {
+            var b = document.createElement('button');
+            b.type = 'button'; b.textContent = tag;
+            b.style.cssText = 'padding:8px 16px;border-radius:999px;border:1px solid #e2e8f0;background:#fff;color:#334155;font-size:13px;cursor:pointer;';
+            b.onmouseenter = function() { b.style.borderColor = '#0d9488'; b.style.color = '#0d9488'; };
+            b.onmouseleave = function() { b.style.borderColor = '#e2e8f0'; b.style.color = '#334155'; };
+            b.onclick = function() { confirmAssetMoveGroup(tag); };
+            opts.appendChild(b);
+        });
+        body.appendChild(opts);
+        dialog.append(header, body);
+        overlay.appendChild(dialog);
+        overlay.onclick = function(event) { if (event.target === overlay) closeAssetMoveGroupDialog(); };
+    }
+    function confirmAssetMoveGroup(tag) {
+        var ids = assetMoveTargetIds.slice();
+        if (!ids.length || !tag) return;
+        notifyParent({ type: 'vf:move-component-group', ids: ids, tag: tag });
+        closeAssetMoveGroupDialog();
+        exitAssetMultiSelect();
+        showToast('已移动 ' + ids.length + ' 个组件到「' + tag + '」');
     }
     // ===== 模板快捷书签 =====
     // 书签仅保存独立模板的稳定 ID；不会保存或复制任何图层，因此和旧的多画板套组互不影响。
@@ -9108,16 +9279,22 @@
         }
         return null;
     }
-    function appendTemplateBookmarkSizeIcon(parent, info) {
+    function appendTemplateBookmarkSizeIcon(parent, info, langTag) {
         const icon = document.createElement('span');
         icon.className = 'template-bookmark-size-icon';
         const frame = document.createElement('i');
         const width = Math.max(1, Number(info?.width) || 1);
         const height = Math.max(1, Number(info?.height) || 1);
-        const scale = Math.min(20 / width, 17 / height);
+        const scale = Math.min(22 / width, 19 / height);
         frame.style.width = Math.max(5, Math.round(width * scale)) + 'px';
         frame.style.height = Math.max(5, Math.round(height * scale)) + 'px';
         icon.appendChild(frame);
+        if (langTag) {
+            const badge = document.createElement('span');
+            badge.className = 'template-bookmark-lang-badge';
+            badge.textContent = langTag;
+            icon.appendChild(badge);
+        }
         parent.appendChild(icon);
     }
     function showTemplateBookmarkHover(anchor, bookmark) {
@@ -9132,30 +9309,61 @@
         note.textContent = '关联模板尺寸';
         const list = document.createElement('div');
         list.className = 'template-bookmark-hover-list';
-        const members = getLiveTemplateBookmarkMembers(bookmark);
+        const members = getLiveTemplateBookmarkMembers(bookmark).sort(function(a, b) {
+            const langA = templateLanguage(a.template);
+            const langB = templateLanguage(b.template);
+            if (langA === 'AR' && langB !== 'AR') return -1;
+            if (langA !== 'AR' && langB === 'AR') return 1;
+            return 0;
+        });
         if (!members.length) {
             const empty = document.createElement('div');
             empty.className = 'asset-pack-loading-note';
             empty.textContent = '暂无可用关联模板';
             list.appendChild(empty);
         } else {
+            // 按尺寸分组，收集每个尺寸对应的所有语言类型
+            const sizeMap = new Map();
             members.forEach(function(member) {
+                const info = templateBookmarkDisplayInfo(member.ref, member.template);
+                if (!info) return;
+                const key = info.width + 'x' + info.height;
+                if (!sizeMap.has(key)) {
+                    sizeMap.set(key, { info: info, langs: new Set() });
+                }
+                const lang = templateLanguage(member.template);
+                if (lang) sizeMap.get(key).langs.add(lang);
+            });
+            sizeMap.forEach(function(entry) {
                 const row = document.createElement('div');
                 row.className = 'template-bookmark-hover-row';
-                const info = templateBookmarkDisplayInfo(member.ref, member.template);
-                appendTemplateBookmarkSizeIcon(row, info);
-                const copy = document.createElement('div');
-                const name = document.createElement('div');
-                name.className = 'template-bookmark-member-name';
-                name.textContent = member.template.name || member.ref.name || '未命名模板';
+                appendTemplateBookmarkSizeIcon(row, entry.info, null);
+                const text = document.createElement('div');
                 const ratio = document.createElement('div');
                 ratio.className = 'template-bookmark-ratio';
-                ratio.textContent = info?.ratio || '读取尺寸中';
+                ratio.textContent = entry.info?.ratio || '—';
                 const pixels = document.createElement('div');
                 pixels.className = 'template-bookmark-size';
-                pixels.textContent = info ? (info.width + ' × ' + info.height + ' px') : '实际尺寸读取中';
-                copy.append(name, ratio, pixels);
-                row.append(copy);
+                pixels.textContent = entry.info ? (entry.info.width + ' × ' + entry.info.height + ' px') : '—';
+                text.append(ratio, pixels);
+                row.append(text);
+                if (entry.langs.size > 0) {
+                    const tags = document.createElement('div');
+                    tags.className = 'template-bookmark-lang-tags';
+                    if (entry.langs.has('EN')) {
+                        const tag = document.createElement('span');
+                        tag.className = 'template-bookmark-lang-tag';
+                        tag.textContent = 'EN';
+                        tags.appendChild(tag);
+                    }
+                    if (entry.langs.has('AR')) {
+                        const tag = document.createElement('span');
+                        tag.className = 'template-bookmark-lang-tag';
+                        tag.textContent = 'AR';
+                        tags.appendChild(tag);
+                    }
+                    row.appendChild(tags);
+                }
                 list.appendChild(row);
             });
         }
@@ -9168,6 +9376,7 @@
         if (overlay) return overlay;
         overlay = document.createElement('div');
         overlay.id = 'template-bookmark-dialog';
+        overlay.className = 'template-bookmark-overlay';
         overlay.style.cssText = 'display:none;position:fixed;inset:0;z-index:10010;align-items:center;justify-content:center;padding:24px;background:rgba(17,24,39,.34);backdrop-filter:blur(4px);';
         document.body.appendChild(overlay);
         return overlay;
@@ -9181,22 +9390,29 @@
         overlay.replaceChildren();
         overlay.style.display = 'flex';
         const dialog = document.createElement('div');
-        dialog.style.cssText = 'width:min(620px,calc(100vw - 36px));max-height:min(700px,calc(100vh - 48px));display:flex;flex-direction:column;overflow:hidden;background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:20px;box-shadow:0 28px 80px rgba(15,23,42,.24);';
+        dialog.className = 'template-bookmark-dialog-card';
+        dialog.style.cssText = 'width:min(800px,calc(100vw - 36px));max-height:min(720px,calc(100vh - 48px));display:flex;flex-direction:column;overflow:hidden;background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:24px;box-shadow:0 24px 80px rgba(15,23,42,0.12), 0 8px 24px rgba(15,23,42,0.06);';
         const header = document.createElement('div');
-        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px;padding:19px 22px;border-bottom:1px solid #e5e7eb;';
+        header.className = 'template-bookmark-dialog-header';
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 24px;border-bottom:1px solid #f3f4f6;';
         const heading = document.createElement('div');
         heading.textContent = title;
         heading.className = 'template-bookmark-dialog-heading';
-        heading.style.cssText = 'font-size:18px;font-weight:900;color:#17191d;';
+        heading.style.cssText = 'font-size:18px;font-weight:800;color:#111827;letter-spacing:-0.02em;';
         const close = document.createElement('button');
+        close.className = 'template-bookmark-dialog-close';
         close.type = 'button'; close.textContent = '×'; close.setAttribute('aria-label', '关闭');
-        close.style.cssText = 'width:30px;height:30px;border:0;border-radius:9px;background:transparent;color:#667085;font-size:28px;line-height:1;cursor:pointer;';
+        close.style.cssText = 'width:32px;height:32px;border:0;border-radius:10px;background:transparent;color:#9ca3af;font-size:24px;line-height:1;cursor:pointer;transition:all 0.15s ease;';
+        close.onmouseenter = function() { close.style.background = '#f3f4f6'; close.style.color = '#374151'; };
+        close.onmouseleave = function() { close.style.background = 'transparent'; close.style.color = '#9ca3af'; };
         close.onclick = closeTemplateBookmarkDialog;
         header.append(heading, close);
         const body = document.createElement('div');
-        body.style.cssText = 'overflow:auto;padding:18px 22px 22px;';
+        body.className = 'template-bookmark-dialog-body';
+        body.style.cssText = 'overflow:auto;padding:20px 24px 24px;';
         if (description) {
             const intro = document.createElement('div');
+            intro.className = 'template-bookmark-dialog-intro';
             intro.textContent = description;
             intro.style.cssText = 'margin-bottom:15px;color:#667085;font-size:13px;line-height:1.55;';
             body.appendChild(intro);
@@ -9280,39 +9496,62 @@
             return;
         }
         const allMembers = getLiveTemplateBookmarkMembers(bookmark);
-        const shell = createTemplateBookmarkDialogShell(bookmark.name || '模板编组', '点击预览图打开模板；右键可重命名 / 释放到组外 / 删除模板 / 设为 EN 或 AR。未标记的模板会同时出现在 EN 与 AR 分组。');
-        shell.dialog.style.width = 'min(760px,calc(100vw - 36px))';
+        const shell = createTemplateBookmarkDialogShell(bookmark.name || '模板编组', '选择模板即可打开。语言标签控制分组和书签封面，未标记模板会显示在两个分组。');
+        shell.dialog.classList.add('bookmark-picker-dialog');
+        shell.body.classList.add('bookmark-picker-body');
         // 头部工具栏：EN/AR 滑块 + 重命名书签 + 解散书签
         const toolbar = document.createElement('div');
-        toolbar.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;';
+        toolbar.className = 'bookmark-picker-toolbar';
+        const filterGroup = document.createElement('div');
+        filterGroup.className = 'bookmark-picker-filter';
+        const filterLabel = document.createElement('span');
+        filterLabel.className = 'bookmark-picker-filter-label';
+        filterLabel.textContent = '语言';
         const langToggle = document.createElement('div');
-        langToggle.style.cssText = 'display:inline-flex;border:1px solid #d0d5dd;border-radius:9px;overflow:hidden;';
+        langToggle.className = 'bookmark-language-tabs';
         const langEnBtn = document.createElement('button');
         const langArBtn = document.createElement('button');
-        function langBtnCss(active) {
-            return 'padding:6px 14px;border:none;font-size:12px;font-weight:700;cursor:pointer;' + (active ? 'background:#111827;color:#fff;' : 'background:#fff;color:#6b7280;');
-        }
         function buildLangBtn(btn, label, value) {
-            btn.type = 'button'; btn.textContent = label;
+            btn.type = 'button';
+            btn.className = 'bookmark-language-tab';
+            btn.dataset.label = label;
             btn.onclick = function() { bookmarkLanguageFilter = value; renderGrid(bookmarkLanguageFilter); };
             langToggle.appendChild(btn);
         }
         buildLangBtn(langEnBtn, 'EN', 'EN');
         buildLangBtn(langArBtn, 'AR', 'AR');
-        function refreshLangToggle() {
-            langEnBtn.style.cssText = langBtnCss(bookmarkLanguageFilter === 'EN');
-            langArBtn.style.cssText = langBtnCss(bookmarkLanguageFilter === 'AR');
+        function memberCountForLanguage(lang) {
+            return allMembers.filter(function(member) {
+                const memberLang = templateLanguage(member.template);
+                return !memberLang || memberLang === lang;
+            }).length;
         }
+        function refreshLangToggle() {
+            langEnBtn.classList.toggle('active', bookmarkLanguageFilter === 'EN');
+            langArBtn.classList.toggle('active', bookmarkLanguageFilter === 'AR');
+            langEnBtn.setAttribute('aria-pressed', bookmarkLanguageFilter === 'EN' ? 'true' : 'false');
+            langArBtn.setAttribute('aria-pressed', bookmarkLanguageFilter === 'AR' ? 'true' : 'false');
+            langEnBtn.textContent = 'EN ' + memberCountForLanguage('EN');
+            langArBtn.textContent = 'AR ' + memberCountForLanguage('AR');
+        }
+        filterGroup.append(filterLabel, langToggle);
+        const resultCount = document.createElement('span');
+        resultCount.className = 'bookmark-picker-result-count';
+        const actions = document.createElement('div');
+        actions.className = 'bookmark-picker-actions';
         const renameBookmarkBtn = document.createElement('button');
-        renameBookmarkBtn.type = 'button'; renameBookmarkBtn.textContent = '重命名书签'; renameBookmarkBtn.className = 'btn btn-outline';
+        renameBookmarkBtn.className = 'bookmark-picker-action';
+        renameBookmarkBtn.type = 'button'; renameBookmarkBtn.textContent = '重命名';
         renameBookmarkBtn.onclick = function() { renameBookmarkInPicker(bookmark); };
         const dissolveBtn = document.createElement('button');
-        dissolveBtn.type = 'button'; dissolveBtn.textContent = '解散书签'; dissolveBtn.className = 'btn btn-outline';
-        dissolveBtn.style.cssText = 'color:#dc2626;border-color:#fca5a5;';
+        dissolveBtn.className = 'bookmark-picker-action danger';
+        dissolveBtn.type = 'button'; dissolveBtn.textContent = '解散';
         dissolveBtn.onclick = function() { closeTemplateBookmarkDialog(); dissolveTemplateBookmark(bookmark); };
-        toolbar.append(langToggle, renameBookmarkBtn, dissolveBtn);
+        actions.append(renameBookmarkBtn, dissolveBtn);
+        toolbar.append(filterGroup, resultCount, actions);
         shell.body.appendChild(toolbar);
         const grid = document.createElement('div');
+        grid.className = 'bookmark-picker-grid-wrap';
         shell.body.appendChild(grid);
         function renderGrid(filterLang) {
             refreshLangToggle();
@@ -9321,39 +9560,53 @@
                 const l = templateLanguage(m.template);
                 return !l || l === filterLang; // 未标记的模板两边都显示
             });
+            resultCount.textContent = '显示 ' + members.length + ' 个模板';
             if (!members.length) {
                 const empty = document.createElement('div');
-                empty.textContent = allMembers.length ? '该分组暂无模板（未标记的模板会同时出现在 EN 与 AR 下）' : '暂无可用关联模板';
-                empty.style.cssText = 'padding:18px;border-radius:12px;background:#f8fafc;color:#667085;text-align:center;font-size:13px;font-weight:700;';
+                empty.className = 'bookmark-picker-empty';
+                empty.textContent = allMembers.length ? '该语言分组还没有模板' : '暂无可用关联模板';
                 grid.appendChild(empty);
                 return;
             }
-            const list = document.createElement('div'); list.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;';
+            const list = document.createElement('div');
+            list.className = 'bookmark-template-grid';
             members.forEach(function(member) {
                 const template = member.template;
                 const info = templateBookmarkDisplayInfo(member.ref, template);
                 const card = document.createElement('div');
-                card.style.cssText = 'cursor:pointer;';
-                // 大图预览（点击打开）
+                card.className = 'bookmark-template-card';
+                card.tabIndex = 0;
+                card.setAttribute('role', 'button');
+                card.setAttribute('aria-label', '打开模板 ' + (template.name || '未命名模板'));
+                // 大图预览
                 const thumb = document.createElement('div');
-                thumb.style.cssText = 'border-radius:12px;overflow:hidden;background:#f7f8fa;position:relative;box-shadow:inset 0 0 0 1px #eef0f3;';
-                if (info && info.width && info.height) thumb.style.aspectRatio = info.width + ' / ' + info.height;
-                else thumb.style.aspectRatio = '3 / 4';
+                thumb.className = 'bookmark-template-thumb';
                 renderAssetPreview(thumb, { type: 'layout', asset: template, img: template.previewUrl || '' });
                 const lang = templateLanguage(template);
                 if (lang) { const badge = createLangBadge(lang, true); if (badge) thumb.appendChild(badge); }
                 thumb.title = '打开 ' + (template.name || '');
                 card.appendChild(thumb);
-                // 名称 + 尺寸
+                const meta = document.createElement('div');
+                meta.className = 'bookmark-template-meta';
                 const name = document.createElement('div');
-                name.textContent = template.name || member.ref.name || '未命名模板';
-                name.style.cssText = 'margin-top:8px;font-size:13px;font-weight:850;color:#17191d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-                const size = document.createElement('div');
-                size.textContent = info ? (info.ratio + ' · ' + info.width + ' × ' + info.height + ' px') : '实际尺寸读取中';
-                size.style.cssText = 'margin-top:3px;font-size:11px;color:#667085;font-weight:650;';
-                card.append(name, size);
+                name.className = 'bookmark-template-name';
+                name.textContent = template.name || '未命名模板';
+                const details = document.createElement('div');
+                details.className = 'bookmark-template-details';
+                const size = document.createElement('span');
+                size.textContent = info ? (info.ratio + '  ' + info.width + ' × ' + info.height + ' px') : '正在读取实际尺寸';
+                const manage = document.createElement('button');
+                manage.type = 'button';
+                manage.className = 'bookmark-template-manage';
+                manage.textContent = '管理';
+                manage.setAttribute('aria-label', '管理模板 ' + (template.name || '未命名模板'));
+                manage.onclick = function(e) { e.preventDefault(); e.stopPropagation(); showBookmarkMemberContextMenu(e, bookmark, member, template, name); };
+                details.append(size, manage);
+                meta.append(name, details);
+                card.append(meta);
                 // 点击打开、右键菜单
                 card.onclick = function() { closeTemplateBookmarkDialog(); applyLayoutPreset(template.id); };
+                card.onkeydown = function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); } };
                 card.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); showBookmarkMemberContextMenu(e, bookmark, member, template, name); };
                 list.appendChild(card);
             });
@@ -9368,6 +9621,7 @@
         if (!heading) return;
         const oldName = bookmark.name || '';
         const input = document.createElement('input');
+        input.className = 'template-bookmark-rename-input';
         input.type = 'text'; input.value = oldName;
         input.style.cssText = 'font-size:18px;font-weight:900;color:#17191d;border:1px solid #0d9488;border-radius:6px;padding:4px 8px;width:100%;font-family:inherit;background:#fff;';
         heading.replaceWith(input);
@@ -9391,6 +9645,7 @@
     function beginBookmarkMemberRename(bookmark, member, template, nameEl) {
         const oldName = template.name || member.ref.name || '';
         const input = document.createElement('input');
+        input.className = 'bookmark-template-name-input';
         input.type = 'text'; input.value = oldName;
         input.style.cssText = 'width:100%;border:1px solid #0d9488;border-radius:4px;padding:2px 6px;font-size:12px;font-weight:680;color:var(--text-main);font-family:inherit;background:#fff;';
         nameEl.replaceWith(input);

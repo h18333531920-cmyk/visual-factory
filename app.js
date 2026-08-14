@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260814-production-unified-ui-v260';
+const TOOL_UI_VERSION = '20260814-jimeng-tunnel-fix-v263';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -157,6 +157,8 @@ const TOOL_UI_VERSION = '20260814-production-unified-ui-v260';
       }
     }
   };
+  // 「移动分组」功能范围：仅这 5 个组件子分组可移动（背景/LOGO/字体 不参与）。
+  const MOVEABLE_COMPONENT_SUBTAGS = ['标签', '品牌圆弧', 'KIKI', '其他素材', '组合'];
   const state = {
     lang: localStorage.getItem('vf_lang') || 'zh',
     supabase: null,
@@ -1030,12 +1032,14 @@ const TOOL_UI_VERSION = '20260814-production-unified-ui-v260';
         ${renderBatchEditModal()}
         ${renderLibraryDetailModal()}
         ${renderLibraryBookmarkModal()}
+        ${renderMoveGroupModal()}
         <div id="context-menu" role="menu" aria-label="${state.lang === 'zh' ? '操作菜单' : 'Context menu'}"></div>
         <div id="multi-select-bar">
           <span class="bar-count">${state.lang === 'zh' ? '已选 0 项' : '0 selected'}</span>
           <button class="bar-edit" data-bar-action="edit">${state.lang === 'zh' ? '批量编辑' : 'Batch edit'}</button>
           <button class="bar-download" data-bar-action="download">${state.lang === 'zh' ? '批量下载' : 'Download'}</button>
           <button class="bar-delete" data-bar-action="delete">${state.lang === 'zh' ? '批量删除' : 'Delete'}</button>
+          <button class="bar-move" data-bar-action="move">${state.lang === 'zh' ? '移动分组' : 'Move group'}</button>
           <button class="bar-cancel" data-bar-action="cancel">${state.lang === 'zh' ? '取消' : 'Cancel'}</button>
         </div>
       </div>
@@ -1319,6 +1323,80 @@ const TOOL_UI_VERSION = '20260814-production-unified-ui-v260';
     `;
   }
 
+  var moveGroupPendingIds = [];
+  var moveGroupChosenTag = null;
+
+  function renderMoveGroupModal() {
+    var options = MOVEABLE_COMPONENT_SUBTAGS.map(function(tag) {
+      return '<button type="button" class="move-group-option" data-move-group-tag="' + escapeAttr(tag) + '">' + escapeHtml(tag) + '</button>';
+    }).join('');
+    return `
+      <div id="move-group-modal" class="modal-backdrop" hidden>
+        <section class="modal library-modal" style="max-width:440px;">
+          <div class="modal-head">
+            <h3>${state.lang === 'zh' ? '移动分组' : 'Move group'}</h3>
+            <button class="icon-btn modal-close-circle" id="close-move-group" type="button" aria-label="Close">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
+            </button>
+          </div>
+          <div class="library-upload-scroll">
+            <p id="move-group-count" style="margin:0 0 12px;font-size:13px;color:#667085;"></p>
+            <div class="move-group-options">${options}</div>
+            <div id="move-group-message" class="message"></div>
+          </div>
+          <div class="modal-actions">
+            <button class="ghost-btn" id="cancel-move-group" type="button">${t('cancel')}</button>
+            <button class="primary-btn" id="confirm-move-group" type="button">${t('save')}</button>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
+  function openMoveGroupModal(sourceIds) {
+    moveGroupPendingIds = (sourceIds || []).filter(Boolean);
+    if (!moveGroupPendingIds.length) return;
+    moveGroupChosenTag = null;
+    var modal = document.getElementById('move-group-modal');
+    if (!modal) return;
+    modal.hidden = false;
+    var countEl = document.getElementById('move-group-count');
+    if (countEl) countEl.textContent = (state.lang === 'zh' ? '将移动已选的 ' : 'Move ') + moveGroupPendingIds.length + (state.lang === 'zh' ? ' 项组件。' : ' components.');
+    var msgEl = document.getElementById('move-group-message');
+    if (msgEl) msgEl.textContent = '';
+    document.querySelectorAll('#move-group-modal .move-group-option').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.moveGroupTag === moveGroupChosenTag);
+    });
+  }
+
+  function closeMoveGroupModal() {
+    var modal = document.getElementById('move-group-modal');
+    if (modal) modal.hidden = true;
+    moveGroupPendingIds = [];
+    moveGroupChosenTag = null;
+  }
+
+  async function confirmMoveGroup() {
+    if (!moveGroupChosenTag || !moveGroupPendingIds.length) {
+      var warn = document.getElementById('move-group-message');
+      if (warn) warn.textContent = state.lang === 'zh' ? '请选择目标分组。' : 'Please choose a target group.';
+      return;
+    }
+    var message = document.getElementById('move-group-message');
+    if (message) message.textContent = state.lang === 'zh' ? '正在移动...' : 'Moving...';
+    try {
+      for (var i = 0; i < moveGroupPendingIds.length; i++) {
+        await moveComponentGroup(moveGroupPendingIds[i], moveGroupChosenTag);
+      }
+      closeMoveGroupModal();
+      exitMultiSelect();
+      await reloadLibraryData();
+    } catch (e) {
+      var m = document.getElementById('move-group-message');
+      if (m) m.textContent = e.message;
+    }
+  }
+
   function wireLibraryShell() {
     document.querySelectorAll('.library-module-row button[data-route]').forEach(button => {
       button.addEventListener('click', () => {
@@ -1500,12 +1578,25 @@ const TOOL_UI_VERSION = '20260814-production-unified-ui-v260';
         if (action === 'delete') batchDeleteSelected();
         if (action === 'download') batchDownloadSelected();
         if (action === 'edit') openBatchEditModal();
+        if (action === 'move') openMoveGroupModal(Array.from(state.librarySelectedIds).map(function(pid) { var it = libraryItemByPreviewId(pid); return it ? it.source.id : null; }).filter(Boolean));
       });
     });
     // 批量编辑弹窗事件
     document.getElementById('close-batch-edit')?.addEventListener('click', closeBatchEditModal);
     document.getElementById('cancel-batch-edit')?.addEventListener('click', closeBatchEditModal);
     document.getElementById('batch-edit-form')?.addEventListener('submit', saveBatchEdit);
+    // 移动分组弹窗事件
+    document.getElementById('close-move-group')?.addEventListener('click', closeMoveGroupModal);
+    document.getElementById('cancel-move-group')?.addEventListener('click', closeMoveGroupModal);
+    document.getElementById('confirm-move-group')?.addEventListener('click', confirmMoveGroup);
+    document.querySelectorAll('#move-group-modal .move-group-option').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        moveGroupChosenTag = btn.dataset.moveGroupTag;
+        document.querySelectorAll('#move-group-modal .move-group-option').forEach(function(b) {
+          b.classList.toggle('active', b.dataset.moveGroupTag === moveGroupChosenTag);
+        });
+      });
+    });
     // Esc 退出多选模式
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape' && state.libraryMultiSelect) {
@@ -2742,6 +2833,10 @@ const TOOL_UI_VERSION = '20260814-production-unified-ui-v260';
     if (kind === 'template') {
       items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="14" height="14" rx="2"/><line x1="5" y1="5" x2="11" y2="11"/><line x1="11" y1="5" x2="5" y2="11"/></svg>', label: lang === 'zh' ? '打开静态模板' : 'Open static template', action: 'use-static' });
     }
+    var movableTags = visibleLibraryTags(source).filter(function(tag) { return MOVEABLE_COMPONENT_SUBTAGS.indexOf(tag) !== -1; });
+    if (kind === 'template' && movableTags.length) {
+      items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4a2 2 0 012-2h3l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H3a2 2 0 01-2-2V4z"/></svg>', label: lang === 'zh' ? '移动分组' : 'Move group', action: 'move-group' });
+    }
     items.push({ divider: true });
     if (canManage) {
       items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 4 14 4"/><path d="M5 4V2.5a1 1 0 011-1h4a1 1 0 011 1V4"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>', label: isBookmarkSource(source) ? (lang === 'zh' ? '释放编组' : 'Release group') : (lang === 'zh' ? '删除' : 'Delete'), action: 'delete', danger: true });
@@ -3083,6 +3178,7 @@ const TOOL_UI_VERSION = '20260814-production-unified-ui-v260';
     if (action === 'open-bookmark') return openLibraryBookmarkPopup(item.source.id);
     if (action === 'edit') return openLibraryEditModal(item.source.id);
     if (action === 'delete') return deleteLibrarySource(item.source.id);
+    if (action === 'move-group') return openMoveGroupModal([item.source.id]);
   }
 
   function renderLibraryDetailModal() {
@@ -4684,7 +4780,8 @@ function libraryTagsForForm(formData, kind) {
   function preserveTemplateLanguageTags(tags, existingTags) {
     const next = Array.isArray(tags) ? tags.slice() : [];
     (Array.isArray(existingTags) ? existingTags : []).forEach(function(tag) {
-      if ((tag === 'vf:lang:EN' || tag === 'vf:lang:AR') && !next.includes(tag)) next.push(tag);
+      // 语言标签 + 移动分组的类型锁定标记都要随编辑保留，否则 vf:type:* 丢失后类型反推会漂移。
+      if ((tag === 'vf:lang:EN' || tag === 'vf:lang:AR' || String(tag).startsWith('vf:type:')) && !next.includes(tag)) next.push(tag);
     });
     return next;
   }
@@ -5988,6 +6085,9 @@ function libraryTagsForForm(formData, kind) {
       case 'vf:set-template-language':
         await handleSetTemplateLanguage(msg, sourceWindow);
         break;
+      case 'vf:move-component-group':
+        await handleMoveComponentGroup(msg);
+        break;
       case 'vf:save-font':
         await handleSaveTemplate(msg, sourceWindow);
         refreshLibraryIfOpen();
@@ -6323,16 +6423,7 @@ function libraryTagsForForm(formData, kind) {
       for (var i = 0; i < (sources || []).length; i++) {
         var s = sources[i];
         var t = s.tags || [];
-        var templateType = 'layout';
-        if (t.includes('字体') && t.includes('组件')) templateType = 'font';
-        else if (t.includes('组合') && t.includes('组件')) templateType = 'groupcombo';
-        else if ((t.includes('标签') && t.includes('组件')) || t.includes('标签组')) templateType = 'tagcombo';
-        else if (t.includes('模板书签')) templateType = 'bookmark';
-        else if (t.includes('套组')) templateType = 'pack';
-        // 模版特征优先于组件标签判断：带「背景/品牌圆弧/LOGO」等标签的模板仍应归入模版，
-        // 而不是被误判成 logo 组件，避免模版跑到「组件 → LOGO」分类里且预览图丢失。
-        else if (t.includes('模版') || t.includes('社媒物料') || t.includes('C端物料') || t.includes('版式') || t.includes('静态模板')) templateType = 'layout';
-        else if (t.includes('LOGO') || t.includes('Logo') || t.includes('背景') || t.includes('KIKI') || t.includes('其他素材') || t.includes('品牌圆弧')) templateType = 'logo';
+        var templateType = resolveTemplateType(t);
         var dims = previewDims[s.id] || {};
         templates.push({ id: s.id, name: s.title, templateType: templateType, tags: t, previewW: dims.w || 0, previewH: dims.h || 0 });
       }
@@ -6480,6 +6571,58 @@ function libraryTagsForForm(formData, kind) {
       if (local) local.tags = tags;
       try { sourceWindow.postMessage({ type: 'vf:template-language-set', id: msg.id, language: msg.language || '', tags: tags }, location.origin); } catch (e) {}
     } catch (e) { console.warn('Set template language failed:', e); }
+  }
+
+  // 反向推断组件/模板的本质类型；vf:type:* 标记（移动分组写入）优先于标签推断。
+  function resolveTemplateType(tags) {
+    var t = Array.isArray(tags) ? tags : [];
+    var typeMarker = t.find(function(x) { return String(x).startsWith('vf:type:'); });
+    if (typeMarker) return typeMarker.slice('vf:type:'.length);
+    if (t.includes('字体') && t.includes('组件')) return 'font';
+    if (t.includes('组合') && t.includes('组件')) return 'groupcombo';
+    if ((t.includes('标签') && t.includes('组件')) || t.includes('标签组')) return 'tagcombo';
+    if (t.includes('模板书签')) return 'bookmark';
+    if (t.includes('套组')) return 'pack';
+    // 模版特征优先于组件标签判断：带「背景/品牌圆弧/LOGO」等标签的模板仍应归入模版，
+    // 而不是被误判成 logo 组件，避免模版跑到「组件 → LOGO」分类里且预览图丢失。
+    if (t.includes('模版') || t.includes('社媒物料') || t.includes('C端物料') || t.includes('版式') || t.includes('静态模板')) return 'layout';
+    if (t.includes('LOGO') || t.includes('Logo') || t.includes('背景') || t.includes('KIKI') || t.includes('其他素材') || t.includes('品牌圆弧')) return 'logo';
+    return 'layout';
+  }
+
+  // 把组件从一个子分组移动到另一个子分组（替换语义），类型用 vf:type:* 锁定，只改 tags 不动 JSON。
+  async function moveComponentGroup(sourceId, newTag) {
+    if (state.localPreview || !state.supabase || !sourceId || !newTag) return { id: sourceId, tags: null };
+    if (MOVEABLE_COMPONENT_SUBTAGS.indexOf(newTag) === -1) return { id: sourceId, tags: null };
+    var { data: rows, error } = await state.supabase.from('vf_source_files')
+      .select('tags').eq('id', sourceId).limit(1);
+    if (error || !rows || !rows.length) throw (error || new Error('模板不存在'));
+    var existing = Array.isArray(rows[0].tags) ? rows[0].tags.slice() : [];
+    var lockedType = resolveTemplateType(existing);
+    var ALL_COMPONENT_SUBTAGS = ['标签', '背景', '品牌圆弧', 'LOGO', 'KIKI', '其他素材', '字体', '组合'];
+    var next = existing.filter(function(tag) {
+      if (String(tag).startsWith('vf:type:')) return false; // 移除旧类型锁
+      if (ALL_COMPONENT_SUBTAGS.indexOf(tag) !== -1) return false; // 移除旧二级标签
+      return true; // 保留 vf:kind / vf:lang /「组件」大类标签等
+    });
+    next.push(newTag);
+    next.push('vf:type:' + lockedType);
+    var { error: updateError } = await state.supabase.from('vf_source_files').update({ tags: next }).eq('id', sourceId);
+    if (updateError) throw updateError;
+    var local = state.librarySources.find(function(s) { return s.id === sourceId; });
+    if (local) local.tags = next;
+    notifyStaticIframe({ type: 'vf:template-tags-updated', id: sourceId, tags: next });
+    return { id: sourceId, tags: next };
+  }
+
+  // 资产库（DIY iframe）发起的批量移动分组。
+  async function handleMoveComponentGroup(msg) {
+    if (state.localPreview || !state.supabase || !Array.isArray(msg.ids) || !msg.tag) return;
+    if (MOVEABLE_COMPONENT_SUBTAGS.indexOf(msg.tag) === -1) return;
+    for (var i = 0; i < msg.ids.length; i++) {
+      try { await moveComponentGroup(msg.ids[i], msg.tag); } catch (e) { console.warn('Move component failed:', e); }
+    }
+    await refreshLibraryIfOpen();
   }
 
   async function handleFetchSingleTemplate(id, sourceWindow) {
