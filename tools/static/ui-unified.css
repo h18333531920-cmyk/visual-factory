@@ -2099,6 +2099,7 @@ html body {
   .bookmark-template-card { transition: none !important; }
   .bookmark-template-card:hover,
   .bookmark-template-card:active { transform: none !important; }
+}
 
 /* v261 density pass: keep the canvas dominant and reveal one inspector task at a time. */
 .sr-only {
