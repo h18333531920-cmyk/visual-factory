@@ -3023,6 +3023,17 @@
         </div>
         <div class="artboard-preview-dock" id="artboard-preview-dock"></div>
         <div class="linked-artboard-dock" id="linked-artboard-dock" aria-label="关联画板集合"></div>
+        <div class="inspector-launcher" role="tablist" aria-label="画布检查器">
+            <button class="inspector-tab" type="button" role="tab" aria-selected="false" aria-expanded="false" data-inspector-tab="layers" data-tooltip="图层" onclick="toggleInspectorPanel('layers')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4-8 4-8-4z"></path><path d="m4 12 8 4 8-4M4 17l8 4 8-4"></path></svg><span class="sr-only">图层</span>
+            </button>
+            <button class="inspector-tab" type="button" role="tab" aria-selected="false" aria-expanded="false" data-inspector-tab="edit" data-tooltip="编辑" onclick="toggleInspectorPanel('edit')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10z"></path><path d="m14 7 3 3M4 20h5"></path></svg><span class="sr-only">编辑</span>
+            </button>
+            <button class="inspector-tab" type="button" role="tab" aria-selected="false" aria-expanded="false" data-inspector-tab="ai" data-tooltip="生图" onclick="toggleInspectorPanel('ai')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.15 3.35L16.5 7.5l-3.35 1.15L12 12l-1.15-3.35L7.5 7.5l3.35-1.15L12 3Z"></path><path d="M18.5 13.5l.72 2.03 2.03.72-2.03.72L18.5 19l-.72-2.03-2.03-.72 2.03-.72.72-2.03Z"></path><path d="M6 14l.58 1.67 1.67.58-1.67.58L6 19.5l-.58-1.67-1.67-.58 1.67-.58L6 14Z"></path></svg><span class="sr-only">生图</span>
+            </button>
+        </div>
         <div class="ai-loading" id="ai-loading">
             <div class="ai-row">
                 <div class="ai-spinner"></div>
@@ -3032,22 +3043,15 @@
         </div>
     </div>
 
-    <div class="right-pane">
+    <div class="right-pane" aria-hidden="true">
         <div class="pane-header inspector-header">
-            <div class="inspector-tabs" role="tablist" aria-label="检查器模块">
-                <button class="inspector-tab active" type="button" role="tab" aria-selected="true" data-inspector-tab="layers" data-tooltip="图层" onclick="switchInspectorPanel('layers')">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4-8 4-8-4z"></path><path d="m4 12 8 4 8-4M4 17l8 4 8-4"></path></svg><span class="sr-only">图层</span>
-                </button>
-                <button class="inspector-tab" type="button" role="tab" aria-selected="false" data-inspector-tab="edit" data-tooltip="编辑" onclick="switchInspectorPanel('edit')">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10z"></path><path d="m14 7 3 3M4 20h5"></path></svg><span class="sr-only">编辑</span>
-                </button>
-                <button class="inspector-tab" type="button" role="tab" aria-selected="false" data-inspector-tab="ai" data-tooltip="生图" onclick="switchInspectorPanel('ai')">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.15 3.35L16.5 7.5l-3.35 1.15L12 12l-1.15-3.35L7.5 7.5l3.35-1.15L12 3Z"></path><path d="M18.5 13.5l.72 2.03 2.03.72-2.03.72L18.5 19l-.72-2.03-2.03-.72 2.03-.72.72-2.03Z"></path><path d="M6 14l.58 1.67 1.67.58-1.67.58L6 19.5l-.58-1.67-1.67-.58 1.67-.58L6 14Z"></path></svg><span class="sr-only">生图</span>
-                </button>
-            </div>
+            <strong class="inspector-drawer-title" id="inspector-drawer-title">图层</strong>
             <div class="inspector-history-actions">
                 <button class="inspector-history-btn" id="undo-btn" onclick="undoAction()" title="撤回 Cmd/Ctrl+Z" aria-label="撤回">↶</button>
                 <button class="inspector-history-btn" id="redo-btn" onclick="redoAction()" title="重做 Cmd/Ctrl+Shift+Z" aria-label="重做">↷</button>
+                <button class="inspector-history-btn inspector-close-btn" type="button" onclick="closeInspectorDrawer()" title="关闭" aria-label="关闭检查器">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+                </button>
             </div>
         </div>
 
@@ -3198,13 +3202,24 @@
     let zoomLevel = 1; // 画布显示缩放倍率（1 = 适配画布），范围 0.3 ~ 2.5
     let activeLayerIds = [];
     let activeInspectorPanel = 'layers';
+    let inspectorDrawerOpen = false;
+    const INSPECTOR_PANEL_LABELS = { layers: '图层', edit: '编辑', ai: '生图' };
     function switchInspectorPanel(panel) {
         const next = ['layers', 'edit', 'ai'].includes(panel) ? panel : 'layers';
         activeInspectorPanel = next;
+        inspectorDrawerOpen = true;
+        const rightPane = document.querySelector('.right-pane');
+        if(rightPane) {
+            rightPane.classList.add('inspector-drawer-open');
+            rightPane.setAttribute('aria-hidden', 'false');
+        }
+        const drawerTitle = document.getElementById('inspector-drawer-title');
+        if(drawerTitle) drawerTitle.textContent = INSPECTOR_PANEL_LABELS[next] || '图层';
         document.querySelectorAll('[data-inspector-tab]').forEach(function(button) {
             const selected = button.dataset.inspectorTab === next;
             button.classList.toggle('active', selected);
             button.setAttribute('aria-selected', selected ? 'true' : 'false');
+            button.setAttribute('aria-expanded', selected ? 'true' : 'false');
         });
         document.querySelectorAll('[data-inspector-panel]').forEach(function(section) {
             const selected = section.dataset.inspectorPanel === next;
@@ -3213,6 +3228,23 @@
         });
         const paneContent = document.querySelector('.right-pane .pane-content');
         if(paneContent) paneContent.scrollTop = 0;
+    }
+    function closeInspectorDrawer() {
+        inspectorDrawerOpen = false;
+        const rightPane = document.querySelector('.right-pane');
+        if(rightPane) {
+            rightPane.classList.remove('inspector-drawer-open');
+            rightPane.setAttribute('aria-hidden', 'true');
+        }
+        document.querySelectorAll('[data-inspector-tab]').forEach(function(button) {
+            button.classList.remove('active');
+            button.setAttribute('aria-selected', 'false');
+            button.setAttribute('aria-expanded', 'false');
+        });
+    }
+    function toggleInspectorPanel(panel) {
+        if(inspectorDrawerOpen && activeInspectorPanel === panel) closeInspectorDrawer();
+        else switchInspectorPanel(panel);
     }
     function focusInspectorOnSelection() {
         if(activeLayerIds.length > 0) switchInspectorPanel('edit');
