@@ -6,7 +6,7 @@
   <title>GCC Design</title>
   <script src="./tools/vendor/supabase-js.js?v=20260805-unified-v76"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="./styles.css?v=20260814-library-toolbar-fix-v268">
+  <link rel="stylesheet" href="./styles.css?v=20260814-static-asset-pane-collapse-v278">
   <style>
     .library-control-strip {
       margin-left: 0 !important;
@@ -481,8 +481,22 @@
       pointer-events: none;
     }
     .library-bookmark-badge {
-      font-size: 13px;
-      line-height: 1;
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 16px;
+    }
+    .library-bookmark-badge svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
     .library-bookmark-count {
       min-width: 14px;
@@ -872,7 +886,7 @@
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="./config.js?v=20260805-unified-v76"></script>
-    <script src="./app.js?v=20260814-library-toolbar-fix-v268" defer></script>
+    <script src="./app.js?v=20260814-static-asset-pane-collapse-v278" defer></script>
 </head>
 <body>
   <main id="login-view" class="login-view">

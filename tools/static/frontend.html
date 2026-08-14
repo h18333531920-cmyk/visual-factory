@@ -497,6 +497,11 @@
         .ai-prompt-shell:focus-within { border-color: #b8bdb6; box-shadow: 0 0 0 3px rgba(16,17,20,0.06); }
         .ai-prompt-shell .textarea { border: 0; box-shadow: none; margin: 0; padding: 8px; min-height: 96px; background: transparent; font-size: 13.5px; line-height: 1.6; color: var(--text-main); }
         .ai-prompt-shell .textarea:focus { border: 0; box-shadow: none; }
+        .ai-prompt-editor { border: 0; box-shadow: none; margin: 0; padding: 8px; min-height: 96px; background: transparent; font-size: 13.5px; line-height: 1.6; color: var(--text-main); outline: none; word-break: break-word; }
+        .ai-prompt-editor:empty::before { content: attr(data-placeholder); color: #a0a6ad; pointer-events: none; }
+        .prompt-chip { display: inline-flex; align-items: center; gap: 4px; background: #f0f2f0; border: 1px solid #d9ddd9; border-radius: 999px; padding: 1px 6px 1px 10px; margin: 0 3px 3px 0; font-size: 12px; font-weight: 700; color: var(--text-main); cursor: default; user-select: none; white-space: nowrap; vertical-align: middle; }
+        .prompt-chip-x { border: 0; background: transparent; color: #8a9199; font-size: 13px; line-height: 1; padding: 0 2px; cursor: pointer; }
+        .prompt-chip-x:hover { color: var(--danger); }
         /* ── 底部控制栏 ── */
         .ai-control-bar { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
         .ai-menu-wrap { position: relative; min-width: 0; flex: 1; }
@@ -2074,8 +2079,9 @@
         .asset-search-input { width: 100%; box-sizing: border-box; padding: 7px 32px 7px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; line-height: 1.4; color: var(--text-main); background: #f9fafb; outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
         .asset-search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.12); background: #fff; }
         .asset-search-input::placeholder { color: #9ca3af; }
-        .asset-search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; border: 0; border-radius: 50%; background: #d1d5db; color: #fff; font-size: 11px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: background .15s; }
-        .asset-search-clear:hover { background: #9ca3af; }
+        .asset-search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; border: 0; border-radius: 50%; background: #d1d5db; color: #fff; font-size: 11px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: background-color .15s; }
+        .asset-search-clear:hover { background: #9ca3af; transform: translateY(-50%); }
+        .asset-search-clear:active { transform: translateY(-50%); }
         .asset-list { flex: 1; max-height: none; gap: 10px; padding: 2px 4px 18px 2px; overflow-y: auto; overflow-x: hidden; min-height: 0; }
         .asset-item { border: 1px solid transparent; border-radius: 8px; background: #fff; }
         .asset-item:hover, .asset-item.current { border-color: var(--border-strong); box-shadow: 0 5px 14px rgba(32,33,36,.10); }
@@ -2937,7 +2943,7 @@
 </div>
 
 <div class="editor-layout">
-        <input class="asset-pane-collapse-toggle" id="asset-pane-collapse-toggle" type="checkbox" aria-label="折叠资产库">
+        <input class="asset-pane-collapse-toggle" id="asset-pane-collapse-toggle" type="checkbox" aria-label="展开或折叠资产库" checked>
         <div class="asset-pane" id="asset-pane">
 <div class="module-card asset-library-card">
             <div class="card-title">
@@ -2972,7 +2978,7 @@
         <button type="button" id="asset-context-multi-select" onclick="enterAssetMultiSelect(); closeAssetContextMenu();" hidden>多选</button>
         <button type="button" id="asset-context-move-group" onclick="openAssetContextMoveGroup();" hidden>移动分组</button>
     </div>
-    <label class="asset-pane-collapse-handle" for="asset-pane-collapse-toggle" title="折叠资产库" aria-label="折叠或展开资产库"></label>
+    <label class="asset-pane-collapse-handle" for="asset-pane-collapse-toggle" title="展开或折叠资产库" aria-label="展开或折叠资产库"></label>
 <div class="left-pane" id="left-pane">
         <div class="canvas-toolbar">
             <div class="canvas-actions">
@@ -3062,7 +3068,7 @@
             </div>
 
             <div class="module-card">
-                <div class="card-title"><div class="card-title-wrap">生图</div></div>
+                <div class="card-title"><div class="card-title-wrap">生图</div><div class="layer-card-actions"><button class="btn-icon" type="button" onclick="refreshJimengSessionId()" title="重新获取即梦 Session ID" aria-label="刷新即梦凭证">↻</button></div></div>
                 <div class="ai-console">
                     <div class="jimeng-api-row" id="jimeng-api-row" hidden>
                         <div class="jimeng-session-head">
@@ -3080,21 +3086,18 @@
                         <div class="ai-reference-hint">拖拽或上传参考图，最多 8 张；也可以只输入文字描述。</div>
                     </div>
                     <div class="ai-prompt-shell">
-                        <textarea class="textarea" id="ai-prompt-input" rows="4" placeholder="上传参考图、输入文字描述或 @ 使用功能"></textarea>
+                        <div class="ai-prompt-editor" id="ai-prompt-input" contenteditable="true" data-placeholder="上传参考图、输入文字描述或点选标签"></div>
                     </div>
                     <div class="ai-control-bar">
                         <div class="ai-control-icons">
                         <div class="ai-menu-wrap">
                             <button class="ai-menu-btn ai-menu-icon-btn active" type="button" onclick="toggleAIMenu('skill', event)" data-tooltip="Skills 技能" aria-label="Skills 技能"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.15 3.35L16.5 7.5l-3.35 1.15L12 12l-1.15-3.35L7.5 7.5l3.35-1.15L12 3Z"></path><path d="M18.5 13.5l.72 2.03 2.03.72-2.03.72L18.5 19l-.72-2.03-2.03-.72 2.03-.72.72-2.03Z"></path><path d="M6 14l.58 1.67 1.67.58-1.67.58L6 19.5l-.58-1.67-1.67-.58 1.67-.58L6 14Z"></path></svg><strong id="ai-skill-label">Skills</strong></button>
-                            <div class="ai-dropdown" id="ai-skill-menu">
-                                <button type="button" data-ai-skill="replace-food" onclick="selectAISkill('replace-food')">一键替换食物</button>
-                                <button type="button" data-ai-skill="upscale" onclick="selectAISkill('upscale')">一键高清</button>
-                                <button type="button" data-ai-skill="outpaint" onclick="selectAISkill('outpaint')">智能扩图</button>
-                            </div>
+                            <div class="ai-dropdown" id="ai-skill-menu"></div>
                         </div>
                         <div class="ai-menu-wrap">
                             <button class="ai-menu-btn ai-menu-icon-btn" type="button" onclick="toggleAIMenu('size', event)" data-tooltip="生成尺寸 · 1:1" aria-label="生成尺寸 1:1"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M8 9h8M8 15h8"></path></svg><strong id="ai-size-label">1:1</strong></button>
                             <div class="ai-dropdown ai-size-dropdown" id="ai-size-menu">
+                                <button type="button" data-ai-size="auto" onclick="selectAISize('auto')">自动（跟画板）</button>
                                 <button type="button" data-ai-size="1:1" onclick="selectAISize('1:1')">1:1</button>
                                 <button type="button" data-ai-size="3:4" onclick="selectAISize('3:4')">3:4</button>
                                 <button type="button" data-ai-size="4:3" onclick="selectAISize('4:3')">4:3</button>
@@ -3105,33 +3108,17 @@
                             </div>
                         </div>
                         <div class="ai-menu-wrap">
-                            <button class="ai-menu-btn ai-menu-icon-btn" type="button" onclick="toggleAIMenu('provider', event)" data-tooltip="模型 · GPT 大模型" aria-label="模型 GPT 大模型"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7 4v10l-7 4-7-4V7l7-4Z"></path><path d="m5 7 7 4 7-4M12 11v10"></path></svg><strong id="ai-provider-label">GPT 大模型</strong></button>
-                            <div class="ai-dropdown" id="ai-provider-menu">
-                                <button type="button" data-ai-provider="openai" onclick="selectAIProvider('openai')">GPT 大模型</button>
-                                <button type="button" data-ai-provider="volc" onclick="selectAIProvider('volc')">火山大模型</button>
-                                <button type="button" data-ai-provider="jimeng" onclick="selectAIProvider('jimeng')">即梦本机</button>
+                            <button class="ai-menu-btn ai-menu-icon-btn" type="button" onclick="toggleAIMenu('model', event)" data-tooltip="即梦模型 · 5.0 Lite" aria-label="即梦模型 5.0 Lite"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7 4v10l-7 4-7-4V7l7-4Z"></path><path d="m5 7 7 4 7-4M12 11v10"></path></svg><strong id="ai-model-label">5.0 Lite</strong></button>
+                            <div class="ai-dropdown" id="ai-model-menu">
+                                <button type="button" data-jimeng-model="jimeng-image-5.0-pro" onclick="selectJimengModel('jimeng-image-5.0-pro')">5.0 Pro</button>
+                                <button type="button" data-jimeng-model="jimeng-image-5.0-lite" onclick="selectJimengModel('jimeng-image-5.0-lite')">5.0 Lite</button>
+                                <button type="button" data-jimeng-model="jimeng-image-4.7" onclick="selectJimengModel('jimeng-image-4.7')">4.7</button>
+                                <button type="button" data-jimeng-model="jimeng-image-4.6" onclick="selectJimengModel('jimeng-image-4.6')">4.6</button>
+                                <button type="button" data-jimeng-model="jimeng-image-4.1" onclick="selectJimengModel('jimeng-image-4.1')">4.1</button>
                             </div>
                         </div>
                         </div>
                         <button class="ai-submit-btn" id="ai-submit-btn" type="button" onclick="runSelectedAIAction()" title="开始生成">↑</button>
-                    </div>
-                    <div class="jimeng-settings-row" id="jimeng-settings-row" hidden>
-                        <div class="jimeng-setting-group">
-                            <span class="jimeng-setting-label">模型</span>
-                            <select class="jimeng-setting-select" id="jimeng-model-select" onchange="onJimengSettingChange()">
-                                <option value="jimeng-image-5.0-pro">5.0 Pro</option>
-                                <option value="jimeng-image-5.0-lite">5.0 Lite</option>
-                                <option value="jimeng-image-4.7">4.7</option>
-                                <option value="jimeng-image-4.6">4.6</option>
-                                <option value="jimeng-image-4.1">4.1</option>
-                            </select>
-                        </div>
-                        <div class="jimeng-setting-group jimeng-setting-full">
-                            <span class="jimeng-setting-label">尺寸</span>
-                            <select class="jimeng-setting-select" id="jimeng-ratio-select" onchange="onJimengSettingChange()">
-                                <option value="">自动（跟画板）</option>
-                            </select>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -3209,10 +3196,15 @@
         { id: 'kw_clean', name: '干净背景', prompt: '干净背景，画面简洁，留出版式和文字空间' },
         { id: 'kw_vivid', name: '鲜艳色彩', prompt: '高饱和色彩，明亮活泼，社交媒体广告风格' }
     ];
-    const AI_SKILL_LABELS = { generate: 'Skills', 'replace-food': '一键替换食物', outpaint: '智能扩图', upscale: '一键高清' };
-    const AI_PROVIDER_LABELS = { openai: 'GPT 大模型', volc: '火山大模型', jimeng: '即梦本机' };
+    const AI_PROVIDER_LABELS = { jimeng: '即梦本机' };
+    const JIMENG_MODEL_LABELS = {
+        'jimeng-image-5.0-pro': '5.0 Pro',
+        'jimeng-image-5.0-lite': '5.0 Lite',
+        'jimeng-image-4.7': '4.7',
+        'jimeng-image-4.6': '4.6',
+        'jimeng-image-4.1': '4.1'
+    };
     let aiFeatureMode = 'generate';
-    let selectedAISkill = 'generate';
     let aiGenerationSize = '1:1';
     let aiProvider = 'jimeng';
     let JIMENG_API_URL = 'https://attributes-royalty-margin-silicon.trycloudflare.com'; // 兜底地址；优先从 KV（jimeng-session）动态读取
@@ -4847,11 +4839,22 @@
         renderCanvas(); renderLayersList(); renderProperties(); saveHistory();
     }
     function getPromptText() {
-        const manual = document.getElementById('ai-prompt-input')?.value.trim() || '';
-        const skillPrompt = selectedAISkill === 'replace-food'
-            ? '保留原图构图、背景和光影，仅替换画面中的食物主体'
-            : '';
-        return [manual, skillPrompt].filter(Boolean).join('，');
+        const editor = document.getElementById('ai-prompt-input'); if(!editor) return '';
+        const parts = [];
+        const seenIds = [];
+        Array.from(editor.childNodes).forEach(function(node) {
+            if(node.nodeType === 1 && node.classList && node.classList.contains('prompt-chip')) {
+                const id = node.dataset.tagId;
+                if(id) seenIds.push(id);
+                const tag = keywordTags.find(function(t) { return t.id === id; });
+                if(tag && tag.prompt) parts.push(String(tag.prompt).trim());
+            } else if(node.nodeType === 3) {
+                const text = node.textContent.replace(/​/g, '').trim();
+                if(text) parts.push(text);
+            }
+        });
+        selectedKeywordTagIds = seenIds;
+        return parts.filter(Boolean).join('，');
     }
     function getOutpaintExpand(imgW, imgH, targetW, targetH) {
         const imgRatio = imgW / imgH;
@@ -4869,11 +4872,14 @@
         return expand;
     }
     function getGenerationRatio() {
-        return aiGenerationSize || getArtboardPreset(currentArtboardId)?.apiRatio || currentRatio;
+        return (aiGenerationSize !== 'auto' && aiGenerationSize) || getArtboardPreset(currentArtboardId)?.apiRatio || currentRatio;
     }
     function setPromptText(text) {
-        const input = document.getElementById('ai-prompt-input');
-        if(input) input.value = text || '';
+        const editor = document.getElementById('ai-prompt-input');
+        if(!editor) return;
+        selectedKeywordTagIds = [];
+        editor.textContent = text || '';
+        renderPromptTags();
     }
     function updateJimengApiUI(status = {}) {
         const panel = document.getElementById('jimeng-api-panel');
@@ -4926,29 +4932,12 @@
             if(input) input.value = jimengSessionId;
         }
         try { jimengModel = localStorage.getItem('jimeng_model') || 'jimeng-image-5.0-lite'; } catch(_) {}
-        try { jimengRatio = localStorage.getItem('jimeng_ratio') || ''; } catch(_) {}
-        syncJimengSettingSelects();
-    }
-    function onJimengSettingChange() {
-        var modelEl = document.getElementById('jimeng-model-select');
-        var ratioEl = document.getElementById('jimeng-ratio-select');
-        if(modelEl) { jimengModel = modelEl.value; try { localStorage.setItem('jimeng_model', jimengModel); } catch(_) {} }
-        if(ratioEl) { jimengRatio = ratioEl.value; try { localStorage.setItem('jimeng_ratio', jimengRatio); } catch(_) {} }
-    }
-    function syncJimengSettingSelects() {
-        var modelEl = document.getElementById('jimeng-model-select');
-        var ratioEl = document.getElementById('jimeng-ratio-select');
-        if(modelEl) modelEl.value = jimengModel;
-        if(ratioEl) {
-            // 动态填充尺寸选项
-            while(ratioEl.options.length > 1) ratioEl.remove(1);
-            JIMENG_RATIOS.forEach(function(r) {
-                var opt = document.createElement('option');
-                opt.value = r; opt.textContent = r;
-                ratioEl.appendChild(opt);
-            });
-            ratioEl.value = jimengRatio;
-        }
+        try {
+            var savedRatio = localStorage.getItem('jimeng_ratio');
+            if(savedRatio === 'auto' || savedRatio === '') aiGenerationSize = 'auto';
+            else if(JIMENG_RATIOS.includes(savedRatio)) aiGenerationSize = savedRatio;
+        } catch(_) {}
+        jimengRatio = aiGenerationSize === 'auto' ? '' : aiGenerationSize;
     }
     function describeJimengSessionId(value) {
         value = value || '';
@@ -4981,9 +4970,16 @@
         if(!silent) updateJimengApiUI({ label: '正在从云端获取即梦 Session ID…' });
         fetchJimengSessionFromEndpoints(0, silent);
     }
+    function refreshJimengSessionId() {
+        showToast('🔄 正在刷新即梦凭证…');
+        requestJimengSessionId(false);
+    }
     function fetchJimengSessionFromEndpoints(index, silent) {
         if(index >= JIMENG_SESSION_ENDPOINTS.length) {
-            if(!silent) updateJimengApiUI({ label: '云端不可达，尝试从扩展获取…' });
+            if(!silent) {
+                updateJimengApiUI({ label: '云端不可达，尝试从扩展获取…' });
+                showToast('❌ 云端暂无可用的即梦 Session ID，请先登录即梦', true);
+            }
             return;
         }
         // 依次尝试同源 /api 与 Cloudflare Pages 绝对地址（GitHub Pages 静态页没有 /api，必须跨域回退）。
@@ -4991,7 +4987,6 @@
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if(data.found && data.sessionid) {
-                    var isNew = jimengSessionId !== data.sessionid;
                     jimengSessionId = data.sessionid;
                     jimengCookies = data.cookies || {};
                     // 隧道地址从 KV 动态读取：本机隧道重启后脚本会自动同步新地址到 KV，
@@ -5003,7 +4998,7 @@
                     logJimengCandidates(data.candidates, '云端 /api/jimeng-session');
                     var updated = data.updatedAt ? '，同步时间 ' + new Date(data.updatedAt).toLocaleString('zh-CN') : '';
                     updateJimengApiUI({ ready: true, label: '✅ 已获取 Session ID（' + describeJimengSessionId(data.sessionid) + '）' + updated });
-                    if(!silent && isNew) showToast('✅ 已获取即梦 Session ID（' + describeJimengSessionId(data.sessionid) + '）');
+                    if(!silent) showToast('✅ 已获取即梦 Session ID（' + describeJimengSessionId(data.sessionid) + '）');
                 } else {
                     fetchJimengSessionFromEndpoints(index + 1, silent);
                 }
@@ -5054,11 +5049,11 @@
     function closeAIMenus() {
         document.getElementById('ai-skill-menu')?.classList.remove('open');
         document.getElementById('ai-size-menu')?.classList.remove('open');
-        document.getElementById('ai-provider-menu')?.classList.remove('open');
+        document.getElementById('ai-model-menu')?.classList.remove('open');
     }
     function toggleAIMenu(type, event) {
         event?.stopPropagation?.();
-        const id = ({ skill: 'ai-skill-menu', size: 'ai-size-menu', provider: 'ai-provider-menu' })[type];
+        const id = ({ skill: 'ai-skill-menu', size: 'ai-size-menu', model: 'ai-model-menu' })[type];
         const target = document.getElementById(id);
         if(!target) return;
         const willOpen = !target.classList.contains('open');
@@ -5066,55 +5061,44 @@
         target.classList.toggle('open', willOpen);
     }
     function refreshAIConsole() {
-        const skillLabel = document.getElementById('ai-skill-label');
         const sizeLabel = document.getElementById('ai-size-label');
-        const providerLabel = document.getElementById('ai-provider-label');
-        if(skillLabel) skillLabel.textContent = 'Skills';
-        if(sizeLabel) sizeLabel.textContent = aiGenerationSize;
-        if(providerLabel) providerLabel.textContent = AI_PROVIDER_LABELS[aiProvider] || 'GPT 大模型';
-        const skillButton = skillLabel?.closest('.ai-menu-icon-btn');
+        const modelLabel = document.getElementById('ai-model-label');
+        const sizeName = aiGenerationSize === 'auto' ? '自动' : aiGenerationSize;
+        if(sizeLabel) sizeLabel.textContent = sizeName;
+        if(modelLabel) modelLabel.textContent = JIMENG_MODEL_LABELS[jimengModel] || '5.0 Lite';
         const sizeButton = sizeLabel?.closest('.ai-menu-icon-btn');
-        const providerButton = providerLabel?.closest('.ai-menu-icon-btn');
-        if(skillButton) {
-            const skillName = AI_SKILL_LABELS[selectedAISkill] || 'Skills';
-            skillButton.dataset.tooltip = `Skills · ${skillName}`;
-            skillButton.setAttribute('aria-label', `Skills ${skillName}`);
-            skillButton.classList.toggle('has-value', selectedAISkill !== 'generate');
-        }
+        const modelButton = modelLabel?.closest('.ai-menu-icon-btn');
+        updateSkillLabel();
         if(sizeButton) {
-            sizeButton.dataset.tooltip = `生成尺寸 · ${aiGenerationSize}`;
-            sizeButton.setAttribute('aria-label', `生成尺寸 ${aiGenerationSize}`);
+            const sizeDescription = aiGenerationSize === 'auto' ? '自动（跟画板）' : aiGenerationSize;
+            sizeButton.dataset.tooltip = `生成尺寸 · ${sizeDescription}`;
+            sizeButton.setAttribute('aria-label', `生成尺寸 ${sizeDescription}`);
             sizeButton.classList.add('has-value');
         }
-        if(providerButton) {
-            const providerName = AI_PROVIDER_LABELS[aiProvider] || 'GPT 大模型';
-            providerButton.dataset.tooltip = `模型 · ${providerName}`;
-            providerButton.setAttribute('aria-label', `模型 ${providerName}`);
-            providerButton.classList.toggle('has-value', aiProvider !== 'openai');
+        if(modelButton) {
+            const modelName = JIMENG_MODEL_LABELS[jimengModel] || '5.0 Lite';
+            modelButton.dataset.tooltip = `即梦模型 · ${modelName}`;
+            modelButton.setAttribute('aria-label', `即梦模型 ${modelName}`);
+            modelButton.classList.add('has-value');
         }
-        document.querySelectorAll('[data-ai-skill]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiSkill === selectedAISkill));
         document.querySelectorAll('[data-ai-size]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiSize === aiGenerationSize));
-        document.querySelectorAll('[data-ai-provider]').forEach(btn => btn.classList.toggle('active', btn.dataset.aiProvider === aiProvider));
+        document.querySelectorAll('[data-jimeng-model]').forEach(btn => btn.classList.toggle('active', btn.dataset.jimengModel === jimengModel));
         renderAIReferenceImage();
         updateJimengApiUI();
     }
-    function selectAISkill(value) {
-        selectedAISkill = value || 'generate';
-        aiFeatureMode = selectedAISkill === 'upscale' || selectedAISkill === 'outpaint' ? selectedAISkill : 'generate';
-        closeAIMenus();
-        refreshAIConsole();
-    }
     function selectAISize(value) {
-        aiGenerationSize = value || '1:1';
-        if(aiProvider === 'jimeng') jimengRatio = aiGenerationSize;
+        aiGenerationSize = value === 'auto' ? 'auto' : (JIMENG_RATIOS.includes(value) ? value : '1:1');
+        jimengRatio = aiGenerationSize === 'auto' ? '' : aiGenerationSize;
+        try { localStorage.setItem('jimeng_ratio', aiGenerationSize); } catch(_) {}
         closeAIMenus();
         refreshAIConsole();
     }
-    function selectAIProvider(value) {
-        aiProvider = value || 'openai';
+    function selectJimengModel(value) {
+        if(!JIMENG_MODEL_LABELS[value]) return;
+        jimengModel = value;
+        try { localStorage.setItem('jimeng_model', jimengModel); } catch(_) {}
         closeAIMenus();
         refreshAIConsole();
-        updateJimengApiUI();
     }
     function renderAIReferenceImage() {
         const strip = document.getElementById('ai-reference-strip');
@@ -5927,30 +5911,78 @@
         setTimeout(() => overlay.querySelector('#custom-board-width')?.focus(), 30);
     }
     function renderPromptTags() {
-        const list = document.getElementById('prompt-tag-list'); if(!list) return;
-        selectedKeywordTagIds = selectedKeywordTagIds.filter(id => keywordTags.some(t => t.id === id));
-        if(keywordTags.length === 0) { list.innerHTML = `<div class="asset-empty" style="width:100%; padding:10px;">可在设置里添加常用关键词标签。</div>`; return; }
-        list.innerHTML = '';
-        keywordTags.forEach(tag => {
+        const menu = document.getElementById('ai-skill-menu'); if(!menu) return;
+        selectedKeywordTagIds = selectedKeywordTagIds.filter(function(id) { return keywordTags.some(function(t) { return t.id === id; }); });
+        const editor = document.getElementById('ai-prompt-input');
+        if(editor) editor.querySelectorAll('.prompt-chip').forEach(function(chip) {
+            const tag = keywordTags.find(function(t) { return t.id === chip.dataset.tagId; });
+            if(!tag) { chip.remove(); return; }
+            const nameEl = chip.querySelector('span');
+            if(nameEl && nameEl.textContent !== tag.name) nameEl.textContent = tag.name;
+        });
+        menu.innerHTML = '';
+        if(keywordTags.length === 0) {
+            menu.innerHTML = '<div style="padding:10px;color:var(--text-sub);font-size:12px;text-align:center;">在「更多」设置里添加提示词标签</div>';
+            updateSkillLabel();
+            return;
+        }
+        keywordTags.forEach(function(tag) {
             const btn = document.createElement('button');
-            btn.className = `prompt-tag-chip ${selectedKeywordTagIds.includes(tag.id) ? 'active' : ''}`;
             btn.type = 'button';
+            btn.className = selectedKeywordTagIds.includes(tag.id) ? 'active' : '';
             btn.innerText = tag.name;
             btn.title = tag.prompt;
-            btn.onclick = (e) => toggleKeywordTag(tag.id, e);
-            list.appendChild(btn);
+            btn.onclick = function() { toggleKeywordTag(tag.id); closeAIMenus(); };
+            menu.appendChild(btn);
         });
+        updateSkillLabel();
     }
-    function toggleKeywordTag(id, event) {
-        var ctrl = event && (event.ctrlKey || event.metaKey);
-        if(ctrl) {
-            if(selectedKeywordTagIds.includes(id)) selectedKeywordTagIds = selectedKeywordTagIds.filter(function(x) { return x !== id; });
-            else selectedKeywordTagIds.push(id);
+    function updateSkillLabel() {
+        const label = document.getElementById('ai-skill-label');
+        const btn = label?.closest('.ai-menu-icon-btn');
+        const count = selectedKeywordTagIds.length;
+        if(label) label.textContent = count ? ('标签 · ' + count) : '标签';
+        if(btn) {
+            btn.dataset.tooltip = count ? ('已选 ' + count + ' 个提示词标签') : '提示词标签';
+            btn.setAttribute('aria-label', btn.dataset.tooltip);
+            btn.classList.toggle('has-value', count > 0);
+        }
+    }
+    function toggleKeywordTag(id) {
+        if(selectedKeywordTagIds.includes(id)) {
+            selectedKeywordTagIds = selectedKeywordTagIds.filter(function(x) { return x !== id; });
+            removePromptChip(id);
         } else {
-            if(selectedKeywordTagIds.length === 1 && selectedKeywordTagIds[0] === id) selectedKeywordTagIds = [];
-            else selectedKeywordTagIds = [id];
+            selectedKeywordTagIds.push(id);
+            insertPromptChip(id);
         }
         renderPromptTags();
+    }
+    function insertPromptChip(id) {
+        const tag = keywordTags.find(function(t) { return t.id === id; }); if(!tag) return;
+        const editor = document.getElementById('ai-prompt-input'); if(!editor) return;
+        const chip = document.createElement('span');
+        chip.className = 'prompt-chip';
+        chip.contentEditable = 'false';
+        chip.dataset.tagId = tag.id;
+        const name = document.createElement('span');
+        name.textContent = tag.name;
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'prompt-chip-x';
+        x.title = '移除';
+        x.setAttribute('aria-label', '移除标签');
+        x.textContent = '×';
+        x.onclick = function(e) { e.preventDefault(); e.stopPropagation(); toggleKeywordTag(id); };
+        chip.appendChild(name);
+        chip.appendChild(x);
+        editor.appendChild(chip);
+        editor.appendChild(document.createTextNode('​'));
+        editor.focus();
+    }
+    function removePromptChip(id) {
+        const editor = document.getElementById('ai-prompt-input'); if(!editor) return;
+        editor.querySelectorAll('.prompt-chip[data-tag-id="' + id + '"]').forEach(function(el) { el.remove(); });
     }
     function setRatio(ratio) {
         if(currentRatio === ratio) return; currentRatio = ratio;
@@ -13339,12 +13371,6 @@
         });
     }
     document.addEventListener('click', e => { if(!e.target.closest('.ai-menu-wrap')) closeAIMenus(); });
-    document.getElementById('ai-prompt-input')?.addEventListener('input', event => {
-        if(/@(?:[^@\s]*)$/.test(event.target.value)) {
-            closeAIMenus();
-            document.getElementById('ai-skill-menu')?.classList.add('open');
-        }
-    });
     bootApp();
 
 </script>

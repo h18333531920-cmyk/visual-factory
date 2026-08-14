@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
+const TOOL_UI_VERSION = '20260814-static-asset-pane-collapse-v278';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -2557,6 +2557,32 @@ const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
     });
   }
 
+  function libraryBookmarkSizeEntries(group) {
+    const sizeGroups = new Map();
+    libraryBookmarkMemberItems(group).forEach(function(member) {
+      const info = libraryBookmarkMemberDimensionInfo(member);
+      if (!info) return;
+      const key = info.width + 'x' + info.height;
+      if (!sizeGroups.has(key)) sizeGroups.set(key, { info: info, languages: new Set() });
+      const language = libraryBookmarkMemberLanguage(member);
+      if (language) sizeGroups.get(key).languages.add(language);
+    });
+    return Array.from(sizeGroups.values());
+  }
+
+  function renderLibraryBookmarkInlineHover(group) {
+    const entries = libraryBookmarkSizeEntries(group);
+    const rows = entries.map(function(entry) {
+      const languages = ['EN', 'AR'].filter(function(language) {
+        return entry.languages.has(language);
+      }).map(function(language) {
+        return `<span class="library-bookmark-language-tag lang-${language.toLowerCase()}">${language}</span>`;
+      }).join('');
+      return `<div class="library-bookmark-inline-row">${libraryBookmarkSizeIconMarkup(entry.info)}<div class="library-bookmark-inline-copy"><strong>${escapeHtml(entry.info.ratio)}</strong><span>${entry.info.width} × ${entry.info.height} px</span></div>${languages ? `<div class="library-bookmark-language-tags">${languages}</div>` : ''}</div>`;
+    }).join('');
+    return `<div class="library-bookmark-inline-hover" aria-hidden="true"><div class="library-bookmark-inline-title">${escapeHtml(group?.source?.title || (state.lang === 'zh' ? '模板快捷书签' : 'Template bookmark'))}</div><div class="library-bookmark-inline-list">${rows || `<div class="library-bookmark-inline-empty">${state.lang === 'zh' ? '暂无可用关联模板' : 'No linked templates'}</div>`}</div></div>`;
+  }
+
   function renderLibraryCard(item) {
     const source = item.source;
     const preview = item.preview;
@@ -2610,25 +2636,14 @@ const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
           <div class="multi-check"></div>
           <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded')" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
           <div class="library-bookmark-summary">
-            <span class="library-bookmark-badge">📑</span>
+            <span class="library-bookmark-badge" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m10 3-7 4 7 4 7-4-7-4Z"/><path d="m3 11 7 4 7-4"/><path d="m3 15 7 4 7-4"/></svg></span>
             <span class="library-bookmark-count">${memberCount}</span>
           </div>
           <div class="library-card-icons">
-            <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}">${favorite ? '★' : '☆'}</button>
-            <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}">↓</button>
+            <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}" aria-label="${state.lang === 'zh' ? '收藏' : 'Favorite'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3Z"/></svg></button>
+            <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}" aria-label="${previewLabel}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button>
           </div>
-          <div class="library-card-overlay">
-            <div>
-              <h4>${escapeHtml(source.title)}</h4>
-              <p>${escapeHtml(state.lang === 'zh' ? '模板快捷书签 · ' + memberCount + ' 个模板' : 'Template bookmark · ' + memberCount + ' templates')}</p>
-            </div>
-            <div class="library-card-actions">
-              <button type="button" data-action="open-bookmark">${state.lang === 'zh' ? '打开' : 'Open'}</button>
-              <button type="button" data-action="download-preview">${previewLabel}</button>
-              ${canSource ? `<button type="button" data-action="download-source">${sourceLabel}</button>` : ''}
-              ${canManage ? `<button type="button" data-action="edit">${state.lang === 'zh' ? '编辑' : 'Edit'}</button><button class="danger" type="button" data-action="delete">${state.lang === 'zh' ? '删除' : 'Delete'}</button>` : ''}
-            </div>
-          </div>
+          ${renderLibraryBookmarkInlineHover(bookmarkGroup)}
         </div>
       </article>
     `;
@@ -2785,10 +2800,6 @@ const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
         }
         selectLibraryItem(card.dataset.previewId);
       });
-      if (card.dataset.bookmarkSource) {
-        card.addEventListener('mouseenter', function() { showLibraryBookmarkHover(card); });
-        card.addEventListener('mouseleave', hideLibraryBookmarkHover);
-      }
     });
     // 图片懒加载淡入
     var lazyImages = document.querySelectorAll('img.lazy-img:not(.observed)');
@@ -2832,6 +2843,11 @@ const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
     }
     if (kind === 'template') {
       items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="14" height="14" rx="2"/><line x1="5" y1="5" x2="11" y2="11"/><line x1="11" y1="5" x2="5" y2="11"/></svg>', label: lang === 'zh' ? '打开静态模板' : 'Open static template', action: 'use-static' });
+      var templateTags = visibleLibraryTags(source);
+      var canBookmarkTemplate = !templateTags.includes('组件') && !templateTags.includes('套组');
+      if (canBookmarkTemplate) {
+        items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><path d="M11.5 9v5M9 11.5h5"/></svg>', label: isBookmarkSource(source) ? (lang === 'zh' ? '编辑模板编组' : 'Edit template group') : (lang === 'zh' ? '模板编组' : 'Group templates'), action: 'template-bookmark' });
+      }
     }
     var movableTags = visibleLibraryTags(source).filter(function(tag) { return MOVEABLE_COMPONENT_SUBTAGS.indexOf(tag) !== -1; });
     if (kind === 'template' && movableTags.length) {
@@ -3176,6 +3192,7 @@ const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
     if (action === 'use-static') return useLibraryAsset(item, 'static');
     if (action === 'use-dynamic') return useLibraryAsset(item, 'dynamic');
     if (action === 'open-bookmark') return openLibraryBookmarkPopup(item.source.id);
+    if (action === 'template-bookmark') return openLibraryTemplateBookmarkEditor(item);
     if (action === 'edit') return openLibraryEditModal(item.source.id);
     if (action === 'delete') return deleteLibrarySource(item.source.id);
     if (action === 'move-group') return openMoveGroupModal([item.source.id]);
@@ -3285,14 +3302,20 @@ const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
   /* ── 模板快捷书签：素材库卡片 + 关联模板弹窗 ── */
   function renderLibraryBookmarkModal() {
     return `
-      <div id="library-bookmark-modal" class="modal-backdrop" hidden>
-        <section class="modal library-modal" style="max-width:560px;padding:24px 26px 20px;">
-          <div class="modal-head" style="margin-bottom:12px;">
-            <h3 id="library-bookmark-title" style="font-size:18px;">${state.lang === 'zh' ? '模板快捷书签' : 'Template bookmark'}</h3>
-            <button class="icon-btn modal-close-circle" id="close-library-bookmark" type="button" aria-label="Close"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>
+      <div id="library-bookmark-modal" class="modal-backdrop library-bookmark-modal-backdrop" hidden>
+        <section class="modal library-modal library-bookmark-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="library-bookmark-title">
+          <div class="modal-head library-bookmark-picker-header">
+            <div class="library-bookmark-title-group">
+              <h3 id="library-bookmark-title">${state.lang === 'zh' ? '模板快捷书签' : 'Template bookmark'}</h3>
+              <button class="library-bookmark-rename-icon" id="rename-library-bookmark" type="button" aria-label="${state.lang === 'zh' ? '重命名书签' : 'Rename bookmark'}" title="${state.lang === 'zh' ? '重命名' : 'Rename'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+            </div>
+            <button class="icon-btn modal-close-circle" id="close-library-bookmark" type="button" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>
           </div>
-          <div id="library-bookmark-toolbar" style="display:flex;gap:8px;margin-bottom:14px;"></div>
-          <div id="library-bookmark-members" style="display:grid;gap:8px;max-height:52vh;overflow:auto;"></div>
+          <div class="library-bookmark-picker-body">
+            <p class="library-bookmark-picker-intro">${state.lang === 'zh' ? '选择模板即可打开。语言标签控制分组和书签封面，未标记模板会显示在两个分组。' : 'Select a template to open it. Language tags control grouping and the bookmark cover; untagged templates appear in both groups.'}</p>
+            <div id="library-bookmark-toolbar" class="library-bookmark-picker-toolbar"></div>
+            <div id="library-bookmark-members" class="library-bookmark-grid-wrap"></div>
+          </div>
         </section>
       </div>
     `;
@@ -3301,7 +3324,154 @@ const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
   function closeLibraryBookmarkPopup() {
     const modal = document.getElementById('library-bookmark-modal');
     if (modal) modal.hidden = true;
+    hideLibraryBookmarkMemberMenu();
     document.body.style.overflow = '';
+  }
+
+  function libraryTemplateBookmarkCandidates(existingGroup) {
+    const previewsBySource = new Map();
+    state.libraryPreviews.forEach(function(preview) {
+      if (!previewsBySource.has(preview.source_file_id)) previewsBySource.set(preview.source_file_id, preview);
+    });
+    const currentIds = new Set((existingGroup?.refs || []).map(function(ref) {
+      return typeof ref === 'string' ? ref : ref?.templateId;
+    }).filter(Boolean));
+    return state.librarySources.map(function(source) {
+      const preview = previewsBySource.get(source.id);
+      if (!preview || libraryKindOfSource(source) !== 'template' || isBookmarkSource(source)) return null;
+      const tags = visibleLibraryTags(source);
+      if (tags.includes('组件') || tags.includes('套组')) return null;
+      if (state.libraryBookmarkMemberIds.has(source.id) && !currentIds.has(source.id)) return null;
+      const previewPath = preview.preview_path || '';
+      return {
+        source: source,
+        preview: preview,
+        url: state.libraryPreviewUrls[previewPath] || '',
+        thumbUrl: state.libraryPreviewUrls[source.source_path ? source.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : ''] || ''
+      };
+    }).filter(Boolean);
+  }
+
+  function chooseLibraryBookmarkCoverItem(items) {
+    const list = (items || []).slice();
+    if (!list.length) return null;
+    function language(item) {
+      const tags = Array.isArray(item?.source?.tags) ? item.source.tags : [];
+      if (tags.includes('vf:lang:EN')) return 'EN';
+      if (tags.includes('vf:lang:AR')) return 'AR';
+      return '';
+    }
+    function isNineSixteen(item) {
+      const width = Math.round(Number(item?.source?.canvasW) || Number(item?.preview?.width) || 0);
+      const height = Math.round(Number(item?.source?.canvasH) || Number(item?.preview?.height) || 0);
+      return width > 0 && height > width && Math.abs(width / height - 9 / 16) < 0.05;
+    }
+    return list.find(function(item) { return isNineSixteen(item) && language(item) === 'EN'; })
+      || list.find(isNineSixteen)
+      || list.find(function(item) { return language(item) === 'EN'; })
+      || list[0];
+  }
+
+  function libraryBookmarkRefFromItem(item) {
+    return {
+      templateId: item.source.id,
+      name: item.source.title || '',
+      canvasW: Math.round(Number(item.source.canvasW) || 0),
+      canvasH: Math.round(Number(item.source.canvasH) || 0)
+    };
+  }
+
+  function libraryUrlToDataUrl(url) {
+    if (!url || String(url).startsWith('data:')) return Promise.resolve(url || '');
+    return fetch(url).then(function(response) {
+      if (!response.ok) throw new Error('Preview fetch failed');
+      return response.blob();
+    }).then(function(blob) {
+      return new Promise(function(resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function() { resolve(String(reader.result || '')); };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }).catch(function() { return ''; });
+  }
+
+  function closeLibraryTemplateBookmarkEditor() {
+    const modal = document.getElementById('library-template-bookmark-editor');
+    if (modal) modal.hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  async function openLibraryTemplateBookmarkEditor(seedItem) {
+    const existingGroup = isBookmarkSource(seedItem?.source)
+      ? state.libraryBookmarkGroups.find(function(group) { return group.source.id === seedItem.source.id; })
+      : null;
+    const candidates = libraryTemplateBookmarkCandidates(existingGroup);
+    if (!candidates.length) {
+      alert(state.lang === 'zh' ? '没有可用于编组的独立模板。' : 'No independent templates are available for grouping.');
+      return;
+    }
+    try {
+      await signLibraryPreviewUrls(candidates.map(function(item) { return item.preview.preview_path; }));
+    } catch (_error) {}
+    candidates.forEach(function(item) {
+      item.url = state.libraryPreviewUrls[item.preview.preview_path] || item.url || '';
+    });
+    const selectedIds = new Set(existingGroup
+      ? existingGroup.refs.map(function(ref) { return typeof ref === 'string' ? ref : ref?.templateId; }).filter(Boolean)
+      : [seedItem?.source?.id].filter(Boolean));
+    let modal = document.getElementById('library-template-bookmark-editor');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'library-template-bookmark-editor';
+      modal.className = 'modal-backdrop library-bookmark-editor-backdrop';
+      document.body.appendChild(modal);
+    }
+    const rows = candidates.map(function(item) {
+      const info = libraryTemplateDimensionInfo(item) || libraryPreviewDimensionInfo(item);
+      const language = libraryBookmarkMemberLanguage(item);
+      const imageUrl = item.url || item.thumbUrl || '';
+      return `<label class="library-bookmark-editor-row"><input type="checkbox" value="${escapeAttr(item.source.id)}" ${selectedIds.has(item.source.id) ? 'checked' : ''}><span class="library-bookmark-editor-thumb">${imageUrl ? `<img src="${escapeAttr(imageUrl)}" alt="">` : ''}</span><span class="library-bookmark-editor-copy"><strong>${escapeHtml(item.source.title || (state.lang === 'zh' ? '未命名模板' : 'Untitled template'))}</strong><small>${escapeHtml(info ? info.ratio + '  ' + info.pixels : (state.lang === 'zh' ? '实际尺寸读取中' : 'Reading dimensions'))}</small></span>${language ? `<span class="library-bookmark-language-tag lang-${language.toLowerCase()}">${language}</span>` : ''}</label>`;
+    }).join('');
+    modal.innerHTML = `<section class="modal library-bookmark-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="library-bookmark-editor-title"><div class="library-bookmark-editor-header"><div><h3 id="library-bookmark-editor-title">${existingGroup ? (state.lang === 'zh' ? '编辑模板编组' : 'Edit template group') : (state.lang === 'zh' ? '模板编组' : 'Group templates')}</h3><p>${state.lang === 'zh' ? '书签只关联现有模板，不会复制或修改原模板。至少选择 1 个模板。' : 'Bookmarks only reference existing templates. Select at least one template.'}</p></div><button type="button" id="close-library-bookmark-editor" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}">×</button></div><div class="library-bookmark-editor-list">${rows}</div><div class="library-bookmark-editor-footer"><button type="button" class="library-bookmark-editor-cancel">${state.lang === 'zh' ? '取消' : 'Cancel'}</button><button type="button" class="library-bookmark-editor-save">${existingGroup ? (state.lang === 'zh' ? '保存关联' : 'Save links') : (state.lang === 'zh' ? '创建书签' : 'Create bookmark')}</button></div></section>`;
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    modal.onclick = function(event) { if (event.target === modal) closeLibraryTemplateBookmarkEditor(); };
+    modal.querySelector('#close-library-bookmark-editor').onclick = closeLibraryTemplateBookmarkEditor;
+    modal.querySelector('.library-bookmark-editor-cancel').onclick = closeLibraryTemplateBookmarkEditor;
+    modal.querySelector('.library-bookmark-editor-save').onclick = async function() {
+      const saveButton = this;
+      const ids = Array.from(modal.querySelectorAll('input[type="checkbox"]:checked')).map(function(input) { return input.value; });
+      if (!ids.length) {
+        alert(state.lang === 'zh' ? '请至少选择 1 个模板。' : 'Select at least one template.');
+        return;
+      }
+      const selectedItems = ids.map(function(id) { return candidates.find(function(item) { return item.source.id === id; }); }).filter(Boolean);
+      saveButton.disabled = true;
+      saveButton.textContent = state.lang === 'zh' ? '保存中...' : 'Saving...';
+      try {
+        await Promise.all(selectedItems.map(function(item) { return hydrateLibraryTemplateDimension(item); }));
+        const refs = selectedItems.map(libraryBookmarkRefFromItem);
+        const cover = chooseLibraryBookmarkCoverItem(selectedItems) || selectedItems[0];
+        const coverUrl = state.libraryPreviewUrls[cover.preview.preview_path] || cover.url || '';
+        const previewDataUrl = await libraryUrlToDataUrl(coverUrl);
+        let result = null;
+        const replyWindow = { postMessage: function(message) { result = message; } };
+        if (existingGroup) {
+          await handleUpdateTemplateBookmark({ id: existingGroup.source.id, name: existingGroup.source.title, data: { templateRefs: refs, coverTemplateId: cover.source.id }, previewDataUrl: previewDataUrl }, replyWindow);
+        } else {
+          const name = (selectedItems[0].source.title || (state.lang === 'zh' ? '未命名模板' : 'Untitled template')) + (state.lang === 'zh' ? '套组' : ' group');
+          await handleSaveTemplate({ templateType: 'bookmark', name: name, data: { templateRefs: refs, coverTemplateId: cover.source.id }, previewDataUrl: previewDataUrl }, replyWindow);
+        }
+        if (result && (result.status === 'error' || result.type === 'vf:bookmark-update-error')) throw new Error(result.error || (state.lang === 'zh' ? '保存失败' : 'Save failed'));
+        closeLibraryTemplateBookmarkEditor();
+        await reloadLibraryData();
+      } catch (error) {
+        alert((state.lang === 'zh' ? '模板编组失败：' : 'Template grouping failed: ') + (error.message || error));
+        saveButton.disabled = false;
+        saveButton.textContent = existingGroup ? (state.lang === 'zh' ? '保存关联' : 'Save links') : (state.lang === 'zh' ? '创建书签' : 'Create bookmark');
+      }
+    };
   }
 
   function libraryBookmarkMemberItems(group) {
@@ -3341,49 +3511,61 @@ const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
     }
   }
 
-  function renderLibraryBookmarkHover(card) {
-    const group = state.libraryBookmarkGroups.find(function(g) { return g.source.id === card.dataset.bookmarkSource; });
-    if (!group) return;
-    const members = libraryBookmarkMemberItems(group);
-    let el = document.getElementById('library-bookmark-hover');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'library-bookmark-hover';
-      el.style.cssText = 'position:fixed;z-index:1000;width:230px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 12px 40px rgba(15,23,42,.18);padding:12px;font-size:12px;color:#17191d;';
-      document.body.appendChild(el);
-    }
-    const rows = members.map(function(m) {
-      const w = Math.round(Number(m.ref?.canvasW) || 0);
-      const h = Math.round(Number(m.ref?.canvasH) || 0);
-      const dims = (w && h) ? (w + ' × ' + h + ' px') : '';
-      const name = m.source.title || m.ref?.name || '未命名模板';
-      const thumb = m.thumbUrl
-        ? `<img src="${escapeAttr(m.thumbUrl)}" style="width:28px;height:28px;object-fit:cover;border-radius:5px;background:#f1f5f9;">`
-        : '<span style="width:28px;height:28px;border-radius:5px;background:#f1f5f9;display:inline-block;flex:none;"></span>';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">${thumb}<div style="min-width:0;"><div style="font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(name)}</div><div style="color:#667085;font-size:11px;">${dims}</div></div></div>`;
-    }).join('');
-    el.innerHTML = '<div style="font-weight:850;margin-bottom:4px;">' + escapeHtml(group.source.title || '') + '</div>' + (rows || '<div style="color:#667085;">暂无关联模板</div>');
-    const rect = card.getBoundingClientRect();
-    let left = rect.left - 240;
-    if (left < 8) left = rect.right + 8;
-    left = Math.min(window.innerWidth - el.offsetWidth - 8, Math.max(8, left));
-    const top = Math.max(8, Math.min(rect.top, window.innerHeight - el.offsetHeight - 8));
-    el.style.left = left + 'px';
-    el.style.top = top + 'px';
-    el.style.display = 'block';
+  function libraryBookmarkMemberLanguage(member) {
+    const tags = Array.isArray(member?.source?.tags) ? member.source.tags : [];
+    if (tags.includes('vf:lang:AR')) return 'AR';
+    if (tags.includes('vf:lang:EN')) return 'EN';
+    return '';
   }
 
-  function showLibraryBookmarkHover(card) {
-    renderLibraryBookmarkHover(card);
-    const group = state.libraryBookmarkGroups.find(function(g) { return g.source.id === card.dataset.bookmarkSource; });
-    if (group) {
-      signLibraryBookmarkMemberUrls(group).then(function() { renderLibraryBookmarkHover(card); }).catch(function() {});
-    }
+  function libraryBookmarkMemberDimensionInfo(member) {
+    const width = Math.round(Number(member?.ref?.canvasW) || Number(member?.preview?.width) || 0);
+    const height = Math.round(Number(member?.ref?.canvasH) || Number(member?.preview?.height) || 0);
+    if (width < 1 || height < 1) return null;
+    let a = width;
+    let b = height;
+    while (b) { const remainder = a % b; a = b; b = remainder; }
+    const divisor = a || 1;
+    return { width: width, height: height, ratio: `${width / divisor}:${height / divisor}` };
   }
 
-  function hideLibraryBookmarkHover() {
-    const el = document.getElementById('library-bookmark-hover');
-    if (el) el.style.display = 'none';
+  function libraryBookmarkSizeIconMarkup(info) {
+    const width = Math.max(1, Number(info?.width) || 1);
+    const height = Math.max(1, Number(info?.height) || 1);
+    const scale = Math.min(22 / width, 19 / height);
+    const frameW = Math.max(5, Math.round(width * scale));
+    const frameH = Math.max(5, Math.round(height * scale));
+    return `<span class="library-bookmark-size-icon" aria-hidden="true"><i style="width:${frameW}px;height:${frameH}px"></i></span>`;
+  }
+
+  let libraryBookmarkLanguageFilter = 'EN';
+
+  function hideLibraryBookmarkMemberMenu() {
+    const menu = document.getElementById('library-bookmark-member-menu');
+    if (menu) menu.hidden = true;
+  }
+
+  function showLibraryBookmarkMemberMenu(event, member, nameEl) {
+    event.preventDefault();
+    event.stopPropagation();
+    let menu = document.getElementById('library-bookmark-member-menu');
+    if (!menu) {
+      menu = document.createElement('div');
+      menu.id = 'library-bookmark-member-menu';
+      menu.className = 'library-bookmark-member-menu';
+      document.body.appendChild(menu);
+    }
+    menu.innerHTML = `<button type="button">${state.lang === 'zh' ? '重命名模板' : 'Rename template'}</button>`;
+    menu.hidden = false;
+    menu.style.left = Math.min(event.clientX, window.innerWidth - menu.offsetWidth - 10) + 'px';
+    menu.style.top = Math.min(event.clientY, window.innerHeight - menu.offsetHeight - 10) + 'px';
+    menu.querySelector('button').onclick = function() {
+      hideLibraryBookmarkMemberMenu();
+      renameLibraryBookmarkMemberInline(member, nameEl);
+    };
+    setTimeout(function() {
+      document.addEventListener('click', hideLibraryBookmarkMemberMenu, { once: true });
+    }, 0);
   }
 
   async function openLibraryBookmarkPopup(sourceId) {
@@ -3394,57 +3576,119 @@ const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
     if (!modal) return;
     const titleEl = document.getElementById('library-bookmark-title');
     if (titleEl) titleEl.textContent = source.title || (state.lang === 'zh' ? '模板快捷书签' : 'Template bookmark');
-    const toolbar = document.getElementById('library-bookmark-toolbar');
-    if (toolbar) {
-      toolbar.innerHTML = '';
-      const renameBtn = document.createElement('button');
-      renameBtn.type = 'button'; renameBtn.className = 'ghost-btn';
-      renameBtn.textContent = state.lang === 'zh' ? '重命名书签' : 'Rename bookmark';
-      renameBtn.style.cssText = 'min-height:34px;border-radius:8px;padding:6px 12px;font-size:12px;';
-      renameBtn.onclick = function() { renameLibraryBookmarkInline(sourceId); };
-      const dissolveBtn = document.createElement('button');
-      dissolveBtn.type = 'button'; dissolveBtn.className = 'ghost-btn danger';
-      dissolveBtn.textContent = state.lang === 'zh' ? '解散书签' : 'Dissolve';
-      dissolveBtn.style.cssText = 'min-height:34px;border-radius:8px;padding:6px 12px;font-size:12px;';
-      dissolveBtn.onclick = function() { dissolveLibraryBookmarkFromPopup(sourceId, group); };
-      toolbar.append(renameBtn, dissolveBtn);
-    }
+    const headerRenameBtn = document.getElementById('rename-library-bookmark');
+    if (headerRenameBtn) headerRenameBtn.onclick = function() { renameLibraryBookmarkInline(sourceId); };
     const listEl = document.getElementById('library-bookmark-members');
     if (!listEl) return;
-    listEl.innerHTML = `<div style="color:#667085;font-size:13px;padding:10px 2px;">${state.lang === 'zh' ? '正在读取关联模板…' : 'Loading linked templates…'}</div>`;
+    listEl.innerHTML = `<div class="library-bookmark-picker-loading">${state.lang === 'zh' ? '正在读取关联模板…' : 'Loading linked templates…'}</div>`;
     modal.hidden = false;
     document.body.style.overflow = 'hidden';
     await signLibraryBookmarkMemberUrls(group);
-    const members = libraryBookmarkMemberItems(group);
-    listEl.innerHTML = '';
-    if (!members.length) {
-      listEl.innerHTML = `<div style="padding:16px;border-radius:12px;background:#f8fafc;color:#667085;text-align:center;font-size:13px;">${state.lang === 'zh' ? '暂无可用关联模板' : 'No linked templates'}</div>`;
-    } else {
-      members.forEach(function(member) {
-        const w = Math.round(Number(member.ref?.canvasW) || 0);
-        const h = Math.round(Number(member.ref?.canvasH) || 0);
-        const dims = (w && h) ? (w + ' × ' + h + ' px') : '';
-        const row = document.createElement('div');
-        row.style.cssText = 'display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:10px;padding:8px 10px;border:1px solid #e6e9ef;border-radius:12px;background:#fff;';
-        const thumb = document.createElement('div');
-        thumb.style.cssText = 'height:44px;border-radius:8px;overflow:hidden;background:#f7f8fa;display:flex;align-items:center;justify-content:center;cursor:pointer;';
-        if (member.thumbUrl) thumb.innerHTML = `<img src="${escapeAttr(member.thumbUrl)}" style="width:100%;height:100%;object-fit:cover;">`;
-        thumb.title = state.lang === 'zh' ? '打开模板' : 'Open template';
-        thumb.onclick = function() { openLibraryTemplate({ source: member.source }).catch(function(e) { alert(e.message); }); };
-        const copy = document.createElement('div'); copy.style.cssText = 'min-width:0;';
-        const nameEl = document.createElement('div'); nameEl.textContent = member.source.title || member.ref?.name || '未命名模板'; nameEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:850;color:#17191d;';
-        const dimEl = document.createElement('div'); dimEl.textContent = dims || (state.lang === 'zh' ? '读取尺寸中' : 'Reading size…'); dimEl.style.cssText = 'margin-top:3px;font-size:11px;color:#667085;font-weight:650;';
-        copy.append(nameEl, dimEl);
-        const ops = document.createElement('div'); ops.style.cssText = 'display:flex;flex-direction:column;gap:5px;';
-        const openBtn = document.createElement('button'); openBtn.type = 'button'; openBtn.className = 'primary-btn'; openBtn.textContent = state.lang === 'zh' ? '打开' : 'Open'; openBtn.style.cssText = 'min-height:30px;border-radius:7px;padding:4px 10px;font-size:12px;';
-        openBtn.onclick = function() { openLibraryTemplate({ source: member.source }).catch(function(e) { alert(e.message); }); };
-        const renameBtn = document.createElement('button'); renameBtn.type = 'button'; renameBtn.className = 'ghost-btn'; renameBtn.textContent = state.lang === 'zh' ? '重命名' : 'Rename'; renameBtn.style.cssText = 'min-height:30px;border-radius:7px;padding:4px 10px;font-size:12px;';
-        renameBtn.onclick = function() { renameLibraryBookmarkMemberInline(member, nameEl); };
-        ops.append(openBtn, renameBtn);
-        row.append(thumb, copy, ops);
-        listEl.appendChild(row);
-      });
+    const allMembers = libraryBookmarkMemberItems(group);
+    const toolbar = document.getElementById('library-bookmark-toolbar');
+    if (!toolbar) return;
+    toolbar.innerHTML = '';
+
+    const filterGroup = document.createElement('div');
+    filterGroup.className = 'library-bookmark-picker-filter';
+    const filterLabel = document.createElement('span');
+    filterLabel.className = 'library-bookmark-picker-filter-label';
+    filterLabel.textContent = state.lang === 'zh' ? '语言' : 'Language';
+    const languageTabs = document.createElement('div');
+    languageTabs.className = 'library-bookmark-language-tabs';
+    const enButton = document.createElement('button');
+    const arButton = document.createElement('button');
+    [enButton, arButton].forEach(function(button) {
+      button.type = 'button';
+      button.className = 'library-bookmark-language-tab';
+      languageTabs.appendChild(button);
+    });
+    const resultCount = document.createElement('span');
+    resultCount.className = 'library-bookmark-result-count';
+    const actions = document.createElement('div');
+    actions.className = 'library-bookmark-picker-actions';
+    const dissolveBtn = document.createElement('button');
+    dissolveBtn.type = 'button';
+    dissolveBtn.className = 'library-bookmark-picker-action danger';
+    dissolveBtn.textContent = state.lang === 'zh' ? '解散' : 'Dissolve';
+    dissolveBtn.onclick = function() { dissolveLibraryBookmarkFromPopup(sourceId, group); };
+    actions.appendChild(dissolveBtn);
+    filterGroup.append(filterLabel, languageTabs);
+    toolbar.append(filterGroup, resultCount, actions);
+
+    function countForLanguage(language) {
+      return allMembers.filter(function(member) {
+        const memberLanguage = libraryBookmarkMemberLanguage(member);
+        return !memberLanguage || memberLanguage === language;
+      }).length;
     }
+
+    function renderMembers(language) {
+      libraryBookmarkLanguageFilter = language;
+      enButton.classList.toggle('active', language === 'EN');
+      arButton.classList.toggle('active', language === 'AR');
+      enButton.setAttribute('aria-pressed', language === 'EN' ? 'true' : 'false');
+      arButton.setAttribute('aria-pressed', language === 'AR' ? 'true' : 'false');
+      enButton.textContent = 'EN ' + countForLanguage('EN');
+      arButton.textContent = 'AR ' + countForLanguage('AR');
+      const members = allMembers.filter(function(member) {
+        const memberLanguage = libraryBookmarkMemberLanguage(member);
+        return !memberLanguage || memberLanguage === language;
+      });
+      resultCount.textContent = state.lang === 'zh' ? `显示 ${members.length} 个模板` : `${members.length} templates`;
+      listEl.innerHTML = '';
+      if (!members.length) {
+        listEl.innerHTML = `<div class="library-bookmark-picker-empty">${allMembers.length ? (state.lang === 'zh' ? '该语言分组还没有模板' : 'No templates in this language group') : (state.lang === 'zh' ? '暂无可用关联模板' : 'No linked templates')}</div>`;
+        return;
+      }
+      const grid = document.createElement('div');
+      grid.className = 'library-bookmark-template-grid';
+      members.forEach(function(member) {
+        const info = libraryBookmarkMemberDimensionInfo(member);
+        const languageTag = libraryBookmarkMemberLanguage(member);
+        const card = document.createElement('div');
+        card.className = 'library-bookmark-template-card';
+        card.tabIndex = 0;
+        card.setAttribute('role', 'button');
+        card.setAttribute('aria-label', (state.lang === 'zh' ? '打开模板 ' : 'Open template ') + (member.source.title || member.ref?.name || ''));
+        const thumb = document.createElement('div');
+        thumb.className = 'library-bookmark-template-thumb';
+        thumb.style.aspectRatio = info ? (info.width + ' / ' + info.height) : '3 / 4';
+        if (member.thumbUrl) thumb.innerHTML = `<img src="${escapeAttr(member.thumbUrl)}" alt="">`;
+        else thumb.innerHTML = `<span class="library-bookmark-template-placeholder">${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`;
+        if (languageTag) {
+          const badge = document.createElement('span');
+          badge.className = 'library-bookmark-template-language lang-' + languageTag.toLowerCase();
+          badge.textContent = languageTag;
+          thumb.appendChild(badge);
+        }
+        const meta = document.createElement('div');
+        meta.className = 'library-bookmark-template-meta';
+        const nameEl = document.createElement('div');
+        nameEl.className = 'library-bookmark-template-name';
+        nameEl.textContent = member.source.title || member.ref?.name || (state.lang === 'zh' ? '未命名模板' : 'Untitled template');
+        const details = document.createElement('div');
+        details.className = 'library-bookmark-template-details';
+        const ratio = document.createElement('strong');
+        ratio.textContent = info ? info.ratio : (state.lang === 'zh' ? '读取中' : 'Loading');
+        const size = document.createElement('span');
+        size.textContent = info ? (info.width + ' × ' + info.height + ' px') : (state.lang === 'zh' ? '正在读取实际尺寸' : 'Reading actual size');
+        details.append(ratio, size);
+        meta.append(nameEl, details);
+        card.append(thumb, meta);
+        card.onclick = function() { closeLibraryBookmarkPopup(); openLibraryTemplate({ source: member.source }).catch(function(e) { alert(e.message); }); };
+        card.onkeydown = function(event) {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); card.click(); }
+        };
+        card.oncontextmenu = function(event) { showLibraryBookmarkMemberMenu(event, member, nameEl); };
+        grid.appendChild(card);
+      });
+      listEl.appendChild(grid);
+    }
+
+    enButton.onclick = function() { renderMembers('EN'); };
+    arButton.onclick = function() { renderMembers('AR'); };
+    renderMembers(libraryBookmarkLanguageFilter);
     const closeBtn = document.getElementById('close-library-bookmark');
     if (closeBtn) closeBtn.onclick = closeLibraryBookmarkPopup;
     modal.onclick = function(event) { if (event.target === modal) closeLibraryBookmarkPopup(); };
@@ -3457,7 +3701,7 @@ const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
     const oldName = source.title || '';
     const input = document.createElement('input');
     input.type = 'text'; input.value = oldName;
-    input.style.cssText = 'width:100%;font-size:18px;font-weight:900;color:#17191d;border:1px solid #0d9488;border-radius:6px;padding:4px 8px;font-family:inherit;background:#fff;';
+    input.className = 'library-bookmark-rename-input';
     titleEl.replaceWith(input);
     input.focus(); input.select();
     input.onblur = function() {
@@ -3481,7 +3725,7 @@ const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
     const oldName = member.source.title || member.ref?.name || '';
     const input = document.createElement('input');
     input.type = 'text'; input.value = oldName;
-    input.style.cssText = 'width:100%;border:1px solid #0d9488;border-radius:4px;padding:2px 6px;font-size:12px;font-weight:700;color:#17191d;font-family:inherit;background:#fff;';
+    input.className = 'library-bookmark-member-name-input';
     nameEl.replaceWith(input);
     input.focus(); input.select();
     input.onblur = function() {
