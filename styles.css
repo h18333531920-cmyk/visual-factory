@@ -11423,3 +11423,58 @@ html body #app-shell.app-shell[data-route="home"] .filter-dropdown-wrap > .ghost
   font-weight: 500 !important;
   letter-spacing: 0 !important;
 }
+
+/* Library route toolbar: keep navigation and actions on one compact baseline. */
+html body #app-shell.app-shell[data-route="library"] .library-control-strip {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  column-gap: 28px !important;
+  row-gap: 12px !important;
+  padding-top: 8px !important;
+  padding-bottom: 16px !important;
+}
+
+html body #app-shell.app-shell[data-route="library"] .library-control-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+html body #app-shell.app-shell[data-route="library"] .library-control-actions .search-wrap,
+html body #app-shell.app-shell[data-route="library"] .library-control-actions .library-upload-area,
+html body #app-shell.app-shell[data-route="library"] .library-control-actions .filter-dropdown-wrap {
+  display: block;
+  flex: 0 0 auto;
+  margin: 0 !important;
+}
+
+html body #app-shell.app-shell[data-route="library"] .library-control-actions .library-search-pill {
+  width: 200px !important;
+  max-width: 200px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding-inline: 9px 6px !important;
+}
+
+html body #app-shell.app-shell[data-route="library"] .library-control-actions .library-upload-area,
+html body #app-shell.app-shell[data-route="library"] .library-control-actions .filter-dropdown-wrap {
+  justify-self: auto !important;
+}
+
+html body #app-shell.app-shell[data-route="library"] .library-tag-rows {
+  grid-column: 1 / -1 !important;
+}
+
+@media (max-width: 980px) {
+  html body #app-shell.app-shell[data-route="library"] .library-control-strip {
+    grid-template-columns: 1fr !important;
+  }
+
+  html body #app-shell.app-shell[data-route="library"] .library-control-actions {
+    justify-content: flex-start !important;
+    flex-wrap: wrap;
+  }
+}

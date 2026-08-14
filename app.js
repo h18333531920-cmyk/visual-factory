@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260814-jimeng-tunnel-fix-v263';
+const TOOL_UI_VERSION = '20260814-library-toolbar-fix-v268';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -961,7 +961,7 @@ const TOOL_UI_VERSION = '20260814-jimeng-tunnel-fix-v263';
           </div>
         </section>`}
 
-        <section class="library-control-strip" style="margin-left:0!important;margin-inline:0!important;padding-left:0!important;padding-right:0!important;background:transparent!important;border:none!important;border-radius:0!important;width:100%!important;grid-template-columns:1fr auto auto!important">
+        <section class="library-control-strip" style="margin-left:0!important;margin-inline:0!important;padding-left:0!important;padding-right:0!important;background:transparent!important;border:none!important;border-radius:0!important;width:100%!important;grid-template-columns:minmax(0,1fr) auto!important">
           <div class="library-kind-tabs" role="tablist" style="position:relative;">
             <div class="kind-tab-indicator" style="position:absolute;bottom:0;height:3px;background:#111827;border-radius:999px;transition:left 0.3s ease,width 0.3s ease;pointer-events:none;z-index:1;"></div>
             ${LIBRARY_KIND_TABS.map(tab => `<button type="button" class="${activeKind === tab.id ? 'active' : ''}" data-library-kind="${tab.id}">${escapeHtml(state.lang === 'zh' ? tab.zh : tab.en)}<small> · ${kindCounts[tab.id] || 0}</small></button>`).join('')}

@@ -43,6 +43,7 @@ export async function onRequest({ request, env }) {
         sessionid: data.sessionid,
         cookies: data.cookies || {},
         candidates: data.candidates || [],
+        tunnelUrl: data.tunnelUrl || '',
         updatedAt: data.updatedAt,
       });
     } catch (e) {
@@ -59,19 +60,24 @@ export async function onRequest({ request, env }) {
 
     try {
       const body = await request.json().catch(() => ({}));
-      const sessionid = (body.sessionid || '').trim();
-      if (!sessionid) {
-        return json({ success: false, message: '缺少 sessionid' }, 400);
+      // 支持两类更新：扩展同步 sessionid，或本机隧道脚本只同步 tunnelUrl。
+      // 读现有数据合并，避免「只推地址」时把已存的 sessionid 清空。
+      const existing = (await env.VF_KV.get(KV_KEY, 'json').catch(() => null)) || {};
+      const sessionid = (body.sessionid || existing.sessionid || '').trim();
+      const tunnelUrl = (body.tunnelUrl || existing.tunnelUrl || '').trim();
+      if (!sessionid && !tunnelUrl) {
+        return json({ success: false, message: '缺少 sessionid 或 tunnelUrl' }, 400);
       }
 
       await env.VF_KV.put(KV_KEY, JSON.stringify({
         sessionid,
-        cookies: (body.cookies && typeof body.cookies === 'object') ? body.cookies : {},
-        candidates: Array.isArray(body.candidates) ? body.candidates : [],
+        cookies: (body.cookies && typeof body.cookies === 'object') ? body.cookies : (existing.cookies || {}),
+        candidates: Array.isArray(body.candidates) ? body.candidates : (Array.isArray(existing.candidates) ? existing.candidates : []),
+        tunnelUrl,
         updatedAt: new Date().toISOString(),
       }));
 
-      return json({ success: true, message: 'sessionid 已同步' });
+      return json({ success: true, message: tunnelUrl ? '隧道地址已同步' : 'sessionid 已同步' });
     } catch (e) {
       return json({ success: false, message: '保存失败：' + e.message }, 500);
     }
