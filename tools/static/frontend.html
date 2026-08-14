@@ -3228,6 +3228,8 @@
         });
         const paneContent = document.querySelector('.right-pane .pane-content');
         if(paneContent) paneContent.scrollTop = 0;
+        requestAnimationFrame(resizeCanvas);
+        setTimeout(resizeCanvas, 230);
     }
     function closeInspectorDrawer() {
         inspectorDrawerOpen = false;
@@ -3241,6 +3243,8 @@
             button.setAttribute('aria-selected', 'false');
             button.setAttribute('aria-expanded', 'false');
         });
+        requestAnimationFrame(resizeCanvas);
+        setTimeout(resizeCanvas, 230);
     }
     function toggleInspectorPanel(panel) {
         if(inspectorDrawerOpen && activeInspectorPanel === panel) closeInspectorDrawer();
