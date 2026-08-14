@@ -457,6 +457,37 @@ html body {
 .ai-dropdown button:hover,
 .ai-dropdown button.active { color: var(--ui-ink) !important; background: #f1f5f9 !important; }
 
+.export-dropdown-menu .export-format-switcher {
+  display: flex !important;
+  margin: 0 0 10px !important;
+  overflow: hidden !important;
+  border: 1px solid #d0d5dd !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+}
+.export-dropdown-menu button.export-format-option {
+  flex: 1 1 50% !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  color: var(--ui-text) !important;
+  background: #fff !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+.export-dropdown-menu button.export-format-option + button.export-format-option {
+  border-left: 1px solid #d0d5dd !important;
+}
+.export-dropdown-menu button.export-format-option:not(.is-active):hover {
+  color: var(--ui-ink) !important;
+  background: #f8fafc !important;
+}
+.export-dropdown-menu button.export-format-option.is-active,
+.export-dropdown-menu button.export-format-option.is-active:hover {
+  color: #fff !important;
+  background: var(--ui-ink) !important;
+}
+
 .modal-overlay { background: rgba(15, 23, 42, 0.26) !important; backdrop-filter: blur(4px) !important; -webkit-backdrop-filter: blur(4px) !important; }
 .modal-content,
 .color-preset-dialog-card,
@@ -1688,11 +1719,15 @@ html body {
 .right-pane .ai-control-icons .ai-dropdown {
   z-index: 240 !important;
   display: none !important;
+  top: calc(100% + 6px) !important;
+  bottom: auto !important;
   width: 156px !important;
   min-width: 156px !important;
   max-width: 156px !important;
-  max-height: none !important;
-  overflow: visible !important;
+  max-height: min(320px, calc(100vh - 220px)) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
 }
 .right-pane .ai-control-icons .ai-dropdown.open {
   display: flex !important;
@@ -2177,6 +2212,11 @@ html body {
 .canvas-toolbar .toolbar-more-wrap:has(.toolbar-more-menu.open) .canvas-icon-action::after {
   opacity: 0 !important;
 }
+.canvas-toolbar .save-template-menu-wrap:has(.save-template-dropdown-menu.open) > .canvas-icon-action,
+.canvas-toolbar .resize-menu-wrap:has(.resize-dropdown-menu.open) > .canvas-icon-action {
+  color: var(--ui-ink) !important;
+  background: #f1f5f9 !important;
+}
 .canvas-toolbar .export-dropdown-wrap > button.primary {
   min-width: 64px !important;
   height: 32px !important;
@@ -2308,7 +2348,7 @@ html body {
 }
 .right-pane #layer-module-card > .card-title .card-title-wrap,
 .right-pane #edit-module-card > .card-title,
-.right-pane #ai-module-card > .card-title {
+.right-pane #ai-module-card > .card-title .card-title-wrap {
   display: none !important;
 }
 .right-pane #layer-module-card .layer-card-actions {
@@ -2656,4 +2696,183 @@ html body {
   .editor-layout > .right-pane {
     transition: none !important;
   }
+}
+
+/* v282: reference images use a stable main-card + expandable stack layout. */
+.right-pane .ai-reference-strip {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-height: 82px !important;
+  height: 82px !important;
+  gap: 10px !important;
+  margin: 0 0 10px !important;
+  overflow: visible !important;
+}
+.right-pane .ai-reference-add-empty {
+  width: 80px !important;
+  min-width: 80px !important;
+  height: 80px !important;
+  min-height: 80px !important;
+  border-radius: 12px !important;
+  transform: none !important;
+  font-size: 22px !important;
+}
+.right-pane .ai-reference-strip:not(.has-reference) .ai-reference-hint {
+  max-width: 150px !important;
+  color: var(--ui-faint) !important;
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+}
+.right-pane .ai-reference-gallery {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 82px !important;
+}
+.right-pane .ai-reference-main-card {
+  position: relative !important;
+  inset: auto !important;
+  z-index: 40 !important;
+  flex: 0 0 80px !important;
+  width: 80px !important;
+  height: 80px !important;
+  border: 2px solid #fff !important;
+  border-radius: 12px !important;
+  transform: none !important;
+  box-shadow: 0 8px 20px -12px rgba(15, 23, 42, .5) !important;
+}
+.right-pane .ai-reference-secondary-stack {
+  position: relative !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  height: 72px !important;
+  margin-left: 8px !important;
+  overflow: visible !important;
+}
+.right-pane .ai-reference-secondary-card {
+  position: absolute !important;
+  top: 6px !important;
+  left: 0 !important;
+  width: 64px !important;
+  height: 64px !important;
+  border: 2px solid #fff !important;
+  border-radius: 11px !important;
+  transform: translateX(var(--stack-x, 0)) rotate(var(--stack-rot, 0deg)) !important;
+  box-shadow: 0 7px 18px -11px rgba(15, 23, 42, .56) !important;
+  transition: left 220ms cubic-bezier(.2, .8, .2, 1), transform 220ms cubic-bezier(.2, .8, .2, 1), box-shadow 160ms ease !important;
+}
+.right-pane .ai-reference-secondary-stack:hover .ai-reference-secondary-card,
+.right-pane .ai-reference-gallery.drag-active .ai-reference-secondary-card {
+  left: var(--spread-left, 0) !important;
+  transform: translateX(0) rotate(0deg) !important;
+}
+.right-pane .ai-reference-secondary-empty {
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+  margin-left: 10px !important;
+  color: var(--ui-faint) !important;
+  font-size: 10.5px !important;
+}
+.right-pane .ai-reference-card img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+.right-pane .ai-reference-gallery .ai-reference-card > button {
+  top: 4px !important;
+  right: 4px !important;
+  width: 18px !important;
+  height: 18px !important;
+  padding: 0 !important;
+  color: #fff !important;
+  background: rgba(15, 23, 42, .82) !important;
+  font-size: 11px !important;
+  line-height: 18px !important;
+  opacity: 0 !important;
+  transform: none !important;
+  transition: opacity 140ms ease, background-color 140ms ease !important;
+}
+.right-pane .ai-reference-gallery .ai-reference-card:hover > button,
+.right-pane .ai-reference-gallery .ai-reference-card:focus-within > button {
+  opacity: 1 !important;
+}
+.right-pane .ai-reference-gallery .ai-reference-card > button:hover {
+  background: #0f172a !important;
+}
+.right-pane .ai-reference-add-more {
+  position: absolute !important;
+  z-index: 75 !important;
+  right: -2px !important;
+  bottom: -2px !important;
+  display: grid !important;
+  place-items: center !important;
+  width: 25px !important;
+  height: 25px !important;
+  min-width: 25px !important;
+  padding: 0 !important;
+  border: 2px solid #fff !important;
+  border-radius: 50% !important;
+  color: #fff !important;
+  background: var(--ui-ink) !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, .22) !important;
+  transform: none !important;
+}
+.right-pane .ai-reference-count {
+  position: absolute !important;
+  z-index: 72 !important;
+  top: 1px !important;
+  right: 1px !important;
+  min-width: 32px !important;
+  height: 20px !important;
+  margin: 0 !important;
+  padding: 0 7px !important;
+  border: 1px solid rgba(226, 232, 240, .9) !important;
+  color: var(--ui-muted) !important;
+  background: rgba(255, 255, 255, .94) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 12px -8px rgba(15, 23, 42, .35) !important;
+}
+.right-pane .ai-submit-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 7px !important;
+  width: auto !important;
+  min-width: 112px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 16px !important;
+  border-radius: 999px !important;
+  color: #fff !important;
+  background: var(--ui-ink) !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  letter-spacing: .01em !important;
+  white-space: nowrap !important;
+  box-shadow: 0 7px 16px -10px rgba(15, 23, 42, .72) !important;
+}
+.right-pane .ai-submit-btn::before {
+  content: "↑" !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+.right-pane .ai-submit-btn:hover {
+  background: #1e293b !important;
+  transform: translateY(-1px) !important;
+}
+.right-pane .ai-submit-btn:active {
+  transform: translateY(0) scale(.98) !important;
+}
+.right-pane .ai-submit-btn:disabled {
+  opacity: .48 !important;
+  transform: none !important;
 }

@@ -2794,7 +2794,7 @@
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260814-production-diy-ui-merge-v279">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260814-native-capture-edges-v288">
 </head>
 <body>
 
@@ -2982,13 +2982,13 @@
 <div class="left-pane" id="left-pane">
         <div class="canvas-toolbar">
             <div class="canvas-actions">
-                <div class="save-template-menu-wrap">
+                <div class="save-template-menu-wrap" onmouseenter="scheduleCanvasToolbarMenuOpen('save')" onmouseleave="scheduleCanvasToolbarMenuClose('save')">
                     <button type="button" class="save-template-btn canvas-icon-action" onclick="toggleSaveTemplateMenu(event)" id="canvas-save-btn" data-tooltip="保存模版" aria-label="保存模版">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3.5" width="15" height="17" rx="2.5"></rect><path d="M8 8h8M8 12h8M8 16h4"></path></svg>
                     </button>
                     <div class="save-template-dropdown-menu" id="save-template-dropdown-menu"></div>
                 </div>
-                <div class="resize-menu-wrap">
+                <div class="resize-menu-wrap" onmouseenter="scheduleCanvasToolbarMenuOpen('resize')" onmouseleave="scheduleCanvasToolbarMenuClose('resize')">
                     <button type="button" class="canvas-icon-action" onclick="toggleResizeMenu(event)" data-tooltip="修改尺寸" aria-label="修改尺寸">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="2.5"></rect><path d="M9 4.5v4.25H4.75M15 19.5v-4.25h4.25"></path></svg>
                     </button>
@@ -3026,6 +3026,13 @@
         </div>
         <div class="layer-context-menu" id="canvas-context-menu">
             <button type="button" onclick="saveGroupCombo(); closeCanvasContextMenu();">保存组合</button>
+        </div>
+        <div class="layer-context-menu" id="layer-context-menu">
+            <button type="button" id="layer-context-add-reference" onclick="addLayerContextReferenceToAI(); closeLayerContextMenu();" hidden>加入生图参考图</button>
+            <button type="button" id="layer-context-replace-image" onclick="replaceLayerContextImage(); closeLayerContextMenu();" hidden>替换图片</button>
+            <button type="button" id="layer-context-duplicate-layer" onclick="duplicateLayerContext(); closeLayerContextMenu();">复制图层</button>
+            <button type="button" onclick="centerLayerOnCanvas(); closeLayerContextMenu();">元素画板居中</button>
+            <button type="button" id="ctx-save-group-btn" onclick="saveGroupCombo(); closeLayerContextMenu();" style="display:none">保存组合</button>
         </div>
         <div class="artboard-preview-dock" id="artboard-preview-dock"></div>
         <div class="linked-artboard-dock" id="linked-artboard-dock" aria-label="关联画板集合"></div>
@@ -3071,13 +3078,6 @@
                     </div>
                 </div>
                 <div class="layer-list" id="layer-list-ui"></div>
-                <div class="layer-context-menu" id="layer-context-menu">
-                    <button type="button" id="layer-context-add-reference" onclick="addLayerContextReferenceToAI(); closeLayerContextMenu();" hidden>加入生图参考图</button>
-                    <button type="button" id="layer-context-replace-image" onclick="replaceLayerContextImage(); closeLayerContextMenu();" hidden>替换图片</button>
-                    <button type="button" id="layer-context-duplicate-layer" onclick="duplicateLayerContext(); closeLayerContextMenu();">复制图层</button>
-                    <button type="button" onclick="centerLayerOnCanvas(); closeLayerContextMenu();">元素画板居中</button>
-                    <button type="button" id="ctx-save-group-btn" onclick="saveGroupCombo(); closeLayerContextMenu();" style="display:none">保存组合</button>
-                </div>
                 <div class="layer-list-resize-handle" id="layer-list-resize-handle" role="separator" aria-label="拖动调整图层列表高度" aria-orientation="horizontal" tabindex="0"></div>
             </div>
 
@@ -3103,7 +3103,7 @@
                         </div>
                     </div>
                     <div class="ai-reference-strip" id="ai-reference-strip">
-                        <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
+                        <button class="ai-reference-add ai-reference-add-empty" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考" aria-label="添加图片参考">+</button>
                         <div class="ai-reference-hint">拖拽或上传参考图，最多 8 张；也可以只输入文字描述。</div>
                     </div>
                     <div class="ai-prompt-shell">
@@ -3139,7 +3139,7 @@
                             </div>
                         </div>
                         </div>
-                        <button class="ai-submit-btn" id="ai-submit-btn" type="button" onclick="runSelectedAIAction()" title="开始生成">↑</button>
+                        <button class="ai-submit-btn" id="ai-submit-btn" type="button" onclick="runSelectedAIAction()" title="一键生图"><span>一键生图</span></button>
                     </div>
                 </div>
             </div>
@@ -5176,20 +5176,43 @@
     function renderAIReferenceImage() {
         const strip = document.getElementById('ai-reference-strip');
         if(!strip) return;
-        const cards = aiReferenceImages.map((item, index) => {
+        const hasReferences = aiReferenceImages.length > 0;
+        strip.classList.toggle('has-reference', hasReferences);
+        if(!hasReferences) {
+            strip.innerHTML = `
+                <button class="ai-reference-add ai-reference-add-empty" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考" aria-label="添加图片参考">+</button>
+                <div class="ai-reference-hint">拖拽或上传参考图，最多 ${AI_REFERENCE_LIMIT} 张</div>
+            `;
+            return;
+        }
+        const primary = aiReferenceImages[0];
+        const secondaryItems = aiReferenceImages.slice(1);
+        const secondaryCards = secondaryItems.map((item, secondaryIndex) => {
+            const index = secondaryIndex + 1;
+            const lastIndex = Math.max(1, secondaryItems.length - 1);
+            const spreadRatio = secondaryItems.length <= 1 ? 0 : secondaryIndex / lastIndex;
+            const spreadPercent = (spreadRatio * 100).toFixed(3);
+            const spreadOffset = (spreadRatio * 64).toFixed(2);
+            const compactOffset = secondaryIndex * 76;
+            const stackOffset = secondaryIndex * 5;
+            const stackRotate = ((secondaryIndex % 3) - 1) * 1.4;
             return `
-            <div class="ai-reference-card" draggable="true" data-ai-ref-index="${index}">
-                <img src="${item.src}" alt="">
-                <button type="button" draggable="false" onclick="event.stopPropagation(); removeAIReferenceImage(${index})" title="移除参考图">×</button>
-            </div>
-        `}).join('');
-        const hint = aiReferenceImages.length
-            ? `<div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div>`
-            : '<div class="ai-reference-hint">最多 8 张参考图</div>';
+                <div class="ai-reference-card ai-reference-secondary-card" draggable="true" data-ai-ref-index="${index}" style="--stack-x:${stackOffset}px;--stack-rot:${stackRotate}deg;--spread-left:min(${compactOffset}px, calc(${spreadPercent}% - ${spreadOffset}px));--stack-z:${index + 1};">
+                    <img src="${item.src}" alt="参考图 ${index + 1}">
+                    <button type="button" draggable="false" onclick="event.stopPropagation(); removeAIReferenceImage(${index})" title="移除参考图" aria-label="移除参考图 ${index + 1}">×</button>
+                </div>
+            `;
+        }).join('');
         strip.innerHTML = `
-            <button class="ai-reference-add" type="button" onclick="document.getElementById('ai-reference-upload').click()" title="添加图片参考">+</button>
-            ${aiReferenceImages.length ? `<div class="ai-reference-stack" id="ai-reference-stack">${cards}</div>` : ''}
-            ${hint}
+            <div class="ai-reference-gallery ${secondaryItems.length ? 'has-secondary' : ''}" id="ai-reference-stack">
+                <div class="ai-reference-card ai-reference-main-card" draggable="true" data-ai-ref-index="0">
+                    <img src="${primary.src}" alt="底图">
+                    <button type="button" draggable="false" onclick="event.stopPropagation(); removeAIReferenceImage(0)" title="移除底图" aria-label="移除底图">×</button>
+                </div>
+                ${secondaryItems.length ? `<div class="ai-reference-secondary-stack">${secondaryCards}</div>` : '<div class="ai-reference-secondary-empty">继续添加参考图</div>'}
+                ${aiReferenceImages.length < AI_REFERENCE_LIMIT ? '<button class="ai-reference-add-more" type="button" onclick="document.getElementById(\'ai-reference-upload\').click()" title="继续添加参考图" aria-label="继续添加参考图">+</button>' : ''}
+                <div class="ai-reference-count">${aiReferenceImages.length}/${AI_REFERENCE_LIMIT}</div>
+            </div>
         `;
         setupAIReferenceSort();
     }
@@ -5347,7 +5370,9 @@
     }
     async function addReferenceElementToAI(item) {
         const normalized = await normalizeReferenceElementForAI(item);
-        return addAIReferenceItems([normalized], `已添加「${item.name || '参考元素'}」到生图参考图`);
+        const added = addAIReferenceItems([normalized], `已添加「${item.name || '参考元素'}」到生图参考图`);
+        if(added) switchInspectorPanel('ai');
+        return added;
     }
     async function readReferenceElementFile(file, category = referenceElementCategory) {
         if(!file || !file.type?.startsWith('image/')) return null;
@@ -7936,13 +7961,62 @@
         badge.title = lang === 'EN' ? '英文版' : '阿拉伯语版';
         return badge;
     }
-    function toggleSaveTemplateMenu(e) {
+    let canvasToolbarMenuOpenTimer = null;
+    let canvasToolbarMenuCloseTimer = null;
+    let canvasToolbarMenuLocked = '';
+    function canvasToolbarMenuElement(type) {
+        return document.getElementById(type === 'save' ? 'save-template-dropdown-menu' : 'resize-dropdown-menu');
+    }
+    function clearCanvasToolbarMenuTimers() {
+        clearTimeout(canvasToolbarMenuOpenTimer);
+        clearTimeout(canvasToolbarMenuCloseTimer);
+        canvasToolbarMenuOpenTimer = null;
+        canvasToolbarMenuCloseTimer = null;
+    }
+    function openCanvasToolbarMenu(type, lock) {
+        clearCanvasToolbarMenuTimers();
+        const otherType = type === 'save' ? 'resize' : 'save';
+        canvasToolbarMenuElement(otherType)?.classList.remove('open');
+        if (canvasToolbarMenuLocked === otherType) canvasToolbarMenuLocked = '';
+        if (type === 'save') buildSaveTemplateMenu();
+        else buildResizeMenu();
+        canvasToolbarMenuElement(type)?.classList.add('open');
+        if (lock) canvasToolbarMenuLocked = type;
+    }
+    function scheduleCanvasToolbarMenuOpen(type) {
+        clearTimeout(canvasToolbarMenuCloseTimer);
+        if (canvasToolbarMenuLocked) return;
+        clearTimeout(canvasToolbarMenuOpenTimer);
+        const anotherMenuOpen = canvasToolbarMenuElement(type === 'save' ? 'resize' : 'save')?.classList.contains('open');
+        canvasToolbarMenuOpenTimer = setTimeout(function() {
+            openCanvasToolbarMenu(type, false);
+        }, anotherMenuOpen ? 0 : 220);
+    }
+    function scheduleCanvasToolbarMenuClose(type) {
+        clearTimeout(canvasToolbarMenuOpenTimer);
+        if (canvasToolbarMenuLocked === type) return;
+        clearTimeout(canvasToolbarMenuCloseTimer);
+        canvasToolbarMenuCloseTimer = setTimeout(function() {
+            canvasToolbarMenuElement(type)?.classList.remove('open');
+        }, 360);
+    }
+    function toggleCanvasToolbarMenu(type, e) {
         e?.stopPropagation();
-        buildSaveTemplateMenu();
-        document.getElementById('save-template-dropdown-menu')?.classList.toggle('open');
+        clearCanvasToolbarMenuTimers();
+        const menu = canvasToolbarMenuElement(type);
+        if (menu?.classList.contains('open') && canvasToolbarMenuLocked === type) {
+            menu.classList.remove('open');
+            canvasToolbarMenuLocked = '';
+            return;
+        }
+        openCanvasToolbarMenu(type, true);
+    }
+    function toggleSaveTemplateMenu(e) {
+        toggleCanvasToolbarMenu('save', e);
     }
     function closeSaveTemplateMenu() {
         document.getElementById('save-template-dropdown-menu')?.classList.remove('open');
+        if (canvasToolbarMenuLocked === 'save') canvasToolbarMenuLocked = '';
     }
     function buildSaveTemplateMenu() {
         const menu = document.getElementById('save-template-dropdown-menu');
@@ -12387,12 +12461,11 @@
     const SAFE_CANVAS_PX = 67108864; // ~67M 像素，浏览器 canvas 安全上限（约 8192×8192）
     // ===== 修改画板尺寸 =====
     function toggleResizeMenu(e) {
-        e?.stopPropagation();
-        buildResizeMenu();
-        document.getElementById('resize-dropdown-menu')?.classList.toggle('open');
+        toggleCanvasToolbarMenu('resize', e);
     }
     function closeResizeMenu() {
         document.getElementById('resize-dropdown-menu')?.classList.remove('open');
+        if (canvasToolbarMenuLocked === 'resize') canvasToolbarMenuLocked = '';
     }
     function buildResizeMenu() {
         var menu = document.getElementById('resize-dropdown-menu');
@@ -12510,9 +12583,9 @@
         var labels = { '0.5': '0.5倍', '1': '1倍（原图）', '1.5': '1.5倍', '2': '2倍', '3': '3倍' };
         var ext = exportFormat === 'jpg' ? 'jpg' : 'png';
         var html = '<div class="export-menu-body">'
-            + '<div style="display:flex;gap:0;margin:0 0 10px;border:1px solid #d0d5dd;border-radius:8px;overflow:hidden;">'
-            + '<button type="button" onclick="setExportFormat(\'png\');buildExportMenu();" style="flex:1;padding:6px 0;border:none;font-size:12px;font-weight:600;cursor:pointer;' + (exportFormat === 'png' ? 'background:#7c5cfc;color:#fff;' : 'background:#fff;color:#6b7280;') + '">PNG</button>'
-            + '<button type="button" onclick="setExportFormat(\'jpg\');buildExportMenu();" style="flex:1;padding:6px 0;border:none;font-size:12px;font-weight:600;cursor:pointer;' + (exportFormat === 'jpg' ? 'background:#7c5cfc;color:#fff;' : 'background:#fff;color:#6b7280;') + '">JPG</button>'
+            + '<div class="export-format-switcher" role="group" aria-label="导出格式">'
+            + '<button type="button" class="export-format-option' + (exportFormat === 'png' ? ' is-active' : '') + '" aria-pressed="' + (exportFormat === 'png') + '" onclick="event.stopPropagation();setExportFormat(\'png\');buildExportMenu();">PNG</button>'
+            + '<button type="button" class="export-format-option' + (exportFormat === 'jpg' ? ' is-active' : '') + '" aria-pressed="' + (exportFormat === 'jpg') + '" onclick="event.stopPropagation();setExportFormat(\'jpg\');buildExportMenu();">JPG</button>'
             + '</div>'
             + '<div class="export-scale-list">';
         scales.forEach(function(s) {
@@ -12725,6 +12798,35 @@
             return { left, top, width, height, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
         }
     }
+    function getNativeCaptureDrawGeometry(rect, videoWidth, videoHeight, outWidth, outHeight) {
+        const scaleX = videoWidth / Math.max(1, rect.viewportWidth);
+        const scaleY = videoHeight / Math.max(1, rect.viewportHeight);
+        const sourceLeft = rect.left * scaleX;
+        const sourceTop = rect.top * scaleY;
+        const sourceRight = (rect.left + rect.width) * scaleX;
+        const sourceBottom = (rect.top + rect.height) * scaleY;
+        if (sourceLeft < -1 || sourceTop < -1 || sourceRight > videoWidth + 1 || sourceBottom > videoHeight + 1) {
+            throw new Error('共享画面与当前标签页不一致，请重新选择“当前标签页”');
+        }
+        // 源区域向外取整，保留画板四边的所有像素；再通过负的目标偏移
+        // 把多取的页面背景推到输出画布之外。这样既不会向内丢一圈，也不会留白边。
+        const sx = Math.max(0, Math.floor(sourceLeft));
+        const sy = Math.max(0, Math.floor(sourceTop));
+        const ex = Math.min(videoWidth, Math.ceil(sourceRight));
+        const ey = Math.min(videoHeight, Math.ceil(sourceBottom));
+        const sw = Math.max(1, ex - sx);
+        const sh = Math.max(1, ey - sy);
+        const destinationScaleX = outWidth / Math.max(0.0001, sourceRight - sourceLeft);
+        const destinationScaleY = outHeight / Math.max(0.0001, sourceBottom - sourceTop);
+        return {
+            sx, sy, sw, sh,
+            dx: (sx - sourceLeft) * destinationScaleX,
+            dy: (sy - sourceTop) * destinationScaleY,
+            dw: sw * destinationScaleX,
+            dh: sh * destinationScaleY,
+            sourceLeft, sourceTop, sourceRight, sourceBottom
+        };
+    }
     // Canvas 的 fillText 会重新计算部分字体的 glyph advance；HT Heliopolis 恰好会在
     // 空格和问号处出现偏差。这个路径不再让 Canvas 排版文字，而是采集浏览器已经
     // 完成排版的标签页像素，再裁切画板并编码成 PNG。
@@ -12780,19 +12882,7 @@
             const wrap = document.getElementById('canvas-wrapper');
             const rect = wrap && getArtboardCaptureRect(wrap);
             if (!rect || rect.width < 2 || rect.height < 2) throw new Error('未找到可导出的画板');
-            const scaleX = video.videoWidth / rect.viewportWidth;
-            const scaleY = video.videoHeight / rect.viewportHeight;
-            // 起点和终点分别换算、分别取整，不能用“起点 + 四舍五入后的宽度”。
-            // 后者在 iframe 缩放或高 DPI 下可能多裁到右侧/底部的一列页面背景像素。
-            const sx = Math.max(0, Math.round(rect.left * scaleX));
-            const sy = Math.max(0, Math.round(rect.top * scaleY));
-            const ex = Math.min(video.videoWidth, Math.round((rect.left + rect.width) * scaleX));
-            const ey = Math.min(video.videoHeight, Math.round((rect.top + rect.height) * scaleY));
-            const sw = Math.max(1, ex - sx);
-            const sh = Math.max(1, ey - sy);
-            if (sx + sw > video.videoWidth + 2 || sy + sh > video.videoHeight + 2) {
-                throw new Error('共享画面与当前标签页不一致，请重新选择“当前标签页”');
-            }
+            const geometry = getNativeCaptureDrawGeometry(rect, video.videoWidth, video.videoHeight, target.outWidth, target.outHeight);
             const canvas = document.createElement('canvas');
             canvas.width = target.outWidth;
             canvas.height = target.outHeight;
@@ -12801,7 +12891,12 @@
             ctx.imageSmoothingQuality = 'high';
             ctx.fillStyle = '#FFFFFF';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(0, 0, canvas.width, canvas.height);
+            ctx.clip();
+            ctx.drawImage(video, geometry.sx, geometry.sy, geometry.sw, geometry.sh, geometry.dx, geometry.dy, geometry.dw, geometry.dh);
+            ctx.restore();
             const blob = await new Promise(function(resolve, reject) {
                 canvas.toBlob(function(result) { result ? resolve(result) : reject(new Error('无法生成文件')); }, 'image/png');
             });
