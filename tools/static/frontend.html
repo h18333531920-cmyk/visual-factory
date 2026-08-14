@@ -2978,30 +2978,26 @@
             <div class="canvas-actions">
                 <div class="save-template-menu-wrap">
                     <button type="button" class="save-template-btn canvas-icon-action" onclick="toggleSaveTemplateMenu(event)" id="canvas-save-btn" data-tooltip="保存模版" aria-label="保存模版">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h12l2 2v14H5z"></path><path d="M8 4v6h8V4M8 20v-6h8v6"></path></svg>
-                        <span class="sr-only">保存模版</span>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3.5" width="15" height="17" rx="2.5"></rect><path d="M8 8h8M8 12h8M8 16h4"></path></svg>
                     </button>
                     <div class="save-template-dropdown-menu" id="save-template-dropdown-menu"></div>
                 </div>
                 <div class="resize-menu-wrap">
                     <button type="button" class="canvas-icon-action" onclick="toggleResizeMenu(event)" data-tooltip="修改尺寸" aria-label="修改尺寸">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="m8 9-3-3M16 15l3 3M8 6v3H5M16 18v-3h3"></path></svg>
-                        <span class="sr-only">修改尺寸</span>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="2.5"></rect><path d="M9 4.5v4.25H4.75M15 19.5v-4.25h4.25"></path></svg>
                     </button>
                     <div class="resize-dropdown-menu" id="resize-dropdown-menu"></div>
                 </div>
                 <button type="button" class="canvas-icon-action" onclick="extendFromHead()" data-tooltip="一键延展" aria-label="一键延展">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path><path d="m3 8 5-5M21 8l-5-5M3 16l5 5M21 16l-5 5"></path></svg>
-                    <span class="sr-only">一键延展</span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="12" height="13" rx="2.25"></rect><path d="M7.5 14.5 10 12l3.5 3.5"></path><circle cx="8" cy="9.5" r="1"></circle><path d="M19 4v4M17 6h4M19 14.5v5M16.5 17h5"></path></svg>
                 </button>
                 <div class="export-dropdown-wrap">
-                    <button type="button" class="primary" onclick="toggleExportMenu(event)">导出 ⌄</button>
+                    <button type="button" class="primary canvas-export-action" onclick="toggleExportMenu(event)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11M8 10l4 4 4-4M5 18v2h14v-2"></path></svg><span>导出</span><svg class="canvas-export-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"></path></svg></button>
                     <div class="export-dropdown-menu" id="export-dropdown-menu"></div>
                 </div>
                 <div class="toolbar-more-wrap">
                     <button type="button" class="canvas-icon-action" onclick="toggleToolbarMore(event)" data-tooltip="更多" aria-label="更多">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.2"></circle><circle cx="12" cy="12" r="1.2"></circle><circle cx="19" cy="12" r="1.2"></circle></svg>
-                        <span class="sr-only">更多</span>
                     </button>
                     <div class="toolbar-more-menu" id="toolbar-more-menu">
                         <button type="button" class="custom-board-menu-item" onclick="openCustomArtboardDialog(currentArtboardId); closeToolbarMore();">尺寸</button>
