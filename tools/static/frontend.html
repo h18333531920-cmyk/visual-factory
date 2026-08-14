@@ -2977,20 +2977,32 @@
         <div class="canvas-toolbar">
             <div class="canvas-actions">
                 <div class="save-template-menu-wrap">
-                    <button type="button" class="save-template-btn" onclick="toggleSaveTemplateMenu(event)" id="canvas-save-btn">保存模版 ⌄</button>
+                    <button type="button" class="save-template-btn canvas-icon-action" onclick="toggleSaveTemplateMenu(event)" id="canvas-save-btn" data-tooltip="保存模版" aria-label="保存模版">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h12l2 2v14H5z"></path><path d="M8 4v6h8V4M8 20v-6h8v6"></path></svg>
+                        <span class="sr-only">保存模版</span>
+                    </button>
                     <div class="save-template-dropdown-menu" id="save-template-dropdown-menu"></div>
                 </div>
                 <div class="resize-menu-wrap">
-                    <button type="button" onclick="toggleResizeMenu(event)">修改尺寸 ⌄</button>
+                    <button type="button" class="canvas-icon-action" onclick="toggleResizeMenu(event)" data-tooltip="修改尺寸" aria-label="修改尺寸">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="m8 9-3-3M16 15l3 3M8 6v3H5M16 18v-3h3"></path></svg>
+                        <span class="sr-only">修改尺寸</span>
+                    </button>
                     <div class="resize-dropdown-menu" id="resize-dropdown-menu"></div>
                 </div>
-                <button type="button" class="primary" onclick="extendFromHead()">一键延展</button>
+                <button type="button" class="canvas-icon-action" onclick="extendFromHead()" data-tooltip="一键延展" aria-label="一键延展">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path><path d="m3 8 5-5M21 8l-5-5M3 16l5 5M21 16l-5 5"></path></svg>
+                    <span class="sr-only">一键延展</span>
+                </button>
                 <div class="export-dropdown-wrap">
                     <button type="button" class="primary" onclick="toggleExportMenu(event)">导出 ⌄</button>
                     <div class="export-dropdown-menu" id="export-dropdown-menu"></div>
                 </div>
                 <div class="toolbar-more-wrap">
-                    <button type="button" onclick="toggleToolbarMore(event)">更多</button>
+                    <button type="button" class="canvas-icon-action" onclick="toggleToolbarMore(event)" data-tooltip="更多" aria-label="更多">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.2"></circle><circle cx="12" cy="12" r="1.2"></circle><circle cx="19" cy="12" r="1.2"></circle></svg>
+                        <span class="sr-only">更多</span>
+                    </button>
                     <div class="toolbar-more-menu" id="toolbar-more-menu">
                         <button type="button" class="custom-board-menu-item" onclick="openCustomArtboardDialog(currentArtboardId); closeToolbarMore();">尺寸</button>
                         <button type="button" onclick="openSettingsModal(); closeToolbarMore();">设置</button>
@@ -3025,22 +3037,31 @@
     </div>
 
     <div class="right-pane">
-        <div class="pane-header">
-            <h2>GCC Poster</h2>
-            <div class="header-actions">
-                <button class="btn-icon" id="undo-btn" onclick="undoAction()" title="撤回 Cmd/Ctrl+Z">↶</button>
-                <button class="btn-icon" id="redo-btn" onclick="redoAction()" title="取消撤回 Cmd/Ctrl+Shift+Z">↷</button>
-                <button class="btn-icon" onclick="openSettingsModal()">设置</button>
+        <div class="pane-header inspector-header">
+            <div class="inspector-tabs" role="tablist" aria-label="检查器模块">
+                <button class="inspector-tab active" type="button" role="tab" aria-selected="true" data-inspector-tab="layers" data-tooltip="图层" onclick="switchInspectorPanel('layers')">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4-8 4-8-4z"></path><path d="m4 12 8 4 8-4M4 17l8 4 8-4"></path></svg><span class="sr-only">图层</span>
+                </button>
+                <button class="inspector-tab" type="button" role="tab" aria-selected="false" data-inspector-tab="edit" data-tooltip="编辑" onclick="switchInspectorPanel('edit')">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10z"></path><path d="m14 7 3 3M4 20h5"></path></svg><span class="sr-only">编辑</span>
+                </button>
+                <button class="inspector-tab" type="button" role="tab" aria-selected="false" data-inspector-tab="ai" data-tooltip="生图" onclick="switchInspectorPanel('ai')">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.15 3.35L16.5 7.5l-3.35 1.15L12 12l-1.15-3.35L7.5 7.5l3.35-1.15L12 3Z"></path><path d="M18.5 13.5l.72 2.03 2.03.72-2.03.72L18.5 19l-.72-2.03-2.03-.72 2.03-.72.72-2.03Z"></path><path d="M6 14l.58 1.67 1.67.58-1.67.58L6 19.5l-.58-1.67-1.67-.58 1.67-.58L6 14Z"></path></svg><span class="sr-only">生图</span>
+                </button>
+            </div>
+            <div class="inspector-history-actions">
+                <button class="inspector-history-btn" id="undo-btn" onclick="undoAction()" title="撤回 Cmd/Ctrl+Z" aria-label="撤回">↶</button>
+                <button class="inspector-history-btn" id="redo-btn" onclick="redoAction()" title="重做 Cmd/Ctrl+Shift+Z" aria-label="重做">↷</button>
             </div>
         </div>
 
         <div class="pane-content">
-                                    <div class="module-card layer-module-card" id="layer-module-card">
+            <div class="module-card layer-module-card inspector-panel active" id="layer-module-card" data-inspector-panel="layers" role="tabpanel">
                 <div class="card-title">
                     <div class="card-title-wrap">图层</div>
                     <div class="layer-card-actions">
                         <button class="btn-icon layer-canvas-fit-btn" id="layer-canvas-fit-btn" type="button" onclick="fitCanvasToSelectedImage()" title="按选中图片原始尺寸适配画布" aria-label="按选中图片原始尺寸适配画布" hidden>⤢</button>
-                        <button class="btn-icon layer-clear-btn" type="button" onclick="clearCurrentArtboardLayers()" title="清空当前画板的全部图层" aria-label="清空当前画板的全部图层">清空</button>
+                        <button class="btn-icon layer-clear-btn" type="button" onclick="clearCurrentArtboardLayers()" title="清空当前画板的全部图层" aria-label="清空当前画板的全部图层"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 3h6l1 4H8zM7 7l1 14h8l1-14M10 11v6M14 11v6"></path></svg></button>
                     </div>
                 </div>
                 <div class="layer-list" id="layer-list-ui"></div>
@@ -3054,14 +3075,14 @@
                 <div class="layer-list-resize-handle" id="layer-list-resize-handle" role="separator" aria-label="拖动调整图层列表高度" aria-orientation="horizontal" tabindex="0"></div>
             </div>
 
-            <div class="module-card">
+            <div class="module-card inspector-panel" id="edit-module-card" data-inspector-panel="edit" role="tabpanel">
                 <div class="card-title"><div class="card-title-wrap">编辑</div></div>
                 <div id="prop-edit-area">
                     <div style="text-align: center; color: var(--text-sub); font-size: 13px; padding: 20px 0;">请在上方或画板中选择图层</div>
                 </div>
             </div>
 
-            <div class="module-card">
+            <div class="module-card inspector-panel" id="ai-module-card" data-inspector-panel="ai" role="tabpanel">
                 <div class="card-title"><div class="card-title-wrap">生图</div></div>
                 <div class="ai-console">
                     <div class="jimeng-api-row" id="jimeng-api-row" hidden>
@@ -3180,6 +3201,26 @@
     let currentRatio = 'head'; let currentScale = 1; let exportFormat = 'png';
     let zoomLevel = 1; // 画布显示缩放倍率（1 = 适配画布），范围 0.3 ~ 2.5
     let activeLayerIds = [];
+    let activeInspectorPanel = 'layers';
+    function switchInspectorPanel(panel) {
+        const next = ['layers', 'edit', 'ai'].includes(panel) ? panel : 'layers';
+        activeInspectorPanel = next;
+        document.querySelectorAll('[data-inspector-tab]').forEach(function(button) {
+            const selected = button.dataset.inspectorTab === next;
+            button.classList.toggle('active', selected);
+            button.setAttribute('aria-selected', selected ? 'true' : 'false');
+        });
+        document.querySelectorAll('[data-inspector-panel]').forEach(function(section) {
+            const selected = section.dataset.inspectorPanel === next;
+            section.classList.toggle('active', selected);
+            section.hidden = !selected;
+        });
+        const paneContent = document.querySelector('.right-pane .pane-content');
+        if(paneContent) paneContent.scrollTop = 0;
+    }
+    function focusInspectorOnSelection() {
+        if(activeLayerIds.length > 0) switchInspectorPanel('edit');
+    }
     let layerSelectionAnchorId = null;
     let _contextMenuLayerId = null;
     let _pendingImageReplacementLayerId = null;
@@ -6223,6 +6264,7 @@
         }
         if(['tag', 'discountTag', 'arc', 'solid'].includes(type)) ensureSharedKey(newL);
         layers.push(newL); activeLayerIds = [newL.id];
+        focusInspectorOnSelection();
         if(['logo', 'logoLayout', 'tag', 'discountTag', 'arc'].includes(type)) markNewlyAddedLayers([newL]);
         saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
     }
@@ -6780,6 +6822,7 @@
 
         activeLayerIds = [layerId];
         layerSelectionAnchorId = layerId;
+        focusInspectorOnSelection();
     }
 
     function renderLayersList() {
@@ -7447,7 +7490,7 @@
             };
             var widthStepper = stepper('maxWidth','宽度',10,4000,10,'px');
             var heightStepper = '';
-            area.innerHTML = '<div style="text-align:center;color:var(--text-main);font-size:14px;font-weight:bold;padding:10px 0;margin-bottom:12px;border-bottom:1px dashed var(--border);">文本属性</div>'
+            area.innerHTML = '<div class="property-context-title">文本属性</div>'
                 + '<label class="label">文字内容</label><textarea class="input-text" style="min-height:56px;resize:vertical;line-height:1.45;font-size:13px;" oninput="updateProp(\'text\',this.value)" onchange="saveHistory()">' + escapeHtml(l.text || '') + '</textarea>'
                 + '<div style="font-size:11px;color:var(--text-sub);margin:-6px 0 8px;">💡 双击画布文字可直接编辑</div>'
                 + '<label class="label">字体</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">' + selectedFontOptions + '</select>'
@@ -7455,14 +7498,16 @@
                 + '<div style="display:flex; gap:6px; margin:-2px 0 10px;"><button type="button" onclick="setTextColor(\'#000000\')" title="黑色" style="flex:1;height:26px;border:1px solid rgba(16,19,24,.15);border-radius:7px;background:#000000;cursor:pointer;"></button><button type="button" onclick="setTextColor(\'#ffe41f\')" title="黄色" style="flex:1;height:26px;border:1px solid rgba(16,19,24,.15);border-radius:7px;background:#ffe41f;cursor:pointer;"></button></div>'
                 + stepper('fontSize','字号',1,480,1,'px')
                 + '<label class="label" style="margin-bottom:8px;">对齐</label><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;"><button class="btn ' + (textAlign==='left'?'btn-dark':'btn-outline') + '" type="button" onclick="setTextAlignment(\'left\')">左对齐</button><button class="btn ' + (textAlign==='center'?'btn-dark':'btn-outline') + '" type="button" onclick="setTextAlignment(\'center\')">居中</button><button class="btn ' + (textAlign==='right'?'btn-dark':'btn-outline') + '" type="button" onclick="setTextAlignment(\'right\')">右对齐</button></div>'
+                + '<details class="advanced-props-accordion"><summary class="advanced-props-summary"><span>高级设置</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"></path></svg></summary><div class="advanced-props-content">'
                 + stepper('lineHeight','行距',0.1,5,0.05,'')
                 + stepper('letterSpacing','字距',-50,30,0.5,'px')
                 + widthStepper + heightStepper
                 + stepper('scale','缩放',0.01,10,0.05,'x')
                 + stepper('rotation','旋转',-180,180,1,'°')
-                + '<div style="text-align:center;color:var(--text-main);font-size:14px;font-weight:bold;padding:10px 0;margin:12px 0 12px;border-bottom:1px dashed var(--border);">文字效果</div>'
+                + '<div class="advanced-props-subtitle">文字效果</div>'
                 + '<label class="label">描边颜色</label><input type="color" value="' + escapeHtml(l.textStrokeCol || '#000000') + '" style="width:100%;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;background:#FFF;cursor:pointer;" oninput="updateProp(\'textStrokeCol\',this.value)" onchange="saveHistory()">'
                 + '<div class="slider-row"><span class="s-label">描边粗细</span><input type="range" min="0" max="30" step="0.5" value="' + (l.textStrokeWidth || 0) + '" oninput="updateProp(\'textStrokeWidth\', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-textStrokeWidth">' + (l.textStrokeWidth || 0) + 'px</span></div>'
+                + '</div></details>'
                 + '<button class="btn btn-outline" style="width:100%;margin-top:4px;" type="button" onclick="centerLayer()">居中画板</button>';
         }
         else if(l.type === 'tag') {
@@ -7714,6 +7759,7 @@
             }
             const id = wrap.dataset.id; const l = layers.find(x => x.id === id); if(!l || l.locked) return;
             if(e.shiftKey || e.ctrlKey || e.metaKey || !activeLayerIds.includes(id)) selectLayerWithModifiers(id, e);
+            focusInspectorOnSelection();
             isDragging = true; dragStartX = e.clientX; dragStartY = e.clientY;
             dragData = activeLayerIds.map(selId => ({ id: selId, ix: layers.find(x => x.id === selId).x, iy: layers.find(x => x.id === selId).y }));
             // Logo 内部的双击操作不能在首击时重建 DOM，否则第二击会落在新节点上，浏览器无法识别为双击。
@@ -8608,6 +8654,7 @@
             var style = 'font-size:11px;padding:2px 10px;';
             if (isSelected && t !== '全部') style += 'background:#0d9488;color:#fff;border-color:#0d9488;';
             var cnt = counts[t] || 0;
+            if (cnt === 0 && t !== '全部' && !isSelected) return '';
             var label = t + ' · ' + cnt;
             return '<button class="filter-capsule' + (isFilterActive || isSelected ? ' active' : '') + '" onclick="diySubtagFilter=\'' + t + '\';diySelectedSubtag=\'' + t + '\';renderAssetLibrary();" style="' + style + '">' + label + '</button>';
         }).join('');
@@ -8655,9 +8702,12 @@
         notifyParent({ type: 'vf:request-templates' });
     }
     function renderAssetLibrary() {
-        var cl = document.getElementById('diy-count-layout'); if (cl) cl.textContent = '· ' + presetLibrary.length;
-        var cc = document.getElementById('diy-count-component'); if (cc) cc.textContent = '· ' + (tagPresetLibrary.length + logoAssets.length + groupPresets.length + referenceElements.length);
-        var cr = document.getElementById('diy-count-recycle'); if (cr) cr.textContent = '· ' + recycleBin.length;
+        var layoutCount = presetLibrary.length;
+        var componentCount = tagPresetLibrary.length + logoAssets.length + groupPresets.length + referenceElements.length;
+        var recycleCount = recycleBin.length;
+        var cl = document.getElementById('diy-count-layout'); if (cl) cl.textContent = layoutCount ? '· ' + layoutCount : '';
+        var cc = document.getElementById('diy-count-component'); if (cc) cc.textContent = componentCount ? '· ' + componentCount : '';
+        var cr = document.getElementById('diy-count-recycle'); if (cr) cr.textContent = recycleCount ? '· ' + recycleCount : '';
         renderDiySubtags();
         const list = document.getElementById('asset-list-ui'); if(!list) return;
         // 保存滚动位置，避免渲染过程中跳回顶部
