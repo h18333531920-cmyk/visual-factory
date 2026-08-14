@@ -2117,3 +2117,163 @@ html body {
   margin-left: -2px !important;
   opacity: .72 !important;
 }
+
+/* v263: canvas-first inspector layout. The fixed rail becomes an on-demand drawer. */
+.editor-layout {
+  position: relative !important;
+}
+.editor-layout > .right-pane {
+  position: absolute !important;
+  z-index: 120 !important;
+  top: 10px !important;
+  right: 10px !important;
+  bottom: 10px !important;
+  width: 354px !important;
+  height: auto !important;
+  min-width: 0 !important;
+  max-width: calc(100% - 20px) !important;
+  flex: none !important;
+  flex-basis: auto !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(226, 232, 240, .96) !important;
+  border-radius: 15px !important;
+  background: rgba(255, 255, 255, .98) !important;
+  box-shadow: 0 22px 54px -24px rgba(15, 23, 42, .28) !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: translateX(calc(100% + 22px)) !important;
+  transition: transform 220ms cubic-bezier(.16, 1, .3, 1), opacity 160ms ease, visibility 0s linear 220ms !important;
+}
+.editor-layout > .right-pane.inspector-drawer-open {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: translateX(0) !important;
+  transition: transform 220ms cubic-bezier(.16, 1, .3, 1), opacity 160ms ease, visibility 0s !important;
+}
+.right-pane .inspector-header {
+  min-height: 50px !important;
+  padding: 7px 9px 7px 14px !important;
+  background: rgba(255, 255, 255, .96) !important;
+}
+.right-pane .inspector-drawer-title {
+  color: var(--ui-ink) !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  letter-spacing: -.01em !important;
+}
+.right-pane .inspector-history-actions {
+  gap: 2px !important;
+}
+.right-pane .inspector-close-btn {
+  margin-left: 3px !important;
+  color: #64748b !important;
+}
+.right-pane .inspector-close-btn svg {
+  width: 16px !important;
+  height: 16px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.8 !important;
+  stroke-linecap: round !important;
+}
+
+/* Separate utility island: same geometry, stroke family and tooltip logic as the edit dock. */
+.left-pane .inspector-launcher {
+  position: absolute !important;
+  z-index: 70 !important;
+  left: 18px !important;
+  bottom: 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  height: 48px !important;
+  padding: 4px !important;
+  border: 1px solid rgba(226, 232, 240, .92) !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, .94) !important;
+  box-shadow: 0 14px 34px -22px rgba(15, 23, 42, .28) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+}
+.left-pane .inspector-launcher .inspector-tab {
+  position: relative !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: #94a3b8 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+  transition: color 150ms ease, background-color 150ms ease !important;
+}
+.left-pane .inspector-launcher .inspector-tab:hover,
+.left-pane .inspector-launcher .inspector-tab:focus-visible {
+  color: #0f172a !important;
+  background: #f8fafc !important;
+  outline: none !important;
+}
+.left-pane .inspector-launcher .inspector-tab.active {
+  color: #fff !important;
+  background: #0f172a !important;
+}
+.left-pane .inspector-launcher .inspector-tab svg {
+  width: 18px !important;
+  height: 18px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.8 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+.left-pane .inspector-launcher .inspector-tab::after {
+  position: absolute !important;
+  z-index: 160 !important;
+  bottom: calc(100% + 8px) !important;
+  left: 50% !important;
+  display: block !important;
+  padding: 5px 8px !important;
+  border-radius: 6px !important;
+  color: #fff !important;
+  background: rgba(15, 23, 42, .96) !important;
+  content: attr(data-tooltip) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translate(-50%, 4px) !important;
+  transition: opacity 150ms ease, transform 150ms ease !important;
+}
+.left-pane .inspector-launcher .inspector-tab:hover::after,
+.left-pane .inspector-launcher .inspector-tab:focus-visible::after {
+  opacity: 1 !important;
+  transform: translate(-50%, 0) !important;
+}
+
+@media (max-width: 980px) {
+  .editor-layout > .right-pane {
+    width: min(336px, calc(100% - 20px)) !important;
+  }
+  .left-pane .inspector-launcher {
+    left: 10px !important;
+    bottom: 10px !important;
+  }
+  .linked-artboard-dock.quick-add-dock {
+    bottom: 10px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-layout > .right-pane {
+    transition: none !important;
+  }
+}
