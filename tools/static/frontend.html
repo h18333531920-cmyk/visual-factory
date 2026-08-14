@@ -2770,7 +2770,7 @@
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260814-static-density-v15">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260814-static-density-v16">
 </head>
 <body>
 
@@ -3202,6 +3202,8 @@
         });
         const paneContent = document.querySelector('.right-pane .pane-content');
         if(paneContent) paneContent.scrollTop = 0;
+        requestAnimationFrame(resizeCanvas);
+        setTimeout(resizeCanvas, 230);
     }
     function closeInspectorDrawer() {
         inspectorDrawerOpen = false;
@@ -3215,6 +3217,8 @@
             button.setAttribute('aria-selected', 'false');
             button.setAttribute('aria-expanded', 'false');
         });
+        requestAnimationFrame(resizeCanvas);
+        setTimeout(resizeCanvas, 230);
     }
     function toggleInspectorPanel(panel) {
         if(inspectorDrawerOpen && activeInspectorPanel === panel) closeInspectorDrawer();
