@@ -2021,3 +2021,99 @@ html body {
   font-weight: 650 !important;
   letter-spacing: .04em !important;
 }
+
+/* v262 top actions: one quiet icon family, one clear primary action. */
+.left-pane .canvas-actions {
+  gap: 2px !important;
+  padding: 4px !important;
+  border: 1px solid rgba(148, 163, 184, .22) !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, .96) !important;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, .07) !important;
+  backdrop-filter: blur(12px) !important;
+  overflow: visible !important;
+}
+.left-pane .canvas-actions .canvas-icon-action,
+.left-pane .canvas-actions button.save-template-btn.canvas-icon-action,
+.left-pane .canvas-actions .toolbar-more-wrap > button.canvas-icon-action {
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: #64748b !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+}
+.left-pane .canvas-actions .canvas-icon-action:hover,
+.left-pane .canvas-actions .canvas-icon-action:focus-visible {
+  color: #0f172a !important;
+  border: 0 !important;
+  background: #f1f5f9 !important;
+  outline: none !important;
+}
+.left-pane .canvas-actions .canvas-icon-action svg {
+  width: 18px !important;
+  height: 18px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.65 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  vector-effect: non-scaling-stroke !important;
+}
+.left-pane .canvas-actions .canvas-icon-action svg circle {
+  fill: currentColor !important;
+  stroke: none !important;
+}
+.left-pane .canvas-actions .export-dropdown-wrap {
+  margin-left: 4px !important;
+  padding-left: 6px !important;
+  border-left: 1px solid #e8edf2 !important;
+}
+.left-pane .canvas-actions .export-dropdown-wrap > button.canvas-export-action {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  min-width: 78px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 10px !important;
+  border: 1px solid #0f172a !important;
+  border-radius: 8px !important;
+  color: #fff !important;
+  background: #0f172a !important;
+  box-shadow: none !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .01em !important;
+}
+.left-pane .canvas-actions .export-dropdown-wrap > button.canvas-export-action:hover,
+.left-pane .canvas-actions .export-dropdown-wrap > button.canvas-export-action:focus-visible {
+  color: #fff !important;
+  border-color: #1e293b !important;
+  background: #1e293b !important;
+  outline: none !important;
+}
+.left-pane .canvas-actions .canvas-export-action > svg {
+  width: 15px !important;
+  height: 15px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.8 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+.left-pane .canvas-actions .canvas-export-action > .canvas-export-chevron {
+  width: 12px !important;
+  height: 12px !important;
+  margin-left: -2px !important;
+  opacity: .72 !important;
+}
