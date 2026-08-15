@@ -109,7 +109,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260814-fix-asset-pane-v289';
+const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -404,7 +404,11 @@ const TOOL_UI_VERSION = '20260814-fix-asset-pane-v289';
     return message.includes('failed to fetch') ||
       message.includes('fetch failed') ||
       message.includes('network') ||
-      message.includes('unreachable');
+      message.includes('unreachable') ||
+      message.includes('service for this project is restricted') ||
+      message.includes('exceed_egress_quota') ||
+      message.includes('exceed_cached_egress_quota') ||
+      message.includes('spend caps');
   }
 
   function isEmergencyToken(value) {
