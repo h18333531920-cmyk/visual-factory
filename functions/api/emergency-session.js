@@ -2,6 +2,17 @@ import { json } from '../_shared.js';
 import { verifyEmergencyToken } from '../_emergency-auth.js';
 
 export async function onRequest({ request, env }) {
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Max-Age': '86400'
+      }
+    });
+  }
   if (request.method !== 'GET') {
     return json({ success: false, message: 'Method not allowed' }, 405);
   }

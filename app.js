@@ -107,9 +107,11 @@
     { id: 'analytics', icon: 'analytics', title: 'analytics', adminOnly: true }
   ];
 
+  const RESTRICTED_UI_ROUTES = new Set(['library', 'static', 'admin']);
+
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
+const TOOL_UI_VERSION = '20260817-local-emergency-login-v307';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -166,6 +168,7 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
     profile: null,
     localPreview: false,
     emergencyMode: false,
+    uiRestricted: true,
     route: 'home',
     activeFrame: null,
     toolFrames: {},
@@ -415,10 +418,16 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
     return String(value || '').startsWith('vfem.');
   }
 
+  function emergencyApiBase() {
+    const host = String(location.hostname || '').toLowerCase();
+    const isProduction = host === 'gccdesign.app' || host.endsWith('.pages.dev');
+    return isProduction ? '' : 'https://gccdesign.app';
+  }
+
   async function emergencyLogin(email, password, reason = '') {
     showLoginMessage(state.lang === 'zh' ? '主登录服务暂不可用，正在启用应急登录...' : 'Primary login is unavailable. Trying emergency login...');
     try {
-      const response = await fetch('/api/emergency-login', {
+      const response = await fetch(emergencyApiBase() + '/api/emergency-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -434,7 +443,7 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
 
   async function restoreEmergencySession(token) {
     try {
-      const response = await fetch('/api/emergency-session', {
+      const response = await fetch(emergencyApiBase() + '/api/emergency-session', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json().catch(() => ({}));
@@ -533,7 +542,9 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
   function renderNav() {
     els.navList.innerHTML = '';
     ROUTES
-      .filter(route => !route.hidden && (!route.adminOnly || currentRole() === 'admin'))
+      .filter(route => !route.hidden
+        && (!route.adminOnly || currentRole() === 'admin')
+        && (!state.uiRestricted || RESTRICTED_UI_ROUTES.has(route.id)))
       .forEach(route => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -562,8 +573,13 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
 
   function navigate(routeId) {
     parkActiveToolFrame();
-    const allowed = ROUTES.some(route => route.id === routeId && (!route.adminOnly || currentRole() === 'admin'));
-    state.route = allowed ? routeId : 'home';
+    const allowed = ROUTES.some(route => route.id === routeId
+      && (!route.adminOnly || currentRole() === 'admin')
+      && (!state.uiRestricted || RESTRICTED_UI_ROUTES.has(route.id)));
+    state.route = allowed ? routeId : (state.uiRestricted ? 'library' : 'home');
+    if ((location.hash || '').slice(1) !== state.route) {
+      history.replaceState(null, '', location.pathname + location.search + '#' + state.route);
+    }
     els.appShell.dataset.route = state.route;
     if (els.projectModal) els.projectModal.hidden = true;
     renderNav();
@@ -571,12 +587,31 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
     els.routeKicker.textContent = state.emergencyMode ? 'Emergency Mode' : state.localPreview ? 'Local Preview' : 'gccdesign.app';
     els.routeTitle.textContent = t(route.title);
     if (state.route === 'home') renderCreativeHome();
-    if (state.route === 'library') { state.libraryDataLoaded = false; renderLibrary(); }
+    if (state.route === 'library') {
+      if (state.uiRestricted) setRestrictedLibraryDefault();
+      state.libraryDataLoaded = false;
+      renderLibrary();
+    }
     if (state.route === 'static') renderTool('static');
     if (state.route === 'dynamic') renderTool('dynamic');
     if (state.route === 'request') renderRequestFlow();
     if (state.route === 'admin') renderAdmin();
     if (state.route === 'analytics') renderAnalyticsPage();
+  }
+
+  function setRestrictedLibraryDefault() {
+    state.libraryFilters.kind = 'template';
+    state.libraryFilters.tag1 = '模版';
+    state.libraryFilters.tag2 = '社媒物料';
+    state.libraryFilters.tag3 = 'all';
+    state.libraryFilters.tag4 = 'all';
+    state.libraryFilters.selectedCountries = [];
+    state.libraryFilters.selectedActivities = [];
+    state.libraryFilters.selectedStrategies = [];
+    state.libraryFilters.selectedElements = [];
+    state.libraryFilters.selectedFormats = [];
+    state.libraryFilters.selectedQuantities = [];
+    state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
   }
 
   function navIcon(icon) {
@@ -1035,7 +1070,6 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
         ${renderEditModal()}
         ${renderBatchEditModal()}
         ${renderLibraryDetailModal()}
-        ${renderLibraryBookmarkModal()}
         ${renderMoveGroupModal()}
         <div id="context-menu" role="menu" aria-label="${state.lang === 'zh' ? '操作菜单' : 'Context menu'}"></div>
         <div id="multi-select-bar">
@@ -1402,6 +1436,7 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
   }
 
   function wireLibraryShell() {
+    ensureLibraryBookmarkModal();
     document.querySelectorAll('.library-module-row button[data-route]').forEach(button => {
       button.addEventListener('click', () => {
         const route = button.dataset.route;
@@ -1666,10 +1701,7 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
       if (kind !== 'all' && kind !== itemKind) return false;
       if (query && !libraryItemMatchesQuery(item, query)) return false;
       var tags = visibleLibraryTags(item.source);
-      if (state.libraryFilters.tag1 !== 'all' && !tags.includes(state.libraryFilters.tag1)) return false;
-      if (state.libraryFilters.tag2 !== 'all' && !tags.includes(state.libraryFilters.tag2)) return false;
-      if (state.libraryFilters.tag3 !== 'all' && !tags.includes(state.libraryFilters.tag3)) return false;
-      if (state.libraryFilters.tag4 !== 'all' && !tags.includes(state.libraryFilters.tag4)) return false;
+      if (!librarySourceMatchesSelectedTags(item.source)) return false;
       // 国家筛选（匹配选项的显示名）
       if (state.libraryFilters.selectedCountries && state.libraryFilters.selectedCountries.length) {
         var countryLabel = libCountryLabel(item.source);
@@ -2224,9 +2256,7 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
         const kind = libraryKindOfSource(item.source);
         return state.libraryFilters.kind === 'all' || state.libraryFilters.kind === kind;
       })
-      .filter(item => {
-        return selectedLibraryTagValues().every(tag => visibleLibraryTags(item.source).includes(tag));
-      })
+      .filter(item => librarySourceMatchesSelectedTags(item.source))
       .filter(item => !state.libraryFilters.favorites || state.libraryFavorites.has(item.preview.id))
       .filter(item => !state.libraryFilters.selectedCountries || !state.libraryFilters.selectedCountries.length || state.libraryFilters.selectedCountries.includes(libCountryLabel(item.source)))
       .filter(item => !state.libraryFilters.selectedActivities || !state.libraryFilters.selectedActivities.length || state.libraryFilters.selectedActivities.includes(libActivityLabel(item.source)))
@@ -2584,7 +2614,7 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
       }).join('');
       return `<div class="library-bookmark-inline-row">${libraryBookmarkSizeIconMarkup(entry.info)}<div class="library-bookmark-inline-copy"><strong>${escapeHtml(entry.info.ratio)}</strong><span>${entry.info.width} × ${entry.info.height} px</span></div>${languages ? `<div class="library-bookmark-language-tags">${languages}</div>` : ''}</div>`;
     }).join('');
-    return `<div class="library-bookmark-inline-hover" aria-hidden="true"><div class="library-bookmark-inline-title">${escapeHtml(group?.source?.title || (state.lang === 'zh' ? '模板快捷书签' : 'Template bookmark'))}</div><div class="library-bookmark-inline-list">${rows || `<div class="library-bookmark-inline-empty">${state.lang === 'zh' ? '暂无可用关联模板' : 'No linked templates'}</div>`}</div></div>`;
+    return `<div class="library-bookmark-inline-hover" aria-hidden="true"><div class="library-bookmark-inline-list">${rows || `<div class="library-bookmark-inline-empty">${state.lang === 'zh' ? '暂无可用关联模板' : 'No linked templates'}</div>`}</div></div>`;
   }
 
   function renderLibraryCard(item) {
@@ -3307,12 +3337,8 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
   function renderLibraryBookmarkModal() {
     return `
       <div id="library-bookmark-modal" class="modal-backdrop library-bookmark-modal-backdrop" hidden>
-        <section class="modal library-modal library-bookmark-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="library-bookmark-title">
+        <section class="modal library-modal library-bookmark-picker-dialog" role="dialog" aria-modal="true" aria-label="${state.lang === 'zh' ? '模板选择' : 'Template picker'}">
           <div class="modal-head library-bookmark-picker-header">
-            <div class="library-bookmark-title-group">
-              <h3 id="library-bookmark-title">${state.lang === 'zh' ? '模板快捷书签' : 'Template bookmark'}</h3>
-              <button class="library-bookmark-rename-icon" id="rename-library-bookmark" type="button" aria-label="${state.lang === 'zh' ? '重命名书签' : 'Rename bookmark'}" title="${state.lang === 'zh' ? '重命名' : 'Rename'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
-            </div>
             <button class="icon-btn modal-close-circle" id="close-library-bookmark" type="button" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>
           </div>
           <div class="library-bookmark-picker-body">
@@ -3323,6 +3349,16 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
         </section>
       </div>
     `;
+  }
+
+  function ensureLibraryBookmarkModal() {
+    let modal = document.getElementById('library-bookmark-modal');
+    if (modal) return modal;
+    const host = document.createElement('div');
+    host.innerHTML = renderLibraryBookmarkModal().trim();
+    modal = host.firstElementChild;
+    document.body.appendChild(modal);
+    return modal;
   }
 
   function closeLibraryBookmarkPopup() {
@@ -3549,7 +3585,7 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
     if (menu) menu.hidden = true;
   }
 
-  function showLibraryBookmarkMemberMenu(event, member, nameEl) {
+  function showLibraryBookmarkMemberMenu(event, group, member, nameEl) {
     event.preventDefault();
     event.stopPropagation();
     let menu = document.getElementById('library-bookmark-member-menu');
@@ -3559,29 +3595,57 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
       menu.className = 'library-bookmark-member-menu';
       document.body.appendChild(menu);
     }
-    menu.innerHTML = `<button type="button">${state.lang === 'zh' ? '重命名模板' : 'Rename template'}</button>`;
+    const actions = [
+      { id: 'rename', label: state.lang === 'zh' ? '重命名' : 'Rename' },
+      { id: 'language-en', label: state.lang === 'zh' ? '设为 EN' : 'Set as EN' },
+      { id: 'language-ar', label: state.lang === 'zh' ? '设为 AR' : 'Set as AR' },
+      { id: 'release', label: state.lang === 'zh' ? '释放到组外' : 'Release from group' },
+      { id: 'delete', label: state.lang === 'zh' ? '删除模板' : 'Delete template', danger: true }
+    ];
+    menu.innerHTML = actions.map(function(action) {
+      return `<button type="button" data-bookmark-member-action="${action.id}"${action.danger ? ' class="danger"' : ''}>${action.label}</button>`;
+    }).join('');
     menu.hidden = false;
     menu.style.left = Math.min(event.clientX, window.innerWidth - menu.offsetWidth - 10) + 'px';
     menu.style.top = Math.min(event.clientY, window.innerHeight - menu.offsetHeight - 10) + 'px';
-    menu.querySelector('button').onclick = function() {
-      hideLibraryBookmarkMemberMenu();
-      renameLibraryBookmarkMemberInline(member, nameEl);
-    };
+    menu.querySelectorAll('[data-bookmark-member-action]').forEach(function(button) {
+      button.onclick = function() {
+        const action = button.dataset.bookmarkMemberAction;
+        hideLibraryBookmarkMemberMenu();
+        if (action === 'rename') {
+          renameLibraryBookmarkMemberInline(member, nameEl);
+          return;
+        }
+        const frame = state.toolFrames.static;
+        if (frame?.contentWindow) {
+          frame.contentWindow.postMessage({
+            type: 'vf:bookmark-member-command',
+            action: action,
+            bookmarkId: group.source.id,
+            memberId: member.source.id,
+            templateRefs: group.refs || [],
+            coverTemplateId: group.coverTemplateId || ''
+          }, location.origin);
+        }
+      };
+    });
     setTimeout(function() {
       document.addEventListener('click', hideLibraryBookmarkMemberMenu, { once: true });
     }, 0);
   }
 
   async function openLibraryBookmarkPopup(sourceId) {
-    const group = state.libraryBookmarkGroups.find(function(g) { return g.source.id === sourceId; });
+    let group = state.libraryBookmarkGroups.find(function(g) { return g.source.id === sourceId; });
+    if (!group) {
+      try {
+        group = await loadLibraryBookmarkGroupOnDemand(sourceId);
+      } catch (error) {
+        alert((state.lang === 'zh' ? '套组读取失败：' : 'Failed to load group: ') + (error.message || error));
+        return;
+      }
+    }
     if (!group) return;
-    const source = group.source;
-    const modal = document.getElementById('library-bookmark-modal');
-    if (!modal) return;
-    const titleEl = document.getElementById('library-bookmark-title');
-    if (titleEl) titleEl.textContent = source.title || (state.lang === 'zh' ? '模板快捷书签' : 'Template bookmark');
-    const headerRenameBtn = document.getElementById('rename-library-bookmark');
-    if (headerRenameBtn) headerRenameBtn.onclick = function() { renameLibraryBookmarkInline(sourceId); };
+    const modal = ensureLibraryBookmarkModal();
     const listEl = document.getElementById('library-bookmark-members');
     if (!listEl) return;
     listEl.innerHTML = `<div class="library-bookmark-picker-loading">${state.lang === 'zh' ? '正在读取关联模板…' : 'Loading linked templates…'}</div>`;
@@ -3609,16 +3673,8 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
     });
     const resultCount = document.createElement('span');
     resultCount.className = 'library-bookmark-result-count';
-    const actions = document.createElement('div');
-    actions.className = 'library-bookmark-picker-actions';
-    const dissolveBtn = document.createElement('button');
-    dissolveBtn.type = 'button';
-    dissolveBtn.className = 'library-bookmark-picker-action danger';
-    dissolveBtn.textContent = state.lang === 'zh' ? '解散' : 'Dissolve';
-    dissolveBtn.onclick = function() { dissolveLibraryBookmarkFromPopup(sourceId, group); };
-    actions.appendChild(dissolveBtn);
     filterGroup.append(filterLabel, languageTabs);
-    toolbar.append(filterGroup, resultCount, actions);
+    toolbar.append(filterGroup, resultCount);
 
     function countForLanguage(language) {
       return allMembers.filter(function(member) {
@@ -3638,6 +3694,13 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
       const members = allMembers.filter(function(member) {
         const memberLanguage = libraryBookmarkMemberLanguage(member);
         return !memberLanguage || memberLanguage === language;
+      }).sort(function(a, b) {
+        const aInfo = libraryBookmarkMemberDimensionInfo(a);
+        const bInfo = libraryBookmarkMemberDimensionInfo(b);
+        const aLength = aInfo ? aInfo.height / Math.max(1, aInfo.width) : 0;
+        const bLength = bInfo ? bInfo.height / Math.max(1, bInfo.width) : 0;
+        if (bLength !== aLength) return bLength - aLength;
+        return (bInfo?.height || 0) - (aInfo?.height || 0);
       });
       resultCount.textContent = state.lang === 'zh' ? `显示 ${members.length} 个模板` : `${members.length} templates`;
       listEl.innerHTML = '';
@@ -3684,7 +3747,7 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
         card.onkeydown = function(event) {
           if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); card.click(); }
         };
-        card.oncontextmenu = function(event) { showLibraryBookmarkMemberMenu(event, member, nameEl); };
+        card.oncontextmenu = function(event) { showLibraryBookmarkMemberMenu(event, group, member, nameEl); };
         grid.appendChild(card);
       });
       listEl.appendChild(grid);
@@ -3696,6 +3759,50 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
     const closeBtn = document.getElementById('close-library-bookmark');
     if (closeBtn) closeBtn.onclick = closeLibraryBookmarkPopup;
     modal.onclick = function(event) { if (event.target === modal) closeLibraryBookmarkPopup(); };
+  }
+
+  async function loadLibraryBookmarkGroupOnDemand(sourceId) {
+    if (state.localPreview || !state.supabase || !sourceId) {
+      throw new Error(state.lang === 'zh' ? '云端素材尚未就绪' : 'Cloud library is not ready');
+    }
+    const sourceFields = 'id,title,country_id,activity_id,category_id,tags,visibility,source_path,source_filename,source_mime_type,source_size_bytes,source_ext,uploaded_by,created_at,updated_at';
+    const sourceResult = await state.supabase.from('vf_source_files').select(sourceFields).eq('id', sourceId).limit(1);
+    if (sourceResult.error || !sourceResult.data?.length) {
+      throw (sourceResult.error || new Error(state.lang === 'zh' ? '找不到模板套组' : 'Template group not found'));
+    }
+    const source = sourceResult.data[0];
+    const snapshot = await loadLibraryTemplateSnapshot({ source: source });
+    const refs = Array.isArray(snapshot?.templateRefs) ? snapshot.templateRefs : [];
+    const memberIds = refs.map(function(ref) {
+      return typeof ref === 'string' ? ref : ref?.templateId;
+    }).filter(Boolean);
+    let members = [];
+    for (const idBatch of chunkArray(memberIds, SUPABASE_IN_BATCH_SIZE)) {
+      const memberResult = await state.supabase.from('vf_source_files').select(sourceFields).in('id', idBatch);
+      if (memberResult.error) throw memberResult.error;
+      members.push(...(memberResult.data || []));
+    }
+    let previews = [];
+    for (const idBatch of chunkArray([sourceId].concat(memberIds), SUPABASE_IN_BATCH_SIZE)) {
+      const previewResult = await state.supabase
+        .from('vf_asset_previews')
+        .select('id,source_file_id,preview_path,preview_filename,preview_mime_type,preview_size_bytes,width,height,sort_order,created_at')
+        .in('source_file_id', idBatch)
+        .order('sort_order', { ascending: true });
+      if (previewResult.error) throw previewResult.error;
+      previews.push(...(previewResult.data || []));
+    }
+    const sourceMap = new Map(state.librarySources.map(function(item) { return [item.id, item]; }));
+    [source].concat(members).forEach(function(item) { sourceMap.set(item.id, item); });
+    state.librarySources = Array.from(sourceMap.values());
+    const previewMap = new Map(state.libraryPreviews.map(function(item) { return [item.id, item]; }));
+    previews.forEach(function(item) { previewMap.set(item.id, item); });
+    state.libraryPreviews = Array.from(previewMap.values());
+    memberIds.forEach(function(id) { state.libraryBookmarkMemberIds.add(id); });
+    const group = { source: source, refs: refs, coverTemplateId: snapshot?.coverTemplateId || '' };
+    state.libraryBookmarkGroups = state.libraryBookmarkGroups.filter(function(item) { return item.source.id !== sourceId; });
+    state.libraryBookmarkGroups.push(group);
+    return group;
   }
 
   function renameLibraryBookmarkInline(sourceId) {
@@ -4956,6 +5063,22 @@ const TOOL_UI_VERSION = '20260815-egress-emergency-login-v290';
       .filter(value => value && value !== 'all');
   }
 
+  function librarySourceMatchesSelectedTags(source) {
+    const selectedTags = selectedLibraryTagValues();
+    if (!selectedTags.length) return true;
+    if (selectedTags.every(tag => visibleLibraryTags(source).includes(tag))) return true;
+    if (!isBookmarkSource(source)) return false;
+
+    const group = state.libraryBookmarkGroups.find(item => item.source.id === source.id);
+    if (!group) return false;
+    const sourcesById = new Map(state.librarySources.map(item => [item.id, item]));
+    return group.refs.some(ref => {
+      const memberId = typeof ref === 'string' ? ref : ref?.templateId;
+      const member = sourcesById.get(memberId);
+      return member && selectedTags.every(tag => visibleLibraryTags(member).includes(tag));
+    });
+  }
+
   function countLibraryKinds() {
     return state.librarySources.reduce((counts, source) => {
       const kind = libraryKindOfSource(source);
@@ -6056,11 +6179,10 @@ function libraryTagsForForm(formData, kind) {
 
   async function renderAdmin() {
     parkActiveToolFrame();
-    els.content.innerHTML = `
-      <div class="panel-page">
+    const managementSettingsHtml = state.uiRestricted ? '' : `
         <section class="admin-section">
           <div>
-            <div class="kicker">${state.lang === 'zh' ? 'TEAM ACCESS' : 'TEAM ACCESS'}</div>
+            <div class="kicker">TEAM ACCESS</div>
             <h3>${t('createAccount')}</h3>
           </div>
           <form id="create-user-form" class="toolbar">
@@ -6074,7 +6196,7 @@ function libraryTagsForForm(formData, kind) {
         </section>
         <section class="admin-section">
           <div>
-            <div class="kicker">${state.lang === 'zh' ? 'CLASSIFICATION' : 'CLASSIFICATION'}</div>
+            <div class="kicker">CLASSIFICATION</div>
             <h3>${t('createCategory')}</h3>
           </div>
           <form id="category-form" class="toolbar">
@@ -6090,12 +6212,39 @@ function libraryTagsForForm(formData, kind) {
             <thead><tr><th>${t('categoryNameZh')}</th><th>${t('categoryNameEn')}</th><th>${t('visibility')}</th></tr></thead>
             <tbody id="categories-table"><tr><td colspan="3">${state.lang === 'zh' ? '正在读取...' : 'Loading...'}</td></tr></tbody>
           </table>
+        </section>`;
+    els.content.innerHTML = `
+      <div class="panel-page">
+        ${managementSettingsHtml}
+        <section class="admin-section ui-restriction-section">
+          <div class="ui-restriction-copy">
+            <div class="kicker">DELIVERY SAFETY</div>
+            <h3>${state.lang === 'zh' ? '用户界面限制' : 'Interface restrictions'}</h3>
+            <p>${state.lang === 'zh'
+              ? '开启后，左侧仅显示素材库、DIY 静态和团队管理，降低交付使用时误入其他功能的风险。'
+              : 'When enabled, the sidebar only shows Library, Static DIY, and Team to reduce accidental access during delivery.'}</p>
+          </div>
+          <label class="ui-restriction-control" for="ui-restriction-toggle">
+            <span id="ui-restriction-status" class="ui-restriction-status">${state.uiRestricted ? (state.lang === 'zh' ? '已开启' : 'On') : (state.lang === 'zh' ? '已关闭' : 'Off')}</span>
+            <input id="ui-restriction-toggle" type="checkbox" ${state.uiRestricted ? 'checked' : ''}>
+            <span class="ui-restriction-switch" aria-hidden="true"></span>
+          </label>
         </section>
       </div>
     `;
-    document.getElementById('create-user-form').addEventListener('submit', createUser);
-    document.getElementById('category-form').addEventListener('submit', createCategory);
-    await loadCategories();
+    const createUserForm = document.getElementById('create-user-form');
+    const categoryForm = document.getElementById('category-form');
+    if (createUserForm) createUserForm.addEventListener('submit', createUser);
+    if (categoryForm) categoryForm.addEventListener('submit', createCategory);
+    const restrictionToggle = document.getElementById('ui-restriction-toggle');
+    if (restrictionToggle) {
+      restrictionToggle.addEventListener('change', function() {
+        state.uiRestricted = restrictionToggle.checked;
+        renderNav();
+        void renderAdmin();
+      });
+    }
+    if (!state.uiRestricted) await loadCategories();
   }
 
   async function createUser(event) {
@@ -6326,6 +6475,9 @@ function libraryTagsForForm(formData, kind) {
         break;
       case 'vf:request-template-metadata':
         handleFetchTemplateMetadata(msg.id, sourceWindow);
+        break;
+      case 'vf:open-template-bookmark':
+        await openLibraryBookmarkPopup(msg.id);
         break;
       case 'vf:rename-template':
         handleRenameTemplate(msg.id, msg.name, sourceWindow);
