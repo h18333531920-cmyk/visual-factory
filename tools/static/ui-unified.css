@@ -2883,10 +2883,8 @@ html body {
   box-shadow: 0 7px 16px -10px rgba(15, 23, 42, .72) !important;
 }
 .right-pane .ai-submit-btn::before {
-  content: "↑" !important;
-  font-size: 15px !important;
-  font-weight: 700 !important;
-  line-height: 1 !important;
+  content: none !important;
+  display: none !important;
 }
 .right-pane .ai-submit-btn:hover {
   background: #1e293b !important;
@@ -3065,5 +3063,11 @@ html[data-vf-mode="user"] .vf-developer-text-controls {
 }
 
 html[data-vf-mode="user"] .vf-user-hidden-logo-control {
+  display: none !important;
+}
+
+/* User delivery mode only edits existing template content; creation tools stay developer-only. */
+html[data-vf-mode="user"] #linked-artboard-dock,
+html[data-vf-mode="user"] .linked-artboard-dock.quick-add-dock {
   display: none !important;
 }

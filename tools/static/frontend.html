@@ -1547,7 +1547,7 @@
             z-index: 23;
             pointer-events: auto;
             display: grid;
-            grid-template-columns: repeat(2, 48px);
+            grid-template-columns: repeat(2, 48px) 36px;
             gap: 3px;
             padding: 4px;
             border: 1px solid rgba(16, 19, 24, 0.10);
@@ -1576,6 +1576,92 @@
             background: #0f172a;
             color: #ffffff;
             box-shadow: 0 4px 12px rgba(15, 23, 42, 0.22);
+        }
+
+        .left-pane .canvas-language-switch .canvas-language-copy {
+            position: relative;
+            width: 36px;
+            color: #64748b;
+        }
+
+        .left-pane .canvas-language-switch .canvas-language-copy::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 6px;
+            bottom: 6px;
+            width: 1px;
+            background: rgba(15, 23, 42, 0.10);
+        }
+
+        .left-pane .canvas-language-switch .canvas-language-copy:hover {
+            background: rgba(15, 23, 42, 0.07);
+            color: #0f172a;
+        }
+
+        .left-pane .canvas-language-switch .canvas-language-copy svg {
+            width: 16px;
+            height: 16px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.9;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            vertical-align: middle;
+        }
+
+        html[data-vf-mode="user"] .canvas-language-copy { display: none !important; }
+        html[data-vf-mode="user"] .left-pane .canvas-language-switch { grid-template-columns: repeat(2, 48px); }
+        html[data-vf-mode="user"] .left-pane .inspector-launcher [data-inspector-tab="layers"],
+        html[data-vf-mode="user"] [data-inspector-panel="layers"] { display: none !important; }
+        html[data-vf-mode="user"] #asset-multi-select-btn,
+        html[data-vf-mode="user"] .asset-tab[data-asset-tab="recycle"] { display: none !important; }
+        html[data-vf-mode="user"] .asset-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+        .asset-pane #refresh-asset-btn.asset-refresh-capsule {
+            width: auto !important;
+            min-width: 54px;
+            height: 30px;
+            padding: 0 12px !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #dfe4eb;
+            border-radius: 999px !important;
+            background: #f6f8fb;
+            color: #526071;
+            font-size: 12px !important;
+            line-height: 1;
+            font-weight: 750;
+            white-space: nowrap;
+        }
+        .asset-pane #refresh-asset-btn.asset-refresh-capsule:hover {
+            border-color: #cbd3de;
+            background: #edf1f6;
+            color: #101828;
+        }
+
+        #ai-module-card .ai-refresh-capsule {
+            width: auto !important;
+            min-width: 54px;
+            height: 30px;
+            padding: 0 12px !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #dfe4eb;
+            border-radius: 999px !important;
+            background: #f6f8fb;
+            color: #526071;
+            font-size: 12px !important;
+            line-height: 1;
+            font-weight: 750;
+            white-space: nowrap;
+        }
+        #ai-module-card .ai-refresh-capsule:hover {
+            border-color: #cbd3de;
+            background: #edf1f6;
+            color: #101828;
         }
 
         .left-pane .ratio-nav button,
@@ -2851,7 +2937,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260818-bookmark-preview-recovery-v370">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260818-ai-submit-no-arrow-v400">
 </head>
 <body>
 
@@ -3006,7 +3092,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             <div class="card-title">
                 <div class="card-title-wrap">资产库</div>
                 <button type="button" class="btn-icon" id="asset-multi-select-btn" onclick="toggleAssetMultiSelect()" title="多选" style="padding:2px 8px;font-size:12px;">多选</button>
-                <button type="button" class="btn-icon" id="refresh-asset-btn" onclick="refreshAssetLibrary()" title="刷新资产库" style="padding:2px 6px;font-size:13px;">↻</button>
+                <button type="button" class="btn-icon asset-refresh-capsule" id="refresh-asset-btn" onclick="refreshAssetLibrary()" title="刷新资产库" aria-label="刷新资产库">刷新</button>
             </div>
             <div class="asset-tabs">
                 <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')" style="white-space:nowrap;">模板 <small id="diy-count-layout">· 0</small></button>
@@ -3076,6 +3162,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             <div class="canvas-language-switch" id="canvas-language-switch" role="group" aria-label="画板语言版本">
                 <button type="button" id="canvas-language-en" class="active" onclick="switchCanvasLanguage('en')" aria-pressed="true">EN</button>
                 <button type="button" id="canvas-language-ar" onclick="switchCanvasLanguage('ar')" aria-pressed="false">AR</button>
+                <button type="button" class="canvas-language-copy" onclick="copyEnglishCanvasToArabic()" title="将 EN 内容和位置复制到 AR" aria-label="将 EN 内容和位置复制到 AR">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>
+                </button>
             </div>
         </div>
 
@@ -3093,6 +3182,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             <button type="button" id="layer-context-add-reference" onclick="addLayerContextReferenceToAI(); closeLayerContextMenu();" hidden>加入生图参考图</button>
             <button type="button" id="layer-context-replace-image" onclick="replaceLayerContextImage(); closeLayerContextMenu();" hidden>替换图片</button>
             <button type="button" id="layer-context-duplicate-layer" onclick="duplicateLayerContext(); closeLayerContextMenu();">复制图层</button>
+            <button type="button" id="layer-context-hide-language" onclick="hideLayerContextInCurrentLanguage(); closeLayerContextMenu();" hidden>隐藏当前版本</button>
             <button type="button" onclick="centerLayerOnCanvas(); closeLayerContextMenu();">元素画板居中</button>
             <button type="button" id="ctx-group-selection-btn" onclick="groupSelectedLayers(); closeLayerContextMenu();" hidden>编组</button>
             <button type="button" id="ctx-ungroup-selection-btn" onclick="ungroupSelectedLayers(); closeLayerContextMenu();" hidden>取消编组</button>
@@ -3153,7 +3243,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             </div>
 
             <div class="module-card inspector-panel" id="ai-module-card" data-inspector-panel="ai" role="tabpanel">
-                <div class="card-title"><div class="card-title-wrap">生图</div><div class="layer-card-actions"><button class="btn-icon" type="button" onclick="refreshJimengSessionId()" title="重新获取即梦 Session ID" aria-label="刷新即梦凭证">↻</button></div></div>
+                <div class="card-title"><div class="card-title-wrap">生图</div><div class="layer-card-actions"><button class="btn-icon ai-refresh-capsule" type="button" onclick="refreshJimengSessionId()" title="重新获取即梦 Session ID" aria-label="刷新即梦凭证">刷新</button></div></div>
                 <div class="ai-console">
                     <div class="jimeng-api-row" id="jimeng-api-row" hidden>
                         <div class="jimeng-session-head">
@@ -3223,6 +3313,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         document.documentElement.dataset.vfMode = nextMode;
         if (document.body) document.body.dataset.vfMode = nextMode;
         if (rerender) {
+            if (nextMode === 'user') {
+                if (typeof closeInspectorDrawer === 'function' && activeInspectorPanel === 'layers') closeInspectorDrawer();
+                if (typeof currentAssetTab !== 'undefined' && currentAssetTab === 'recycle' && typeof switchAssetTab === 'function') switchAssetTab('layout');
+                if (typeof assetMultiSelect !== 'undefined' && assetMultiSelect && typeof exitAssetMultiSelect === 'function') exitAssetMultiSelect();
+                if (typeof templateBookmarkSelectMode !== 'undefined' && templateBookmarkSelectMode && typeof exitTemplateBookmarkMultiSelect === 'function') exitTemplateBookmarkMultiSelect(false);
+            }
             if (typeof closeSaveTemplateMenu === 'function') closeSaveTemplateMenu();
             if (typeof closeResizeMenu === 'function') closeResizeMenu();
             if (typeof renderCanvas === 'function') renderCanvas();
@@ -3260,7 +3356,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     function isUserProtectedTemplateContent(layer) {
         return isUserProtectedTemplateText(layer)
             || isUserProtectedTemplateLogo(layer)
-            || isUserProtectedTemplateTag(layer);
+            || isUserProtectedTemplateTag(layer)
+            || isUserProtectedTemplateArc(layer);
     }
     function isUserMoveProtectedTemplateLayer(layer) {
         return isUserProtectedTemplateContent(layer) || isUserProtectedTemplateArc(layer);
@@ -3270,10 +3367,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const hasText = items.some(isUserProtectedTemplateText);
         const hasLogo = items.some(isUserProtectedTemplateLogo);
         const hasTag = items.some(isUserProtectedTemplateTag);
+        const hasArc = items.some(isUserProtectedTemplateArc);
         const labels = [];
         if (hasText) labels.push('文字');
         if (hasLogo) labels.push('Logo 组件');
         if (hasTag) labels.push('标签');
+        if (hasArc) labels.push('圆环');
         return '模板' + (labels.join('、') || '内容') + '不可删除';
     }
     function getProtectedTemplateMoveMessage(layer) {
@@ -3329,6 +3428,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     const INSPECTOR_PANEL_LABELS = { layers: '图层', edit: '编辑', ai: '生图' };
     function switchInspectorPanel(panel) {
         const next = ['layers', 'edit', 'ai'].includes(panel) ? panel : 'layers';
+        if (next === 'layers' && isUserInterfaceMode()) {
+            closeInspectorDrawer();
+            return;
+        }
         activeInspectorPanel = next;
         inspectorDrawerOpen = true;
         const rightPane = document.querySelector('.right-pane');
@@ -3393,11 +3496,25 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     const LANGUAGE_VARIANT_PLACEMENT_PROPS = ['x', 'y', 'rotation', 'scale', 'flipX'];
     const LANGUAGE_VARIANT_TEXT_PROPS = ['text', 'resizeMode', 'maxWidth', 'textBoxHeight', 'textBoxAnchor', 'textDirection', 'textDirectionMode', 'textAlign', 'textAlignMode', '_userAutoWrapped', '_userAutoFitBaseLetterSpacing'];
     const LANGUAGE_VARIANT_DISCOUNT_PROPS = ['mainText', 'topText', 'bottomText', 'subtitle', 'discountLang', 'sideLineGap', 'topFontSize', 'bottomFontSize'];
-    const LANGUAGE_VARIANT_LOGO_LAYOUT_PROPS = ['slots', 'mainLogoSrc', 'mainLogoStyle'];
+    const LANGUAGE_VARIANT_LOGO_LAYOUT_PROPS = ['slots', 'mainLogoSrc', 'mainLogoStyle', '_pairWideAutoOffset', '_pairWideAutoScaleFactor'];
     const LANGUAGE_VARIANT_LINKED_GEOMETRY_PROPS = LANGUAGE_VARIANT_PLACEMENT_PROPS.concat(['resizeMode', 'maxWidth', 'textBoxHeight', 'textBoxAnchor', 'textDirection', 'textDirectionMode', 'textAlign', 'textAlignMode', '_userAutoWrapped', '_userAutoFitBaseLetterSpacing']);
 
     function normalizeCanvasLanguage(language) {
         return String(language || '').toLowerCase() === 'ar' ? 'ar' : 'en';
+    }
+    function isLayerVisibleInCanvasLanguage(layer, language = currentCanvasLanguage) {
+        if (!layer || layer.visible === false) return false;
+        const visibility = layer._languageVisibility;
+        if (!visibility || typeof visibility !== 'object') return true;
+        return visibility[normalizeCanvasLanguage(language)] !== false;
+    }
+    function setLayerVisibleInCanvasLanguage(layer, visible, language = currentCanvasLanguage) {
+        if (!layer) return;
+        const normalized = normalizeCanvasLanguage(language);
+        if (!layer._languageVisibility || typeof layer._languageVisibility !== 'object') {
+            layer._languageVisibility = { en: true, ar: true };
+        }
+        layer._languageVisibility[normalized] = visible !== false;
     }
     function normalizeCanvasLanguagesInitialized(value, activeLanguage = currentCanvasLanguage) {
         const active = normalizeCanvasLanguage(activeLanguage);
@@ -3501,6 +3618,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 if (Object.prototype.hasOwnProperty.call(variant, prop)) layer[prop] = cloneLanguageValue(variant[prop]);
                 else delete layer[prop];
             });
+            if (layer.type === 'logoLayout' && layer.logoLayout === 'pair') {
+                const pairRatio = (Number(layer.pairRightW) || 114) / Math.max(1, Number(layer.pairRightH) || 114);
+                applyPairWideComponentOffset(layer, pairRatio > 1.3);
+                variants[normalized] = snapshotLayerLanguageVariant(layer, targetLayers);
+            }
             if (layer.type === 'discountTag' && layer.discountLang !== normalized) {
                 toggleDiscountLangForLayer(layer);
                 variants[normalized] = snapshotLayerLanguageVariant(layer, targetLayers);
@@ -3535,13 +3657,62 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             artboards[currentArtboardId].languageMode = nextLanguage;
             artboards[currentArtboardId].languagesInitialized = cloneData(currentCanvasLanguagesInitialized);
         }
-        activeLayerIds = activeLayerIds.filter(function(id) { return layers.some(function(layer) { return layer.id === id; }); });
+        activeLayerIds = activeLayerIds.filter(function(id) {
+            return layers.some(function(layer) { return layer.id === id && isLayerVisibleInCanvasLanguage(layer, nextLanguage); });
+        });
         syncCanvasLanguageControl();
         renderCanvas(); renderLayersList(); renderProperties(); renderArtboardPreviews();
         saveHistory(true);
         showToast(nextLanguage === 'ar' ? '已切换到 AR 版本' : '已切换到 EN 版本');
     }
     window.switchCanvasLanguage = switchCanvasLanguage;
+    async function copyEnglishCanvasToArabic() {
+        if (isUserInterfaceMode()) return;
+        const confirmed = await askConfirm('将用 EN 版本的文字内容和组件位置覆盖当前 AR 版本。AR 专属的语言模式（例如折扣标签的 AR 模式）会保留。是否继续？');
+        if (!confirmed) return;
+        exitTextEdit();
+        // 先落盘当前正在编辑的版本，确保 EN 的最新修改不会因复制而遗漏。
+        captureCanvasLanguageState(layers, currentCanvasLanguage);
+        let copiedCount = 0;
+        layers.forEach(function(layer) {
+            if (isLanguageSharedBackgroundLayer(layer, layers)) return;
+            const variants = ensureLayerLanguageVariants(layer, layers, currentCanvasLanguage);
+            if (!variants) return;
+            let englishVariant = variants.en;
+            if (!englishVariant && currentCanvasLanguage === 'en') {
+                englishVariant = snapshotLayerLanguageVariant(layer, layers);
+                variants.en = cloneData(englishVariant);
+            }
+            if (!englishVariant) return;
+            // 折扣标签复制 EN 的内容和位置，但目标快照必须继续保持 AR 模式。
+            variants.ar = layer.type === 'discountTag'
+                ? createDiscountLanguageVariant(englishVariant, 'ar')
+                : cloneData(englishVariant);
+            if (layer._languagePendingPlacement) {
+                delete layer._languagePendingPlacement.ar;
+                if (!Object.keys(layer._languagePendingPlacement).length) delete layer._languagePendingPlacement;
+            }
+            copiedCount++;
+        });
+        if (!copiedCount) {
+            showToast('当前画板没有可复制的 EN 版本内容', true);
+            return;
+        }
+        currentCanvasLanguagesInitialized.ar = true;
+        if (currentCanvasLanguage === 'ar') applyCanvasLanguageState(layers, 'ar');
+        if (artboards[currentArtboardId]) {
+            artboards[currentArtboardId].languageMode = currentCanvasLanguage;
+            artboards[currentArtboardId].languagesInitialized = cloneData(currentCanvasLanguagesInitialized);
+        }
+        activeLayerIds = [];
+        renderCanvas();
+        renderLayersList();
+        renderProperties();
+        renderArtboardPreviews();
+        saveHistory(true);
+        showToast('已将 EN 内容和位置复制到 AR，AR 语言模式保持不变');
+    }
+    window.copyEnglishCanvasToArabic = copyEnglishCanvasToArabic;
     // 关联画板集合：复制画板后保留各自尺寸，但图层内容作为一个共享集合同步。
     let linkedArtboardGroupId = '';
     let linkedArtboardIds = [];
@@ -6988,6 +7159,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 wrapper.style.background = 'transparent';
             }
             const slots = Array.isArray(l.slots) ? l.slots : [];
+            if (interactive) scheduleLogoLayoutBackgroundRecovery(l);
             if(l.logoLayout === 'matrix') {
                 var rows = l.rows || 2, cols = l.cols || 2;
                 var slotSize = l.slotSize || 140;
@@ -7012,7 +7184,17 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 wrapper.style.width = (l.baseW || 210) + 'px'; wrapper.style.height = (l.baseH || 210) + 'px';
                 wrapper.innerHTML = '<div class="logo-layout-single">' + getLogoLayoutSlotHTML(slots[0], 0) + '</div>';
             } else {
-                if(l.logoPairLayoutVersion !== 2) { l.baseW = 442; l.logoPairLayoutVersion = 2; }
+                if(l.logoPairLayoutVersion !== 11) {
+                    var previousPairLayoutVersion = Number(l.logoPairLayoutVersion) || 0;
+                    var legacyPairRatio = (Number(l.pairRightW) || 114) / Math.max(1, Number(l.pairRightH) || 114);
+                    var legacyPairWasWide = legacyPairRatio > 1.3;
+                    l.baseW = 442;
+                    autoFitPairRightSlot(l, legacyPairWasWide ? 2 : 1);
+                    // v391 曾把所有横版组件强制缩放为 1；只补偿这一版造成的意外缩小。
+                    if(previousPairLayoutVersion === 5 && legacyPairWasWide && Math.abs((Number(l.scale) || 1) - 1) < 0.001) l.scale = 1.06;
+                    applyPairWideComponentOffset(l, legacyPairWasWide);
+                    l.logoPairLayoutVersion = 11;
+                }
                 wrapper.style.width = (l.baseW || 442) + 'px'; wrapper.style.height = (l.baseH || 150) + 'px';
                 const mainLogoSrc = getCloudKeetaLogoSrc(l.mainLogoStyle || 'primary', l.mainLogoSrc);
                 const isLightKeeta = l.mainLogoStyle === 'white' || l.mainLogoStyle === 'yellow' || /keeta-secondary-(white|yellow)/.test(mainLogoSrc);
@@ -7218,7 +7400,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const layer = layers.find(function(item) { return item.id === id; });
             if (!layer) return;
             const groupId = getEditorGroupId(layer);
-            if (groupId) getEditorGroupMembers(groupId).forEach(function(member) { expanded.add(member.id); });
+            if (groupId) getEditorGroupMembers(groupId).filter(function(member) { return isLayerVisibleInCanvasLanguage(member); }).forEach(function(member) { expanded.add(member.id); });
             else expanded.add(layer.id);
         });
         return Array.from(expanded);
@@ -7228,7 +7410,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (!selected.length) return null;
         const groupId = getEditorGroupId(selected[0]);
         if (!groupId) return null;
-        const members = getEditorGroupMembers(groupId);
+        const members = getEditorGroupMembers(groupId).filter(function(member) { return isLayerVisibleInCanvasLanguage(member); });
         if (members.length < 2 || selected.length !== members.length || !members.every(function(member) { return activeLayerIds.includes(member.id); })) return null;
         return { id: groupId, members: members };
     }
@@ -7238,7 +7420,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         root.querySelector('.editor-group-selection-box')?.remove();
         const activeGroup = getActiveEditorGroup();
         if (!activeGroup) return;
-        const bounds = getGroupBounds(activeGroup.members.filter(function(layer) { return layer.visible !== false; }));
+        const bounds = getGroupBounds(activeGroup.members.filter(function(member) { return isLayerVisibleInCanvasLanguage(member); }));
         if (!bounds) return;
         const selectionBox = document.createElement('div');
         selectionBox.className = 'editor-group-selection-box';
@@ -7272,7 +7454,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     function renderCanvas() {
         const container = document.getElementById('dynamic-layers'); container.innerHTML = '';
         const hintEl = document.getElementById('empty-hint');
-        const visibleLayers = layers.filter(function(l) { return l.visible !== false; });
+        const visibleLayers = layers.filter(function(layer) { return isLayerVisibleInCanvasLanguage(layer); });
         const activeGroup = getActiveEditorGroup();
         if (hintEl) hintEl.style.display = 'none'; // 不再显示空白提示
         visibleLayers.sort((a,b) => a.zIndex - b.zIndex).forEach(l => {
@@ -7299,7 +7481,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const viewportH = Math.max(34, Math.round(size.h * scale));
             card.innerHTML = `<div class="artboard-preview-title"><span>${preset.label}</span><span>${size.w}×${size.h}</span></div><div class="artboard-preview-viewport" style="width:${viewportW}px;height:${viewportH}px;"><div class="artboard-preview-canvas" style="width:${size.w}px;height:${size.h}px;transform:scale(${scale});"><div class="preview-layers"></div></div></div>`;
             const layerRoot = card.querySelector('.preview-layers');
-            (artboards[preset.id]?.layers || []).slice().sort((a,b) => a.zIndex - b.zIndex).forEach(layer => {
+            (artboards[preset.id]?.layers || []).filter(function(layer) { return isLayerVisibleInCanvasLanguage(layer); }).slice().sort((a,b) => a.zIndex - b.zIndex).forEach(layer => {
                 layerRoot.appendChild(createLayerElement(layer, { active: false, interactive: false, idPrefix: `preview_${preset.id}_` }));
             });
             dock.appendChild(card);
@@ -7453,7 +7635,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             if (draggingLayerId && Number.isInteger(insertIndex)) reorderLayerByDrop(draggingLayerId, insertIndex);
         };
         [...layers].sort((a,b) => b.zIndex - a.zIndex).forEach(l => {
-            const hidden = l.visible === false;
+            const hidden = !isLayerVisibleInCanvasLanguage(l);
             const li = document.createElement('div');
             li.className = `layer-item ${activeLayerIds.includes(l.id) ? 'active' : ''} ${hidden ? 'hidden-layer' : ''} ${l.locked ? 'locked' : ''}`;
             li.draggable = true; li.dataset.id = l.id;
@@ -7593,10 +7775,32 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const button = document.getElementById('layer-context-add-reference');
         const replaceButton = document.getElementById('layer-context-replace-image');
         const duplicateButton = document.getElementById('layer-context-duplicate-layer');
+        const hideLanguageButton = document.getElementById('layer-context-hide-language');
         const isImageLayer = !!layer?.src && (layer.type === 'image' || layer.type === 'logo');
         if(button) button.hidden = !isImageLayer;
         if(replaceButton) replaceButton.hidden = !isImageLayer;
         if(duplicateButton) duplicateButton.hidden = false;
+        if(hideLanguageButton) {
+            const canHideCurrentLanguage = !isUserInterfaceMode()
+                && !!layer
+                && !isLanguageSharedBackgroundLayer(layer, layers)
+                && isLayerVisibleInCanvasLanguage(layer);
+            hideLanguageButton.hidden = !canHideCurrentLanguage;
+            hideLanguageButton.textContent = '隐藏当前 ' + normalizeCanvasLanguage(currentCanvasLanguage).toUpperCase() + ' 版本';
+        }
+    }
+    function hideLayerContextInCurrentLanguage() {
+        if (isUserInterfaceMode()) return;
+        const layer = layers.find(function(item) { return item.id === _contextMenuLayerId; });
+        if (!layer || isLanguageSharedBackgroundLayer(layer, layers)) return;
+        const language = normalizeCanvasLanguage(currentCanvasLanguage);
+        preservePaneScroll(function() {
+            setLayerVisibleInCanvasLanguage(layer, false, language);
+            activeLayerIds = activeLayerIds.filter(function(id) { return id !== layer.id; });
+            if (layerSelectionAnchorId === layer.id) layerSelectionAnchorId = activeLayerIds[0] || null;
+            renderCanvas(); renderLayersList(); renderProperties(); saveHistory();
+        });
+        showToast('已在 ' + language.toUpperCase() + ' 版本隐藏该组件');
     }
     function addLayerContextReferenceToAI() {
         const layer = layers.find(function(item) { return item.id === _contextMenuLayerId; });
@@ -7694,7 +7898,22 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         });
     }
     function toggleLock(id) { preservePaneScroll(() => { const l = layers.find(x => x.id === id); if(l) l.locked = !l.locked; renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); }); }
-    function toggleLayerVisible(id) { preservePaneScroll(() => { const l = layers.find(x => x.id === id); if(l) { l.visible = l.visible === false ? true : false; } renderCanvas(); renderLayersList(); saveHistory(); }); }
+    function toggleLayerVisible(id) { preservePaneScroll(() => {
+        const l = layers.find(x => x.id === id);
+        if(l) {
+            const language = normalizeCanvasLanguage(currentCanvasLanguage);
+            const hiddenOnlyInCurrentLanguage = l._languageVisibility?.[language] === false;
+            if (hiddenOnlyInCurrentLanguage) {
+                setLayerVisibleInCanvasLanguage(l, true, language);
+            } else if (!isUserInterfaceMode()) {
+                if (l.visible === false) l.visible = true;
+                else setLayerVisibleInCanvasLanguage(l, false, language);
+            } else {
+                l.visible = l.visible === false ? true : false;
+            }
+        }
+        renderCanvas(); renderLayersList(); saveHistory();
+    }); }
     function initGroupScaleOriginals() {
         var sel = activeLayerIds.map(function(id) { return layers.find(function(l) { return l.id === id; }); }).filter(Boolean);
         if (sel.length < 2) { _groupScaleOriginals = null; _groupScaleValue = 1; _groupRotationValue = 0; return; }
@@ -7787,6 +8006,28 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         renderCanvas(); renderLayersList();
     }
 
+    function preparePairLogoAsset(layer, dataUrl, name) {
+        return detectLogoContentBounds(dataUrl).catch(function() { return null; }).then(function(bounds) {
+            var canCrop = bounds && bounds.width > 10 && bounds.height > 10;
+            var preparedSource = canCrop ? cropLogoToContent(dataUrl, bounds) : Promise.resolve(dataUrl);
+            return preparedSource.then(function(finalSrc) {
+                return detectImageBackgroundColor(finalSrc).then(function(info) {
+                    var ratio = canCrop ? bounds.ratio : ((info && info.w && info.h) ? info.w / info.h : 1);
+                    var isWide = ratio > 1.3;
+                    var shape = autoFitPairRightSlot(layer, ratio);
+                    applyPairWideComponentOffset(layer, isWide);
+                    var background = getDetectedLogoBackground(info);
+                    return {
+                        slot: { src:finalSrc, name:name || 'Logo', bgColor:background, _backgroundRemoved:false, _backgroundMode:'auto' },
+                        background: background,
+                        shape: shape,
+                        isWide: isWide
+                    };
+                });
+            });
+        });
+    }
+
     function bindPairDropZone(layer) {
         var zone = document.getElementById('logo-pair-drop-zone');
         if (!zone) return;
@@ -7796,32 +8037,15 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             reader.onload = function(ev) {
                 var dataUrl = ev.target.result;
                 layer.pairRightRadius = undefined;
-                detectImageBackgroundColor(dataUrl).then(function(info) {
-                    var bg = 'rgb(' + info.r + ',' + info.g + ',' + info.b + ')';
-                    detectLogoContentBounds(dataUrl).then(function(bounds) {
-                        if (bounds && bounds.width > 10 && bounds.height > 10) {
-                            var shape = autoFitPairRightSlot(layer, bounds.ratio);
-                            cropLogoToContent(dataUrl, bounds).then(function(cropped) {
-                                layer.slots = layer.slots || [];
-                                layer.slots[0] = { src: cropped, name: file.name || 'Logo', bgColor: bg };
-                                layer.bgColor = bg;
-                                saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
-                                showToast('已添加 Logo（' + shape + '）');
-                            });
-                        } else {
-                            layer.slots = layer.slots || [];
-                            layer.slots[0] = { src: dataUrl, name: file.name || 'Logo', bgColor: bg };
-                            layer.bgColor = bg;
-                            saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
-                            showToast('已添加 Logo');
-                        }
-                    }).catch(function() {
-                        layer.slots = layer.slots || [];
-                        layer.slots[0] = { src: dataUrl, name: file.name || 'Logo', bgColor: bg };
-                        layer.bgColor = bg;
-                        saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
-                        showToast('已添加 Logo');
-                    });
+                preparePairLogoAsset(layer, dataUrl, file.name).then(function(result) {
+                    layer.slots = layer.slots || [];
+                    layer.slots[0] = result.slot;
+                    layer.bgColor = result.background;
+                    syncPairLogoReplacementAcrossLanguages(layer, result);
+                    saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+                    showToast('已添加 Logo（' + result.shape + '，已居中适配）');
+                }).catch(function() {
+                    showToast('Logo 处理失败，请换一张图片重试', true);
                 });
             };
             reader.readAsDataURL(file);
@@ -7840,7 +8064,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             reader.onload = function(ev) {
                 var dataUrl = ev.target.result;
                 detectImageBackgroundColor(dataUrl).then(function(info) {
-                    layer.bgColor = 'rgb(' + info.r + ',' + info.g + ',' + info.b + ')';
+                    layer.bgColor = getDetectedLogoBackground(info);
                     layer.slots = layer.slots || [];
                     layer.slots[0] = { src: dataUrl, name: file.name || 'Logo' };
                     saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
@@ -7882,7 +8106,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     var slot = { src: ev.target.result, name: file.name || 'Logo' };
                     layer.slots.push(slot);
                     detectImageBackgroundColor(ev.target.result).then(function(info) {
-                        slot.bgColor = 'rgb(' + info.r + ',' + info.g + ',' + info.b + ')';
+                        slot.bgColor = getDetectedLogoBackground(info);
                         processed++;
                         if (processed >= validFiles.length) syncAndRefresh();
                     });
@@ -8491,6 +8715,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 var isWide = (l.pairRightW && l.pairRightH) ? (l.pairRightW / l.pairRightH > 1.15) : true;
                 pairBackgroundControl = ((l.slots && l.slots[0] && l.slots[0]._origSrc) ? '<button type="button" onclick="restoreRightSlotBackground()" style="display:block;width:100%;padding:9px 0;margin-bottom:12px;border:1px solid #fca5a5;border-radius:10px;background:#fef2f2;color:#dc2626;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;" onmouseover="this.style.borderColor=\'#ef4444\';this.style.background=\'#fee2e2\'" onmouseout="this.style.borderColor=\'#fca5a5\';this.style.background=\'#fef2f2\'">↩ 还原背景</button>' : (l.slots && l.slots[0] && l.slots[0].src) ? '<button type="button" onclick="removeBackgroundFromRightSlot()" style="display:block;width:100%;padding:9px 0;margin-bottom:12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#374151;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;" onmouseover="this.style.borderColor=\'#7c5cfc\';this.style.color=\'#7c5cfc\';this.style.background=\'#f8f7ff\'" onmouseout="this.style.borderColor=\'#e5e7eb\';this.style.color=\'#374151\';this.style.background=\'#fff\'">🪄 去除背景</button>' : '') + ''
                     + '<div style="display:flex;gap:0;margin-bottom:12px;border:1px solid #d0d5dd;border-radius:10px;overflow:hidden;"><button type="button" onclick="switchPairShape(\'' + l.id + '\',\'square\')" style="flex:1;padding:8px 0;border:none;font-size:12px;font-weight:600;cursor:pointer;' + (isWide ? 'background:#fff;color:#6b7280;' : 'background:#7c5cfc;color:#fff;') + '">◻ 方形</button><button type="button" onclick="switchPairShape(\'' + l.id + '\',\'wide\')" style="flex:1;padding:8px 0;border:none;font-size:12px;font-weight:600;cursor:pointer;' + (isWide ? 'background:#7c5cfc;color:#fff;' : 'background:#fff;color:#6b7280;') + '">▬ 横版</button></div>';
+                if (!isUserInterfaceMode() && l.slots && l.slots[0] && l.slots[0].src) {
+                    var pairSlot = l.slots[0];
+                    var pairBgMode = pairSlot._backgroundMode || (pairSlot._backgroundRemoved ? 'transparent' : 'auto');
+                    var pairManualColor = pairSlot._manualBgColor || '#ffffff';
+                    pairBackgroundControl += '<div style="margin-bottom:12px;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;"><div style="margin-bottom:7px;font-size:11px;font-weight:750;color:#667085;">Logo 底色</div><div style="display:grid;grid-template-columns:1fr 1fr 38px;gap:6px;"><button type="button" onclick="setPairLogoBackgroundMode(\'auto\')" style="height:32px;border:1px solid #d0d5dd;border-radius:8px;background:' + (pairBgMode === 'auto' ? '#101828' : '#fff') + ';color:' + (pairBgMode === 'auto' ? '#fff' : '#475467') + ';font-size:12px;font-weight:700;cursor:pointer;">自动识别</button><button type="button" onclick="setPairLogoBackgroundMode(\'transparent\')" style="height:32px;border:1px solid #d0d5dd;border-radius:8px;background:' + (pairBgMode === 'transparent' ? '#101828' : '#fff') + ';color:' + (pairBgMode === 'transparent' ? '#fff' : '#475467') + ';font-size:12px;font-weight:700;cursor:pointer;">保持透明</button><input type="color" value="' + pairManualColor + '" title="指定底色" oninput="setPairLogoBackgroundMode(\'color\',this.value)" style="width:38px;height:32px;padding:2px;border:1px solid #d0d5dd;border-radius:8px;background:#fff;cursor:pointer;"></div></div>';
+                }
                 pairSliders = '';
             } else if (l.logoLayout === 'matrix') {
                 var r = l.rows || 2, c = l.cols || 2;
@@ -8919,7 +9149,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             }
             renderLayersList(); renderProperties();
             const activeEditorGroup = getActiveEditorGroup();
-            const groupBounds = activeEditorGroup ? getGroupBounds(activeEditorGroup.members.filter(function(member) { return member.visible !== false; })) : null;
+            const groupBounds = activeEditorGroup ? getGroupBounds(activeEditorGroup.members.filter(function(member) { return isLayerVisibleInCanvasLanguage(member); })) : null;
             dragGroupBoxData = isDragging && groupBounds
                 ? { left:groupBounds.x1, top:groupBounds.y1, width:groupBounds.w, height:groupBounds.h }
                 : null;
@@ -8999,7 +9229,18 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 activeLayerIds = expandSelectionToEditorGroups([wrap.dataset.id]);
                 renderCanvas(); renderLayersList(); renderProperties();
             }
-            else if (hasDragged && getActiveEditorGroup()) syncEditorGroupSelectionBox();
+            else if (hasDragged) {
+                if (getActiveEditorGroup()) syncEditorGroupSelectionBox();
+                // 资产库组合插入时会预先缓存一次统一缩放/旋转中心。组合移动后必须
+                // 按新位置重建，否则下一次调整尺寸或角度会围绕旧的画布中心计算，
+                // 表现为整个组件瞬移回画面中央。
+                if (activeLayerIds.length > 1) {
+                    _groupScaleOriginals = null;
+                    _groupScaleValue = 1;
+                    _groupRotationValue = 0;
+                    initGroupScaleOriginals();
+                }
+            }
         }
         dragGroupBoxData = null;
     });
@@ -11897,6 +12138,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         pendingGroupPresetId = '';
         saveHistory(true);
         var newLayers = cloneLayersForInsert(p.elements, true, { seedInactivePlacementOnFirstSwitch: true });
+        // “组合”类型资产无论保存时是否已经手动编组，插入画板后都应作为一个整体。
+        // 每次插入生成独立编组 ID，避免同一资产的多个副本互相串组选中。
+        if (newLayers.length > 1) {
+            var insertedGroupId = genId('editor_group');
+            newLayers.forEach(function(layer) { layer._editorGroupId = insertedGroupId; });
+        }
         var selectedAny = layers.filter(function(layer) { return activeLayerIds.includes(layer.id); });
         if (selectedAny.length > 0) {
             var inherited = selectedAny[0];
@@ -12674,6 +12921,16 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         }).finally(() => { e.target.value = ''; });
     });
 
+    function getDetectedLogoBackground(info, slot) {
+        if (slot && slot._backgroundRemoved === true) return 'transparent';
+        if (slot && slot._backgroundMode === 'transparent') return 'transparent';
+        if (slot && slot._backgroundMode === 'color' && slot._manualBgColor) return slot._manualBgColor;
+        if (!info) return 'transparent';
+        // 自动模式区分圆角/局部透明的实色底板和真正的透明字标。
+        if (info.transparent && info.method !== 'dominant-opaque-background') return 'transparent';
+        return 'rgb(' + info.r + ',' + info.g + ',' + info.b + ')';
+    }
+
     function detectImageBackgroundColor(src) {
         return new Promise(function(resolve) {
             var img = new Image();
@@ -12691,29 +12948,69 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     var d = ctx.getImageData(Math.max(0,p[0]), Math.max(0,p[1]), 1, 1).data;
                     edgeAlphas.push(d[3]);
                 });
-                // 如果边缘大部分透明 → 透明 PNG，根据 logo 主体明暗选背景
+                // 圆角透明图片往往只有四角透明、四边中点仍不透明，不能只按
+                // “8 个边缘点至少 5 个透明”判断。整图存在稳定透明区域也视为透明 PNG。
                 var transparentEdges = edgeAlphas.filter(function(a) { return a < 20; }).length;
-                if (transparentEdges >= 5) {
-                    // 采样中心区域的不透明像素判断明暗
-                    var cx = Math.floor(w/2), cy = Math.floor(h/2), sw = Math.floor(w/4), sh = Math.floor(h/4);
-                    var sampleData = ctx.getImageData(cx - Math.floor(sw/2), cy - Math.floor(sh/2), sw, sh).data;
-                    var totalLum = 0, count = 0;
-                    for (var i = 0; i < sampleData.length; i += 4) {
-                        if (sampleData[i+3] > 100) { // 只统计不透明的像素
-                            totalLum += 0.299 * sampleData[i] + 0.587 * sampleData[i+1] + 0.114 * sampleData[i+2];
-                            count++;
+                var allData = ctx.getImageData(0, 0, w, h).data;
+                var transparentPixelCount = 0;
+                var edgeBandOpaqueCount = 0;
+                var edgeBandPixelCount = 0;
+                var edgeBand = Math.max(1, Math.round(Math.min(w, h) * 0.04));
+                for (var alphaIndex = 3; alphaIndex < allData.length; alphaIndex += 4) {
+                    if (allData[alphaIndex] < 20) transparentPixelCount++;
+                }
+                for (var py = 0; py < h; py++) {
+                    for (var px = 0; px < w; px++) {
+                        if (px >= edgeBand && px < w - edgeBand && py >= edgeBand && py < h - edgeBand) continue;
+                        edgeBandPixelCount++;
+                        if (allData[(py * w + px) * 4 + 3] >= 48) edgeBandOpaqueCount++;
+                    }
+                }
+                var transparentCoverage = transparentPixelCount / Math.max(1, w * h);
+                var edgeBandOpaqueCoverage = edgeBandOpaqueCount / Math.max(1, edgeBandPixelCount);
+                if (transparentEdges >= 2 || transparentCoverage >= 0.003) {
+                    // 先检测主体里是否存在占比较大的实色底板。旧逻辑只看平均亮度，
+                    // 红底黄字的 Logo 会因为黄色较亮而被误配成黑底。
+                    var buckets = {};
+                    var opaqueCount = 0;
+                    for (var i = 0; i < allData.length; i += 4) {
+                        if (allData[i+3] < 64) continue;
+                        var pr = allData[i], pg = allData[i+1], pb = allData[i+2];
+                        opaqueCount++;
+                        var qr = Math.round(pr / 24) * 24;
+                        var qg = Math.round(pg / 24) * 24;
+                        var qb = Math.round(pb / 24) * 24;
+                        var bucketKey = qr + ',' + qg + ',' + qb;
+                        var bucket = buckets[bucketKey] || (buckets[bucketKey] = { count:0, r:0, g:0, b:0 });
+                        bucket.count++;
+                        bucket.r += pr; bucket.g += pg; bucket.b += pb;
+                    }
+                    var dominant = null;
+                    Object.keys(buckets).forEach(function(key) {
+                        var candidate = buckets[key];
+                        if (!dominant || candidate.count > dominant.count) dominant = candidate;
+                    });
+                    // 底板颜色应以实际覆盖面积为准。优先彩色块会把白底红字中的红字
+                    // 误认为背景，导致整个槽位被填红。
+                    var backgroundCandidate = dominant;
+                    var opaqueCoverage = opaqueCount / Math.max(1, w * h);
+                    var dominantShare = backgroundCandidate ? backgroundCandidate.count / Math.max(1, opaqueCount) : 0;
+                    if (backgroundCandidate) {
+                        var dr = Math.round(backgroundCandidate.r / backgroundCandidate.count);
+                        var dg = Math.round(backgroundCandidate.g / backgroundCandidate.count);
+                        var db = Math.round(backgroundCandidate.b / backgroundCandidate.count);
+                        // 实色底板通常覆盖图片较大面积，且其颜色在不透明像素中占主导；
+                        // 白色、黑色底板同样有效，不能再以“必须是彩色”作为条件。
+                        // 圆角/局部透明的实色底板在裁到内容后，外围带状区域仍大面积不透明；
+                        // 透明字标只会有少量笔画碰到边界。按边带覆盖率区分两者，避免误补色。
+                        if (edgeBandOpaqueCoverage >= 0.48 && opaqueCoverage >= 0.12 && dominantShare >= 0.24) {
+                            resolve({ r:dr, g:dg, b:db, w:w, h:h, transparent:true, method:'dominant-opaque-background' });
+                            return;
                         }
                     }
-                    var avgLum = count > 0 ? totalLum / count : 128;
-                    // 浅色 logo → 深色背景，深色 logo → 白色背景
-                    if (avgLum > 160) {
-                        resolve({ r: 30, g: 30, b: 30, w: w, h: h });
-                    } else if (avgLum < 80) {
-                        resolve({ r: 255, g: 255, b: 255, w: w, h: h });
-                    } else {
-                        // 中等亮度 → 白色底
-                        resolve({ r: 255, g: 255, b: 255, w: w, h: h });
-                    }
+                    // 不带实色底板的透明图一律保持透明；显示对比度由画板本身决定，
+                    // 组件不擅自添加黑底、白底或主体色底。
+                    resolve({ r:0, g:0, b:0, w:w, h:h, transparent:true, method:'transparent' });
                     return;
                 }
                 // 非透明图片：采样边缘颜色
@@ -12732,10 +13029,41 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 Object.keys(map).forEach(function(k) {
                     if (map[k] > bestCount) { bestCount = map[k]; best = k.split(',').map(Number); }
                 });
-                resolve({ r: best[0], g: best[1], b: best[2], w: w, h: h });
+                resolve({ r: best[0], g: best[1], b: best[2], w: w, h: h, transparent:false, method:'edge-color' });
             };
             img.onerror = function() { resolve({ r: 255, g: 255, b: 255, w: 100, h: 100 }); };
             img.src = src;
+        });
+    }
+
+    // 兼容已经保存过的旧 Logo 组件：旧算法可能把透明 PNG 自动写成黑底、白底或主体色。
+    // v4 会把真透明图恢复成透明，仅为确有连续实色底板的圆角图片补齐底色。
+    function scheduleLogoLayoutBackgroundRecovery(layer) {
+        if (!layer || layer.type !== 'logoLayout') return;
+        var slots = Array.isArray(layer.slots) ? layer.slots : [];
+        var filledSlots = slots.filter(function(slot) { return slot && slot.src; });
+        if (!filledSlots.length) return;
+        var sourceKey = 'v4:' + filledSlots.map(function(slot) { return String(slot.src).slice(-160); }).join('|');
+        if (layer._logoBackgroundProbeKey === sourceKey) return;
+        layer._logoBackgroundProbeKey = sourceKey;
+        Promise.all(filledSlots.map(function(slot) {
+            return detectImageBackgroundColor(slot.src).then(function(info) {
+                if (!info) return false;
+                var color = getDetectedLogoBackground(info, slot);
+                var changed = slot.bgColor !== color;
+                slot.bgColor = color;
+                if (layer.logoLayout !== 'matrix' && layer.bgColor !== color) {
+                    layer.bgColor = color;
+                    changed = true;
+                }
+                return changed;
+            }).catch(function() { return false; });
+        })).then(function(results) {
+            if (!results.some(Boolean)) return;
+            saveHistory();
+            renderCanvas();
+            renderLayersList();
+            renderProperties();
         });
     }
 
@@ -12753,13 +13081,24 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 var ctx = cvs.getContext('2d');
                 ctx.drawImage(img, 0, 0, w, h);
                 var data = ctx.getImageData(0, 0, w, h).data;
+                var transparentPixels = 0;
+                for (var alphaIndex = 3; alphaIndex < data.length; alphaIndex += 4) {
+                    if (data[alphaIndex] < 20) transparentPixels++;
+                }
+                var hasRealTransparency = transparentPixels / Math.max(1, w * h) >= 0.003;
                 // 采样边缘像素找背景色
                 var samples = [[0,0],[w-1,0],[0,h-1],[w-1,h-1],[Math.floor(w/2),0],[Math.floor(w/2),h-1],[0,Math.floor(h/2)],[w-1,Math.floor(h/2)]];
                 var bgR=0, bgG=0, bgB=0;
                 samples.forEach(function(p){ var i=(p[1]*w+p[0])*4; bgR+=data[i]; bgG+=data[i+1]; bgB+=data[i+2]; });
                 bgR=Math.round(bgR/samples.length); bgG=Math.round(bgG/samples.length); bgB=Math.round(bgB/samples.length);
                 var thr=35;
-                function isContent(r,g,b,a){ if(a<128)return false; return Math.abs(r-bgR)>thr||Math.abs(g-bgG)>thr||Math.abs(b-bgB)>thr; }
+                function isContent(r,g,b,a){
+                    // 对透明 PNG 直接按 alpha 找真实可见边界。旧逻辑把透明像素的 RGB=0
+                    // 当成黑色背景，会漏掉黑色字标并造成裁切、偏移。
+                    if (hasRealTransparency) return a > 12;
+                    if(a<128)return false;
+                    return Math.abs(r-bgR)>thr||Math.abs(g-bgG)>thr||Math.abs(b-bgB)>thr;
+                }
                 var top=0,bottom=h-1,left=0,right=w-1;
                 t:for(var y=0;y<h;y++)for(var x=0;x<w;x++){var i=(y*w+x)*4;if(isContent(data[i],data[i+1],data[i+2],data[i+3])){top=y;break t;}}
                 b:for(var y=h-1;y>=0;y--)for(var x=0;x<w;x++){var i=(y*w+x)*4;if(isContent(data[i],data[i+1],data[i+2],data[i+3])){bottom=y;break b;}}
@@ -12893,26 +13232,19 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         });
     }
 
-    // 去背后原地放大 + 左移：根据内容占原图比例补偿 scale，弥补白边消失后的视觉距离
+    // 去背后恢复最初版的紧边补偿：放大真实内容，并向分隔线方向靠近。
     function tightFitRightSlot(layer, slot, contentBounds, orgW, orgH) {
-        if (!orgW || !orgH) return;
-        // 首次去背时锁定原始位置和缩放，后续始终以此为基准
+        if (!contentBounds || !orgW || !orgH) return;
         if (slot._origPairRightX === undefined) slot._origPairRightX = layer.pairRightX;
         if (slot._origPairRightScale === undefined) slot._origPairRightScale = layer.pairRightScale;
-        // 内容占原图的比例 → 越小说明白边越多，需要放得越大
-        var contentW = contentBounds.width, contentH = contentBounds.height;
-        var fillRatio = Math.min(contentW / orgW, contentH / orgH);
-        if (fillRatio <= 0 || fillRatio >= 1) return;
-        var boost = 1 / fillRatio;
-        if (boost > 2.2) boost = 2.2;
-        if (boost < 1.05) boost = 1.05;
-        var newScale = Math.round((slot._origPairRightScale || 1) * boost * 100) / 100;
-        if (newScale > 3) newScale = 3;
-        layer.pairRightScale = newScale;
+        var fillRatio = Math.min(contentBounds.width / orgW, contentBounds.height / orgH);
+        if (fillRatio > 0 && fillRatio < 1) {
+            var boost = Math.max(1.05, Math.min(2.2, 1 / fillRatio));
+            layer.pairRightScale = Math.min(3, Math.round((slot._origPairRightScale || 1) * boost * 100) / 100);
+        }
+        layer.pairRightX = Math.max(0, Math.round((slot._origPairRightX || layer.pairRightX) - (layer.pairRightW || 100) * 0.08));
         layer.pairRightRadius = 0;
         layer.bgColor = 'transparent';
-        // 以原始 X 为基准左移 8%
-        layer.pairRightX = Math.max(0, Math.round((slot._origPairRightX || layer.pairRightX) - (layer.pairRightW || 100) * 0.08));
     }
 
     // 手动切换方形 / 横版布局
@@ -12922,12 +13254,39 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         saveHistory(true);
         // 用 ratio 值触发对应布局：>1.3 横版，<=1.3 方形
         autoFitPairRightSlot(layer, shape === 'wide' ? 2 : 1);
+        applyPairWideComponentOffset(layer, shape === 'wide');
         // 清除去背锁定数据
         var slot = (layer.slots || [])[0];
         if (slot) { slot._origPairRightX = undefined; slot._origPairRightScale = undefined; }
         layer.pairRightRadius = undefined;
         saveHistory(); renderCanvas(); renderProperties();
         showToast('已切换为' + (shape === 'wide' ? '横版' : '方形') + '布局');
+    };
+
+    window.setPairLogoBackgroundMode = function(mode, color) {
+        var layer = activeLayerIds.length === 1 ? layers.find(function(l) { return l.id === activeLayerIds[0]; }) : null;
+        if (!layer || layer.type !== 'logoLayout' || layer.logoLayout !== 'pair') return;
+        var slot = (layer.slots || [])[0];
+        if (!slot || !slot.src) return;
+        slot._backgroundMode = ['auto', 'transparent', 'color'].includes(mode) ? mode : 'auto';
+        if (slot._backgroundMode === 'transparent') {
+            slot.bgColor = 'transparent';
+            layer.bgColor = 'transparent';
+            saveHistory(); renderCanvas(); renderProperties();
+            return;
+        }
+        if (slot._backgroundMode === 'color') {
+            slot._manualBgColor = /^#[0-9a-f]{6}$/i.test(color || '') ? color : (slot._manualBgColor || '#ffffff');
+            slot.bgColor = slot._manualBgColor;
+            layer.bgColor = slot._manualBgColor;
+            saveHistory(); renderCanvas(); renderProperties();
+            return;
+        }
+        detectImageBackgroundColor(slot.src).then(function(info) {
+            slot.bgColor = getDetectedLogoBackground(info, slot);
+            layer.bgColor = slot.bgColor;
+            saveHistory(); renderCanvas(); renderProperties();
+        });
     };
 
     // 对右侧 slot logo 执行去背
@@ -12946,19 +13305,37 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     tightFitRightSlot(layer, slot, bounds, bounds.orgW, bounds.orgH);
                     cropLogoToContent(newSrc, bounds).then(function(cropped) {
                         slot.src = cropped;
+                        slot._backgroundRemoved = true;
+                        slot.bgColor = 'transparent';
                         layer.bgColor = 'transparent';
+                        syncPairLogoReplacementAcrossLanguages(layer, {
+                            slot: slot,
+                            isWide: (Number(layer.pairRightW) || 114) / Math.max(1, Number(layer.pairRightH) || 114) > 1.3
+                        });
                         saveHistory(); renderCanvas(); renderProperties();
                         showToast('背景已去除，容器已紧密适配');
                     });
                 } else {
                     slot.src = newSrc;
+                    slot._backgroundRemoved = true;
+                    slot.bgColor = 'transparent';
                     layer.bgColor = 'transparent';
+                    syncPairLogoReplacementAcrossLanguages(layer, {
+                        slot: slot,
+                        isWide: (Number(layer.pairRightW) || 114) / Math.max(1, Number(layer.pairRightH) || 114) > 1.3
+                    });
                     saveHistory(); renderCanvas(); renderProperties();
                     showToast('背景已去除');
                 }
             }).catch(function() {
                 slot.src = newSrc;
+                slot._backgroundRemoved = true;
+                slot.bgColor = 'transparent';
                 layer.bgColor = 'transparent';
+                syncPairLogoReplacementAcrossLanguages(layer, {
+                    slot: slot,
+                    isWide: (Number(layer.pairRightW) || 114) / Math.max(1, Number(layer.pairRightH) || 114) > 1.3
+                });
                 saveHistory(); renderCanvas(); renderProperties();
                 showToast('背景已去除');
             });
@@ -12972,38 +13349,68 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (!layer || layer.type !== 'logoLayout' || layer.logoLayout !== 'pair') return;
         var slot = (layer.slots || [])[0];
         if (!slot || !slot._origSrc) { showToast('没有可还原的原始图片', true); return; }
-        slot.src = slot._origSrc;
+        var originalSource = slot._origSrc;
+        var originalName = slot.name || 'Logo';
+        slot.src = originalSource;
         slot._origSrc = null;
+        slot._backgroundRemoved = false;
         slot._origPairRightX = undefined;
         slot._origPairRightScale = undefined;
         layer.pairRightRadius = undefined; // 恢复默认圆角
-        detectImageBackgroundColor(slot.src).then(function(info) {
-            layer.bgColor = 'rgb(' + info.r + ',' + info.g + ',' + info.b + ')';
-            detectLogoContentBounds(slot.src).then(function(bounds) {
-                if (bounds && bounds.width > 10 && bounds.height > 10) {
-                    var shape = autoFitPairRightSlot(layer, bounds.ratio);
-                    cropLogoToContent(slot.src, bounds).then(function(cropped) {
-                        slot.src = cropped;
-                        saveHistory(); renderCanvas(); renderProperties();
-                        showToast('已还原原始 Logo（' + shape + '）');
-                    });
-                } else {
-                    saveHistory(); renderCanvas(); renderProperties();
-                    showToast('已还原原始 Logo');
-                }
-            }).catch(function() {
-                saveHistory(); renderCanvas(); renderProperties();
-                showToast('已还原原始 Logo');
-            });
+        preparePairLogoAsset(layer, originalSource, originalName).then(function(result) {
+            layer.slots[0] = result.slot;
+            layer.bgColor = result.background;
+            syncPairLogoReplacementAcrossLanguages(layer, result);
+            saveHistory(); renderCanvas(); renderProperties();
+            showToast('已还原原始 Logo（' + result.shape + '）');
+        }).catch(function() {
+            saveHistory(); renderCanvas(); renderProperties();
+            showToast('已还原原始 Logo');
         });
     };
+
+    function applyPairWideComponentOffset(layer, isWide) {
+        if (!layer) return;
+        var previousOffset = Math.max(0, Number(layer._pairWideAutoOffset) || 0);
+        var canvasWidth = Number((SIZES[currentRatio] || {}).w) || 1080;
+        // 用未包含系统补偿的原始中心点判断位置，避免已经左移后被误判为靠边。
+        var unshiftedCenterX = (Number(layer.x) || 0) + previousOffset;
+        var isNearHorizontalCenter = unshiftedCenterX >= canvasWidth * 0.4 && unshiftedCenterX <= canvasWidth * 0.6;
+        var targetOffset = isWide && isNearHorizontalCenter ? 76 : 0;
+        if (previousOffset !== targetOffset) {
+            layer.x = (Number(layer.x) || 0) + previousOffset - targetOffset;
+            layer._pairWideAutoOffset = targetOffset;
+        }
+        var previousFactor = Math.max(0.01, Number(layer._pairWideAutoScaleFactor) || 1);
+        var targetFactor = isWide ? 0.94 : 1;
+        if (Math.abs(previousFactor - targetFactor) > 0.0001) {
+            layer.scale = Math.max(0.05, (Number(layer.scale) || 1) / previousFactor * targetFactor);
+            layer._pairWideAutoScaleFactor = targetFactor;
+        }
+    }
+
+    function syncPairLogoReplacementAcrossLanguages(layer, result) {
+        if (!layer || !result || layer.type !== 'logoLayout' || layer.logoLayout !== 'pair') return;
+        var variants = ensureLayerLanguageVariants(layer, layers, currentCanvasLanguage);
+        if (!variants) return;
+        var currentSnapshot = snapshotLayerLanguageVariant(layer, layers);
+        ['en', 'ar'].forEach(function(language) {
+            var variant = variants[language] ? cloneData(variants[language]) : cloneData(currentSnapshot);
+            variant.slots = [cloneData(result.slot)];
+            applyPairWideComponentOffset(variant, result.isWide === true);
+            variants[language] = variant;
+        });
+    }
 
     // 根据 logo 实际宽高比自动适配右侧 slot 尺寸
     function autoFitPairRightSlot(layer, contentRatio) {
         // 二分法：横版用宽长方形，其余用正方形。一整套布局参数全部切换。
         if(!contentRatio || contentRatio <= 0) return '方形';
+        layer.baseW = 442;
+        layer.baseH = 150;
+        layer.logoPairLayoutVersion = 11;
         if (contentRatio > 1.3) {
-            // 横版 — 宽长方形布局（分隔线居中：左边缘166 右左边缘306 → 236）
+            // 最初版横向 Logo 布局参数。
             layer.pairLeftImgX = 4; layer.pairLeftImgY = 14;
             layer.pairLeftImgW = 162; layer.pairLeftImgH = 120;
             layer.pairLeftScale = 3;
@@ -13011,10 +13418,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             layer.pairRightX = 330; layer.pairRightY = 31;
             layer.pairRightW = 206; layer.pairRightH = 80;
             layer.pairRightScale = 1.55;
-            layer.scale = 1;
             return '横版';
         } else {
-            // 方形 — 正方形布局（分隔线居中：左边缘166 右左边缘256 → 211）
+            // 最初版方形 Logo 布局参数。
             layer.pairLeftImgX = 4; layer.pairLeftImgY = 14;
             layer.pairLeftImgW = 162; layer.pairLeftImgH = 120;
             layer.pairLeftScale = 3;
@@ -13022,7 +13428,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             layer.pairRightX = 269; layer.pairRightY = 15;
             layer.pairRightW = 114; layer.pairRightH = 114;
             layer.pairRightScale = 1.15;
-            layer.scale = 1.06;
             return '方形';
         }
     }
@@ -13043,7 +13448,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     var slot = { src: ev.target.result, name: file.name || 'Logo' };
                     activeLayer.slots.push(slot);
                     detectImageBackgroundColor(ev.target.result).then(function(info) {
-                        slot.bgColor = 'rgb(' + info.r + ',' + info.g + ',' + info.b + ')';
+                        slot.bgColor = getDetectedLogoBackground(info, slot);
                         saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                     });
                 };
@@ -13056,38 +13461,25 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             var layer = layers.find(function(l) { return l.id === target.layerId; });
             if (!layer || !Array.isArray(layer.slots)) return;
             var dataUrl = ev.target.result;
+            // pair 布局先裁到真实内容，再判断圆角底板或真实透明，并放回固定居中区域。
+            if (layer.logoLayout === 'pair') {
+                layer.pairRightRadius = undefined;
+                preparePairLogoAsset(layer, dataUrl, file.name).then(function(result) {
+                    layer.slots[target.slotIndex] = result.slot;
+                    layer.bgColor = result.background;
+                    syncPairLogoReplacementAcrossLanguages(layer, result);
+                    saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+                    showToast('已添加 Logo（' + result.shape + '，已居中适配）');
+                }).catch(function() {
+                    showToast('Logo 处理失败，请换一张图片重试', true);
+                });
+                return;
+            }
             detectImageBackgroundColor(dataUrl).then(function(info) {
-                var bg = 'rgb(' + info.r + ',' + info.g + ',' + info.b + ')';
-                // pair 布局：检测内容边界、裁白边、智能适配 slot 尺寸
-                if (layer.logoLayout === 'pair') {
-                    // 新上传 logo 时清除之前去背留下的零圆角
-                    layer.pairRightRadius = undefined;
-                    detectLogoContentBounds(dataUrl).then(function(bounds) {
-                        var finalSrc = dataUrl;
-                        if (bounds && bounds.width > 10 && bounds.height > 10) {
-                            var shape = autoFitPairRightSlot(layer, bounds.ratio);
-                            cropLogoToContent(dataUrl, bounds).then(function(cropped) {
-                                layer.slots[target.slotIndex] = { src: cropped, name: file.name || 'Logo', bgColor: bg };
-                                if (layer.logoLayout !== 'matrix') layer.bgColor = bg;
-                                saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
-                                showToast('已添加 Logo（' + shape + '，已自动裁边适配）');
-                            });
-                        } else {
-                            layer.slots[target.slotIndex] = { src: dataUrl, name: file.name || 'Logo', bgColor: bg };
-                            if (layer.logoLayout !== 'matrix') layer.bgColor = bg;
-                            saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
-                            showToast('已添加 Logo');
-                        }
-                    }).catch(function() {
-                        layer.slots[target.slotIndex] = { src: dataUrl, name: file.name || 'Logo', bgColor: bg };
-                        if (layer.logoLayout !== 'matrix') layer.bgColor = bg;
-                        saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
-                        showToast('已添加 Logo');
-                    });
-                    return;
-                }
-                // 非 pair 布局：直接存储
-                layer.slots[target.slotIndex] = { src: dataUrl, name: file.name || 'Logo', bgColor: bg };
+                var slot = { src:dataUrl, name:file.name || 'Logo' };
+                var bg = getDetectedLogoBackground(info, slot);
+                slot.bgColor = bg;
+                layer.slots[target.slotIndex] = slot;
                 if (layer.logoLayout !== 'matrix') layer.bgColor = bg;
                 saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                 showToast('已添加 Logo');

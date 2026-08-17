@@ -111,7 +111,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
+const TOOL_UI_VERSION = '20260818-ai-submit-no-arrow-v400';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -163,6 +163,8 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
   const MOVEABLE_COMPONENT_SUBTAGS = ['标签', '品牌圆弧', 'KIKI', '其他素材', '组合'];
   const INITIAL_INTERFACE_MODE = localStorage.getItem('vf_interface_mode') === 'user' ? 'user' : 'developer';
   const INTERFACE_MODE_TOGGLE_POSITION_KEY = 'vf_interface_mode_toggle_position';
+  const DEVELOPER_BALL_VISIBILITY_KEY = 'vf_developer_ball_visible';
+  const DEVELOPER_BALL_PASSWORD = '123123';
   let interfaceModeDragState = null;
   let suppressInterfaceModeClick = false;
   const state = {
@@ -182,6 +184,7 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
     libraryPreviews: [],
     libraryItems: [],
     libraryPreviewUrls: {},
+    libraryPreviewUrlSignedAt: {},
     libraryBookmarkMemberIds: new Set(),
     libraryBookmarkGroups: [],
     libraryFavorites: new Set(),
@@ -232,6 +235,7 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
     cacheEls();
     bindEvents();
     syncInterfaceModeControl();
+    syncDeveloperBallVisibility();
     restoreInterfaceModeTogglePosition();
     exposeInterfaceModeApi();
     refreshTranslations();
@@ -587,6 +591,21 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
       ? (isDeveloper ? '开发者模式' : '用户模式')
       : (isDeveloper ? 'Developer' : 'User mode');
     window.VF_INTERFACE_MODE = mode;
+  }
+
+  function isDeveloperBallVisible() {
+    return localStorage.getItem(DEVELOPER_BALL_VISIBILITY_KEY) === '1';
+  }
+
+  function syncDeveloperBallVisibility() {
+    if (els.globalInterfaceModeToggle) {
+      els.globalInterfaceModeToggle.hidden = !isDeveloperBallVisible();
+    }
+  }
+
+  function setDeveloperBallVisibility(visible) {
+    localStorage.setItem(DEVELOPER_BALL_VISIBILITY_KEY, visible ? '1' : '0');
+    syncDeveloperBallVisibility();
   }
 
   function broadcastInterfaceMode(targetFrame) {
@@ -2211,6 +2230,7 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
     state.libraryDataLoaded = false;
     state.libraryDataPromise = null;
     state.libraryPreviewUrls = {};
+    state.libraryPreviewUrlSignedAt = {};
     state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
     await loadLibraryData();
     refreshKindTabCounts();
@@ -2364,15 +2384,42 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
     state.libraryBookmarkGroups = groups;
   }
 
+  function libraryBookmarkCoverPreview(sourceId) {
+    const group = state.libraryBookmarkGroups.find(function(item) { return item.source.id === sourceId; });
+    if (!group) return null;
+    const memberIds = [];
+    if (group.coverTemplateId) memberIds.push(group.coverTemplateId);
+    (group.refs || []).forEach(function(ref) {
+      const id = typeof ref === 'string' ? ref : ref?.templateId;
+      if (id && !memberIds.includes(id)) memberIds.push(id);
+    });
+    for (const memberId of memberIds) {
+      const preview = state.libraryPreviews.find(function(item) {
+        return item.source_file_id === memberId && item.preview_path;
+      });
+      if (preview?.preview_path) return preview;
+    }
+    return null;
+  }
+
+  function libraryBookmarkCoverPreviewPath(sourceId) {
+    return libraryBookmarkCoverPreview(sourceId)?.preview_path || '';
+  }
+
   async function signLibraryPreviewUrls(paths) {
+    const refreshBefore = Date.now() - 50 * 60 * 1000;
     const targetPaths = Array.from(new Set((paths || state.libraryPreviews.map(item => item.preview_path)).filter(Boolean)))
-      .filter(path => !state.libraryPreviewUrls[path]);
+      .filter(path => !state.libraryPreviewUrls[path] || Number(state.libraryPreviewUrlSignedAt[path] || 0) < refreshBefore);
     if (targetPaths.length === 0) return;
     for (const pathBatch of chunkArray(targetPaths, SIGNED_URL_BATCH_SIZE)) {
       const { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).createSignedUrls(pathBatch, 60 * 60);
       if (error) throw error;
+      const signedAt = Date.now();
       (data || []).forEach(item => {
-        if (item.path && item.signedUrl) state.libraryPreviewUrls[item.path] = item.signedUrl;
+        if (item.path && item.signedUrl) {
+          state.libraryPreviewUrls[item.path] = item.signedUrl;
+          state.libraryPreviewUrlSignedAt[item.path] = signedAt;
+        }
       });
     }
   }
@@ -2381,12 +2428,13 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
     if (state.localPreview || !state.supabase) return;
     var paths = [];
     items.forEach(function(item) {
-      var p = item.preview.preview_path;
-      if (p && !state.libraryPreviewUrls[p]) paths.push(p);
       var src = (state.librarySources || []).find(function(s) { return s.id === item.preview.source_file_id; });
-      if (src && src.source_path) {
+      var bookmarkCoverPath = src && isBookmarkSource(src) ? libraryBookmarkCoverPreviewPath(src.id) : '';
+      var p = bookmarkCoverPath || item.preview.preview_path;
+      if (p) paths.push(p);
+      if (src && src.source_path && !isBookmarkSource(src)) {
         var thumbPath = src.source_path.replace(/\/[^/]+$/, '/_thumb.jpg');
-        if (thumbPath && !state.libraryPreviewUrls[thumbPath]) paths.push(thumbPath);
+        if (thumbPath) paths.push(thumbPath);
       }
     });
     if (paths.length) {
@@ -2409,30 +2457,87 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
       if (!card) return;
       var img = card.querySelector('.library-thumb img');
       if (!img) return;
-      var fullUrl = state.libraryPreviewUrls[item.preview.preview_path] || '';
       var src = (state.librarySources || []).find(function(s) { return s.id === item.preview.source_file_id; });
-      var thumbPath = (src && src.source_path) ? src.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
+      var bookmarkCoverPath = src && isBookmarkSource(src) ? libraryBookmarkCoverPreviewPath(src.id) : '';
+      var displayPreviewPath = bookmarkCoverPath || item.preview.preview_path || '';
+      var fullUrl = state.libraryPreviewUrls[displayPreviewPath] || '';
+      var thumbPath = (src && src.source_path && !isBookmarkSource(src)) ? src.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
       var thumbUrl = state.libraryPreviewUrls[thumbPath] || '';
       var newUrl = thumbUrl || fullUrl;
+      img.dataset.previewPath = displayPreviewPath;
+      img.dataset.thumbPath = thumbPath;
+      img.dataset.libraryImageStage = thumbUrl ? 'thumb' : 'full';
+      img.dataset.libraryImageRetries = '0';
+      img.onload = function() { this.classList.add('loaded'); var t = this.closest('.library-thumb'); if (t) t.classList.add('img-loaded'); };
+      img.onerror = function() { void recoverLibraryCardImage(this); };
       if (newUrl && img.src !== newUrl) {
         img.classList.remove('loaded');
         var thumb = img.closest('.library-thumb');
         if (thumb) thumb.classList.remove('img-loaded');
-        img.onload = function() { this.classList.add('loaded'); var t = this.closest('.library-thumb'); if (t) t.classList.add('img-loaded'); };
-        img.onerror = function() { this.classList.add('loaded'); var t = this.closest('.library-thumb'); if (t) t.classList.add('img-loaded'); if (fullUrl && this.src !== fullUrl) { this.onerror = null; this.src = fullUrl; } };
         img.src = newUrl;
         if (thumbUrl && fullUrl) thumbCount++;
+      } else if (newUrl && img.complete && img.naturalWidth === 0) {
+        void recoverLibraryCardImage(img);
       }
     });
     console.log('[缩略图] ' + thumbCount + ' 张缩略图, ' + (items.length - thumbCount) + ' 张原图（无缩略图文件）');
     // 同步更新 state.libraryItems 里的 url，供详情弹窗等使用
     if (state.libraryItems) {
       state.libraryItems.forEach(function(libItem) {
-        libItem.url = state.libraryPreviewUrls[libItem.preview.preview_path] || libItem.url;
         var s = (state.librarySources || []).find(function(s) { return s.id === libItem.preview.source_file_id; });
-        var tp = (s && s.source_path) ? s.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
+        var bp = s && isBookmarkSource(s) ? libraryBookmarkCoverPreviewPath(s.id) : '';
+        var pp = bp || libItem.preview.preview_path || '';
+        libItem.url = state.libraryPreviewUrls[pp] || libItem.url;
+        var tp = (s && s.source_path && !isBookmarkSource(s)) ? s.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
         libItem.thumbUrl = state.libraryPreviewUrls[tp] || libItem.thumbUrl;
       });
+    }
+  }
+
+  async function recoverLibraryCardImage(img) {
+    if (!img || !img.isConnected) return;
+    const previewPath = img.dataset.previewPath || '';
+    const thumbPath = img.dataset.thumbPath || '';
+    const stage = img.dataset.libraryImageStage || 'full';
+    const fullUrl = previewPath ? state.libraryPreviewUrls[previewPath] || '' : '';
+    if (stage === 'thumb' && fullUrl) {
+      img.dataset.libraryImageStage = 'full';
+      img.classList.remove('loaded');
+      img.src = fullUrl;
+      return;
+    }
+
+    const retries = Number(img.dataset.libraryImageRetries || 0);
+    if (!previewPath || retries >= 2 || state.localPreview || !state.supabase) {
+      img.classList.add('loaded');
+      img.closest('.library-thumb')?.classList.add('img-loaded');
+      return;
+    }
+
+    img.dataset.libraryImageRetries = String(retries + 1);
+    delete state.libraryPreviewUrls[previewPath];
+    delete state.libraryPreviewUrlSignedAt[previewPath];
+    if (thumbPath) {
+      delete state.libraryPreviewUrls[thumbPath];
+      delete state.libraryPreviewUrlSignedAt[thumbPath];
+    }
+    try {
+      await signLibraryPreviewUrls([previewPath]);
+      if (!img.isConnected) return;
+      const refreshedUrl = state.libraryPreviewUrls[previewPath] || '';
+      if (!refreshedUrl) throw new Error('Preview URL was not returned');
+      img.dataset.libraryImageStage = 'full';
+      img.classList.remove('loaded');
+      img.closest('.library-thumb')?.classList.remove('img-loaded');
+      img.src = refreshedUrl;
+    } catch (error) {
+      console.warn('Preview recovery failed:', previewPath, error);
+      if (Number(img.dataset.libraryImageRetries || 0) < 2) {
+        setTimeout(function() { void recoverLibraryCardImage(img); }, 500);
+      } else {
+        img.classList.add('loaded');
+        img.closest('.library-thumb')?.classList.add('img-loaded');
+      }
     }
   }
 
@@ -2465,8 +2570,10 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
     const filteredItems = state.libraryPreviews
       .map(function(preview) {
         var src = sourcesById.get(preview.source_file_id);
-        var url = state.libraryPreviewUrls[preview.preview_path] || '';
-        var thumbPath = (src && src.source_path) ? src.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
+        var bookmarkCoverPath = src && isBookmarkSource(src) ? libraryBookmarkCoverPreviewPath(src.id) : '';
+        var displayPreviewPath = bookmarkCoverPath || preview.preview_path || '';
+        var url = state.libraryPreviewUrls[displayPreviewPath] || '';
+        var thumbPath = (src && src.source_path && !isBookmarkSource(src)) ? src.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
         var thumbUrl = state.libraryPreviewUrls[thumbPath] || '';
         return { preview: preview, source: src, url: url, thumbUrl: thumbUrl };
       })
@@ -2876,19 +2983,20 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
     }
     if (isBookmarkSource(source)) {
       const bookmarkGroup = state.libraryBookmarkGroups.find(function(g) { return g.source.id === source.id; });
+      const bookmarkCoverPreview = libraryBookmarkCoverPreview(source.id);
+      const bookmarkThumbStyle = previewAspectStyle(bookmarkCoverPreview || preview);
       const memberCount = bookmarkGroup ? bookmarkGroup.refs.length : 0;
       return `
       <article class="library-card library-bookmark-card ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" data-bookmark-source="${escapeAttr(source.id)}" tabindex="0">
         <div class="library-thumb-wrap">
           <div class="multi-check"></div>
-          <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded')" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
+          <div class="library-thumb" style="${bookmarkThumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t){t.classList.add('img-loaded');if(this.naturalWidth&&this.naturalHeight)t.style.setProperty('--preview-ratio',this.naturalWidth+' / '+this.naturalHeight)}" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
           <div class="library-bookmark-summary">
             <span class="library-bookmark-badge" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m10 3-7 4 7 4 7-4-7-4Z"/><path d="m3 11 7 4 7-4"/><path d="m3 15 7 4 7-4"/></svg></span>
             <span class="library-bookmark-count">${memberCount}</span>
           </div>
           <div class="library-card-icons">
             <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}" aria-label="${state.lang === 'zh' ? '收藏' : 'Favorite'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3Z"/></svg></button>
-            <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}" aria-label="${previewLabel}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button>
           </div>
           ${renderLibraryBookmarkInlineHover(bookmarkGroup)}
         </div>
@@ -2902,7 +3010,7 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
           <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t){t.classList.add('img-loaded');if(this.naturalWidth&&this.naturalHeight)t.style.setProperty('--preview-ratio',this.naturalWidth+' / '+this.naturalHeight)}" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
           <div class="library-card-icons">
             <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}" aria-label="${state.lang === 'zh' ? '收藏' : 'Favorite'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3Z"/></svg></button>
-            <button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}" aria-label="${previewLabel}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button>
+            ${kind !== 'template' ? `<button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}" aria-label="${previewLabel}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button>` : ''}
           </div>
           <div class="library-card-overlay">
             <div class="library-hover-dimensions" ${isTemplateArtwork ? `data-template-size-source="${escapeAttr(source.id)}"` : ''}>
@@ -3077,18 +3185,21 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
     var kind = libraryKindOfSource(source);
     var canManage = canManageSource(source);
     var lang = state.lang;
+    var userTemplateMenu = state.interfaceMode === 'user' && kind === 'template';
     var items = [];
     items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="4.5"/><circle cx="7" cy="7" r="2"/><line x1="10.5" y1="10.5" x2="15" y2="15"/></svg>', label: lang === 'zh' ? '查看详情' : 'View details', action: 'detail' });
-    items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 11.5V14h2.5L13 5.5 10.5 3 2 11.5z"/></svg>', label: lang === 'zh' ? '编辑信息' : 'Edit', action: 'edit' });
+    if (!userTemplateMenu) {
+      items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 11.5V14h2.5L13 5.5 10.5 3 2 11.5z"/></svg>', label: lang === 'zh' ? '编辑信息' : 'Edit', action: 'edit' });
+    }
     items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="2" x2="8" y2="13"/><polyline points="4 9 8 13 12 9"/><line x1="3" y1="15" x2="13" y2="15"/></svg>', label: kind === 'gallery' ? (lang === 'zh' ? '下载原图' : 'Download image') : (lang === 'zh' ? '下载预览图' : 'Download preview'), action: 'download-preview' });
-    if (kind !== 'gallery' && canDownloadSource()) {
+    if (!userTemplateMenu && kind !== 'gallery' && canDownloadSource()) {
       items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="2" x2="8" y2="13"/><polyline points="4 9 8 13 12 9"/><line x1="3" y1="15" x2="13" y2="15"/></svg>', label: kind === 'template' ? (lang === 'zh' ? '下载模板' : 'Download template') : (lang === 'zh' ? '下载源文件' : 'Download source'), action: 'download-source' });
     }
     if (kind === 'gallery') {
       items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="14" height="14" rx="2"/><line x1="5" y1="5" x2="11" y2="11"/><line x1="11" y1="5" x2="5" y2="11"/></svg>', label: lang === 'zh' ? '静态 DIY' : 'Static DIY', action: 'use-static' });
       items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 1 14 8 3 15 3 1"/></svg>', label: lang === 'zh' ? '动态 DIY' : 'Dynamic DIY', action: 'use-dynamic' });
     }
-    if (kind === 'template') {
+    if (kind === 'template' && !userTemplateMenu) {
       items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="14" height="14" rx="2"/><line x1="5" y1="5" x2="11" y2="11"/><line x1="11" y1="5" x2="5" y2="11"/></svg>', label: lang === 'zh' ? '打开静态模板' : 'Open static template', action: 'use-static' });
       var templateTags = visibleLibraryTags(source);
       var canBookmarkTemplate = !templateTags.includes('组件') && !templateTags.includes('套组');
@@ -3097,14 +3208,16 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
       }
     }
     var movableTags = visibleLibraryTags(source).filter(function(tag) { return MOVEABLE_COMPONENT_SUBTAGS.indexOf(tag) !== -1; });
-    if (kind === 'template' && movableTags.length) {
+    if (!userTemplateMenu && kind === 'template' && movableTags.length) {
       items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4a2 2 0 012-2h3l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H3a2 2 0 01-2-2V4z"/></svg>', label: lang === 'zh' ? '移动分组' : 'Move group', action: 'move-group' });
     }
-    items.push({ divider: true });
-    if (canManage) {
-      items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 4 14 4"/><path d="M5 4V2.5a1 1 0 011-1h4a1 1 0 011 1V4"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>', label: isBookmarkSource(source) ? (lang === 'zh' ? '释放编组' : 'Release group') : (lang === 'zh' ? '删除' : 'Delete'), action: 'delete', danger: true });
+    if (!userTemplateMenu) {
+      items.push({ divider: true });
+      if (canManage) {
+        items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 4 14 4"/><path d="M5 4V2.5a1 1 0 011-1h4a1 1 0 011 1V4"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>', label: isBookmarkSource(source) ? (lang === 'zh' ? '释放编组' : 'Release group') : (lang === 'zh' ? '删除' : 'Delete'), action: 'delete', danger: true });
+      }
+      items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="14" height="14" rx="3"/><polyline points="4.5 8 7 10.5 11.5 5.5"/></svg>', label: lang === 'zh' ? '多选模式' : 'Multi-select', action: 'multi-select' });
     }
-    items.push({ icon: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="14" height="14" rx="3"/><polyline points="4.5 8 7 10.5 11.5 5.5"/></svg>', label: lang === 'zh' ? '多选模式' : 'Multi-select', action: 'multi-select' });
 
     var html = '';
     items.forEach(function(it) {
@@ -4930,6 +5043,7 @@ const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
       alert('完成！刷新页面看看。');
       state.libraryDataLoaded = false;
       state.libraryPreviewUrls = {};
+      state.libraryPreviewUrlSignedAt = {};
       state.librarySources = [];
       state.libraryPreviews = [];
       window.location.reload();
@@ -6371,30 +6485,92 @@ function libraryTagsForForm(formData, kind) {
         ${managementSettingsHtml}
         <section class="admin-section ui-restriction-section">
           <div class="ui-restriction-copy">
-            <div class="kicker">DELIVERY SAFETY</div>
-            <h3>${state.lang === 'zh' ? '用户界面限制' : 'Interface restrictions'}</h3>
+            <div class="kicker">DEVELOPER TOOLS</div>
+            <h3>${state.lang === 'zh' ? '开发者模式悬浮球' : 'Developer mode floating control'}</h3>
             <p>${state.lang === 'zh'
-              ? '开启后，左侧仅显示素材库、DIY 静态和团队管理，降低交付使用时误入其他功能的风险。'
-              : 'When enabled, the sidebar only shows Library, Static DIY, and Team to reduce accidental access during delivery.'}</p>
+              ? '开启后，所有页面都会显示可拖动的开发者模式悬浮球。开启时需要输入密码。'
+              : 'When enabled, the draggable developer-mode control is shown on every page. A password is required to enable it.'}</p>
           </div>
-          <label class="ui-restriction-control" for="ui-restriction-toggle">
-            <span id="ui-restriction-status" class="ui-restriction-status">${state.uiRestricted ? (state.lang === 'zh' ? '已开启' : 'On') : (state.lang === 'zh' ? '已关闭' : 'Off')}</span>
-            <input id="ui-restriction-toggle" type="checkbox" ${state.uiRestricted ? 'checked' : ''}>
+          <label class="ui-restriction-control" for="developer-ball-visibility-toggle">
+            <span id="developer-ball-visibility-status" class="ui-restriction-status">${isDeveloperBallVisible() ? (state.lang === 'zh' ? '已显示' : 'Shown') : (state.lang === 'zh' ? '已隐藏' : 'Hidden')}</span>
+            <input id="developer-ball-visibility-toggle" type="checkbox" ${isDeveloperBallVisible() ? 'checked' : ''}>
             <span class="ui-restriction-switch" aria-hidden="true"></span>
           </label>
         </section>
+        <div id="developer-ball-password-modal" class="modal-backdrop" hidden>
+          <section class="modal developer-ball-password-dialog" role="dialog" aria-modal="true" aria-labelledby="developer-ball-password-title">
+            <div class="modal-head">
+              <h3 id="developer-ball-password-title">${state.lang === 'zh' ? '开启开发者悬浮球' : 'Enable developer control'}</h3>
+              <button id="close-developer-ball-password" class="icon-btn modal-close-circle" type="button" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}">×</button>
+            </div>
+            <p class="developer-ball-password-hint">${state.lang === 'zh' ? '请输入开发者密码后继续。' : 'Enter the developer password to continue.'}</p>
+            <label class="developer-ball-password-field">
+              <span>${state.lang === 'zh' ? '密码' : 'Password'}</span>
+              <input id="developer-ball-password-input" type="password" inputmode="numeric" autocomplete="off">
+            </label>
+            <div id="developer-ball-password-message" class="message"></div>
+            <div class="modal-actions">
+              <button id="cancel-developer-ball-password" class="ghost-btn" type="button">${state.lang === 'zh' ? '取消' : 'Cancel'}</button>
+              <button id="confirm-developer-ball-password" class="primary-btn" type="button">${state.lang === 'zh' ? '确认开启' : 'Enable'}</button>
+            </div>
+          </section>
+        </div>
       </div>
     `;
     const createUserForm = document.getElementById('create-user-form');
     const categoryForm = document.getElementById('category-form');
     if (createUserForm) createUserForm.addEventListener('submit', createUser);
     if (categoryForm) categoryForm.addEventListener('submit', createCategory);
-    const restrictionToggle = document.getElementById('ui-restriction-toggle');
-    if (restrictionToggle) {
-      restrictionToggle.addEventListener('change', function() {
-        setInterfaceMode(restrictionToggle.checked ? 'user' : 'developer');
-      });
-    }
+    const ballToggle = document.getElementById('developer-ball-visibility-toggle');
+    const ballStatus = document.getElementById('developer-ball-visibility-status');
+    const passwordModal = document.getElementById('developer-ball-password-modal');
+    const passwordInput = document.getElementById('developer-ball-password-input');
+    const passwordMessage = document.getElementById('developer-ball-password-message');
+    const updateBallControl = visible => {
+      if (ballToggle) ballToggle.checked = visible;
+      if (ballStatus) ballStatus.textContent = visible
+        ? (state.lang === 'zh' ? '已显示' : 'Shown')
+        : (state.lang === 'zh' ? '已隐藏' : 'Hidden');
+    };
+    const closePasswordModal = () => {
+      if (passwordModal) passwordModal.hidden = true;
+      if (passwordInput) passwordInput.value = '';
+      if (passwordMessage) setMessage(passwordMessage, '', false);
+      updateBallControl(isDeveloperBallVisible());
+    };
+    const confirmDeveloperBall = () => {
+      if (!passwordInput || passwordInput.value !== DEVELOPER_BALL_PASSWORD) {
+        if (passwordMessage) setMessage(passwordMessage, state.lang === 'zh' ? '密码错误，请重新输入。' : 'Incorrect password. Try again.', true);
+        passwordInput?.focus();
+        passwordInput?.select();
+        return;
+      }
+      setDeveloperBallVisibility(true);
+      closePasswordModal();
+      updateBallControl(true);
+    };
+    ballToggle?.addEventListener('change', function() {
+      if (!ballToggle.checked) {
+        setDeveloperBallVisibility(false);
+        updateBallControl(false);
+        return;
+      }
+      ballToggle.checked = false;
+      if (passwordModal) passwordModal.hidden = false;
+      requestAnimationFrame(() => passwordInput?.focus());
+    });
+    document.getElementById('close-developer-ball-password')?.addEventListener('click', closePasswordModal);
+    document.getElementById('cancel-developer-ball-password')?.addEventListener('click', closePasswordModal);
+    document.getElementById('confirm-developer-ball-password')?.addEventListener('click', confirmDeveloperBall);
+    passwordInput?.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        confirmDeveloperBall();
+      }
+    });
+    passwordModal?.addEventListener('click', event => {
+      if (event.target === passwordModal) closePasswordModal();
+    });
     if (!state.uiRestricted) await loadCategories();
   }
 

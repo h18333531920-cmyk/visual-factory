@@ -12015,6 +12015,18 @@ html body #app-shell.app-shell[data-route="home"] .library-card:not(.library-fon
   transform: scale(1.012) !important;
 }
 
+/* Bookmark covers must preserve the linked template's full canvas instead of cropping it. */
+html body #app-shell.app-shell[data-route="home"] .library-bookmark-card .library-thumb img,
+.library-bookmark-card .library-thumb img {
+  object-fit: contain !important;
+  transform: none !important;
+}
+
+html body #app-shell.app-shell[data-route="home"] .library-bookmark-card:hover .library-thumb img,
+html body #app-shell.app-shell[data-route="home"] .library-bookmark-card:focus-within .library-thumb img {
+  transform: none !important;
+}
+
 html body #app-shell.app-shell[data-route="home"] .library-home-card-meta,
 html body #app-shell.app-shell[data-route="home"] .library-template-size-hover {
   display: none !important;
@@ -12553,6 +12565,30 @@ html body #app-shell.app-shell .sidebar .nav-item::after {
 .ui-restriction-control input:focus-visible + .ui-restriction-switch {
   outline: 3px solid rgba(37, 99, 235, .22);
   outline-offset: 2px;
+}
+
+.developer-ball-password-dialog {
+  width: min(420px, 100%);
+}
+
+.developer-ball-password-hint {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.developer-ball-password-field {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.developer-ball-password-field input {
+  width: 100%;
 }
 
 @media (max-width: 640px) {
