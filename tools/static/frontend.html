@@ -2803,7 +2803,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260817-canvas-ctrl-multiselect-v340">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260817-user-group-tag-menu-v346">
 </head>
 <body>
 
@@ -3038,7 +3038,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         <div class="layer-context-menu" id="canvas-context-menu">
             <button type="button" id="canvas-group-selection-btn" onclick="groupSelectedLayers(); closeCanvasContextMenu();">编组</button>
             <button type="button" id="canvas-ungroup-selection-btn" onclick="ungroupSelectedLayers(); closeCanvasContextMenu();" hidden>取消编组</button>
-            <button type="button" onclick="saveGroupCombo(); closeCanvasContextMenu();">保存组件</button>
+            <button type="button" id="canvas-save-group-btn" onclick="saveGroupCombo(); closeCanvasContextMenu();">保存组件</button>
         </div>
         <div class="layer-context-menu" id="layer-context-menu">
             <button type="button" id="layer-context-add-reference" onclick="addLayerContextReferenceToAI(); closeLayerContextMenu();" hidden>加入生图参考图</button>
@@ -7290,8 +7290,15 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const activeGroup = getActiveEditorGroup();
         const groupButton = document.getElementById(prefix === 'canvas' ? 'canvas-group-selection-btn' : 'ctx-group-selection-btn');
         const ungroupButton = document.getElementById(prefix === 'canvas' ? 'canvas-ungroup-selection-btn' : 'ctx-ungroup-selection-btn');
-        if (groupButton) groupButton.hidden = activeLayerIds.length < 2 || !!activeGroup;
-        if (ungroupButton) ungroupButton.hidden = !activeGroup;
+        const saveButton = document.getElementById(prefix === 'canvas' ? 'canvas-save-group-btn' : 'ctx-save-group-btn');
+        if (groupButton) groupButton.hidden = activeLayerIds.length < 2 || !!activeGroup || isUserInterfaceMode();
+        if (ungroupButton) ungroupButton.hidden = !activeGroup || isUserInterfaceMode();
+        if (saveButton) saveButton.hidden = isUserInterfaceMode();
+    }
+    function hasVisibleContextMenuAction(menu) {
+        return !!menu && Array.from(menu.querySelectorAll('button')).some(function(button) {
+            return !button.hidden && button.style.display !== 'none';
+        });
     }
     function updateLayerContextReferenceAction(layer) {
         const button = document.getElementById('layer-context-add-reference');
@@ -7985,7 +7992,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         } else if (layer.type === 'tag') {
             control = '<input class="input" style="width:100%;" value="' + escapeHtml(layer.text || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'text\',this.value)" onchange="commitEditorGroupMemberChange()">';
         } else if (layer.type === 'discountTag') {
-            control = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><input class="input" value="' + escapeHtml(layer.mainText || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'mainText\',this.value)" onchange="commitEditorGroupMemberChange()"><input class="input" value="' + escapeHtml(layer.bottomText || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'bottomText\',this.value)" onchange="commitEditorGroupMemberChange()"></div>';
+            const bottomTextInput = isUserInterfaceMode() ? '' : '<input class="input" value="' + escapeHtml(layer.bottomText || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'bottomText\',this.value)" onchange="commitEditorGroupMemberChange()">';
+            control = '<div style="display:grid;grid-template-columns:' + (isUserInterfaceMode() ? '1fr' : '1fr 1fr') + ';gap:6px;"><input class="input" value="' + escapeHtml(layer.mainText || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'mainText\',this.value)" onchange="commitEditorGroupMemberChange()">' + bottomTextInput + '</div>';
         } else if (layer.type === 'logoLayout') {
             control = '<div style="height:64px;border:2px dashed #cbd5e1;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:12px;cursor:pointer;background:#f8fafc;" onclick="chooseLocalLogoForLayout(\'' + layer.id + '\',0)" ondragover="event.preventDefault()" ondrop="handleEditorGroupLogoDrop(event,\'' + layer.id + '\')">拖拽或点击替换 Logo</div>';
         } else if ((layer.type === 'image' || layer.type === 'logo') && layer.src) {
@@ -8003,17 +8011,20 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             initGroupScaleOriginals();
             const types = activeLayerIds.map(id => layers.find(l => l.id === id)?.type); const allTags = types.every(t => ['tag', 'discountTag'].includes(t)); const allArcs = types.every(t => t === 'arc');
             let batchUI = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0;">已选择 ${activeLayerIds.length} 个图层</div>`;
-            if(allTags) { let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); presetHtml += `<div onclick="handleColorPresetClick(event,'tag','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid #FFF; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;" title="${p.name}（双击编辑并同步）"></div>`; }); batchUI += `<label class="label">批量修改标签品牌色</label>${presetHtml}</div>`; }
+            if(allTags && !isUserInterfaceMode()) { let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); presetHtml += `<div onclick="handleColorPresetClick(event,'tag','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid #FFF; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;" title="${p.name}（双击编辑并同步）"></div>`; }); batchUI += `<label class="label">批量修改标签品牌色</label>${presetHtml}</div>`; }
             else if (allArcs) { let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; arcColorPresets.forEach(p => { presetHtml += `<div onclick="handleColorPresetClick(event,'arc','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.cIn}; border: 4px solid ${p.cOut}; cursor:pointer;" title="${p.name}（双击编辑并同步）"></div>`; }); batchUI += `<label class="label">批量修改圆弧品牌色</label>${presetHtml}</div>`; }
-            // 统一缩放
-            var gsCurrent = Number(_groupScaleValue) || 1;
-            batchUI += `<div class="slider-row"><span class="s-label">统一缩放</span><input type="range" min="0.2" max="5" step="0.01" value="${gsCurrent}" oninput="applyGroupScale(parseFloat(this.value))" onchange="saveHistory(); _groupScaleValue=1; _groupScaleOriginals=null; this.value=1; document.getElementById('val-groupScale').innerText='1.00x'; initGroupScaleOriginals();"><span class="slider-val" id="val-groupScale">${gsCurrent.toFixed(2)}x</span></div>`;
-            // 统一旋转：围绕当前选区中心旋转位置，并同步叠加每个图层自身角度。
-            var grCurrent = Number(_groupRotationValue) || 0;
-            batchUI += `<div class="slider-row"><span class="s-label">统一旋转</span><input type="range" min="-180" max="180" step="1" value="${grCurrent}" oninput="applyGroupRotation(parseFloat(this.value))" onchange="saveHistory(); _groupRotationValue=0; _groupScaleOriginals=null; this.value=0; document.getElementById('val-groupRotation').innerText='0°'; initGroupScaleOriginals();"><span class="slider-val" id="val-groupRotation">${Math.round(grCurrent)}°</span></div>`;
+            if (!isUserInterfaceMode()) {
+                // 统一缩放
+                var gsCurrent = Number(_groupScaleValue) || 1;
+                batchUI += `<div class="slider-row"><span class="s-label">统一缩放</span><input type="range" min="0.2" max="5" step="0.01" value="${gsCurrent}" oninput="applyGroupScale(parseFloat(this.value))" onchange="saveHistory(); _groupScaleValue=1; _groupScaleOriginals=null; this.value=1; document.getElementById('val-groupScale').innerText='1.00x'; initGroupScaleOriginals();"><span class="slider-val" id="val-groupScale">${gsCurrent.toFixed(2)}x</span></div>`;
+                // 统一旋转：围绕当前选区中心旋转位置，并同步叠加每个图层自身角度。
+                var grCurrent = Number(_groupRotationValue) || 0;
+                batchUI += `<div class="slider-row"><span class="s-label">统一旋转</span><input type="range" min="-180" max="180" step="1" value="${grCurrent}" oninput="applyGroupRotation(parseFloat(this.value))" onchange="saveHistory(); _groupRotationValue=0; _groupScaleOriginals=null; this.value=0; document.getElementById('val-groupRotation').innerText='0°'; initGroupScaleOriginals();"><span class="slider-val" id="val-groupRotation">${Math.round(grCurrent)}°</span></div>`;
+            }
             const activeEditorGroup = getActiveEditorGroup();
             if (activeEditorGroup) {
-                batchUI += '<div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--border);"><strong style="font-size:13px;">编组内容</strong><button type="button" class="btn btn-outline" style="height:30px;padding:0 10px;font-size:11px;" onclick="ungroupSelectedLayers()">取消编组</button></div>';
+                const ungroupAction = isUserInterfaceMode() ? '' : '<button type="button" class="btn btn-outline" style="height:30px;padding:0 10px;font-size:11px;" onclick="ungroupSelectedLayers()">取消编组</button>';
+                batchUI += '<div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--border);"><strong style="font-size:13px;">编组内容</strong>' + ungroupAction + '</div>';
                 activeEditorGroup.members.slice().sort(function(a,b) { return (Number(b.zIndex)||0) - (Number(a.zIndex)||0); }).forEach(function(member) { batchUI += getEditorGroupMemberControlHtml(member); });
             }
             area.innerHTML = batchUI; return;
@@ -8489,7 +8500,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             e.preventDefault();
             var cm2 = document.getElementById('canvas-context-menu');
             updateEditorGroupContextActions('canvas');
-            if (cm2) { cm2.style.left = e.clientX + 'px'; cm2.style.top = e.clientY + 'px'; cm2.classList.add('open'); }
+            if (hasVisibleContextMenuAction(cm2)) { cm2.style.left = e.clientX + 'px'; cm2.style.top = e.clientY + 'px'; cm2.classList.add('open'); }
             return;
         }
         // 单选任意图层 → 统一右键菜单（复制图层；图片额外提供参考图/替换等）
@@ -9718,6 +9729,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             item.oncontextmenu = function(e) {
                 e.preventDefault();
                 e.stopPropagation();
+                if (isUserInterfaceMode() && isTemplateAsset) {
+                    closeAssetContextMenu();
+                    return;
+                }
                 openAssetContextMenu(e, { item, asset, title, type, renameable: isRenameable, canUseAsAIReference: canUseAsAIReference, onDelete: onDelete });
             };
         }
@@ -10445,7 +10460,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 // 点击打开、右键菜单
                 card.onclick = function() { closeTemplateBookmarkDialog(); applyLayoutPreset(template.id); };
                 card.onkeydown = function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); } };
-                card.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); showBookmarkMemberContextMenu(e, bookmark, member, template, name); };
+                card.oncontextmenu = function(e) {
+                    e.preventDefault(); e.stopPropagation();
+                    if (isUserInterfaceMode()) { closeBookmarkMemberContextMenu(); return; }
+                    showBookmarkMemberContextMenu(e, bookmark, member, template, name);
+                };
                 list.appendChild(card);
             });
             grid.appendChild(list);
