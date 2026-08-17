@@ -220,6 +220,15 @@
         .text-mode-btn span { display: block; font-size: 10px; font-weight: 600; margin-top: 2px; }
 
         .is-active-layer { outline: 3px dashed var(--primary); outline-offset: 4px; }
+        .editor-group-selection-box {
+            position: absolute;
+            z-index: 9998;
+            pointer-events: none;
+            border: 3px dashed var(--primary);
+            border-radius: 4px;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, .08);
+            transform: translate(-3px, -3px);
+        }
         .is-new-layer {
             outline: 3px solid #4f6df5 !important;
             outline-offset: 6px;
@@ -2794,7 +2803,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260817-user-template-tag-lock-v327">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260817-editor-group-text-limit-v339">
 </head>
 <body>
 
@@ -3027,6 +3036,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             <div class="safe-guide" id="safe-guide"></div>
         </div>
         <div class="layer-context-menu" id="canvas-context-menu">
+            <button type="button" id="canvas-group-selection-btn" onclick="groupSelectedLayers(); closeCanvasContextMenu();">编组</button>
+            <button type="button" id="canvas-ungroup-selection-btn" onclick="ungroupSelectedLayers(); closeCanvasContextMenu();" hidden>取消编组</button>
             <button type="button" onclick="saveGroupCombo(); closeCanvasContextMenu();">保存组件</button>
         </div>
         <div class="layer-context-menu" id="layer-context-menu">
@@ -3034,6 +3045,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             <button type="button" id="layer-context-replace-image" onclick="replaceLayerContextImage(); closeLayerContextMenu();" hidden>替换图片</button>
             <button type="button" id="layer-context-duplicate-layer" onclick="duplicateLayerContext(); closeLayerContextMenu();">复制图层</button>
             <button type="button" onclick="centerLayerOnCanvas(); closeLayerContextMenu();">元素画板居中</button>
+            <button type="button" id="ctx-group-selection-btn" onclick="groupSelectedLayers(); closeLayerContextMenu();" hidden>编组</button>
+            <button type="button" id="ctx-ungroup-selection-btn" onclick="ungroupSelectedLayers(); closeLayerContextMenu();" hidden>取消编组</button>
             <button type="button" id="ctx-save-group-btn" onclick="saveGroupCombo(); closeLayerContextMenu();" style="display:none">保存组件</button>
         </div>
         <div class="artboard-preview-dock" id="artboard-preview-dock"></div>
@@ -3183,10 +3196,25 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             && ['tag', 'discountTag', 'tagPill'].includes(layer?.type)
             && layer?._templateLayer === true;
     }
+    function isUserProtectedTemplateArc(layer) {
+        return isUserInterfaceMode()
+            && layer?.type === 'arc'
+            && layer?._templateLayer === true;
+    }
+    function isUserTemplateBackgroundImage(layer) {
+        if (!isUserInterfaceMode() || layer?.type !== 'image' || layer?._templateLayer !== true) return false;
+        if (layer.role === 'extended-background') return true;
+        const templateLayers = layers.filter(function(item) { return item?._templateLayer === true; });
+        const lowestZ = Math.min.apply(null, templateLayers.map(function(item) { return Number(item.zIndex) || 0; }));
+        return (Number(layer.zIndex) || 0) === lowestZ;
+    }
     function isUserProtectedTemplateContent(layer) {
         return isUserProtectedTemplateText(layer)
             || isUserProtectedTemplateLogo(layer)
             || isUserProtectedTemplateTag(layer);
+    }
+    function isUserMoveProtectedTemplateLayer(layer) {
+        return isUserProtectedTemplateContent(layer) || isUserProtectedTemplateArc(layer);
     }
     function getProtectedTemplateDeleteMessage(protectedLayers) {
         const items = Array.isArray(protectedLayers) ? protectedLayers : [protectedLayers];
@@ -3200,6 +3228,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         return '模板' + (labels.join('、') || '内容') + '不可删除';
     }
     function getProtectedTemplateMoveMessage(layer) {
+        if (isUserProtectedTemplateArc(layer)) return '用户模式下不能移动模板圆弧';
         if (isUserProtectedTemplateTag(layer)) return '用户模式下不能移动模板标签';
         return isUserProtectedTemplateLogo(layer)
             ? '用户模式下不能移动模板 Logo 组件'
@@ -5740,8 +5769,13 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         let cx = 0, cy = 0;
         source.forEach(l => { cx += Number(l.x) || 0; cy += Number(l.y) || 0; });
         cx /= source.length; cy /= source.length;
+        const editorGroupIdMap = new Map();
         return source.map((el, i) => {
             const cloned = { ...el, id: genId(el.type), zIndex: maxZ + i + 1, locked: false };
+            if (cloned._editorGroupId) {
+                if (!editorGroupIdMap.has(cloned._editorGroupId)) editorGroupIdMap.set(cloned._editorGroupId, genId('editor_group'));
+                cloned._editorGroupId = editorGroupIdMap.get(cloned._editorGroupId);
+            }
             if(centerOnCanvas) { cloned.x = w / 2 + ((Number(el.x) || 0) - cx); cloned.y = h / 2 + ((Number(el.y) || 0) - cy); }
             if(cloned.type === 'tag' && cloned.shadowThickness === undefined) cloned.shadowThickness = 12;
             if(cloned.type === 'tag' && cloned.letterSpacing === undefined) cloned.letterSpacing = 0;
@@ -6882,14 +6916,80 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if(newlyAddedLayerIds.has(l.id)) wrapper.classList.add('is-new-layer');
         return wrapper;
     }
+    function getEditorGroupId(layer) {
+        return layer && layer._editorGroupId ? String(layer._editorGroupId) : '';
+    }
+    function getEditorGroupMembers(groupId) {
+        if (!groupId) return [];
+        return layers.filter(function(layer) { return getEditorGroupId(layer) === String(groupId); });
+    }
+    function expandSelectionToEditorGroups(ids) {
+        const expanded = new Set();
+        (ids || []).forEach(function(id) {
+            const layer = layers.find(function(item) { return item.id === id; });
+            if (!layer) return;
+            const groupId = getEditorGroupId(layer);
+            if (groupId) getEditorGroupMembers(groupId).forEach(function(member) { expanded.add(member.id); });
+            else expanded.add(layer.id);
+        });
+        return Array.from(expanded);
+    }
+    function getActiveEditorGroup() {
+        const selected = activeLayerIds.map(function(id) { return layers.find(function(layer) { return layer.id === id; }); }).filter(Boolean);
+        if (!selected.length) return null;
+        const groupId = getEditorGroupId(selected[0]);
+        if (!groupId) return null;
+        const members = getEditorGroupMembers(groupId);
+        if (members.length < 2 || selected.length !== members.length || !members.every(function(member) { return activeLayerIds.includes(member.id); })) return null;
+        return { id: groupId, members: members };
+    }
+    function syncEditorGroupSelectionBox(container) {
+        const root = container || document.getElementById('dynamic-layers');
+        if (!root) return;
+        root.querySelector('.editor-group-selection-box')?.remove();
+        const activeGroup = getActiveEditorGroup();
+        if (!activeGroup) return;
+        const bounds = getGroupBounds(activeGroup.members.filter(function(layer) { return layer.visible !== false; }));
+        if (!bounds) return;
+        const selectionBox = document.createElement('div');
+        selectionBox.className = 'editor-group-selection-box';
+        selectionBox.style.left = bounds.x1 + 'px';
+        selectionBox.style.top = bounds.y1 + 'px';
+        selectionBox.style.width = bounds.w + 'px';
+        selectionBox.style.height = bounds.h + 'px';
+        root.appendChild(selectionBox);
+    }
+    function groupSelectedLayers() {
+        const ids = expandSelectionToEditorGroups(activeLayerIds);
+        const selected = ids.map(function(id) { return layers.find(function(layer) { return layer.id === id; }); }).filter(Boolean);
+        if (selected.length < 2) return showToast('请先选择至少两个组件', true);
+        const groupId = genId('editor_group');
+        selected.forEach(function(layer) { layer._editorGroupId = groupId; });
+        activeLayerIds = selected.map(function(layer) { return layer.id; });
+        layerSelectionAnchorId = selected[0].id;
+        _groupScaleOriginals = null;
+        saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+        showToast('已编组，点击任一成员即可选择整组');
+    }
+    function ungroupSelectedLayers() {
+        const activeGroup = getActiveEditorGroup();
+        const selected = activeGroup ? activeGroup.members : activeLayerIds.map(function(id) { return layers.find(function(layer) { return layer.id === id; }); }).filter(Boolean);
+        if (!selected.some(function(layer) { return getEditorGroupId(layer); })) return showToast('当前选择中没有编组', true);
+        selected.forEach(function(layer) { delete layer._editorGroupId; });
+        _groupScaleOriginals = null;
+        saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+        showToast('已取消编组');
+    }
     function renderCanvas() {
         const container = document.getElementById('dynamic-layers'); container.innerHTML = '';
         const hintEl = document.getElementById('empty-hint');
         const visibleLayers = layers.filter(function(l) { return l.visible !== false; });
+        const activeGroup = getActiveEditorGroup();
         if (hintEl) hintEl.style.display = 'none'; // 不再显示空白提示
         visibleLayers.sort((a,b) => a.zIndex - b.zIndex).forEach(l => {
-            container.appendChild(createLayerElement(l, { active: activeLayerIds.includes(l.id), interactive: true }));
+            container.appendChild(createLayerElement(l, { active: !activeGroup && activeLayerIds.includes(l.id), interactive: true }));
         });
+        if (activeGroup) syncEditorGroupSelectionBox(container);
         renderArtboardPreviews();
     }
     function renderArtboardPreviews() {
@@ -7005,21 +7105,22 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if(event.shiftKey && layerSelectionAnchorId && orderedIds.includes(layerSelectionAnchorId)) {
             const from = orderedIds.indexOf(layerSelectionAnchorId);
             const to = orderedIds.indexOf(layerId);
-            activeLayerIds = orderedIds.slice(Math.min(from, to), Math.max(from, to) + 1);
+            activeLayerIds = expandSelectionToEditorGroups(orderedIds.slice(Math.min(from, to), Math.max(from, to) + 1));
             return;
         }
 
         // Ctrl（macOS 同时支持 Command）：逐个精确增减选中，不影响其他图层。
         if(event.ctrlKey || event.metaKey) {
-            if(activeLayerIds.includes(layerId)) activeLayerIds = activeLayerIds.filter(id => id !== layerId);
-            else activeLayerIds = [...activeLayerIds, layerId];
+            const targetIds = expandSelectionToEditorGroups([layerId]);
+            const allSelected = targetIds.every(function(id) { return activeLayerIds.includes(id); });
+            if(allSelected) activeLayerIds = activeLayerIds.filter(function(id) { return !targetIds.includes(id); });
+            else activeLayerIds = expandSelectionToEditorGroups(activeLayerIds.concat(targetIds));
             layerSelectionAnchorId = layerId;
             return;
         }
 
-        activeLayerIds = [layerId];
+        activeLayerIds = expandSelectionToEditorGroups([layerId]);
         layerSelectionAnchorId = layerId;
-        focusInspectorOnSelection();
     }
 
     function renderLayersList() {
@@ -7092,7 +7193,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 if (li._clickTimer) { clearTimeout(li._clickTimer); li._clickTimer = null; }
                 // 右键同时选中该图层（不改变已有 multi-select）
                 if (!activeLayerIds.includes(l.id)) {
-                    activeLayerIds = [l.id];
+                    activeLayerIds = expandSelectionToEditorGroups([l.id]);
                     layerSelectionAnchorId = l.id;
                     renderCanvas(); renderLayersList(); renderProperties();
                 }
@@ -7103,6 +7204,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 // 多选时显示"保存组合"按钮
                 var saveGroupBtn = document.getElementById('ctx-save-group-btn');
                 if (saveGroupBtn) saveGroupBtn.style.display = activeLayerIds.length >= 2 ? '' : 'none';
+                updateEditorGroupContextActions('ctx');
                 menu.style.left = e.clientX + 'px';
                 menu.style.top = e.clientY + 'px';
                 menu.classList.add('open');
@@ -7172,14 +7274,24 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
 
     function deleteLayer(id) {
         var target = layers.find(function(layer) { return layer.id === id; });
-        if (isUserProtectedTemplateContent(target)) {
-            showToast(getProtectedTemplateDeleteMessage(target), true);
+        const targets = getEditorGroupId(target) ? getEditorGroupMembers(getEditorGroupId(target)) : [target].filter(Boolean);
+        const protectedTarget = targets.find(isUserProtectedTemplateContent);
+        if (protectedTarget) {
+            showToast(getProtectedTemplateDeleteMessage(protectedTarget), true);
             return;
         }
-        preservePaneScroll(() => { layers = layers.filter(l => l.id !== id); activeLayerIds = activeLayerIds.filter(x => x !== id); renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); });
+        const targetIds = new Set(targets.map(function(layer) { return layer.id; }));
+        preservePaneScroll(() => { layers = layers.filter(function(layer) { return !targetIds.has(layer.id); }); activeLayerIds = activeLayerIds.filter(function(activeId) { return !targetIds.has(activeId); }); renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); });
     }
     function closeLayerContextMenu() {
         document.getElementById('layer-context-menu')?.classList.remove('open');
+    }
+    function updateEditorGroupContextActions(prefix) {
+        const activeGroup = getActiveEditorGroup();
+        const groupButton = document.getElementById(prefix === 'canvas' ? 'canvas-group-selection-btn' : 'ctx-group-selection-btn');
+        const ungroupButton = document.getElementById(prefix === 'canvas' ? 'canvas-ungroup-selection-btn' : 'ctx-ungroup-selection-btn');
+        if (groupButton) groupButton.hidden = activeLayerIds.length < 2 || !!activeGroup;
+        if (ungroupButton) ungroupButton.hidden = !activeGroup;
     }
     function updateLayerContextReferenceAction(layer) {
         const button = document.getElementById('layer-context-add-reference');
@@ -7214,6 +7326,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         saveHistory(true);
         const cloned = cloneData(layer);
         cloned.id = genId(layer.type);
+        delete cloned._editorGroupId;
         cloned.locked = false;
         cloned.customName = layer.customName ? `${layer.customName} 副本` : null;
         // 关联画板共享类型的图层（tag/discountTag/arc/solid）复制后需独立，避免与原件联动
@@ -7231,7 +7344,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (!_contextMenuLayerId) return;
         var layer = layers.find(function(l) { return l.id === _contextMenuLayerId; });
         if (!layer) return;
-        if (isUserProtectedTemplateContent(layer)) return showToast(getProtectedTemplateMoveMessage(layer), true);
+        if (isUserMoveProtectedTemplateLayer(layer)) return showToast(getProtectedTemplateMoveMessage(layer), true);
         var size = SIZES[currentRatio] || { w: 1080, h: 1080 };
         saveHistory();
         layer.x = size.w / 2;
@@ -7292,10 +7405,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         // 选区未变则跳过
         var currentIds = sel.map(function(l) { return l.id; }).sort().join(',');
         if (_groupScaleOriginals && _groupScaleOriginals._selKey === currentIds) return;
-        // 计算选中图层的几何中心
-        var cx = 0, cy = 0;
-        sel.forEach(function(l) { cx += Number(l.x) || 0; cy += Number(l.y) || 0; });
-        cx /= sel.length; cy /= sel.length;
+        // 使用整体视觉包围盒中心，保证编组缩放时不会因成员尺寸不同而跳动。
+        var selectionBounds = getGroupBounds(sel);
+        var cx = selectionBounds ? selectionBounds.cx : 0;
+        var cy = selectionBounds ? selectionBounds.cy : 0;
         _groupScaleOriginals = { cx: cx, cy: cy, _selKey: currentIds, layers: sel.map(function(l) {
             return {
                 id: l.id,
@@ -7344,7 +7457,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var cy = _groupScaleOriginals.cy;
         _groupScaleOriginals.layers.forEach(function(orig) {
             var l = layers.find(function(x) { return x.id === orig.id; });
-            if (!l || l.locked || isUserProtectedTemplateContent(l)) return;
+            if (!l || l.locked || isUserMoveProtectedTemplateLayer(l)) return;
             // 位置：相对于组中心等比缩放（保持图层间的相对间距）
             l.x = cx + (orig.x - cx) * newValue;
             l.y = cy + (orig.y - cy) * newValue;
@@ -7366,7 +7479,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var cy = _groupScaleOriginals.cy;
         _groupScaleOriginals.layers.forEach(function(orig) {
             var l = layers.find(function(x) { return x.id === orig.id; });
-            if (!l || l.locked || isUserProtectedTemplateContent(l)) return;
+            if (!l || l.locked || isUserMoveProtectedTemplateLayer(l)) return;
             var dx = orig.x - cx;
             var dy = orig.y - cy;
             l.x = cx + dx * cos - dy * sin;
@@ -7602,39 +7715,173 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         });
         return width * (Number(layer.scale) || 1);
     }
+    function measureNaturalTextLayerHeight(layer, text, layoutOverride) {
+        var probe = document.createElement('div');
+        var mode = layoutOverride?.resizeMode || layer.resizeMode || 'autoWidth';
+        var maxWidth = Number(layoutOverride?.maxWidth ?? layer.maxWidth) || 620;
+        probe.style.position = 'fixed';
+        probe.style.left = '-100000px';
+        probe.style.top = '0';
+        probe.style.visibility = 'hidden';
+        probe.style.pointerEvents = 'none';
+        probe.style.boxSizing = 'border-box';
+        probe.style.fontFamily = layer.font || getDefaultFont();
+        probe.style.fontWeight = isCustomFont(layer.font)
+            ? resolveFontWeight(layer.font, Number(layer.fontWeight) || 900)
+            : (Number(layer.fontWeight) || 900);
+        probe.style.fontSize = (Number(layer.fontSize) || 88) + 'px';
+        probe.style.lineHeight = String(Number(layer.lineHeight) || 0.95);
+        probe.style.letterSpacing = (Number(layer.letterSpacing) || 0) + 'px';
+        probe.style.whiteSpace = mode === 'autoWidth' ? 'pre' : 'pre-wrap';
+        probe.style.overflowWrap = 'anywhere';
+        if (mode !== 'autoWidth') probe.style.width = maxWidth + 'px';
+        probe.textContent = String(text || ' ');
+        document.body.appendChild(probe);
+        var height = probe.getBoundingClientRect().height;
+        probe.remove();
+        var fallbackHeight = (Number(layer.fontSize) || 88) * (Number(layer.lineHeight) || 0.95);
+        return (height || fallbackHeight) * (Number(layer.scale) || 1);
+    }
+    function getUserTextAvailableWidth(layer) {
+        var canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
+        var scale = Math.max(0.01, Math.abs(Number(layer.scale) || 1));
+        var x = Number(layer.x) || canvasSize.w / 2;
+        var align = getEffectiveTextAlign(layer, getEffectiveTextDirection(layer));
+        var availableVisual;
+        if (layer.textBoxAnchor === 'center') {
+            availableVisual = Math.max(0, Math.min(x, canvasSize.w - x) * 2);
+        } else if (align === 'right') {
+            availableVisual = Math.max(0, x);
+        } else {
+            availableVisual = Math.max(0, canvasSize.w - x);
+        }
+        return Math.max(24, (availableVisual - 4) / scale);
+    }
+    function prepareUserTextLayout(layer, nextText) {
+        if (!isUserInterfaceMode() || layer?.type !== 'text') return { accepted: true };
+        var text = String(nextText == null ? '' : nextText);
+        if (text.split('\n').length > 2) return { accepted: false };
+        var currentMode = layer.resizeMode || 'autoWidth';
+        var plan = { accepted: true, resizeMode: currentMode, maxWidth: Number(layer.maxWidth) || 620 };
+        var availableWidth = getUserTextAvailableWidth(layer);
+        var naturalWidth = measureAutoWidthTextLayer(layer, text) / Math.max(0.01, Math.abs(Number(layer.scale) || 1));
+        if (currentMode === 'fixedSize') {
+            plan.maxWidth = Math.min(plan.maxWidth, availableWidth);
+        } else if (currentMode === 'fixedWidth') {
+            plan.maxWidth = Math.min(plan.maxWidth, availableWidth);
+        } else if (naturalWidth > availableWidth) {
+            plan.resizeMode = 'fixedWidth';
+            plan.maxWidth = availableWidth;
+        }
+        var height = measureNaturalTextLayerHeight(layer, text || ' ', plan);
+        var scale = Math.max(0.01, Math.abs(Number(layer.scale) || 1));
+        var lineBoxHeight = (Number(layer.fontSize) || 88) * (Number(layer.lineHeight) || 0.95) * scale;
+        var renderedLines = Math.max(1, Math.ceil(height / Math.max(1, lineBoxHeight) - 0.01));
+        if (renderedLines > 2) return { accepted: false };
+        // 自动高度文字以当前顶部为锚点；第二行也必须留在画布内。
+        var canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
+        var oldHeight = measureNaturalTextLayerHeight(layer, String(layer.text || ' ') || ' ');
+        var oldTop = (Number(layer.y) || canvasSize.h / 2) - oldHeight / 2;
+        if (oldTop + height > canvasSize.h + 0.5) return { accepted: false };
+        return plan;
+    }
+    function snapshotEditorGroupBounds(layer) {
+        const groupId = getEditorGroupId(layer);
+        if (!groupId) return null;
+        const bounds = new Map();
+        getEditorGroupMembers(groupId).forEach(function(member) { bounds.set(member.id, getLayerBounds(member)); });
+        return bounds;
+    }
+    function reflowEditorGroupAfterMemberResize(changedLayer, oldBoundsById) {
+        if (!changedLayer || !oldBoundsById) return;
+        const groupId = getEditorGroupId(changedLayer);
+        const oldChanged = oldBoundsById.get(changedLayer.id);
+        if (!groupId || !oldChanged) return;
+        const nextChanged = getLayerBounds(changedLayer);
+        const epsilon = 2;
+        getEditorGroupMembers(groupId).forEach(function(member) {
+            if (member.id === changedLayer.id || member.locked) return;
+            const oldMember = oldBoundsById.get(member.id);
+            if (!oldMember) return;
+            let dx = 0, dy = 0;
+            // 以变化成员原来的四条边为约束：在其下/上/右/左的成员继续保持原边距。
+            if (oldMember.y1 >= oldChanged.y2 - epsilon) dy = nextChanged.y2 - oldChanged.y2;
+            else if (oldMember.y2 <= oldChanged.y1 + epsilon) dy = nextChanged.y1 - oldChanged.y1;
+            if (oldMember.x1 >= oldChanged.x2 - epsilon) dx = nextChanged.x2 - oldChanged.x2;
+            else if (oldMember.x2 <= oldChanged.x1 + epsilon) dx = nextChanged.x1 - oldChanged.x1;
+            member.x = (Number(member.x) || 0) + dx;
+            member.y = (Number(member.y) || 0) + dy;
+        });
+    }
     function setTextContentPreservingAlignedEdge(layer, nextText) {
         var oldText = String(layer.text || '');
         var normalizedText = String(nextText == null ? '' : nextText);
         if (oldText === normalizedText) return;
+        var oldEditorGroupBounds = snapshotEditorGroupBounds(layer);
+        var userLayout = prepareUserTextLayout(layer, normalizedText);
+        if (!userLayout.accepted) return false;
         var alignment = getEffectiveTextAlign(layer, getEffectiveTextDirection(oldText));
         var preserveEdge = (layer.resizeMode || 'autoWidth') === 'autoWidth'
             && layer.textBoxAnchor === 'center'
             && (alignment === 'left' || alignment === 'right');
+        // 所有自动高度文字（包括没有 textBoxAnchor 标记的旧模板文字）都要锁住顶部。
+        // 只有真正设置了固定框高的图层，内容行数变化时才无需移动图层中心。
+        var hasFixedHeight = (layer.resizeMode || 'autoWidth') === 'fixedSize'
+            && Number(layer.textBoxHeight) > 0;
+        var preserveTop = !hasFixedHeight;
         // 用户模式下空文字会显示 Enter text；定位时也要计入它的宽度，
         // 否则占位符仍会以锚点为中心向两侧展开。
         var oldVisualText = !oldText.trim() && isUserProtectedTemplateText(layer) ? 'Enter text' : oldText;
         var nextVisualText = !normalizedText.trim() && isUserProtectedTemplateText(layer) ? 'Enter text' : normalizedText;
         var oldWidth = preserveEdge ? measureAutoWidthTextLayer(layer, oldVisualText) : 0;
+        var oldHeight = preserveTop ? measureNaturalTextLayerHeight(layer, oldVisualText) : 0;
         layer.text = normalizedText;
-        if (!preserveEdge) return;
-        var newWidth = measureAutoWidthTextLayer(layer, nextVisualText);
-        var direction = alignment === 'left' ? 1 : -1;
-        var localDelta = direction * (newWidth - oldWidth) / 2;
+        if (userLayout.resizeMode) layer.resizeMode = userLayout.resizeMode;
+        if (userLayout.maxWidth) layer.maxWidth = userLayout.maxWidth;
+        if (!preserveEdge && !preserveTop) {
+            reflowEditorGroupAfterMemberResize(layer, oldEditorGroupBounds);
+            return true;
+        }
+        var localDeltaX = 0;
+        var localDeltaY = 0;
+        if (preserveEdge) {
+            var newWidth = (layer.resizeMode || 'autoWidth') === 'autoWidth'
+                ? measureAutoWidthTextLayer(layer, nextVisualText)
+                : (Number(layer.maxWidth) || 620) * (Number(layer.scale) || 1);
+            var direction = alignment === 'left' ? 1 : -1;
+            localDeltaX = direction * (newWidth - oldWidth) / 2;
+        }
+        if (preserveTop) {
+            var newHeight = measureNaturalTextLayerHeight(layer, nextVisualText);
+            localDeltaY = (newHeight - oldHeight) / 2;
+        }
         var angle = (Number(layer.rotation) || 0) * Math.PI / 180;
-        layer.x = (Number(layer.x) || 0) + localDelta * Math.cos(angle);
-        layer.y = (Number(layer.y) || 0) + localDelta * Math.sin(angle);
+        layer.x = (Number(layer.x) || 0) + localDeltaX * Math.cos(angle) - localDeltaY * Math.sin(angle);
+        layer.y = (Number(layer.y) || 0) + localDeltaX * Math.sin(angle) + localDeltaY * Math.cos(angle);
+        reflowEditorGroupAfterMemberResize(layer, oldEditorGroupBounds);
+        return true;
     }
     window.updateProp = function(p, v) {
+        var rejectedTextInput = false;
         activeLayerIds.forEach(id => {
             const l = layers.find(x => x.id === id);
             if(l) {
-                if (p === 'text' && l.type === 'text') setTextContentPreservingAlignedEdge(l, v);
+                if (p === 'text' && l.type === 'text') {
+                    if (setTextContentPreservingAlignedEdge(l, v) === false) rejectedTextInput = true;
+                }
                 else l[p] = v;
                 if(getSharedPropsForLayer(l).includes(p)) propagateSharedLayerChange(l, [p]);
             }
         });
         renderCanvas(); renderArtboardPreviews();
+        if (rejectedTextInput) {
+            var textEditor = document.querySelector('#prop-edit-area textarea');
+            var selectedTextLayer = layers.find(function(layer) { return layer.id === activeLayerIds[0] && layer.type === 'text'; });
+            if (textEditor && selectedTextLayer) textEditor.value = selectedTextLayer.text || '';
+            showToast('文字最多两行，不可出现第三行', true);
+        }
         if(activeLayerIds.length === 1) { const el = document.getElementById('val-'+p); if(el) el.innerText = formatPropValue(p, v); }
+        return !rejectedTextInput;
     };
     window.setTextColor = function(color) {
         activeLayerIds.forEach(id => {
@@ -7694,6 +7941,60 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         renderCanvas(); renderProperties(); renderArtboardPreviews(); saveHistory();
     };
 
+    function updateEditorGroupMemberProp(layerId, prop, value, sourceElement) {
+        const layer = layers.find(function(item) { return item.id === layerId; });
+        if (!layer) return;
+        const oldBounds = snapshotEditorGroupBounds(layer);
+        if (prop === 'text' && layer.type === 'text') {
+            if (setTextContentPreservingAlignedEdge(layer, value) === false) {
+                if (sourceElement) {
+                    sourceElement.value = String(layer.text || '');
+                    const cursor = sourceElement.value.length;
+                    try { sourceElement.setSelectionRange(cursor, cursor); } catch (_error) {}
+                }
+                showToast('文字最多两行，不可出现第三行', true);
+                return false;
+            }
+        } else {
+            layer[prop] = value;
+            reflowEditorGroupAfterMemberResize(layer, oldBounds);
+        }
+        if (getSharedPropsForLayer(layer).includes(prop)) propagateSharedLayerChange(layer, [prop]);
+        renderCanvas(); renderLayersList(); renderArtboardPreviews();
+    }
+    function commitEditorGroupMemberChange() { saveHistory(); renderProperties(); }
+    function handleEditorGroupLogoDrop(event, layerId) {
+        event.preventDefault(); event.stopPropagation();
+        const file = event.dataTransfer?.files?.[0];
+        const layer = layers.find(function(item) { return item.id === layerId; });
+        if (!file || !layer || layer.type !== 'logoLayout' || !/^image\/(png|jpeg|webp|svg\+xml)$/.test(file.type)) return showToast('请拖入图片文件', true);
+        const reader = new FileReader();
+        reader.onload = function(readEvent) {
+            layer.slots = Array.isArray(layer.slots) ? layer.slots : [];
+            layer.slots[0] = { src: readEvent.target.result, name: file.name || 'Logo' };
+            saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+            showToast('已更新编组中的 Logo');
+        };
+        reader.readAsDataURL(file);
+    }
+    function getEditorGroupMemberControlHtml(layer) {
+        const name = escapeHtml(getLayerName(layer));
+        let control = '<div style="font-size:12px;color:var(--text-sub);">' + escapeHtml(layer.type || '组件') + '</div>';
+        if (layer.type === 'text') {
+            control = '<textarea class="input" rows="2" style="width:100%;resize:vertical;" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'text\',this.value,this)" onchange="commitEditorGroupMemberChange()">' + escapeHtml(layer.text || '') + '</textarea>';
+        } else if (layer.type === 'tag') {
+            control = '<input class="input" style="width:100%;" value="' + escapeHtml(layer.text || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'text\',this.value)" onchange="commitEditorGroupMemberChange()">';
+        } else if (layer.type === 'discountTag') {
+            control = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><input class="input" value="' + escapeHtml(layer.mainText || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'mainText\',this.value)" onchange="commitEditorGroupMemberChange()"><input class="input" value="' + escapeHtml(layer.bottomText || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'bottomText\',this.value)" onchange="commitEditorGroupMemberChange()"></div>';
+        } else if (layer.type === 'logoLayout') {
+            control = '<div style="height:64px;border:2px dashed #cbd5e1;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:12px;cursor:pointer;background:#f8fafc;" onclick="chooseLocalLogoForLayout(\'' + layer.id + '\',0)" ondragover="event.preventDefault()" ondrop="handleEditorGroupLogoDrop(event,\'' + layer.id + '\')">拖拽或点击替换 Logo</div>';
+        } else if ((layer.type === 'image' || layer.type === 'logo') && layer.src) {
+            control = '<div style="display:flex;align-items:center;gap:10px;color:var(--text-sub);font-size:12px;"><img src="' + escapeHtml(layer.src) + '" style="width:42px;height:42px;object-fit:contain;border:1px solid var(--border);border-radius:8px;background:#fff;">图片素材</div>';
+        }
+        const geometryControls = isUserInterfaceMode() ? '' : '<div style="display:grid;grid-template-columns:42px 1fr 48px;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--text-sub);"><span>缩放</span><input type="range" min="0.05" max="5" step="0.01" value="' + (Number(layer.scale) || 1) + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'scale\',parseFloat(this.value));this.nextElementSibling.textContent=parseFloat(this.value).toFixed(2)+\'x\'" onchange="commitEditorGroupMemberChange()"><span>' + (Number(layer.scale) || 1).toFixed(2) + 'x</span></div>';
+        return '<section style="padding:12px;border:1px solid var(--border);border-radius:14px;background:#fff;margin-bottom:10px;"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;"><strong style="font-size:13px;">' + name + '</strong><span style="font-size:10px;color:var(--text-sub);">' + escapeHtml(layer.type || '') + '</span></div>' + control + geometryControls + '</section>';
+    }
+
     function renderProperties() {
         const area = document.getElementById('prop-edit-area'); 
         syncLayerCanvasFitButton();
@@ -7710,10 +8011,17 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             // 统一旋转：围绕当前选区中心旋转位置，并同步叠加每个图层自身角度。
             var grCurrent = Number(_groupRotationValue) || 0;
             batchUI += `<div class="slider-row"><span class="s-label">统一旋转</span><input type="range" min="-180" max="180" step="1" value="${grCurrent}" oninput="applyGroupRotation(parseFloat(this.value))" onchange="saveHistory(); _groupRotationValue=0; _groupScaleOriginals=null; this.value=0; document.getElementById('val-groupRotation').innerText='0°'; initGroupScaleOriginals();"><span class="slider-val" id="val-groupRotation">${Math.round(grCurrent)}°</span></div>`;
+            const activeEditorGroup = getActiveEditorGroup();
+            if (activeEditorGroup) {
+                batchUI += '<div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--border);"><strong style="font-size:13px;">编组内容</strong><button type="button" class="btn btn-outline" style="height:30px;padding:0 10px;font-size:11px;" onclick="ungroupSelectedLayers()">取消编组</button></div>';
+                activeEditorGroup.members.slice().sort(function(a,b) { return (Number(b.zIndex)||0) - (Number(a.zIndex)||0); }).forEach(function(member) { batchUI += getEditorGroupMemberControlHtml(member); });
+            }
             area.innerHTML = batchUI; return;
         }
 
         const l = layers.find(x => x.id === activeLayerIds[0]); if(!l) return;
+        // 图片型 Logo 在用户模式下完全只读；可替换内容的 logoLayout 仍需显示上传框。
+        if (isUserProtectedTemplateArc(l) || (isUserProtectedTemplateLogo(l) && l.type === 'logo')) { area.innerHTML = ''; return; }
         // 字体列表由 JS 运行时动态填充，仅包含用户上传的自定义字体（HT / dela 等），不再内置系统字体。
         let fontOptions = '';
         getCustomFontFamilies().forEach(group => { fontOptions += `<option value='${cssFontFamily(group.familyId)}'>${escapeHtml(group.familyName)}</option>`; });
@@ -7727,6 +8035,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const fitMode = l.fitMode || 'cover';
             const fitControls = l.type === 'image' ? `<label class="label">图片适配</label><div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px;"><button class="btn ${fitMode === 'cover' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="applyImageFitMode('cover')">铺满</button><button class="btn ${fitMode === 'contain' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="applyImageFitMode('contain')">完整</button><button class="btn btn-outline" type="button" onclick="applyImageFitMode('original')">原图</button></div><div style="font-size:11px; color:var(--text-sub); line-height:1.55; margin:-4px 0 14px;">铺满会裁切；完整不裁切；原图按原比例放入画布。</div>` : '';
             area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">${title}</div>${fitControls}<div class="slider-row"><span class="s-label">不透明度</span><input type="range" min="0" max="1" step="0.05" value="${l.opacity !== undefined ? l.opacity : 1}" oninput="updateProp('opacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-opacity">${Math.round((l.opacity !== undefined ? l.opacity : 1) * 100)}%</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div style="display:flex; gap:8px; margin-top:16px;"><button class="btn btn-outline" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="centerLayer()">居中</button><button class="btn btn-outline" style="flex:1;" onclick="toggleFlipX()" title="镜像反转">镜像</button></div>`;
+            if (isUserTemplateBackgroundImage(l)) {
+                area.querySelectorAll('.slider-row').forEach(function(row) {
+                    const label = row.querySelector('.s-label')?.textContent?.trim() || '';
+                    if (label === '不透明度' || label === '旋转') row.remove();
+                });
+            }
         }
         else if(l.type === 'logoLayout') {
             const layoutLabel = l.logoLayout === 'matrix' ? 'Logo矩阵' : (l.logoLayout === 'pair' ? 'Logo左右组合' : '单一Logo');
@@ -7820,7 +8134,16 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         }
         else if(l.type === 'tag') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="handleColorPresetClick(event,'tag','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;" title="双击编辑并同步"></div>`; });
-            area.innerHTML = `<label class="label">文案内容</label><input type="text" class="input-text" value="${escapeHtml(l.text)}" oninput="updateProp('text', this.value)" onchange="saveHistory()"><label class="label">字体选择</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();">${selectedWeightInfo.html}</select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">标签高度</span><input type="range" min="10" max="300" step="1" value="${l.tagHeight || 60}" oninput="updateProp('tagHeight', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagHeight">${l.tagHeight || 60}px</span></div><div class="slider-row"><span class="s-label">圆角</span><input type="range" min="0" max="150" step="1" value="${l.borderRadius !== undefined && l.borderRadius !== null ? l.borderRadius : Math.round((l.tagHeight || 60)/2)}" oninput="updateProp('borderRadius', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-borderRadius">${l.borderRadius !== undefined && l.borderRadius !== null ? l.borderRadius : Math.round((l.tagHeight || 60)/2)}px</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-50" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">内边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingX ?? 36}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 36}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="30" step="1" value="${l.shadowThickness||12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness||12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 1)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 1)*100)}%</span></div>`;
+            area.innerHTML = `<label class="label">文案内容</label><input data-tag-main-input type="text" class="input-text" value="${escapeHtml(l.text)}" oninput="updateProp('text', this.value)" onchange="saveHistory()"><label class="label">字体选择</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();">${selectedWeightInfo.html}</select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">标签高度</span><input type="range" min="10" max="300" step="1" value="${l.tagHeight || 60}" oninput="updateProp('tagHeight', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagHeight">${l.tagHeight || 60}px</span></div><div class="slider-row"><span class="s-label">圆角</span><input type="range" min="0" max="150" step="1" value="${l.borderRadius !== undefined && l.borderRadius !== null ? l.borderRadius : Math.round((l.tagHeight || 60)/2)}" oninput="updateProp('borderRadius', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-borderRadius">${l.borderRadius !== undefined && l.borderRadius !== null ? l.borderRadius : Math.round((l.tagHeight || 60)/2)}px</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-50" max="30" step="0.5" value="${l.letterSpacing ?? 0}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? 0}px</span></div><div class="slider-row"><span class="s-label">内边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingX ?? 36}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 36}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="30" step="1" value="${l.shadowThickness||12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness||12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 1)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 1)*100)}%</span></div>`;
+            if (isUserInterfaceMode()) {
+                const mainInput = area.querySelector('[data-tag-main-input]');
+                let hiddenControl = mainInput?.nextElementSibling;
+                while (hiddenControl) {
+                    const nextControl = hiddenControl.nextElementSibling;
+                    hiddenControl.remove();
+                    hiddenControl = nextControl;
+                }
+            }
         } 
         else if(l.type === 'discountTag') {
             normalizeDiscountTagLayer(l);
@@ -7851,7 +8174,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if(activeLayerIds.length === 1) {
             const l = layers.find(x => x.id === activeLayerIds[0]);
             const {w, h} = SIZES[currentRatio];
-            if(isUserProtectedTemplateContent(l)) return showToast(getProtectedTemplateMoveMessage(l), true);
+            if(isUserMoveProtectedTemplateLayer(l)) return showToast(getProtectedTemplateMoveMessage(l), true);
             if(l) { l.x = w/2; l.y = h/2; renderCanvas(); saveHistory(); }
         }
     }
@@ -7859,7 +8182,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if(activeLayerIds.length === 1) {
             const l = layers.find(x => x.id === activeLayerIds[0]);
             const {w} = SIZES[currentRatio];
-            if(isUserProtectedTemplateContent(l)) return showToast(getProtectedTemplateMoveMessage(l), true);
+            if(isUserMoveProtectedTemplateLayer(l)) return showToast(getProtectedTemplateMoveMessage(l), true);
             if(l) { l.x = w/2; renderCanvas(); saveHistory(); }
         }
     }
@@ -7872,8 +8195,18 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
 
     /* ================= 图层统一拖拽引擎 ================= */
-    let isDragging = false, dragStartX = 0, dragStartY = 0, dragData = [], hasDragged = false;
+    let isDragging = false, dragStartX = 0, dragStartY = 0, dragData = [], hasDragged = false, dragGroupBoxData = null;
     var textEditLayerId = null;
+    function restoreCanvasTextEditorValue(el, text) {
+        if (!el) return;
+        el.textContent = String(text || '');
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        var selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
     window.syncTextEdit = function(id, el) {
         var l = layers.find(function(x) { return x.id === id; });
         if (!l) return;
@@ -7890,13 +8223,32 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .replace(/&#(\d+);/g, function(_, d) { return String.fromCharCode(Number(d)); });
         // 去掉开头/末尾多余换行，压缩连续换行
         text = text.replace(/^\n+/, '').replace(/\n+$/, '').replace(/\n{3,}/g, '\n\n');
-        setTextContentPreservingAlignedEdge(l, text);
+        if (setTextContentPreservingAlignedEdge(l, text) === false) {
+            restoreCanvasTextEditorValue(el, l.text || '');
+            showToast('文字最多两行，不可出现第三行', true);
+            return;
+        }
         // contenteditable 输入期间不重建图层 DOM（否则光标会丢失），
         // 但必须立即同步补偿后的锚点位置，才能让左/右边缘在删字时保持不动。
         var liveWrapper = document.getElementById(id);
         if (liveWrapper) {
             liveWrapper.style.left = l.x + 'px';
             liveWrapper.style.top = l.y + 'px';
+            var liveMode = l.resizeMode || 'autoWidth';
+            liveWrapper.style.width = liveMode === 'autoWidth' ? 'auto' : ((Number(l.maxWidth) || 620) + 'px');
+            el.style.whiteSpace = liveMode === 'autoWidth' ? 'pre' : 'pre-wrap';
+        }
+        // 编组响应式排版可能同步移动其他成员；输入过程中直接更新现有 DOM，避免重建
+        // contenteditable 导致光标丢失，并让总体选择框实时跟随新尺寸。
+        const editorGroupId = getEditorGroupId(l);
+        if (editorGroupId) {
+            getEditorGroupMembers(editorGroupId).forEach(function(member) {
+                const memberElement = document.getElementById(member.id);
+                if (!memberElement) return;
+                memberElement.style.left = member.x + 'px';
+                memberElement.style.top = member.y + 'px';
+            });
+            syncEditorGroupSelectionBox();
         }
         const showUserPlaceholder = isUserProtectedTemplateText(l) && !text.trim();
         el.classList.toggle('vf-user-text-placeholder', showUserPlaceholder);
@@ -8104,13 +8456,13 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const id = wrap.dataset.id; const l = layers.find(x => x.id === id); if(!l || l.locked) return;
             if(e.shiftKey || e.ctrlKey || e.metaKey || !activeLayerIds.includes(id)) selectLayerWithModifiers(id, e);
             focusInspectorOnSelection();
-            // 用户模式下的模板文字只允许改文案，不能改变模板已设定的位置。
-            const protectedTemplateContent = isUserProtectedTemplateContent(l);
+            // 用户模式下受保护的模板内容不能改变模板已设定的位置。
+            const protectedTemplateContent = isUserMoveProtectedTemplateLayer(l);
             isDragging = !protectedTemplateContent;
             dragStartX = e.clientX; dragStartY = e.clientY;
             dragData = activeLayerIds.map(function(selId) {
                 const selectedLayer = layers.find(function(item) { return item.id === selId; });
-                return selectedLayer && !isUserProtectedTemplateContent(selectedLayer)
+                return selectedLayer && !isUserMoveProtectedTemplateLayer(selectedLayer)
                     ? { id: selId, ix: selectedLayer.x, iy: selectedLayer.y }
                     : null;
             }).filter(Boolean);
@@ -8122,6 +8474,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 renderCanvas();
             }
             renderLayersList(); renderProperties();
+            const activeEditorGroup = getActiveEditorGroup();
+            const groupBounds = activeEditorGroup ? getGroupBounds(activeEditorGroup.members.filter(function(member) { return member.visible !== false; })) : null;
+            dragGroupBoxData = isDragging && groupBounds
+                ? { left:groupBounds.x1, top:groupBounds.y1, width:groupBounds.w, height:groupBounds.h }
+                : null;
         } else { exitTextEdit(); activeLayerIds = []; layerSelectionAnchorId = null; renderCanvas(); renderLayersList(); renderProperties(); }
     });
     // 画布右键菜单
@@ -8131,6 +8488,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (activeLayerIds.length >= 2) {
             e.preventDefault();
             var cm2 = document.getElementById('canvas-context-menu');
+            updateEditorGroupContextActions('canvas');
             if (cm2) { cm2.style.left = e.clientX + 'px'; cm2.style.top = e.clientY + 'px'; cm2.classList.add('open'); }
             return;
         }
@@ -8141,7 +8499,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             e.preventDefault();
             _contextMenuLayerId = layer.id;
             if (!activeLayerIds.includes(layer.id)) {
-                activeLayerIds = [layer.id];
+                activeLayerIds = expandSelectionToEditorGroups([layer.id]);
                 layerSelectionAnchorId = layer.id;
                 renderCanvas(); renderLayersList(); renderProperties();
             }
@@ -8149,7 +8507,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             if (lm) {
                 updateLayerContextReferenceAction(layer);
                 var saveGroupBtn = document.getElementById('ctx-save-group-btn');
-                if (saveGroupBtn) saveGroupBtn.style.display = 'none';
+                if (saveGroupBtn) saveGroupBtn.style.display = activeLayerIds.length >= 2 ? '' : 'none';
+                updateEditorGroupContextActions('ctx');
                 lm.style.left = e.clientX + 'px';
                 lm.style.top = e.clientY + 'px';
                 lm.classList.add('open');
@@ -8179,14 +8538,26 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 else dx = 0;
             }
             dragData.forEach(data => { const l = layers.find(x => x.id === data.id); if(l) { l.x = data.ix + dx; l.y = data.iy + dy; document.getElementById(data.id).style.left = l.x + 'px'; document.getElementById(data.id).style.top = l.y + 'px'; }});
+            const groupBox = document.querySelector('#dynamic-layers > .editor-group-selection-box');
+            if (groupBox && dragGroupBoxData) {
+                groupBox.style.left = (dragGroupBoxData.left + dx) + 'px';
+                groupBox.style.top = (dragGroupBoxData.top + dy) + 'px';
+                groupBox.style.width = dragGroupBoxData.width + 'px';
+                groupBox.style.height = dragGroupBoxData.height + 'px';
+            }
         }
     });
     window.addEventListener('mouseup', e => {
         if(isDragging) {
             isDragging = false; saveHistory();
             const wrap = e.target.closest('.layer-base');
-            if(!hasDragged && !e.shiftKey && wrap && activeLayerIds.length > 1) { activeLayerIds = [wrap.dataset.id]; renderCanvas(); renderLayersList(); renderProperties(); }
+            if(!hasDragged && !e.shiftKey && wrap && activeLayerIds.length > 1) {
+                activeLayerIds = expandSelectionToEditorGroups([wrap.dataset.id]);
+                renderCanvas(); renderLayersList(); renderProperties();
+            }
+            else if (hasDragged && getActiveEditorGroup()) syncEditorGroupSelectionBox();
         }
+        dragGroupBoxData = null;
     });
 
     /* ================= 内嵌资产库系统 ================= */
@@ -11220,7 +11591,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
 
     function getLayerBounds(l) {
         const scale = Number(l.scale) || 1;
-        if(l.type === 'image' || l.type === 'logo' || l.type === 'solid') {
+        if(l.type === 'image' || l.type === 'logo' || l.type === 'solid' || l.type === 'logoLayout') {
             const w = (Number(l.baseW) || 260) * scale;
             const h = (Number(l.baseH) || 160) * scale;
             return { x1: l.x - w / 2, y1: l.y - h / 2, x2: l.x + w / 2, y2: l.y + h / 2, w, h, cx: l.x, cy: l.y, area: w * h };
@@ -11232,14 +11603,15 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             return { x1: l.x - w / 2, y1: l.y - h / 2, x2: l.x + w / 2, y2: l.y + h / 2, w, h, cx: l.x, cy: l.y, area: w * h };
         }
         if(l.type === 'text') {
-            const lines = String(l.text || '').split('\n');
             const fontSize = Number(l.fontSize) || 88;
-            const lineHeight = Number(l.lineHeight) || 0.95;
-            const letterSpacing = Number(l.letterSpacing) || 0;
-            const maxLineChars = Math.max(1, ...lines.map(line => line.length));
-            const rawW = maxLineChars * (fontSize * 0.64 + letterSpacing);
-            const w = Math.min(Number(l.maxWidth) || 620, Math.max(fontSize, rawW)) * scale;
-            const h = Math.max(fontSize, lines.length * fontSize * lineHeight) * scale;
+            const mode = l.resizeMode || 'autoWidth';
+            const visualText = String(l.text || '') || 'Enter text';
+            const w = mode === 'autoWidth'
+                ? Math.max(fontSize * scale, measureAutoWidthTextLayer(l, visualText))
+                : (Number(l.maxWidth) || 620) * scale;
+            const h = mode === 'fixedSize' && Number(l.textBoxHeight) > 0
+                ? Number(l.textBoxHeight) * scale
+                : measureNaturalTextLayerHeight(l, visualText);
             return { x1: l.x - w / 2, y1: l.y - h / 2, x2: l.x + w / 2, y2: l.y + h / 2, w, h, cx: l.x, cy: l.y, area: w * h };
         }
         if(l.type === 'discountTag') {
@@ -11262,7 +11634,14 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
     function getGroupBounds(group) {
         if(group.length === 0) return null;
-        const boxes = group.map(getLayerBounds);
+        const boxes = group.map(function(layer) {
+            const box = getLayerBounds(layer);
+            const radians = Math.abs(Number(layer.rotation) || 0) * Math.PI / 180;
+            if (!radians || !box.w || !box.h) return box;
+            const rotatedW = Math.abs(box.w * Math.cos(radians)) + Math.abs(box.h * Math.sin(radians));
+            const rotatedH = Math.abs(box.w * Math.sin(radians)) + Math.abs(box.h * Math.cos(radians));
+            return { x1:box.cx-rotatedW/2, y1:box.cy-rotatedH/2, x2:box.cx+rotatedW/2, y2:box.cy+rotatedH/2, w:rotatedW, h:rotatedH, cx:box.cx, cy:box.cy, area:rotatedW*rotatedH };
+        });
         const x1 = Math.min(...boxes.map(b => b.x1));
         const y1 = Math.min(...boxes.map(b => b.y1));
         const x2 = Math.max(...boxes.map(b => b.x2));
