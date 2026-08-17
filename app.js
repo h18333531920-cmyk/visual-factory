@@ -111,7 +111,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260818-ai-submit-no-arrow-v400';
+const TOOL_UI_VERSION = '20260818-default-hidden-dev-ball-v402';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -161,10 +161,12 @@ const TOOL_UI_VERSION = '20260818-ai-submit-no-arrow-v400';
   };
   // 「移动分组」功能范围：仅这 5 个组件子分组可移动（背景/LOGO/字体 不参与）。
   const MOVEABLE_COMPONENT_SUBTAGS = ['标签', '品牌圆弧', 'KIKI', '其他素材', '组合'];
-  const INITIAL_INTERFACE_MODE = localStorage.getItem('vf_interface_mode') === 'user' ? 'user' : 'developer';
+  // 每次重新打开网页都从交付用的用户模式开始；开发者模式仅在当前会话内主动开启。
+  const INITIAL_INTERFACE_MODE = 'user';
   const INTERFACE_MODE_TOGGLE_POSITION_KEY = 'vf_interface_mode_toggle_position';
   const DEVELOPER_BALL_VISIBILITY_KEY = 'vf_developer_ball_visible';
   const DEVELOPER_BALL_PASSWORD = '123123';
+  let developerBallVisible = false;
   let interfaceModeDragState = null;
   let suppressInterfaceModeClick = false;
   const state = {
@@ -594,7 +596,7 @@ const TOOL_UI_VERSION = '20260818-ai-submit-no-arrow-v400';
   }
 
   function isDeveloperBallVisible() {
-    return localStorage.getItem(DEVELOPER_BALL_VISIBILITY_KEY) === '1';
+    return developerBallVisible;
   }
 
   function syncDeveloperBallVisibility() {
@@ -604,7 +606,9 @@ const TOOL_UI_VERSION = '20260818-ai-submit-no-arrow-v400';
   }
 
   function setDeveloperBallVisibility(visible) {
-    localStorage.setItem(DEVELOPER_BALL_VISIBILITY_KEY, visible ? '1' : '0');
+    developerBallVisible = visible === true;
+    // 旧版本曾把显示状态持久化；清除它，确保下次打开仍默认隐藏。
+    localStorage.removeItem(DEVELOPER_BALL_VISIBILITY_KEY);
     syncDeveloperBallVisibility();
   }
 
