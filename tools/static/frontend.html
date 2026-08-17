@@ -1540,6 +1540,44 @@
             font-variant-numeric: tabular-nums;
         }
 
+        .left-pane .canvas-language-switch {
+            position: absolute;
+            top: 20px;
+            left: 22px;
+            z-index: 23;
+            pointer-events: auto;
+            display: grid;
+            grid-template-columns: repeat(2, 48px);
+            gap: 3px;
+            padding: 4px;
+            border: 1px solid rgba(16, 19, 24, 0.10);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.84);
+            box-shadow: 0 8px 24px rgba(16, 19, 24, 0.08);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .left-pane .canvas-language-switch button {
+            width: 48px;
+            height: 30px;
+            padding: 0;
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            color: #7b8494;
+            font-size: 12px;
+            font-weight: 850;
+            cursor: pointer;
+            transition: background .16s ease, color .16s ease, box-shadow .16s ease;
+        }
+
+        .left-pane .canvas-language-switch button.active {
+            background: #0f172a;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.22);
+        }
+
         .left-pane .ratio-nav button,
         .left-pane .canvas-actions button {
             flex: 0 0 auto;
@@ -1917,6 +1955,16 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         }
         .asset-item.multi-selected .asset-multi-check { background: #0d9488; border-color: #0d9488; }
         .asset-item.multi-selected { outline: 2px solid #0d9488; outline-offset: -2px; }
+        .template-bookmark-select-bar {
+            display: none; align-items: center; gap: 6px; flex-wrap: wrap;
+            margin-bottom: 8px; padding: 8px; border: 1px solid #e2e8f0;
+            border-radius: 10px; background: #f8fafc;
+        }
+        .template-bookmark-select-bar .selection-count {
+            flex: 1 1 auto; min-width: 84px; font-size: 12px;
+            color: #475569; font-weight: 750;
+        }
+        .template-bookmark-select-bar button:disabled { opacity: .42; cursor: not-allowed; }
 
         .custom-board-menu-item {
             display: none !important;
@@ -2803,7 +2851,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260817-user-group-tag-menu-v346">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260818-bookmark-preview-recovery-v370">
 </head>
 <body>
 
@@ -2957,7 +3005,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
 <div class="module-card asset-library-card">
             <div class="card-title">
                 <div class="card-title-wrap">资产库</div>
-                <button type="button" class="btn-icon" id="asset-multi-select-btn" onclick="toggleAssetMultiSelect()" title="多选移动分组" style="padding:2px 8px;font-size:12px;">多选</button>
+                <button type="button" class="btn-icon" id="asset-multi-select-btn" onclick="toggleAssetMultiSelect()" title="多选" style="padding:2px 8px;font-size:12px;">多选</button>
                 <button type="button" class="btn-icon" id="refresh-asset-btn" onclick="refreshAssetLibrary()" title="刷新资产库" style="padding:2px 6px;font-size:13px;">↻</button>
             </div>
             <div class="asset-tabs">
@@ -2972,6 +3020,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 <button type="button" class="filter-capsule" onclick="openAssetMoveGroupFromBar()" style="font-size:11px;padding:2px 10px;background:#f59e0b;color:#fff;border-color:#f59e0b;">移动分组</button>
                 <button type="button" class="filter-capsule" onclick="exitAssetMultiSelect()" style="font-size:11px;padding:2px 10px;">取消</button>
             </div>
+            <div id="template-bookmark-select-bar" class="template-bookmark-select-bar">
+                <span id="template-bookmark-select-count" class="selection-count">已选 0 个模板</span>
+                <button type="button" class="filter-capsule" onclick="exitTemplateBookmarkMultiSelect()" style="font-size:11px;padding:3px 10px;">取消</button>
+                <button type="button" class="filter-capsule" id="template-bookmark-select-confirm" onclick="confirmTemplateBookmarkMultiSelect()" style="font-size:11px;padding:3px 10px;background:#0f172a;color:#fff;border-color:#0f172a;">创建书签</button>
+            </div>
             <div class="asset-list" id="asset-list-ui"></div>
 
         </div>
@@ -2981,8 +3034,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         <button type="button" id="asset-context-add-reference" onclick="addAssetContextReferenceToAI(); closeAssetContextMenu();">加入生图参考图</button>
         <button type="button" id="asset-context-template-bookmark" onclick="openAssetContextTemplateBookmarkEditor(); closeAssetContextMenu();" hidden>模板编组</button>
         <button type="button" id="asset-context-rename" onclick="renameAssetContextItem(); closeAssetContextMenu();" hidden>重命名素材</button>
-        <button type="button" id="asset-context-set-lang-en" onclick="setAssetContextLanguage('EN'); closeAssetContextMenu();" hidden>设为 EN</button>
-        <button type="button" id="asset-context-set-lang-ar" onclick="setAssetContextLanguage('AR'); closeAssetContextMenu();" hidden>设为 AR</button>
         <button type="button" id="asset-context-delete" onclick="deleteAssetContextItem(); closeAssetContextMenu();" hidden>删除</button>
         <button type="button" id="asset-context-multi-select" onclick="enterAssetMultiSelect(); closeAssetContextMenu();" hidden>多选</button>
         <button type="button" id="asset-context-move-group" onclick="openAssetContextMoveGroup();" hidden>移动分组</button>
@@ -2991,12 +3042,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
 <div class="left-pane" id="left-pane">
         <div class="canvas-toolbar">
             <div class="canvas-actions">
-                <div class="save-template-menu-wrap" onmouseenter="scheduleCanvasToolbarMenuOpen('save')" onmouseleave="scheduleCanvasToolbarMenuClose('save')">
-                    <button type="button" class="save-template-btn canvas-icon-action" onclick="toggleSaveTemplateMenu(event)" id="canvas-save-btn" data-tooltip="保存模板" aria-label="保存模板">
+                <div class="save-template-menu-wrap">
+                    <button type="button" class="save-template-btn canvas-icon-action" onclick="saveActiveAsset('')" id="canvas-save-btn" data-tooltip="保存模板" aria-label="保存模板">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3.5" width="15" height="17" rx="2.5"></rect><path d="M8 8h8M8 12h8M8 16h4"></path></svg>
                         <span class="canvas-action-label">保存模板</span>
                     </button>
-                    <div class="save-template-dropdown-menu" id="save-template-dropdown-menu"></div>
                 </div>
                 <div class="resize-menu-wrap" onmouseenter="scheduleCanvasToolbarMenuOpen('resize')" onmouseleave="scheduleCanvasToolbarMenuClose('resize')">
                     <button type="button" class="canvas-icon-action" onclick="toggleResizeMenu(event)" data-tooltip="修改尺寸" aria-label="修改尺寸">
@@ -3023,10 +3073,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     </div>
                 </div>
             </div>
-            <div class="canvas-zoom-control" id="canvas-zoom-control">
-                <button type="button" class="cz-btn" onclick="resetCanvasZoom()" title="适应画布 (100%)" aria-label="适应画布">⤢</button>
-                <input type="range" class="cz-slider" id="canvas-zoom-slider" min="0.3" max="2.5" step="0.05" value="1" aria-label="画布缩放" oninput="setCanvasZoom(parseFloat(this.value))">
-                <span class="cz-value" id="canvas-zoom-value">100%</span>
+            <div class="canvas-language-switch" id="canvas-language-switch" role="group" aria-label="画板语言版本">
+                <button type="button" id="canvas-language-en" class="active" onclick="switchCanvasLanguage('en')" aria-pressed="true">EN</button>
+                <button type="button" id="canvas-language-ar" onclick="switchCanvasLanguage('ar')" aria-pressed="false">AR</button>
             </div>
         </div>
 
@@ -3339,6 +3388,160 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         acc[preset.id] = { id: preset.id, label: preset.label, ratio: preset.ratio, layers: [] };
         return acc;
     }, {});
+    let currentCanvasLanguage = 'en';
+    let currentCanvasLanguagesInitialized = { en: true, ar: false };
+    const LANGUAGE_VARIANT_PLACEMENT_PROPS = ['x', 'y', 'rotation', 'scale', 'flipX'];
+    const LANGUAGE_VARIANT_TEXT_PROPS = ['text', 'resizeMode', 'maxWidth', 'textBoxHeight', 'textBoxAnchor', 'textDirection', 'textDirectionMode', 'textAlign', 'textAlignMode', '_userAutoWrapped', '_userAutoFitBaseLetterSpacing'];
+    const LANGUAGE_VARIANT_DISCOUNT_PROPS = ['mainText', 'topText', 'bottomText', 'subtitle', 'discountLang', 'sideLineGap', 'topFontSize', 'bottomFontSize'];
+    const LANGUAGE_VARIANT_LOGO_LAYOUT_PROPS = ['slots', 'mainLogoSrc', 'mainLogoStyle'];
+    const LANGUAGE_VARIANT_LINKED_GEOMETRY_PROPS = LANGUAGE_VARIANT_PLACEMENT_PROPS.concat(['resizeMode', 'maxWidth', 'textBoxHeight', 'textBoxAnchor', 'textDirection', 'textDirectionMode', 'textAlign', 'textAlignMode', '_userAutoWrapped', '_userAutoFitBaseLetterSpacing']);
+
+    function normalizeCanvasLanguage(language) {
+        return String(language || '').toLowerCase() === 'ar' ? 'ar' : 'en';
+    }
+    function normalizeCanvasLanguagesInitialized(value, activeLanguage = currentCanvasLanguage) {
+        const active = normalizeCanvasLanguage(activeLanguage);
+        if (value && typeof value === 'object') {
+            return { en: value.en === true, ar: value.ar === true };
+        }
+        return { en: active === 'en', ar: active === 'ar' };
+    }
+    function cloneLanguageValue(value) {
+        return value === undefined ? undefined : cloneData(value);
+    }
+    function isLanguageSharedBackgroundLayer(layer, sourceLayers = layers) {
+        if (!layer) return false;
+        if (layer._languageSharedBackground === true) return true;
+        const tags = [].concat(layer.tags || [], layer.subTag || [], layer._subTag || []).map(String);
+        if (tags.some(function(tag) { return tag === '背景' || tag.toLowerCase() === 'background'; })) return true;
+        if (layer.type !== 'image' && layer.type !== 'solid') return false;
+        const canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
+        const width = Math.abs((Number(layer.baseW) || 0) * (Number(layer.scale) || 1));
+        const height = Math.abs((Number(layer.baseH) || 0) * (Number(layer.scale) || 1));
+        const coversCanvas = width >= canvasSize.w * 0.88 && height >= canvasSize.h * 0.88;
+        const minimumZ = Math.min.apply(null, (sourceLayers || []).map(function(item) { return Number(item.zIndex) || 0; }).concat([Number(layer.zIndex) || 0]));
+        return coversCanvas && (Number(layer.zIndex) || 0) === minimumZ;
+    }
+    function getLanguageVariantProps(layer, sourceLayers = layers) {
+        if (!layer || isLanguageSharedBackgroundLayer(layer, sourceLayers)) return [];
+        const props = LANGUAGE_VARIANT_PLACEMENT_PROPS.slice();
+        if (layer.type === 'text') props.push.apply(props, LANGUAGE_VARIANT_TEXT_PROPS);
+        else if (layer.type === 'tag') props.push('text');
+        else if (layer.type === 'discountTag') props.push.apply(props, LANGUAGE_VARIANT_DISCOUNT_PROPS);
+        else if (layer.type === 'logoLayout') props.push.apply(props, LANGUAGE_VARIANT_LOGO_LAYOUT_PROPS);
+        else if (layer.type === 'logo' || layer.type === 'image') props.push('src');
+        return Array.from(new Set(props));
+    }
+    function snapshotLayerLanguageVariant(layer, sourceLayers = layers) {
+        const snapshot = {};
+        getLanguageVariantProps(layer, sourceLayers).forEach(function(prop) {
+            if (Object.prototype.hasOwnProperty.call(layer, prop)) snapshot[prop] = cloneLanguageValue(layer[prop]);
+        });
+        return snapshot;
+    }
+    function createDiscountLanguageVariant(snapshot, language) {
+        const temp = Object.assign({ type: 'discountTag' }, cloneData(snapshot || {}));
+        normalizeDiscountTagLayer(temp);
+        const target = normalizeCanvasLanguage(language);
+        if (temp.discountLang !== target) toggleDiscountLangForLayer(temp);
+        const result = {};
+        LANGUAGE_VARIANT_PLACEMENT_PROPS.concat(LANGUAGE_VARIANT_DISCOUNT_PROPS).forEach(function(prop) {
+            if (Object.prototype.hasOwnProperty.call(temp, prop)) result[prop] = cloneLanguageValue(temp[prop]);
+        });
+        return result;
+    }
+    function ensureLayerLanguageVariants(layer, sourceLayers = layers, sourceLanguage = currentCanvasLanguage) {
+        const props = getLanguageVariantProps(layer, sourceLayers);
+        if (!props.length) return null;
+        if (!layer._languageVariants || typeof layer._languageVariants !== 'object') {
+            const current = snapshotLayerLanguageVariant(layer, sourceLayers);
+            const language = normalizeCanvasLanguage(sourceLanguage);
+            // 只初始化当前正在编辑的语言。另一语言要等到用户第一次切换时，
+            // 再从“切换前的最新布局”创建副本；否则组件刚添加在画布中央时就会
+            // 提前冻结 AR 坐标，之后 EN 移到底部，首次切 AR 便会瞬移回中央。
+            layer._languageVariants = {};
+            if (layer.type === 'discountTag') {
+                layer._languageVariants[language] = createDiscountLanguageVariant(current, language);
+            } else {
+                layer._languageVariants[language] = cloneData(current);
+            }
+        }
+        return layer._languageVariants;
+    }
+    function captureCanvasLanguageState(targetLayers = layers, language = currentCanvasLanguage) {
+        const normalized = normalizeCanvasLanguage(language);
+        (targetLayers || []).forEach(function(layer) {
+            const variants = ensureLayerLanguageVariants(layer, targetLayers, normalized);
+            if (variants) variants[normalized] = snapshotLayerLanguageVariant(layer, targetLayers);
+        });
+    }
+    function applyCanvasLanguageState(targetLayers = layers, language = currentCanvasLanguage) {
+        const normalized = normalizeCanvasLanguage(language);
+        (targetLayers || []).forEach(function(layer) {
+            const props = getLanguageVariantProps(layer, targetLayers);
+            if (!props.length) return;
+            const variants = ensureLayerLanguageVariants(layer, targetLayers, currentCanvasLanguage);
+            let variant = variants?.[normalized];
+            if (!variant) {
+                variant = snapshotLayerLanguageVariant(layer, targetLayers);
+                if (layer.type === 'discountTag') variant = createDiscountLanguageVariant(variant, normalized);
+                variants[normalized] = cloneData(variant);
+            }
+            // 资产库组件会保留双语内容，但其内部保存的另一语言坐标不应直接带进
+            // 当前模板。第一次切换到该语言时，用组件在当前画板上的最新位置播种。
+            if (layer._languagePendingPlacement?.[normalized]) {
+                LANGUAGE_VARIANT_PLACEMENT_PROPS.forEach(function(prop) {
+                    if (Object.prototype.hasOwnProperty.call(layer, prop)) variant[prop] = cloneLanguageValue(layer[prop]);
+                    else delete variant[prop];
+                });
+                delete layer._languagePendingPlacement[normalized];
+                if (!Object.keys(layer._languagePendingPlacement).length) delete layer._languagePendingPlacement;
+            }
+            props.forEach(function(prop) {
+                if (Object.prototype.hasOwnProperty.call(variant, prop)) layer[prop] = cloneLanguageValue(variant[prop]);
+                else delete layer[prop];
+            });
+            if (layer.type === 'discountTag' && layer.discountLang !== normalized) {
+                toggleDiscountLangForLayer(layer);
+                variants[normalized] = snapshotLayerLanguageVariant(layer, targetLayers);
+            }
+        });
+    }
+    function syncCanvasLanguageControl() {
+        const language = normalizeCanvasLanguage(currentCanvasLanguage);
+        ['en', 'ar'].forEach(function(item) {
+            const button = document.getElementById('canvas-language-' + item);
+            if (!button) return;
+            const active = language === item;
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+    }
+    function switchCanvasLanguage(language) {
+        const nextLanguage = normalizeCanvasLanguage(language);
+        if (nextLanguage === currentCanvasLanguage) return;
+        exitTextEdit();
+        captureCanvasLanguageState(layers, currentCanvasLanguage);
+        if (!currentCanvasLanguagesInitialized[nextLanguage]) {
+            layers.forEach(function(layer) {
+                if (isLanguageSharedBackgroundLayer(layer, layers)) return;
+                layer._languagePendingPlacement = Object.assign({}, layer._languagePendingPlacement, { [nextLanguage]: true });
+            });
+        }
+        currentCanvasLanguage = nextLanguage;
+        applyCanvasLanguageState(layers, nextLanguage);
+        currentCanvasLanguagesInitialized[nextLanguage] = true;
+        if (artboards[currentArtboardId]) {
+            artboards[currentArtboardId].languageMode = nextLanguage;
+            artboards[currentArtboardId].languagesInitialized = cloneData(currentCanvasLanguagesInitialized);
+        }
+        activeLayerIds = activeLayerIds.filter(function(id) { return layers.some(function(layer) { return layer.id === id; }); });
+        syncCanvasLanguageControl();
+        renderCanvas(); renderLayersList(); renderProperties(); renderArtboardPreviews();
+        saveHistory(true);
+        showToast(nextLanguage === 'ar' ? '已切换到 AR 版本' : '已切换到 EN 版本');
+    }
+    window.switchCanvasLanguage = switchCanvasLanguage;
     // 关联画板集合：复制画板后保留各自尺寸，但图层内容作为一个共享集合同步。
     let linkedArtboardGroupId = '';
     let linkedArtboardIds = [];
@@ -3423,6 +3626,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     // 回收站只存在于当前网页会话；刷新后会通知父页面清理云端记录。
     let recycleBin = [];
     let _assetListScrollTop = 0; // 模块级滚动位置，跨 renderAssetLibrary 调用保持
+    let _assetRenderGeneration = 0; // 素材流式到达时取消旧的分批渲染，避免重复建卡片
     let _assetSearchQuery = ''; // 资产库搜索关键词
     const RECYCLE_BIN_SESSION_KEY = 'vf-static-recycle-bin-v1';
 
@@ -3986,6 +4190,17 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     || (next.type === 'image' && (Number(next.baseW) || 0) >= oldSize.w * 0.92 && (Number(next.baseH) || 0) >= oldSize.h * 0.92);
                 next.x = offsetX + (Number(next.x) || oldSize.w / 2) * uniform;
                 next.y = offsetY + (Number(next.y) || oldSize.h / 2) * uniform;
+                if (next._languageVariants) {
+                    ['en', 'ar'].forEach(function(language) {
+                        const variant = next._languageVariants[language];
+                        if (!variant) return;
+                        if (Number.isFinite(Number(variant.x))) variant.x = offsetX + Number(variant.x) * uniform;
+                        if (Number.isFinite(Number(variant.y))) variant.y = offsetY + Number(variant.y) * uniform;
+                        if (Number.isFinite(Number(variant.maxWidth))) variant.maxWidth = Number(variant.maxWidth) * uniform;
+                        if (Number.isFinite(Number(variant.textBoxHeight))) variant.textBoxHeight = Number(variant.textBoxHeight) * uniform;
+                        if (Number.isFinite(Number(variant.scale))) variant.scale = Number(variant.scale) * uniform;
+                    });
+                }
                 if(isFullBackground) {
                     next.x = safeW / 2;
                     next.y = safeH / 2;
@@ -4092,6 +4307,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 ratio: incoming.ratio || preset.ratio,
                 canvasSize: incomingSize && Number(incomingSize.w) > 0 && Number(incomingSize.h) > 0 ? cloneData(incomingSize) : undefined,
                 linkedGroupId: incoming.linkedGroupId || '',
+                languageMode: normalizeCanvasLanguage(incoming.languageMode),
+                languagesInitialized: normalizeCanvasLanguagesInitialized(incoming.languagesInitialized, incoming.languageMode),
                 layers: cloneData(incoming.layers || [])
             };
             return acc;
@@ -4104,6 +4321,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             artboards[currentArtboardId] = { id: preset.id, label: preset.label, ratio: preset.ratio, layers: [] };
         }
         artboards[currentArtboardId].ratio = currentRatio;
+        captureCanvasLanguageState(layers, currentCanvasLanguage);
+        artboards[currentArtboardId].languageMode = currentCanvasLanguage;
+        artboards[currentArtboardId].languagesInitialized = cloneData(currentCanvasLanguagesInitialized);
         const currentSize = SIZES[currentRatio];
         if(currentSize) artboards[currentArtboardId].canvasSize = { w: currentSize.w, h: currentSize.h };
         artboards[currentArtboardId].layers = cloneData(layers);
@@ -4137,6 +4357,18 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 ['x','y','zIndex','scale','rotation','baseW','baseH','maxWidth','textBoxHeight','rIn','wIn','wOut'].forEach(function(key) {
                     if (own[key] !== undefined) merged[key] = own[key];
                 });
+                if (shared._languageVariants && own._languageVariants) {
+                    merged._languageVariants = cloneData(shared._languageVariants);
+                    ['en', 'ar'].forEach(function(language) {
+                        const ownVariant = own._languageVariants?.[language];
+                        const mergedVariant = merged._languageVariants?.[language];
+                        if (!ownVariant || !mergedVariant) return;
+                        LANGUAGE_VARIANT_LINKED_GEOMETRY_PROPS.forEach(function(key) {
+                            if (Object.prototype.hasOwnProperty.call(ownVariant, key)) mergedVariant[key] = cloneLanguageValue(ownVariant[key]);
+                            else delete mergedVariant[key];
+                        });
+                    });
+                }
                 return merged;
             });
         });
@@ -4222,7 +4454,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 w: sourceSize.w, h: sourceSize.h
             }, false, { skipLimit:true });
             if (!primaryId) { linkedArtboardGroupId = ''; return; }
-            artboards[primaryId] = { id:primaryId, label:getArtboardPreset(primaryId)?.label || '画板', ratio:getArtboardPreset(primaryId)?.ratio || primaryId, linkedGroupId:linkedArtboardGroupId, layers:prepareLinkedLayers(layers) };
+            artboards[primaryId] = { id:primaryId, label:getArtboardPreset(primaryId)?.label || '画板', ratio:getArtboardPreset(primaryId)?.ratio || primaryId, linkedGroupId:linkedArtboardGroupId, languageMode:currentCanvasLanguage, languagesInitialized:cloneData(currentCanvasLanguagesInitialized), layers:prepareLinkedLayers(layers) };
             linkedArtboardIds = [primaryId];
         }
         const nextNumber = linkedArtboardIds.length + 1;
@@ -4231,7 +4463,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             w: sourceSize.w, h: sourceSize.h
         }, false, { skipLimit:true });
         if (!id) return;
-        artboards[id] = { id:id, label:(getArtboardPreset(id)?.label || '副本 ' + nextNumber), ratio:getArtboardPreset(id)?.ratio || id, linkedGroupId:linkedArtboardGroupId, layers:prepareLinkedLayers(layers) };
+        artboards[id] = { id:id, label:(getArtboardPreset(id)?.label || '副本 ' + nextNumber), ratio:getArtboardPreset(id)?.ratio || id, linkedGroupId:linkedArtboardGroupId, languageMode:currentCanvasLanguage, languagesInitialized:cloneData(currentCanvasLanguagesInitialized), layers:prepareLinkedLayers(layers) };
         linkedArtboardIds.push(id);
         renderLinkedArtboardDock();
         switchArtboard(id);
@@ -4245,6 +4477,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const board = artboards[id];
         if(board?.canvasSize && board.ratio) SIZES[board.ratio] = { w: board.canvasSize.w, h: board.canvasSize.h };
         currentRatio = board?.ratio || preset.ratio;
+        currentCanvasLanguage = normalizeCanvasLanguage(board?.languageMode);
+        currentCanvasLanguagesInitialized = normalizeCanvasLanguagesInitialized(board?.languagesInitialized, currentCanvasLanguage);
         layers = cloneData(artboards[id].layers || []);
         activeLayerIds = activeLayerIds.filter(layerId => layers.some(l => l.id === layerId));
         syncArtboardTabs();
@@ -4253,6 +4487,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         renderCanvas();
         renderLayersList();
         renderProperties();
+        syncCanvasLanguageControl();
         if (!options.skipAssetLibrary) renderAssetLibrary();
     }
     function switchArtboard(id) {
@@ -4332,10 +4567,14 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             currentArtboardId = artboards[state.currentArtboardId] ? state.currentArtboardId : 'head';
             var board = artboards[currentArtboardId];
             currentRatio = (board && board.ratio) || getArtboardPreset(currentArtboardId).ratio;
+            currentCanvasLanguage = normalizeCanvasLanguage(board?.languageMode);
+            currentCanvasLanguagesInitialized = normalizeCanvasLanguagesInitialized(board?.languagesInitialized, currentCanvasLanguage);
             layers = cloneData(board.layers || []);
         } else {
             currentArtboardId = 'head';
             currentRatio = state.ratio || 'head';
+            currentCanvasLanguage = normalizeCanvasLanguage(state.languageMode);
+            currentCanvasLanguagesInitialized = normalizeCanvasLanguagesInitialized(state.languagesInitialized, currentCanvasLanguage);
             layers = cloneData(state.layers || []);
             artboards = normalizeArtboardSnapshot({ head: { layers } });
             linkedArtboardGroupId = '';
@@ -4349,6 +4588,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         renderPromptTags();
         renderLayersList();
         renderProperties();
+        syncCanvasLanguageControl();
         renderAssetLibrary();
         isRestoring = false;
         updateHistoryButtons();
@@ -4783,40 +5023,46 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if(layer.subtitleFontWeight === undefined) layer.subtitleFontWeight = 900;
         if(layer.subtitlePosition === undefined) layer.subtitlePosition = 'bottom';
         if(layer.subtitleStrokeWidth === undefined) layer.subtitleStrokeWidth = 6;
-
+        if(layer.mainFontSize === undefined) layer.mainFontSize = 96;
+        if(layer.sideFontSize === undefined) layer.sideFontSize = 42;
+        if(layer.topFontSize === undefined) layer.topFontSize = layer.sideFontSize;
+        if(layer.bottomFontSize === undefined) layer.bottomFontSize = layer.sideFontSize;
+        if(layer.sideGap === undefined) layer.sideGap = 8;
+        if(layer.sideLineGap === undefined) layer.sideLineGap = -2;
+        return layer;
+    }
+    function toggleDiscountLangForLayer(l) {
+        if (!l || l.type !== 'discountTag') return false;
+        normalizeDiscountTagLayer(l);
+        // 先交换上下文字位置
+        var tmp = l.topText;
+        l.topText = l.bottomText;
+        l.bottomText = tmp;
+        // 再转换语言关键词 + 调整间距和字号
+        if (l.discountLang === 'en') {
+            l.discountLang = 'ar';
+            if (l.topText === 'off') l.topText = 'خصم';
+            if (l.bottomText === 'off') l.bottomText = 'خصم';
+            if (l.sideLineGap === undefined || l.sideLineGap <= 0) l.sideLineGap = 6;
+            if ((l.topFontSize === undefined || l.topFontSize === 52) && (l.bottomFontSize === undefined || l.bottomFontSize === 42)) {
+                l.topFontSize = 28;
+                l.bottomFontSize = 58;
+            }
+        } else {
+            l.discountLang = 'en';
+            if (l.topText === 'خصم') l.topText = 'off';
+            if (l.bottomText === 'خصم') l.bottomText = 'off';
+            if (l.sideLineGap === 6) l.sideLineGap = -2;
+            if (l.topFontSize === 28 && l.bottomFontSize === 58) {
+                l.topFontSize = 52;
+                l.bottomFontSize = 42;
+            }
+        }
+        return true;
+    }
     function toggleDiscountLang() {
         activeLayerIds.forEach(function(id) {
-            var l = layers.find(function(x) { return x.id === id; });
-            if (!l || l.type !== 'discountTag') return;
-            // 先交换上下文字位置
-            var tmp = l.topText;
-            l.topText = l.bottomText;
-            l.bottomText = tmp;
-            // 再转换语言关键词 + 调整间距和字号
-            if (l.discountLang === 'en') {
-                l.discountLang = 'ar';
-                // off → خصم
-                if (l.topText === 'off') l.topText = 'خصم';
-                if (l.bottomText === 'off') l.bottomText = 'خصم';
-                // AR 文字更高，默认增大行间距
-                if (l.sideLineGap === undefined || l.sideLineGap <= 0) l.sideLineGap = 6;
-                // AR: خصم 小一些，% 大一些
-                if ((l.topFontSize === undefined || l.topFontSize === 52) && (l.bottomFontSize === undefined || l.bottomFontSize === 42)) {
-                    l.topFontSize = 28;
-                    l.bottomFontSize = 58;
-                }
-            } else {
-                l.discountLang = 'en';
-                // خصم → off
-                if (l.topText === 'خصم') l.topText = 'off';
-                if (l.bottomText === 'خصم') l.bottomText = 'off';
-                // 恢复默认间距和字号
-                if (l.sideLineGap === 6) l.sideLineGap = -2;
-                if (l.topFontSize === 28 && l.bottomFontSize === 58) {
-                    l.topFontSize = 52;
-                    l.bottomFontSize = 42;
-                }
-            }
+            toggleDiscountLangForLayer(layers.find(function(x) { return x.id === id; }));
         });
         renderCanvas(); renderProperties(); saveHistory();
     }
@@ -4835,14 +5081,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         renderCanvas(); renderProperties(); saveHistory();
     }
     window.toggleDiscountSubtitle = toggleDiscountSubtitle;
-        if(layer.mainFontSize === undefined) layer.mainFontSize = 96;
-        if(layer.sideFontSize === undefined) layer.sideFontSize = 42;
-        if(layer.topFontSize === undefined) layer.topFontSize = layer.sideFontSize;
-        if(layer.bottomFontSize === undefined) layer.bottomFontSize = layer.sideFontSize;
-        if(layer.sideGap === undefined) layer.sideGap = 8;
-        if(layer.sideLineGap === undefined) layer.sideLineGap = -2;
-        return layer;
-    }
     function colorWithAlpha(color, alpha = 1) {
         const a = normalizeAlpha(alpha);
         const raw = String(color || '#111827').trim();
@@ -4943,6 +5181,17 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const next = cloneData(layer);
             next.x = (Number(next.x) || sourceSize.w / 2) * sx;
             next.y = (Number(next.y) || sourceSize.h / 2) * sy;
+            if (next._languageVariants) {
+                ['en', 'ar'].forEach(function(language) {
+                    const variant = next._languageVariants[language];
+                    if (!variant) return;
+                    if (Number.isFinite(Number(variant.x))) variant.x = Number(variant.x) * sx;
+                    if (Number.isFinite(Number(variant.y))) variant.y = Number(variant.y) * sy;
+                    if (Number.isFinite(Number(variant.maxWidth))) variant.maxWidth = Number(variant.maxWidth) * uniform;
+                    if (Number.isFinite(Number(variant.textBoxHeight))) variant.textBoxHeight = Number(variant.textBoxHeight) * uniform;
+                    if (Number.isFinite(Number(variant.scale))) variant.scale = Number(variant.scale) * uniform;
+                });
+            }
             if(next.id === selectedId && next.type === 'image') {
                 next.x = targetSize.w / 2;
                 next.y = targetSize.h / 2;
@@ -5760,7 +6009,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     function getSelectedTagLayers() {
         return activeLayerIds.map(id => layers.find(l => l.id === id)).filter(l => l && ['tag', 'discountTag'].includes(l.type));
     }
-    function cloneLayersForInsert(elements, centerOnCanvas = false) {
+    function cloneLayersForInsert(elements, centerOnCanvas = false, options = {}) {
         const {w, h} = SIZES[currentRatio];
         const maxZ = layers.length > 0 ? Math.max(...layers.map(l => l.zIndex)) : 1;
         const source = JSON.parse(JSON.stringify(elements || []))
@@ -5770,13 +6019,26 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         source.forEach(l => { cx += Number(l.x) || 0; cy += Number(l.y) || 0; });
         cx /= source.length; cy /= source.length;
         const editorGroupIdMap = new Map();
-        return source.map((el, i) => {
+        const clonedLayers = source.map((el, i) => {
             const cloned = { ...el, id: genId(el.type), zIndex: maxZ + i + 1, locked: false };
             if (cloned._editorGroupId) {
                 if (!editorGroupIdMap.has(cloned._editorGroupId)) editorGroupIdMap.set(cloned._editorGroupId, genId('editor_group'));
                 cloned._editorGroupId = editorGroupIdMap.get(cloned._editorGroupId);
             }
-            if(centerOnCanvas) { cloned.x = w / 2 + ((Number(el.x) || 0) - cx); cloned.y = h / 2 + ((Number(el.y) || 0) - cy); }
+            if(centerOnCanvas) {
+                const offsetX = w / 2 - cx;
+                const offsetY = h / 2 - cy;
+                cloned.x = (Number(el.x) || 0) + offsetX;
+                cloned.y = (Number(el.y) || 0) + offsetY;
+                if (cloned._languageVariants) {
+                    ['en', 'ar'].forEach(function(language) {
+                        const variant = cloned._languageVariants[language];
+                        if (!variant) return;
+                        if (Number.isFinite(Number(variant.x))) variant.x = Number(variant.x) + offsetX;
+                        if (Number.isFinite(Number(variant.y))) variant.y = Number(variant.y) + offsetY;
+                    });
+                }
+            }
             if(cloned.type === 'tag' && cloned.shadowThickness === undefined) cloned.shadowThickness = 12;
             if(cloned.type === 'tag' && cloned.letterSpacing === undefined) cloned.letterSpacing = 0;
             if(cloned.type === 'tag' && cloned.tagPaddingX === undefined) cloned.tagPaddingX = 36;
@@ -5784,8 +6046,19 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             if(cloned.type === 'tag' && cloned.shadowOpacity === undefined) cloned.shadowOpacity = 1;
             normalizeDiscountTagLayer(cloned);
             if((cloned.type === 'image' || cloned.type === 'logo' || cloned.type === 'solid') && cloned.flipX === undefined) cloned.flipX = false;
+            if (options.seedInactivePlacementOnFirstSwitch) {
+                const inactiveLanguage = normalizeCanvasLanguage(currentCanvasLanguage) === 'ar' ? 'en' : 'ar';
+                cloned._languagePendingPlacement = { [inactiveLanguage]: true };
+            }
             return cloned;
         });
+        // 双语恢复必须基于完整图层集合判断共享背景。逐图层恢复时，大尺寸透明
+        // Logo 图片会因为“自身也是最低图层”而被误判成背景，进而跳过 EN/AR 坐标。
+        clonedLayers.forEach(function(cloned) {
+            ensureLayerLanguageVariants(cloned, clonedLayers, currentCanvasLanguage);
+        });
+        applyCanvasLanguageState(clonedLayers, currentCanvasLanguage);
+        return clonedLayers;
     }
     function adaptPresetElementsToCurrent(elements, presetSize) {
         const cloned = cloneLayersForInsert(elements, false);
@@ -5798,6 +6071,17 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         return cloned.map(layer => {
             layer.x = (Number(layer.x) || source.w / 2) * scaleX;
             layer.y = (Number(layer.y) || source.h / 2) * scaleY;
+            if (layer._languageVariants) {
+                ['en', 'ar'].forEach(function(language) {
+                    const variant = layer._languageVariants[language];
+                    if (!variant) return;
+                    if (Number.isFinite(Number(variant.x))) variant.x = Number(variant.x) * scaleX;
+                    if (Number.isFinite(Number(variant.y))) variant.y = Number(variant.y) * scaleY;
+                    if (Number.isFinite(Number(variant.maxWidth))) variant.maxWidth = Number(variant.maxWidth) * uniform;
+                    if (Number.isFinite(Number(variant.textBoxHeight))) variant.textBoxHeight = Number(variant.textBoxHeight) * uniform;
+                    if (Number.isFinite(Number(variant.scale))) variant.scale = Number(variant.scale) * uniform;
+                });
+            }
             // 图片/纯色层：缩放 baseW/baseH 而不是 scale，避免 layout box 溢出画布
             if (layer.type === 'image' || layer.type === 'solid') {
                 layer.baseW = (Number(layer.baseW) || source.w) * uniform;
@@ -6487,7 +6771,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             else if(type === 'tag') Object.assign(newL, { rotation: -3, tagHeight: 60, shadowThickness: 12, shadowOpacity: 1, letterSpacing: 0, tagPaddingX: 36, tagTextOffsetY: 0, text: 'NEW TAG', font: getDefaultFont(), fontWeight: 900, bgCol: '#00D06C', textCol: '#FFFFFF', shadowCol: '#111827' });
             else if(type === 'discountTag') Object.assign(newL, { rotation: -5, shadowThickness: 12, shadowOpacity: 0.45, letterSpacing: -3, tagPaddingX: 34, tagPaddingY: 15, tagTextOffsetY: 0, mainText: '60', topText: '%', bottomText: 'off', discountLang: 'en', mainFontSize: 96, topFontSize: 52, bottomFontSize: 42, sideGap: 8, sideLineGap: -2, font: getDefaultFont(), fontWeight: 900, bgCol: '#050505', textCol: '#7CFF00', shadowCol: '#111827' });
         }
+        if (type === 'discountTag' && currentCanvasLanguage === 'ar') toggleDiscountLangForLayer(newL);
         if(['tag', 'discountTag', 'arc', 'solid'].includes(type)) ensureSharedKey(newL);
+        ensureLayerLanguageVariants(newL, layers.concat([newL]), currentCanvasLanguage);
         layers.push(newL); activeLayerIds = [newL.id];
         focusInspectorOnSelection();
         if(['logo', 'logoLayout', 'tag', 'discountTag', 'arc'].includes(type)) markNewlyAddedLayers([newL]);
@@ -6791,6 +7077,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         }
         else if(l.type === 'text') {
             wrapper.className = 'layer-text-wrapper layer-base';
+            if (interactive && isUserInterfaceMode()) {
+                syncTextDirectionFromContent(l, l.text || '');
+            }
             var dir = getEffectiveTextDirection(l);
             var align = getEffectiveTextAlign(l, dir);
             // New text layers always use their box centre as the anchor. Legacy layers retain their old anchor until converted.
@@ -6809,7 +7098,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             wrapper.style.color = l.textCol || '#FFFFFF';
             wrapper.style.textAlign = align;
             wrapper.style.direction = dir;
-            wrapper.style.unicodeBidi = 'plaintext';
+            wrapper.style.unicodeBidi = 'isolate';
             wrapper.lang = dir === 'rtl' ? 'ar' : 'en';
             var mode = l.resizeMode || 'autoWidth';
             var ws = 'pre';
@@ -6836,9 +7125,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             var safeText = String(l.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             var showUserPlaceholder = interactive && isUserProtectedTemplateText(l) && !String(l.text || '').trim();
             wrapper.classList.toggle('vf-user-empty-template-text', showUserPlaceholder);
-            wrapper.innerHTML = '<div class="layer-text-content' + (showUserPlaceholder ? ' vf-user-text-placeholder' : '') + '"'
+            wrapper.innerHTML = '<div class="layer-text-content' + (showUserPlaceholder ? ' vf-user-text-placeholder' : '') + '" dir="' + dir + '"'
                 + (showUserPlaceholder ? ' data-user-placeholder="Enter text"' : '')
-                + ' contenteditable="' + (editing ? 'true' : 'false') + '" oninput="syncTextEdit(\'' + l.id + '\', this)" onblur="syncTextEdit(\'' + l.id + '\', this)" style="white-space:' + ws + ';">' + safeText + '</div>';
+                + ' contenteditable="' + (editing ? 'true' : 'false') + '" oninput="syncTextEdit(\'' + l.id + '\', this)" onblur="syncTextEdit(\'' + l.id + '\', this)" style="white-space:' + ws + ';direction:' + dir + ';text-align:' + align + ';unicode-bidi:isolate;">' + safeText + '</div>';
         }
         else if(l.type === 'tag') {
             wrapper.className = 'layer-tag-wrapper layer-base';
@@ -7706,14 +7995,14 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         renderCanvas(); renderArtboardPreviews();
     };
     var textMeasureCanvas = document.createElement('canvas');
-    function measureAutoWidthTextLayer(layer, text) {
+    function measureAutoWidthTextLayer(layer, text, letterSpacingOverride) {
         var context = textMeasureCanvas.getContext('2d');
         var fontSize = Number(layer.fontSize) || 88;
         var fontWeight = isCustomFont(layer.font)
             ? resolveFontWeight(layer.font, Number(layer.fontWeight) || 900)
             : (Number(layer.fontWeight) || 900);
         context.font = fontWeight + ' ' + fontSize + 'px ' + (layer.font || getDefaultFont());
-        var letterSpacing = Number(layer.letterSpacing) || 0;
+        var letterSpacing = Number.isFinite(Number(letterSpacingOverride)) ? Number(letterSpacingOverride) : (Number(layer.letterSpacing) || 0);
         var width = 0;
         String(text || '').split('\n').forEach(function(line) {
             var glyphCount = Array.from(line).length;
@@ -7722,7 +8011,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         });
         return width * (Number(layer.scale) || 1);
     }
-    function measureNaturalTextLayerHeight(layer, text, layoutOverride) {
+    function measureNaturalTextLayerLayout(layer, text, layoutOverride) {
         var probe = document.createElement('div');
         var mode = layoutOverride?.resizeMode || layer.resizeMode || 'autoWidth';
         var maxWidth = Number(layoutOverride?.maxWidth ?? layer.maxWidth) || 620;
@@ -7738,53 +8027,124 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             : (Number(layer.fontWeight) || 900);
         probe.style.fontSize = (Number(layer.fontSize) || 88) + 'px';
         probe.style.lineHeight = String(Number(layer.lineHeight) || 0.95);
-        probe.style.letterSpacing = (Number(layer.letterSpacing) || 0) + 'px';
+        var measuredLetterSpacing = Number.isFinite(Number(layoutOverride?.letterSpacing))
+            ? Number(layoutOverride.letterSpacing)
+            : (Number(layer.letterSpacing) || 0);
+        probe.style.letterSpacing = measuredLetterSpacing + 'px';
         probe.style.whiteSpace = mode === 'autoWidth' ? 'pre' : 'pre-wrap';
         probe.style.overflowWrap = 'anywhere';
+        var measuredDirection = detectStrongTextDirection(text) || getEffectiveTextDirection(layer);
+        probe.dir = measuredDirection;
+        probe.style.direction = measuredDirection;
+        probe.style.textAlign = measuredDirection === 'rtl' ? 'right' : 'left';
+        probe.style.unicodeBidi = 'isolate';
         if (mode !== 'autoWidth') probe.style.width = maxWidth + 'px';
         probe.textContent = String(text || ' ');
         document.body.appendChild(probe);
         var height = probe.getBoundingClientRect().height;
         probe.remove();
         var fallbackHeight = (Number(layer.fontSize) || 88) * (Number(layer.lineHeight) || 0.95);
-        return (height || fallbackHeight) * (Number(layer.scale) || 1);
+        // Range.getClientRects() 在 RTL 文本混入 []、数字或拉丁标点时，
+        // 会把同一行拆成多个 bidi 片段，不能用片段数量判断行数。
+        // 直接用实际排版高度除以行高，才与用户看到的行数一致。
+        var measuredLineCount = Math.max(1, Math.round((height || fallbackHeight) / fallbackHeight));
+        var explicitLineCount = Math.max(1, String(text || '').split('\n').length);
+        return {
+            height: (height || fallbackHeight) * (Number(layer.scale) || 1),
+            lineCount: Math.max(measuredLineCount, explicitLineCount)
+        };
     }
-    function getUserTextAvailableWidth(layer) {
+    function measureNaturalTextLayerHeight(layer, text, layoutOverride) {
+        return measureNaturalTextLayerLayout(layer, text, layoutOverride).height;
+    }
+    function getUserTextAvailableWidth(layer, nextText) {
         var canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
         var scale = Math.max(0.01, Math.abs(Number(layer.scale) || 1));
         var x = Number(layer.x) || canvasSize.w / 2;
-        var align = getEffectiveTextAlign(layer, getEffectiveTextDirection(layer));
+        var nextDirection = detectStrongTextDirection(nextText);
+        var align = nextDirection ? (nextDirection === 'rtl' ? 'right' : 'left') : getEffectiveTextAlign(layer, getEffectiveTextDirection(layer));
+        // 只保留一条稳定的安全边距，避免字号越大、可输入宽度反而越小。
+        var safeMargin = 24;
         var availableVisual;
         if (layer.textBoxAnchor === 'center') {
-            availableVisual = Math.max(0, Math.min(x, canvasSize.w - x) * 2);
+            var currentMode = layer.resizeMode || 'autoWidth';
+            var currentVisualWidth = currentMode === 'autoWidth'
+                ? measureAutoWidthTextLayer(layer, layer.text || ' ')
+                : (Number(layer.maxWidth) || 620) * scale;
+            if (align === 'right') {
+                var currentRightEdge = Math.min(canvasSize.w - safeMargin, x + currentVisualWidth / 2);
+                var currentRightMargin = Math.max(safeMargin, canvasSize.w - currentRightEdge);
+                availableVisual = Math.max(0, currentRightEdge - currentRightMargin);
+            } else if (align === 'left') {
+                var currentLeftEdge = Math.max(safeMargin, x - currentVisualWidth / 2);
+                var currentLeftMargin = Math.max(safeMargin, currentLeftEdge);
+                availableVisual = Math.max(0, canvasSize.w - currentLeftMargin - currentLeftEdge);
+            } else {
+                availableVisual = Math.max(0, Math.min(x - safeMargin, canvasSize.w - safeMargin - x) * 2);
+            }
         } else if (align === 'right') {
-            availableVisual = Math.max(0, x);
+            var rightAnchorMargin = Math.max(safeMargin, canvasSize.w - x);
+            availableVisual = Math.max(0, x - rightAnchorMargin);
         } else {
-            availableVisual = Math.max(0, canvasSize.w - x);
+            var leftAnchorMargin = Math.max(safeMargin, x);
+            availableVisual = Math.max(0, canvasSize.w - leftAnchorMargin - x);
         }
-        return Math.max(24, (availableVisual - 4) / scale);
+        return Math.max(24, availableVisual / scale);
     }
     function prepareUserTextLayout(layer, nextText) {
         if (!isUserInterfaceMode() || layer?.type !== 'text') return { accepted: true };
         var text = String(nextText == null ? '' : nextText);
         if (text.split('\n').length > 2) return { accepted: false };
         var currentMode = layer.resizeMode || 'autoWidth';
-        var plan = { accepted: true, resizeMode: currentMode, maxWidth: Number(layer.maxWidth) || 620 };
-        var availableWidth = getUserTextAvailableWidth(layer);
-        var naturalWidth = measureAutoWidthTextLayer(layer, text) / Math.max(0.01, Math.abs(Number(layer.scale) || 1));
+        var baseLetterSpacing = Number.isFinite(Number(layer._userAutoFitBaseLetterSpacing))
+            ? Number(layer._userAutoFitBaseLetterSpacing)
+            : (Number(layer.letterSpacing) || 0);
+        var plan = { accepted: true, resizeMode: currentMode, maxWidth: Number(layer.maxWidth) || 620, letterSpacing: baseLetterSpacing };
+        var availableWidth = getUserTextAvailableWidth(layer, text);
+        var naturalWidth = measureAutoWidthTextLayer(layer, text, baseLetterSpacing) / Math.max(0.01, Math.abs(Number(layer.scale) || 1));
+        var maxTighten = Math.min(4, Math.max(1.5, (Number(layer.fontSize) || 88) * 0.04));
         if (currentMode === 'fixedSize') {
-            plan.maxWidth = Math.min(plan.maxWidth, availableWidth);
-        } else if (currentMode === 'fixedWidth') {
-            plan.maxWidth = Math.min(plan.maxWidth, availableWidth);
-        } else if (naturalWidth > availableWidth) {
-            plan.resizeMode = 'fixedWidth';
+            // 固定高度只负责保留模板的纵向区域，不应继续锁死旧的窄宽度。
+            // 用户输入较长文案时，横向仍可使用到画布安全边距的完整空间。
             plan.maxWidth = availableWidth;
+        } else {
+            // 用户模式不沿用上一次自动折行留下的窄 fixedWidth。
+            // 每次都先按当前阅读起点使用到画布安全边距的完整宽度。
+            var glyphCount = Math.max(0, Array.from(text.replace(/\n/g, '')).length - 1);
+            var requiredTighten = glyphCount > 0 ? Math.max(0, naturalWidth - availableWidth) / glyphCount : Infinity;
+            if (naturalWidth <= availableWidth) {
+                plan.resizeMode = 'autoWidth';
+                plan.autoWrapped = false;
+            } else if (requiredTighten <= maxTighten) {
+                // 仅差一点时先轻微收紧字距，避免一个短词被过早挤到第二行。
+                plan.resizeMode = 'autoWidth';
+                plan.letterSpacing = baseLetterSpacing - requiredTighten - 0.2;
+                plan.autoFitBaseLetterSpacing = baseLetterSpacing;
+                plan.autoWrapped = false;
+            } else {
+                plan.resizeMode = 'fixedWidth';
+                plan.maxWidth = availableWidth;
+                plan.autoWrapped = true;
+            }
         }
-        var height = measureNaturalTextLayerHeight(layer, text || ' ', plan);
-        var scale = Math.max(0.01, Math.abs(Number(layer.scale) || 1));
-        var lineBoxHeight = (Number(layer.fontSize) || 88) * (Number(layer.lineHeight) || 0.95) * scale;
-        var renderedLines = Math.max(1, Math.ceil(height / Math.max(1, lineBoxHeight) - 0.01));
-        if (renderedLines > 2) return { accepted: false };
+        var measuredLayout = measureNaturalTextLayerLayout(layer, text || ' ', plan);
+        if (measuredLayout.lineCount > 2) {
+            // 仅差一点时允许最多收紧约 1.5–4px 字间距，分四档尝试。
+            // 这个范围肉眼不会明显变形，但可以消化一个短词造成的第三行。
+            for (var tightenStep = 1; tightenStep <= 4; tightenStep++) {
+                var candidateSpacing = baseLetterSpacing - maxTighten * tightenStep / 4;
+                var candidatePlan = Object.assign({}, plan, { letterSpacing: candidateSpacing });
+                var candidateLayout = measureNaturalTextLayerLayout(layer, text || ' ', candidatePlan);
+                if (candidateLayout.lineCount <= 2) {
+                    plan.letterSpacing = candidateSpacing;
+                    plan.autoFitBaseLetterSpacing = baseLetterSpacing;
+                    measuredLayout = candidateLayout;
+                    break;
+                }
+            }
+        }
+        if (measuredLayout.lineCount > 2) return { accepted: false };
+        var height = measuredLayout.height;
         // 自动高度文字以当前顶部为锚点；第二行也必须留在画布内。
         var canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
         var oldHeight = measureNaturalTextLayerHeight(layer, String(layer.text || ' ') || ' ');
@@ -7827,9 +8187,13 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var oldEditorGroupBounds = snapshotEditorGroupBounds(layer);
         var userLayout = prepareUserTextLayout(layer, normalizedText);
         if (!userLayout.accepted) return false;
-        var alignment = getEffectiveTextAlign(layer, getEffectiveTextDirection(oldText));
-        var preserveEdge = (layer.resizeMode || 'autoWidth') === 'autoWidth'
-            && layer.textBoxAnchor === 'center'
+        var oldAlignment = getEffectiveTextAlign(layer, getEffectiveTextDirection(oldText));
+        var nextStrongDirection = detectStrongTextDirection(normalizedText);
+        var nextAutomaticAlign = nextStrongDirection === 'rtl' ? 'right' : (nextStrongDirection === 'ltr' ? 'left' : '');
+        // 切换语言时按“新语言”的阅读起点锁边：阿语锁右边，英语锁左边。
+        // 否则自动宽度文本从英文换成阿语后，依然会停在原来的左边。
+        var alignment = nextAutomaticAlign || oldAlignment;
+        var preserveEdge = layer.textBoxAnchor === 'center'
             && (alignment === 'left' || alignment === 'right');
         // 所有自动高度文字（包括没有 textBoxAnchor 标记的旧模板文字）都要锁住顶部。
         // 只有真正设置了固定框高的图层，内容行数变化时才无需移动图层中心。
@@ -7840,11 +8204,27 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         // 否则占位符仍会以锚点为中心向两侧展开。
         var oldVisualText = !oldText.trim() && isUserProtectedTemplateText(layer) ? 'Enter text' : oldText;
         var nextVisualText = !normalizedText.trim() && isUserProtectedTemplateText(layer) ? 'Enter text' : normalizedText;
-        var oldWidth = preserveEdge ? measureAutoWidthTextLayer(layer, oldVisualText) : 0;
+        var oldWidth = preserveEdge
+            ? ((layer.resizeMode || 'autoWidth') === 'autoWidth'
+                ? measureAutoWidthTextLayer(layer, oldVisualText)
+                : (Number(layer.maxWidth) || 620) * (Number(layer.scale) || 1))
+            : 0;
         var oldHeight = preserveTop ? measureNaturalTextLayerHeight(layer, oldVisualText) : 0;
+        if (nextAutomaticAlign && layer.textBoxAnchor !== 'center' && nextAutomaticAlign !== oldAlignment) {
+            // 旧模板把 x 当成左/右边缘锨点。切换书写方向前先转为中心锨点，
+            // 否则从英文左对齐切到阿语右对齐时会整块跳位。
+            layer.x = getTextLayerPixelBounds(layer).cx;
+            layer.textBoxAnchor = 'center';
+        }
         layer.text = normalizedText;
+        syncTextDirectionFromContent(layer, normalizedText);
         if (userLayout.resizeMode) layer.resizeMode = userLayout.resizeMode;
         if (userLayout.maxWidth) layer.maxWidth = userLayout.maxWidth;
+        if (userLayout.autoWrapped === true) layer._userAutoWrapped = true;
+        else if (userLayout.autoWrapped === false) delete layer._userAutoWrapped;
+        if (Number.isFinite(Number(userLayout.letterSpacing))) layer.letterSpacing = Number(userLayout.letterSpacing);
+        if (Number.isFinite(Number(userLayout.autoFitBaseLetterSpacing))) layer._userAutoFitBaseLetterSpacing = Number(userLayout.autoFitBaseLetterSpacing);
+        else if (Number.isFinite(Number(layer._userAutoFitBaseLetterSpacing)) && Number(layer.letterSpacing) === Number(layer._userAutoFitBaseLetterSpacing)) delete layer._userAutoFitBaseLetterSpacing;
         if (!preserveEdge && !preserveTop) {
             reflowEditorGroupAfterMemberResize(layer, oldEditorGroupBounds);
             return true;
@@ -7904,6 +8284,24 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             else if(/[A-Za-z\u00C0-\u024F]/.test(char)) ltr++;
         }
         return rtl > ltr ? 'rtl' : 'ltr';
+    }
+    function detectStrongTextDirection(text = '') {
+        var value = String(text || '');
+        var hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(value);
+        var hasLatin = /[A-Za-z\u00C0-\u024F]/.test(value);
+        if (!hasArabic && !hasLatin) return '';
+        return detectTextDirection(value);
+    }
+    function syncTextDirectionFromContent(layer, text) {
+        if (!layer || layer.type !== 'text') return '';
+        var direction = detectStrongTextDirection(text);
+        // 纯数字、标点或空占位不改变现有书写方向。
+        if (!direction) return '';
+        layer.textDirection = direction;
+        layer.textDirectionMode = 'auto';
+        layer.textAlign = direction === 'rtl' ? 'right' : 'left';
+        layer.textAlignMode = 'auto';
+        return direction;
     }
     function getEffectiveTextDirection(layer) {
         if(layer?.textDirectionMode === 'manual' && ['ltr', 'rtl'].includes(layer.textDirection)) return layer.textDirection;
@@ -7970,6 +8368,18 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         renderCanvas(); renderLayersList(); renderArtboardPreviews();
     }
     function commitEditorGroupMemberChange() { saveHistory(); renderProperties(); }
+    function setEditorGroupDiscountLang(layerId, nextLang) {
+        const layer = layers.find(function(item) { return item.id === layerId; });
+        if (!layer || layer.type !== 'discountTag' || !['en', 'ar'].includes(nextLang)) return;
+        normalizeDiscountTagLayer(layer);
+        if (layer.discountLang === nextLang) return;
+        const oldBounds = snapshotEditorGroupBounds(layer);
+        if (!toggleDiscountLangForLayer(layer)) return;
+        reflowEditorGroupAfterMemberResize(layer, oldBounds);
+        propagateSharedLayerChange(layer, ['topText', 'bottomText', 'discountLang', 'sideLineGap', 'topFontSize', 'bottomFontSize']);
+        renderCanvas(); renderLayersList(); renderArtboardPreviews(); renderProperties(); saveHistory();
+    }
+    window.setEditorGroupDiscountLang = setEditorGroupDiscountLang;
     function handleEditorGroupLogoDrop(event, layerId) {
         event.preventDefault(); event.stopPropagation();
         const file = event.dataTransfer?.files?.[0];
@@ -7988,12 +8398,19 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const name = escapeHtml(getLayerName(layer));
         let control = '<div style="font-size:12px;color:var(--text-sub);">' + escapeHtml(layer.type || '组件') + '</div>';
         if (layer.type === 'text') {
-            control = '<textarea class="input" rows="2" style="width:100%;resize:vertical;" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'text\',this.value,this)" onchange="commitEditorGroupMemberChange()">' + escapeHtml(layer.text || '') + '</textarea>';
+            const groupTextDirection = detectStrongTextDirection(layer.text || '') || getEffectiveTextDirection(layer);
+            const groupTextAlign = groupTextDirection === 'rtl' ? 'right' : 'left';
+            control = '<textarea class="input" rows="2" dir="' + groupTextDirection + '" style="width:100%;resize:vertical;direction:' + groupTextDirection + ';text-align:' + groupTextAlign + ';unicode-bidi:isolate;" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'text\',this.value,this);this.dir=detectStrongTextDirection(this.value)||\'' + groupTextDirection + '\';this.style.direction=this.dir;this.style.textAlign=this.dir===\'rtl\'?\'right\':\'left\';" onchange="commitEditorGroupMemberChange()">' + escapeHtml(layer.text || '') + '</textarea>';
         } else if (layer.type === 'tag') {
             control = '<input class="input" style="width:100%;" value="' + escapeHtml(layer.text || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'text\',this.value)" onchange="commitEditorGroupMemberChange()">';
         } else if (layer.type === 'discountTag') {
+            normalizeDiscountTagLayer(layer);
+            const isArabicDiscount = layer.discountLang === 'ar';
+            const languageSwitch = !isUserInterfaceMode()
+                ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;"><span style="font-size:11px;font-weight:750;color:var(--text-sub);">语言格式</span><div style="display:grid;grid-template-columns:1fr 1fr;min-width:132px;padding:3px;border:1px solid var(--border);border-radius:10px;background:#f3f5f8;"><button type="button" onclick="setEditorGroupDiscountLang(\'' + layer.id + '\',\'en\')" style="height:30px;border:0;border-radius:7px;background:' + (!isArabicDiscount ? 'var(--primary)' : 'transparent') + ';color:' + (!isArabicDiscount ? '#fff' : 'var(--text-sub)') + ';font-size:12px;font-weight:850;cursor:pointer;">EN</button><button type="button" onclick="setEditorGroupDiscountLang(\'' + layer.id + '\',\'ar\')" style="height:30px;border:0;border-radius:7px;background:' + (isArabicDiscount ? 'var(--primary)' : 'transparent') + ';color:' + (isArabicDiscount ? '#fff' : 'var(--text-sub)') + ';font-size:12px;font-weight:850;cursor:pointer;">AR</button></div></div>'
+                : '';
             const bottomTextInput = isUserInterfaceMode() ? '' : '<input class="input" value="' + escapeHtml(layer.bottomText || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'bottomText\',this.value)" onchange="commitEditorGroupMemberChange()">';
-            control = '<div style="display:grid;grid-template-columns:' + (isUserInterfaceMode() ? '1fr' : '1fr 1fr') + ';gap:6px;"><input class="input" value="' + escapeHtml(layer.mainText || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'mainText\',this.value)" onchange="commitEditorGroupMemberChange()">' + bottomTextInput + '</div>';
+            control = languageSwitch + '<div style="display:grid;grid-template-columns:' + (isUserInterfaceMode() ? '1fr' : '1fr 1fr') + ';gap:6px;"><input class="input" value="' + escapeHtml(layer.mainText || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'mainText\',this.value)" onchange="commitEditorGroupMemberChange()">' + bottomTextInput + '</div>';
         } else if (layer.type === 'logoLayout') {
             control = '<div style="height:64px;border:2px dashed #cbd5e1;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:12px;cursor:pointer;background:#f8fafc;" onclick="chooseLocalLogoForLayout(\'' + layer.id + '\',0)" ondragover="event.preventDefault()" ondrop="handleEditorGroupLogoDrop(event,\'' + layer.id + '\')">拖拽或点击替换 Logo</div>';
         } else if ((layer.type === 'image' || layer.type === 'logo') && layer.src) {
@@ -8010,7 +8427,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if(activeLayerIds.length > 1) {
             initGroupScaleOriginals();
             const types = activeLayerIds.map(id => layers.find(l => l.id === id)?.type); const allTags = types.every(t => ['tag', 'discountTag'].includes(t)); const allArcs = types.every(t => t === 'arc');
-            let batchUI = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0;">已选择 ${activeLayerIds.length} 个图层</div>`;
+            const activeEditorGroup = getActiveEditorGroup();
+            let batchUI = isUserInterfaceMode() && activeEditorGroup
+                ? ''
+                : `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0;">已选择 ${activeLayerIds.length} 个图层</div>`;
             if(allTags && !isUserInterfaceMode()) { let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); presetHtml += `<div onclick="handleColorPresetClick(event,'tag','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid #FFF; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;" title="${p.name}（双击编辑并同步）"></div>`; }); batchUI += `<label class="label">批量修改标签品牌色</label>${presetHtml}</div>`; }
             else if (allArcs) { let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; arcColorPresets.forEach(p => { presetHtml += `<div onclick="handleColorPresetClick(event,'arc','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.cIn}; border: 4px solid ${p.cOut}; cursor:pointer;" title="${p.name}（双击编辑并同步）"></div>`; }); batchUI += `<label class="label">批量修改圆弧品牌色</label>${presetHtml}</div>`; }
             if (!isUserInterfaceMode()) {
@@ -8021,10 +8441,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 var grCurrent = Number(_groupRotationValue) || 0;
                 batchUI += `<div class="slider-row"><span class="s-label">统一旋转</span><input type="range" min="-180" max="180" step="1" value="${grCurrent}" oninput="applyGroupRotation(parseFloat(this.value))" onchange="saveHistory(); _groupRotationValue=0; _groupScaleOriginals=null; this.value=0; document.getElementById('val-groupRotation').innerText='0°'; initGroupScaleOriginals();"><span class="slider-val" id="val-groupRotation">${Math.round(grCurrent)}°</span></div>`;
             }
-            const activeEditorGroup = getActiveEditorGroup();
             if (activeEditorGroup) {
                 const ungroupAction = isUserInterfaceMode() ? '' : '<button type="button" class="btn btn-outline" style="height:30px;padding:0 10px;font-size:11px;" onclick="ungroupSelectedLayers()">取消编组</button>';
-                batchUI += '<div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--border);"><strong style="font-size:13px;">编组内容</strong>' + ungroupAction + '</div>';
+                const groupHeaderStyle = isUserInterfaceMode()
+                    ? 'display:flex;align-items:center;justify-content:space-between;margin:0 0 10px;'
+                    : 'display:flex;align-items:center;justify-content:space-between;margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--border);';
+                batchUI += '<div style="' + groupHeaderStyle + '"><strong style="font-size:13px;">编组内容</strong>' + ungroupAction + '</div>';
                 activeEditorGroup.members.slice().sort(function(a,b) { return (Number(b.zIndex)||0) - (Number(a.zIndex)||0); }).forEach(function(member) { batchUI += getEditorGroupMemberControlHtml(member); });
             }
             area.innerHTML = batchUI; return;
@@ -8123,7 +8545,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             var widthStepper = stepper('maxWidth','宽度',10,4000,10,'px');
             var heightStepper = '';
             area.innerHTML = '<div class="property-context-title">文本属性</div>'
-                + '<label class="label">文字内容</label><textarea class="input-text" style="min-height:56px;resize:vertical;line-height:1.45;font-size:13px;" oninput="updateProp(\'text\',this.value)" onchange="saveHistory()">' + escapeHtml(l.text || '') + '</textarea>'
+                + '<label class="label">文字内容</label><textarea class="input-text" dir="' + getEffectiveTextDirection(l) + '" style="min-height:56px;resize:vertical;line-height:1.45;font-size:13px;direction:' + getEffectiveTextDirection(l) + ';text-align:' + textAlign + ';unicode-bidi:isolate;" oninput="updateProp(\'text\',this.value);this.dir=detectStrongTextDirection(this.value)||this.dir;this.style.direction=this.dir;this.style.textAlign=this.dir===\'rtl\'?\'right\':\'left\';" onchange="saveHistory()">' + escapeHtml(l.text || '') + '</textarea>'
                 + '<div style="font-size:11px;color:var(--text-sub);margin:-6px 0 8px;">💡 双击画布文字可直接编辑</div>'
                 + '<div class="vf-developer-font-control"><label class="label">字体</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">' + selectedFontOptions + '</select></div>'
                 + '<div class="vf-developer-text-controls">'
@@ -8166,6 +8588,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const subtitleControls = hasSubtitle ? `<label class="label">副标题文字</label><input type="text" class="input-text" value="${escapeHtml(l.subtitle || '')}" oninput="updateProp('subtitle', this.value)" onchange="saveHistory()"><div style="display:flex; gap:6px; margin-bottom:10px;"><button type="button" onclick="updateProp('subtitlePosition','top');saveHistory();renderProperties();" style="flex:1;padding:6px 10px;font-size:12px;font-weight:600;border-radius:7px;border:1px solid var(--border);background:${subPos==='top'?'var(--primary)':'#f3f4f6'};color:${subPos==='top'?'#fff':'#6b7280'};cursor:pointer;">↑ 顶部</button><button type="button" onclick="updateProp('subtitlePosition','bottom');saveHistory();renderProperties();" style="flex:1;padding:6px 10px;font-size:12px;font-weight:600;border-radius:7px;border:1px solid var(--border);background:${subPos==='bottom'?'var(--primary)':'#f3f4f6'};color:${subPos==='bottom'?'#fff':'#6b7280'};cursor:pointer;">↓ 底部</button></div><div class="slider-row"><span class="s-label">位置偏移</span><input type="range" min="-80" max="80" step="1" value="${l.subtitleOffsetY ?? 8}" oninput="updateProp('subtitleOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-subtitleOffsetY">${l.subtitleOffsetY ?? 8}px</span></div><div class="slider-row"><span class="s-label">字体大小</span><input type="range" min="8" max="48" step="1" value="${l.subtitleFontSize ?? 14}" oninput="updateProp('subtitleFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-subtitleFontSize">${l.subtitleFontSize ?? 14}px</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('subtitleFontWeight',parseInt(this.value));saveHistory();"><option value="300" ${(l.subtitleFontWeight||700)===300?'selected':''}>细体 (300)</option><option value="400" ${(l.subtitleFontWeight||700)===400?'selected':''}>常规 (400)</option><option value="700" ${(l.subtitleFontWeight||700)===700?'selected':''}>加粗 (700)</option><option value="900" ${(l.subtitleFontWeight||700)===900?'selected':''}>黑体 (900)</option></select></div><div></div></div><div class="slider-row"><span class="s-label">白边粗细</span><input type="range" min="0" max="6" step="0.5" value="${l.subtitleStrokeWidth ?? 2}" oninput="updateProp('subtitleStrokeWidth', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-subtitleStrokeWidth">${l.subtitleStrokeWidth ?? 2}px</span></div>` : '';
             area.innerHTML = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;"><span style="font-size:11px; font-weight:700; color:#6b7280;">语言格式</span><button type="button" onclick="toggleDiscountLang()" style="display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#f3f4f6; padding:0; cursor:pointer;"><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:7px 0 0 7px; transition:all .15s; ${!isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">EN</span><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:0 7px 7px 0; transition:all .15s; ${isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">AR</span></button></div><label class="label">主文字</label><input data-discount-main-input type="text" class="input-text" value="${escapeHtml(l.mainText)}" oninput="updateProp('mainText', this.value)" onchange="saveHistory()"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><div><label class="label">右上角</label><input type="text" class="input-text" value="${escapeHtml(l.topText)}" oninput="updateProp('topText', this.value)" onchange="saveHistory()"></div><div><label class="label">右下角</label><input type="text" class="input-text" value="${escapeHtml(l.bottomText)}" oninput="updateProp('bottomText', this.value)" onchange="saveHistory()"></div></div>${subtitleToggleBtn}${subtitleControls}<label class="label">字体选择</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();">${selectedWeightInfo.html}</select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">主字大小</span><input type="range" min="48" max="150" step="1" value="${l.mainFontSize ?? 96}" oninput="updateProp('mainFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-mainFontSize">${l.mainFontSize ?? 96}px</span></div><div class="slider-row"><span class="s-label">%大小</span><input type="range" min="20" max="90" step="1" value="${l.topFontSize ?? l.sideFontSize ?? 52}" oninput="updateProp('topFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-topFontSize">${l.topFontSize ?? l.sideFontSize ?? 52}px</span></div><div class="slider-row"><span class="s-label">Off大小</span><input type="range" min="16" max="80" step="1" value="${l.bottomFontSize ?? l.sideFontSize ?? 42}" oninput="updateProp('bottomFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-bottomFontSize">${l.bottomFontSize ?? l.sideFontSize ?? 42}px</span></div><div class="slider-row"><span class="s-label">左右间距</span><input type="range" min="-8" max="32" step="1" value="${l.sideGap ?? 8}" oninput="updateProp('sideGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideGap">${l.sideGap ?? 8}px</span></div><div class="slider-row"><span class="s-label">%/Off间距</span><input type="range" min="-18" max="48" step="1" value="${l.sideLineGap ?? -2}" oninput="updateProp('sideLineGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideLineGap">${l.sideLineGap ?? -2}px</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="18" step="0.5" value="${l.letterSpacing ?? -3}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? -3}px</span></div><div class="slider-row"><span class="s-label">左右边距</span><input type="range" min="8" max="90" step="1" value="${l.tagPaddingX ?? 34}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 34}px</span></div><div class="slider-row"><span class="s-label">上下边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingY ?? 15}" oninput="updateProp('tagPaddingY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingY">${l.tagPaddingY ?? 15}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="36" step="1" value="${l.shadowThickness ?? 12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness ?? 12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 0.45)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 0.45)*100)}%</span></div>`;
             if (isUserInterfaceMode()) {
+                area.firstElementChild?.remove();
                 const mainInput = area.querySelector('[data-discount-main-input]');
                 let hiddenControl = mainInput?.nextElementSibling;
                 while (hiddenControl) {
@@ -8248,6 +8671,16 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             var liveMode = l.resizeMode || 'autoWidth';
             liveWrapper.style.width = liveMode === 'autoWidth' ? 'auto' : ((Number(l.maxWidth) || 620) + 'px');
             el.style.whiteSpace = liveMode === 'autoWidth' ? 'pre' : 'pre-wrap';
+            var liveDirection = getEffectiveTextDirection(l);
+            var liveAlignment = getEffectiveTextAlign(l, liveDirection);
+            liveWrapper.style.direction = liveDirection;
+            liveWrapper.style.textAlign = liveAlignment;
+            liveWrapper.style.unicodeBidi = 'isolate';
+            liveWrapper.lang = liveDirection === 'rtl' ? 'ar' : 'en';
+            el.dir = liveDirection;
+            el.style.direction = liveDirection;
+            el.style.textAlign = liveAlignment;
+            el.style.unicodeBidi = 'isolate';
         }
         // 编组响应式排版可能同步移动其他成员；输入过程中直接更新现有 DOM，避免重建
         // contenteditable 导致光标丢失，并让总体选择框实时跟随新尺寸。
@@ -8573,6 +9006,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
 
     /* ================= 内嵌资产库系统 ================= */
     function switchAssetTab(tab) {
+        if (tab !== 'layout' && templateBookmarkSelectMode) exitTemplateBookmarkMultiSelect(false);
         currentAssetTab = tab;
         diySubtagFilter = '全部';
         diySelectedSubtag = '全部';
@@ -8599,14 +9033,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const label = btn.querySelector('.canvas-action-label');
         if (label) label.textContent = '保存模板';
         btn.disabled = currentAssetTab === 'recycle';
-    }
-    function createLangBadge(lang, overlay) {
-        if (lang !== 'EN' && lang !== 'AR') return null;
-        const badge = document.createElement('span');
-        badge.className = 'lang-badge lang-' + (lang === 'EN' ? 'en' : 'ar') + (overlay ? ' lang-overlay' : '');
-        badge.textContent = lang;
-        badge.title = lang === 'EN' ? '英文版' : '阿拉伯语版';
-        return badge;
     }
     let canvasToolbarMenuOpenTimer = null;
     let canvasToolbarMenuCloseTimer = null;
@@ -8666,21 +9092,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (canvasToolbarMenuLocked === 'save') canvasToolbarMenuLocked = '';
     }
     function buildSaveTemplateMenu() {
-        const menu = document.getElementById('save-template-dropdown-menu');
-        if (!menu) return;
-        menu.innerHTML = '';
-        function option(label, lang) {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            const text = document.createElement('span'); text.textContent = label;
-            btn.appendChild(text);
-            if (lang) { const badge = createLangBadge(lang, false); if (badge) btn.appendChild(badge); }
-            btn.onclick = function() { closeSaveTemplateMenu(); saveActiveAsset(lang); };
-            menu.appendChild(btn);
-        }
-        option('保存 EN 模版', 'EN');
-        option('保存 AR 模版', 'AR');
-        option('保存（不打标）', '');
+        // 模板语言下拉菜单已移除；保存按钮直接保存普通模板。
     }
     function toggleAddMenu(e) { e.stopPropagation(); document.getElementById('add-menu')?.classList.toggle('open'); }
     function closeAddMenu() { document.getElementById('add-menu')?.classList.remove('open'); }
@@ -8959,6 +9371,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             } else {
                 data.elements = await compressLayersForSync(preset.elements);
                 data.size = preset.size || currentRatio;
+                data.canvasLanguage = normalizeCanvasLanguage(preset.canvasLanguage);
+                data.canvasLanguagesInitialized = normalizeCanvasLanguagesInitialized(preset.canvasLanguagesInitialized, preset.canvasLanguage);
             }
             showSyncStatus('uploading');
             notifyParent({ type: 'vf:save-template', templateType: templateType, name: preset.name, data: data, previewDataUrl: previewDataUrl || '' });
@@ -9027,13 +9441,21 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             // 后台预加载云端字体
             setTimeout(function() { preloadCloudFonts(); }, 2000);
         } else if (event.data.type === 'vf:template-preview') {
-            // 接收预览图 data URL
+            // 优先接收 Blob：避免在素材列表中塞入几十个巨大 Base64 字符串。
             var pid = event.data.id;
-            var pUrl = event.data.previewUrl || '';
+            var pUrl = event.data.previewBlob instanceof Blob
+                ? URL.createObjectURL(event.data.previewBlob)
+                : (event.data.previewUrl || '');
             if (pUrl) {
                 [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
                     var item = arr.find(function(x) { return x.cloudId === pid; });
-                    if (item) item.previewUrl = pUrl;
+                    if (item) {
+                        if (item.previewUrl && item.previewUrl !== pUrl && String(item.previewUrl).startsWith('blob:')) {
+                            try { URL.revokeObjectURL(item.previewUrl); } catch (e) {}
+                        }
+                        item.previewUrl = pUrl;
+                        item._previewRetrying = false;
+                    }
                 });
                 // 关联模板预览到达后，按显式语言标签重新选择书签封面。
                 // 这一步也会把旧书签曾按名称选中的 coverTemplateId 迁移为标签判断结果。
@@ -9048,6 +9470,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                         var existingImg = thumb.querySelector('img:not(.hover-preview-img)');
                         if (!existingImg) {
                             existingImg = document.createElement('img');
+                            existingImg.loading = 'lazy';
+                            existingImg.decoding = 'async';
                             existingImg.style.width = '100%';
                             existingImg.style.height = '100%';
                             existingImg.style.objectFit = 'contain';
@@ -9087,6 +9511,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     packItem.size = packMeta.size || packItem.size || '';
                     packItem.canvasW = packMeta.canvasW || 0;
                     packItem.canvasH = packMeta.canvasH || 0;
+                    packItem.canvasLanguage = normalizeCanvasLanguage(packMeta.canvasLanguage);
                 }
                 packItem._metadataLoaded = true;
                 packItem._metadataLoading = false;
@@ -9141,6 +9566,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 if (tdata.size) item.size = tdata.size;
                 if (tdata.canvasW) item.canvasW = tdata.canvasW;
                 if (tdata.canvasH) item.canvasH = tdata.canvasH;
+                if (tdata.canvasLanguage) item.canvasLanguage = normalizeCanvasLanguage(tdata.canvasLanguage);
+                if (tdata.canvasLanguagesInitialized) item.canvasLanguagesInitialized = normalizeCanvasLanguagesInitialized(tdata.canvasLanguagesInitialized, tdata.canvasLanguage || item.canvasLanguage);
                 if (tdata.src) item.src = tdata.src;
                 if (tdata.schema === 'vf-font-asset/v1') {
                     item.fontFamilyName = tdata.familyName;
@@ -9175,7 +9602,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     if (isGroup) { applyGroupCombo(loadedRequestedPresetId); }
                     else if (isTag) { applyTagComboPreset(loadedRequestedPresetId); }
                     else if (isLogo) { addLogoFromAsset(loadedRequestedPresetId); }
-                    else if (bookmarkAction?.mode === 'edit') { openTemplateBookmarkEditor(bookmarkAction.asset); }
+                    else if (bookmarkAction?.mode === 'edit') { openTemplateBookmarkInlineEditor(bookmarkAction.asset); }
                     else if (bookmarkAction?.mode === 'open') { openTemplateBookmarkPicker(loadedRequestedPresetId); }
                     else { applyLayoutPreset(loadedRequestedPresetId); }
                 });
@@ -9241,12 +9668,17 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 leaveLinkedArtboardGroup();
                 activeTemplatePackId = null;
                 restoreTemplateCanvas(d);
+                currentCanvasLanguage = normalizeCanvasLanguage(d.canvasLanguage);
+                currentCanvasLanguagesInitialized = normalizeCanvasLanguagesInitialized(d.canvasLanguagesInitialized, currentCanvasLanguage);
+                syncCanvasLanguageControl();
                 // 套用模板是一次原子替换：不能保留上一张模板的图片、Logo 或圆环，
                 // 否则连续点击时会发生叠加或被新背景遮住。
-                var newEls = cloneData(d.elements).map(function(l) { l._templateLayer = true; return l; });
+                var newEls = adaptPresetElementsToCurrent(d.elements, d.size);
+                newEls.forEach(function(l) { l._templateLayer = true; });
                 layers = newEls;
-                activeLayerIds = layers.filter(function(l) { return l.type !== 'image'; }).map(function(l) { return l.id; });
-                if (!activeLayerIds.length) activeLayerIds = layers.map(function(l) { return l.id; });
+                // 与资产库直接打开模板保持一致：加载完成后不默认选中任何图层。
+                // 旧逻辑会选中全部非图片组件，导致从书签入口进入时满画布都是选择框。
+                activeLayerIds = [];
                 saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                 showToast('已应用版式：' + (d.name || ''));
             } else if (d.schema === 'vf-template-pack/v1' && d.artboards) {
@@ -9267,7 +9699,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 saveHistory(); renderAssetLibrary();
                 showToast('已应用套组：' + (d.name || ''));
             } else if (d.schema === 'vf-tag-combo/v1' && d.elements) {
-                var tagLayers = cloneLayersForInsert(d.elements, true);
+                var tagLayers = cloneLayersForInsert(d.elements, true, { seedInactivePlacementOnFirstSwitch: true });
                 layers.push.apply(layers, tagLayers);
                 activeLayerIds = tagLayers.map(function(l) { return l.id; });
                 markNewlyAddedLayers(tagLayers);
@@ -9275,7 +9707,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                 showToast('已应用标签组：' + (d.name || ''));
             } else if (d.schema === 'vf-group-combo/v1' && d.elements) {
-                var groupLayers = cloneLayersForInsert(d.elements, true);
+                var groupLayers = cloneLayersForInsert(d.elements, true, { seedInactivePlacementOnFirstSwitch: true });
                 layers.push.apply(layers, groupLayers);
                 activeLayerIds = groupLayers.map(function(l) { return l.id; });
                 markNewlyAddedLayers(groupLayers);
@@ -9389,6 +9821,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     var assetMultiSelect = false;
     var assetSelectedIds = new Set();
     var assetMoveTargetIds = [];
+    var templateBookmarkSelectMode = false;
+    var templateBookmarkSelectedIds = new Set();
+    var templateBookmarkEditing = null;
     function getColorPaletteCards() {
         if(!cloudColorPaletteSnapshot.loaded) return [];
         const tagCards = cloudColorPaletteSnapshot.tagColorPresets.filter(function(preset) { return preset?._cloudSaved === true; }).map(function(preset) {
@@ -9489,6 +9924,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         notifyParent({ type: 'vf:request-templates' });
     }
     function renderAssetLibrary() {
+        var renderGeneration = ++_assetRenderGeneration;
         var layoutCount = presetLibrary.length;
         var componentCount = tagPresetLibrary.length + logoAssets.length + groupPresets.length + referenceElements.length;
         var recycleCount = recycleBin.length;
@@ -9548,8 +9984,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             });
             // 搜索过滤
             var searchFilter = function(p) { return assetMatchesSearch(p, p.kind === 'bookmark' ? 'bookmark' : (p.kind === 'pack' ? 'pack' : 'layout')); };
-            var filteredBookmarks = bookmarks.filter(searchFilter);
-            var filteredRegular = regularItems.filter(searchFilter);
+            // 编组选择只针对当前尚未被收纳的独立模板；选择期间不显示书签卡片。
+            var filteredBookmarks = templateBookmarkSelectMode ? [] : bookmarks.filter(searchFilter);
+            var filteredRegular = regularItems.filter(function(p) {
+                return !templateBookmarkSelectMode || (p.kind !== 'pack' && !p._pending);
+            }).filter(searchFilter);
             const items = filteredBookmarks.concat(filteredRegular);
             if(items.length === 0) { list.innerHTML = '<div class="asset-empty">' + (_assetSearchQuery ? '未找到匹配的模板' : '暂无版式') + '</div>'; if (_assetListScrollTop) list.scrollTop = _assetListScrollTop; return; }
             items.forEach(p => {
@@ -9591,10 +10030,27 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             var filteredRefs = referenceElements.filter(refFilterFn).filter(function(r) { return assetMatchesSearch(r, 'reference'); });
             var totalComp = filteredTags.length + filteredLogos.length + filteredGroups.length + filteredRefs.length;
             if(totalComp === 0) { list.innerHTML = '<div class="asset-empty">' + (_assetSearchQuery ? '未找到匹配的组件' : '暂无组件') + '</div>'; if (_assetListScrollTop) list.scrollTop = _assetListScrollTop; return; }
-            filteredTags.forEach(p => appendAssetItem(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, asset: p, type: 'tag', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) })));
-            filteredLogos.forEach(l => appendAssetItem(createAssetItem({ title: l.name, meta: '点击添加到画布', asset: l, type: 'logo', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) })));
-            filteredGroups.forEach(p => appendAssetItem(createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个图层`, asset: p, type: 'group', onApply: () => applyGroupCombo(p.id), onDelete: () => deleteGroupCombo(p.id) })));
-            filteredRefs.forEach(r => appendAssetItem(createAssetItem({ title: r.name, meta: '点击替换选中图层', asset: r, type: 'reference', img: r.src, onApply: () => applyReferenceElementToLayer(r), onDelete: () => deleteReferenceElement(r.id) })));
+            // 刚进站时预览图仍在流式到达。组件页改为小批渲染，让点击先立即响应，
+            // 并且新一轮 renderAssetLibrary 会中止上一轮未完成的任务。
+            var componentFactories = [];
+            filteredTags.forEach(function(p) { componentFactories.push(function() { return createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个标签`, asset: p, type: 'tag', onApply: () => applyTagComboPreset(p.id), onDelete: () => deleteTagComboPreset(p.id) }); }); });
+            filteredLogos.forEach(function(l) { componentFactories.push(function() { return createAssetItem({ title: l.name, meta: '点击添加到画布', asset: l, type: 'logo', img: l.src, onApply: () => addLogoFromAsset(l.id), onDelete: () => deleteLogoAsset(l.id) }); }); });
+            filteredGroups.forEach(function(p) { componentFactories.push(function() { return createAssetItem({ title: p.name, meta: `${p.elements?.length || 0} 个图层`, asset: p, type: 'group', onApply: () => applyGroupCombo(p.id), onDelete: () => deleteGroupCombo(p.id) }); }); });
+            filteredRefs.forEach(function(r) { componentFactories.push(function() { return createAssetItem({ title: r.name, meta: '点击替换选中图层', asset: r, type: 'reference', img: r.src, onApply: () => applyReferenceElementToLayer(r), onDelete: () => deleteReferenceElement(r.id) }); }); });
+            var componentIndex = 0;
+            function appendComponentBatch(deadline) {
+                if (renderGeneration !== _assetRenderGeneration || currentAssetTab !== 'component' || !list.isConnected) return;
+                var batchEnd = Math.min(componentFactories.length, componentIndex + (componentIndex === 0 ? 12 : 8));
+                while (componentIndex < batchEnd) {
+                    appendAssetItem(componentFactories[componentIndex++]());
+                    if (deadline && deadline.timeRemaining && deadline.timeRemaining() < 2) break;
+                }
+                if (componentIndex < componentFactories.length) {
+                    if ('requestIdleCallback' in window) requestIdleCallback(appendComponentBatch, { timeout: 120 });
+                    else setTimeout(appendComponentBatch, 16);
+                }
+            }
+            appendComponentBatch();
         } else if(currentAssetTab === 'recycle') {
             if (!recycleBin.length) { list.innerHTML = '<div class="asset-empty">回收站为空</div>'; if (_assetListScrollTop) list.scrollTop = _assetListScrollTop; return; }
             recycleBin.forEach(function(entry) {
@@ -9642,8 +10098,20 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             if (assetSelectedIds.has(item.dataset.assetId)) { _msCheck.textContent = '✓'; item.classList.add('multi-selected'); }
             item.appendChild(_msCheck);
         }
+        const isBookmarkSelectable = templateBookmarkSelectMode && type === 'layout' && asset?.kind !== 'pack' && !asset?._pending && !!item.dataset.assetId;
+        if (isBookmarkSelectable) {
+            item.classList.add('multi-selectable');
+            var _bookmarkCheck = document.createElement('span');
+            _bookmarkCheck.className = 'asset-multi-check';
+            if (templateBookmarkSelectedIds.has(item.dataset.assetId)) {
+                _bookmarkCheck.textContent = '✓';
+                item.classList.add('multi-selected');
+            }
+            item.appendChild(_bookmarkCheck);
+        }
         const canUseAsAIReference = type === 'reference' || (type === 'logo' && getLogoAssetType(asset) === 'image' && !!asset?.src);
         item.onclick = () => {
+            if (isBookmarkSelectable) { toggleTemplateBookmarkMultiCard(item.dataset.assetId); return; }
             if (assetMultiSelect && isMoveableComponent(asset)) { toggleAssetMultiCard(item.dataset.assetId); return; }
             if(item._isDragging) return;
             if (onRestore) return;
@@ -9687,15 +10155,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var ph = Number(asset?.previewH) || 0;
         if (pw > 0 && ph > 0) thumb.style.aspectRatio = pw + ' / ' + ph;
         renderAssetPreview(thumb, { type, asset, img });
-        // 模板预览图左上角显示 EN/AR 语言图标（书签本身不标语言）。
-        if (type === 'layout' || type === 'pack') {
-            const lang = templateLanguage(asset);
-            if (lang) {
-                thumb.style.position = 'relative';
-                const badge = createLangBadge(lang, true);
-                if (badge) thumb.appendChild(badge);
-            }
-        }
         let packHover = null;
         if(type === 'layout' || type === 'pack' || type === 'bookmark') {
             const canvasInfo = getTemplatePreviewCanvasInfo(asset);
@@ -9829,12 +10288,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             // 书签是“引用”而非“包含”：右键“删除”会让人误以为会删掉关联模板，改成“释放编组”。
             deleteButton.textContent = target?.type === 'bookmark' ? '释放编组' : '删除';
         }
-        // 语言标签只对单画板模板 / 套组有意义。
-        const setLangEnButton = document.getElementById('asset-context-set-lang-en');
-        const setLangArButton = document.getElementById('asset-context-set-lang-ar');
-        const isLanguageSettable = target?.type === 'layout' || target?.type === 'pack';
-        if(setLangEnButton) setLangEnButton.hidden = !isLanguageSettable;
-        if(setLangArButton) setLangArButton.hidden = !isLanguageSettable;
         const moveGroupButton = document.getElementById('asset-context-move-group');
         if(moveGroupButton) moveGroupButton.hidden = !isMoveableComponent(target?.asset);
         const multiSelectButton = document.getElementById('asset-context-multi-select');
@@ -9861,22 +10314,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     function openAssetContextTemplateBookmarkEditor() {
         const asset = assetContextTarget?.asset;
         if (!asset) return;
-        openTemplateBookmarkEditor(asset.kind === 'bookmark' ? asset : null, asset.kind === 'bookmark' ? null : asset);
-    }
-    function setAssetContextLanguage(lang) {
-        const asset = assetContextTarget?.asset;
-        if (!asset) return;
-        setTemplateLanguage(asset, lang);
-    }
-    function setTemplateLanguage(template, lang) {
-        if (!template) return;
-        template.tags = setTemplateLanguageTag(template.tags, lang);
-        const cloudId = template.cloudId || template.id;
-        if (cloudId) notifyParent({ type: 'vf:set-template-language', id: cloudId, language: lang || '' });
-        // 模板语言标签变化会直接影响其所在书签的封面优先级。
-        refreshTemplateBookmarkCoversForTemplate(cloudId, true);
-        renderAssetLibrary();
-        showToast(lang === 'EN' ? '已标记为 EN' : (lang === 'AR' ? '已标记为 AR' : '已取消语言标记'));
+        openTemplateBookmarkInlineEditor(asset.kind === 'bookmark' ? asset : null, asset.kind === 'bookmark' ? null : asset);
     }
     // ===== 组件移动分组（单件 + 多选批量） =====
     function getComponentSubTag(item) {
@@ -9899,6 +10337,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         return MOVEABLE_COMPONENT_SUBTAGS.indexOf(getComponentSubTag(item)) !== -1;
     }
     function toggleAssetMultiSelect() {
+        if (currentAssetTab === 'layout') {
+            if (templateBookmarkSelectMode) exitTemplateBookmarkMultiSelect();
+            else openTemplateBookmarkInlineEditor(null, null);
+            return;
+        }
         if (assetMultiSelect) exitAssetMultiSelect();
         else enterAssetMultiSelect();
     }
@@ -9934,7 +10377,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var count = document.getElementById('asset-ms-count');
         if (count) count.textContent = '已选 ' + assetSelectedIds.size + ' 项';
         var btn = document.getElementById('asset-multi-select-btn');
-        if (btn) btn.textContent = assetMultiSelect ? '完成' : '多选';
+        if (btn) btn.textContent = (assetMultiSelect || templateBookmarkSelectMode) ? '完成' : '多选';
     }
     function openAssetMoveGroupFromBar() {
         openAssetMoveGroupDialog(Array.from(assetSelectedIds));
@@ -10046,21 +10489,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const taggedCover = chooseTemplateBookmarkCoverTemplate(liveMembers.map(function(m) { return m.template; }));
         return taggedCover || (liveMembers[0]?.template || null);
     }
-    function templateLanguage(template) {
-        // 语言标签显式存在 tags 里（vf:lang:EN / vf:lang:AR）；未标记返回空串。
-        var tags = (template && template.tags) || [];
-        if (tags.indexOf('vf:lang:AR') !== -1) return 'AR';
-        if (tags.indexOf('vf:lang:EN') !== -1) return 'EN';
-        return '';
-    }
-    function setTemplateLanguageTag(tags, lang) {
-        var next = (Array.isArray(tags) ? tags : []).filter(function(t) {
-            return t !== 'vf:lang:EN' && t !== 'vf:lang:AR';
-        });
-        if (lang === 'EN') next.push('vf:lang:EN');
-        else if (lang === 'AR') next.push('vf:lang:AR');
-        return next;
-    }
     function isNineSixteenCanvas(width, height) {
         var w = Math.round(Number(width) || 0);
         var h = Math.round(Number(height) || 0);
@@ -10068,19 +10496,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         return Math.abs(w / h - 9 / 16) < 0.05;
     }
     function chooseTemplateBookmarkCoverTemplate(templates) {
-        // 书签封面优选「9:16 尺寸 + EN 标签」→「9:16 任意语言」→「EN 标签任意尺寸」→ 原顺序第一个。
-        // 语言按显式标签（vf:lang:EN/AR）判断，不再按名字关键词。
+        // 模板不再区分 EN / AR；书签封面只优选 9:16，其余按原顺序。
         var list = (templates || []).slice();
         if (!list.length) return null;
         function nine16(t) { var r = templateBookmarkRefFromTemplate(t); return isNineSixteenCanvas(r.canvasW, r.canvasH); }
-        function english(t) { return templateLanguage(t) === 'EN'; }
-        var hit = list.find(function(t) { return nine16(t) && english(t); });
-        if (hit) return hit;
-        hit = list.find(nine16);
-        if (hit) return hit;
-        hit = list.find(english);
-        if (hit) return hit;
-        return list[0];
+        return list.find(nine16) || list[0];
     }
     function updateTemplateBookmarkCoverFromTags(bookmark, persist) {
         if (!bookmark || bookmark.kind !== 'bookmark') return false;
@@ -10164,30 +10584,22 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         note.textContent = '关联模板尺寸';
         const list = document.createElement('div');
         list.className = 'template-bookmark-hover-list';
-        const members = getLiveTemplateBookmarkMembers(bookmark).sort(function(a, b) {
-            const langA = templateLanguage(a.template);
-            const langB = templateLanguage(b.template);
-            if (langA === 'AR' && langB !== 'AR') return -1;
-            if (langA !== 'AR' && langB === 'AR') return 1;
-            return 0;
-        });
+        const members = getLiveTemplateBookmarkMembers(bookmark);
         if (!members.length) {
             const empty = document.createElement('div');
             empty.className = 'asset-pack-loading-note';
             empty.textContent = '暂无可用关联模板';
             list.appendChild(empty);
         } else {
-            // 按尺寸分组，收集每个尺寸对应的所有语言类型
+            // 按尺寸分组；模板不再区分语言标签。
             const sizeMap = new Map();
             members.forEach(function(member) {
                 const info = templateBookmarkDisplayInfo(member.ref, member.template);
                 if (!info) return;
                 const key = info.width + 'x' + info.height;
                 if (!sizeMap.has(key)) {
-                    sizeMap.set(key, { info: info, langs: new Set() });
+                    sizeMap.set(key, { info: info });
                 }
-                const lang = templateLanguage(member.template);
-                if (lang) sizeMap.get(key).langs.add(lang);
             });
             sizeMap.forEach(function(entry) {
                 const row = document.createElement('div');
@@ -10202,29 +10614,117 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 pixels.textContent = entry.info ? (entry.info.width + ' × ' + entry.info.height + ' px') : '—';
                 text.append(ratio, pixels);
                 row.append(text);
-                if (entry.langs.size > 0) {
-                    const tags = document.createElement('div');
-                    tags.className = 'template-bookmark-lang-tags';
-                    if (entry.langs.has('EN')) {
-                        const tag = document.createElement('span');
-                        tag.className = 'template-bookmark-lang-tag lang-en';
-                        tag.textContent = 'EN';
-                        tags.appendChild(tag);
-                    }
-                    if (entry.langs.has('AR')) {
-                        const tag = document.createElement('span');
-                        tag.className = 'template-bookmark-lang-tag lang-ar';
-                        tag.textContent = 'AR';
-                        tags.appendChild(tag);
-                    }
-                    row.appendChild(tags);
-                }
                 list.appendChild(row);
             });
         }
         el.append(note, list);
         positionAssetHoverPreview(anchor);
         requestAnimationFrame(function() { el.classList.add('show'); });
+    }
+    function getUnbookmarkedTemplateBookmarkCandidates() {
+        const collectedIds = new Set();
+        presetLibrary.forEach(function(item) {
+            if (item?.kind !== 'bookmark') return;
+            normalizeTemplateBookmarkRefs(item.templateRefs).forEach(function(ref) { collectedIds.add(ref.templateId); });
+        });
+        return getTemplateBookmarkCandidates().filter(function(item) {
+            return !collectedIds.has(item.cloudId) && !collectedIds.has(item.id);
+        });
+    }
+    function openTemplateBookmarkInlineEditor(bookmark, seedTemplate) {
+        if (bookmark?._lazy) {
+            pendingBookmarkAction = { mode: 'edit', id: bookmark.id, asset: bookmark };
+            showToast('正在读取书签关联模板，请稍候…');
+            notifyParent({ type: 'vf:request-template-data', id: bookmark.cloudId || bookmark.id });
+            return;
+        }
+        const available = getUnbookmarkedTemplateBookmarkCandidates();
+        if (!bookmark && !available.length) return showToast('当前没有尚未编组的独立模板', true);
+        if (assetMultiSelect) {
+            assetMultiSelect = false;
+            assetSelectedIds.clear();
+            updateAssetMultiSelectBar();
+        }
+        if (currentAssetTab !== 'layout') switchAssetTab('layout');
+        diySubtagFilter = '全部';
+        diySelectedSubtag = '全部';
+        const searchInput = document.getElementById('asset-search-input');
+        const clearButton = document.getElementById('asset-search-clear');
+        if (searchInput) searchInput.value = '';
+        if (clearButton) clearButton.hidden = true;
+        _assetSearchQuery = '';
+        templateBookmarkEditing = bookmark || null;
+        templateBookmarkSelectedIds = new Set(normalizeTemplateBookmarkRefs(bookmark?.templateRefs).map(function(ref) { return ref.templateId; }));
+        if (!bookmark && seedTemplate) templateBookmarkSelectedIds.add(seedTemplate.cloudId || seedTemplate.id);
+        templateBookmarkSelectMode = true;
+        updateTemplateBookmarkMultiSelectBar();
+        renderDiySubtags();
+        renderAssetLibrary();
+        showToast(bookmark ? '请在资产库中勾选要补充的模板' : '请直接勾选要编组的模板');
+    }
+    function exitTemplateBookmarkMultiSelect(shouldRender) {
+        templateBookmarkSelectMode = false;
+        templateBookmarkSelectedIds.clear();
+        templateBookmarkEditing = null;
+        updateTemplateBookmarkMultiSelectBar();
+        if (shouldRender !== false && currentAssetTab === 'layout') renderAssetLibrary();
+    }
+    function toggleTemplateBookmarkMultiCard(templateId) {
+        if (!templateBookmarkSelectMode || !templateId) return;
+        if (templateBookmarkSelectedIds.has(templateId)) templateBookmarkSelectedIds.delete(templateId);
+        else templateBookmarkSelectedIds.add(templateId);
+        var card = null;
+        try { card = document.querySelector('.asset-item[data-asset-id="' + CSS.escape(templateId) + '"]'); } catch (_error) { card = null; }
+        if (card) {
+            const selected = templateBookmarkSelectedIds.has(templateId);
+            card.classList.toggle('multi-selected', selected);
+            const check = card.querySelector('.asset-multi-check');
+            if (check) check.textContent = selected ? '✓' : '';
+        }
+        updateTemplateBookmarkMultiSelectBar();
+    }
+    function updateTemplateBookmarkMultiSelectBar() {
+        const bar = document.getElementById('template-bookmark-select-bar');
+        if (bar) bar.style.display = (templateBookmarkSelectMode && currentAssetTab === 'layout') ? 'flex' : 'none';
+        const count = document.getElementById('template-bookmark-select-count');
+        if (count) count.textContent = '已选 ' + templateBookmarkSelectedIds.size + ' 个模板';
+        const confirm = document.getElementById('template-bookmark-select-confirm');
+        if (confirm) {
+            confirm.textContent = templateBookmarkEditing ? '保存关联' : '创建书签';
+            confirm.disabled = templateBookmarkSelectedIds.size === 0;
+        }
+        const multiButton = document.getElementById('asset-multi-select-btn');
+        if (multiButton) multiButton.textContent = templateBookmarkSelectMode ? '完成' : (assetMultiSelect ? '完成' : '多选');
+    }
+    function confirmTemplateBookmarkMultiSelect() {
+        if (!templateBookmarkSelectMode || !templateBookmarkSelectedIds.size) return showToast('请至少选择 1 个模板', true);
+        const candidates = getTemplateBookmarkCandidates();
+        const templates = Array.from(templateBookmarkSelectedIds).map(function(id) {
+            return candidates.find(function(item) { return (item.cloudId || item.id) === id; });
+        }).filter(Boolean);
+        if (!templates.length) return showToast('所选模板已不可用，请刷新后重试', true);
+        const refs = templates.map(templateBookmarkRefFromTemplate);
+        const coverTemplate = chooseTemplateBookmarkCoverTemplate(templates);
+        const coverTemplateId = coverTemplate ? (coverTemplate.cloudId || coverTemplate.id) : (refs[0]?.templateId || '');
+        const coverPreviewUrl = coverTemplate?.previewUrl || templates[0]?.previewUrl || '';
+        const bookmark = templateBookmarkEditing;
+        if (bookmark) {
+            bookmark.templateRefs = refs;
+            bookmark.coverTemplateId = coverTemplateId;
+            bookmark.previewUrl = coverPreviewUrl || bookmark.previewUrl || '';
+            bookmark._pending = true;
+            notifyParent({ type: 'vf:update-template-bookmark', id: bookmark.cloudId || bookmark.id, name: bookmark.name, data: { templateRefs: refs, coverTemplateId: coverTemplateId }, previewDataUrl: coverPreviewUrl || '' });
+            showToast('正在更新模板编组...');
+        } else {
+            const name = (templates[0]?.name || '未命名模板') + '套组';
+            const tempId = genId('template_bookmark');
+            const created = { id: tempId, kind: 'bookmark', name: name, templateRefs: refs, coverTemplateId: coverTemplateId, previewUrl: coverPreviewUrl || generatePlaceholderPreview(name, '模板书签'), _pending: true };
+            presetLibrary.unshift(created);
+            notifyParent({ type: 'vf:save-template', templateType: 'bookmark', name: name, data: { templateRefs: refs, coverTemplateId: coverTemplateId }, previewDataUrl: created.previewUrl || '', tempId: tempId });
+            showToast('正在创建模板编组...');
+        }
+        exitTemplateBookmarkMultiSelect(false);
+        renderAssetLibrary();
     }
     function ensureTemplateBookmarkDialog() {
         let overlay = document.getElementById('template-bookmark-dialog');
@@ -10340,7 +10840,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         };
         footer.append(cancel, confirm); shell.body.appendChild(footer);
     }
-    var bookmarkLanguageFilter = 'EN'; // 书签弹窗的语言分组滑块，默认 EN
     function openTemplateBookmarkPicker(bookmarkId) {
         const bookmark = presetLibrary.find(function(item) { return item.id === bookmarkId; });
         if (!bookmark) return;
@@ -10355,7 +10854,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             return;
         }
         const allMembers = getLiveTemplateBookmarkMembers(bookmark);
-        const shell = createTemplateBookmarkDialogShell(bookmark.name || '模板编组', '选择模板即可打开。语言标签控制分组和书签封面，未标记模板会显示在两个分组。');
+        const shell = createTemplateBookmarkDialogShell(bookmark.name || '模板编组', '选择模板即可打开。');
         shell.dialog.classList.add('bookmark-picker-dialog');
         shell.dialog.setAttribute('role', 'dialog');
         shell.dialog.setAttribute('aria-label', '模板编组');
@@ -10364,61 +10863,23 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (pickerHeader) pickerHeader.classList.add('bookmark-picker-header-titleless');
         const heading = shell.dialog.querySelector('.template-bookmark-dialog-heading');
         if (heading) heading.remove();
-        // 头部工具栏：EN/AR 滑块 + 解散书签
         const toolbar = document.createElement('div');
         toolbar.className = 'bookmark-picker-toolbar';
-        const filterGroup = document.createElement('div');
-        filterGroup.className = 'bookmark-picker-filter';
-        const filterLabel = document.createElement('span');
-        filterLabel.className = 'bookmark-picker-filter-label';
-        filterLabel.textContent = '语言';
-        const langToggle = document.createElement('div');
-        langToggle.className = 'bookmark-language-tabs';
-        const langEnBtn = document.createElement('button');
-        const langArBtn = document.createElement('button');
-        function buildLangBtn(btn, label, value) {
-            btn.type = 'button';
-            btn.className = 'bookmark-language-tab';
-            btn.dataset.label = label;
-            btn.onclick = function() { bookmarkLanguageFilter = value; renderGrid(bookmarkLanguageFilter); };
-            langToggle.appendChild(btn);
-        }
-        buildLangBtn(langEnBtn, 'EN', 'EN');
-        buildLangBtn(langArBtn, 'AR', 'AR');
-        function memberCountForLanguage(lang) {
-            return allMembers.filter(function(member) {
-                const memberLang = templateLanguage(member.template);
-                return !memberLang || memberLang === lang;
-            }).length;
-        }
-        function refreshLangToggle() {
-            langEnBtn.classList.toggle('active', bookmarkLanguageFilter === 'EN');
-            langArBtn.classList.toggle('active', bookmarkLanguageFilter === 'AR');
-            langEnBtn.setAttribute('aria-pressed', bookmarkLanguageFilter === 'EN' ? 'true' : 'false');
-            langArBtn.setAttribute('aria-pressed', bookmarkLanguageFilter === 'AR' ? 'true' : 'false');
-            langEnBtn.textContent = 'EN ' + memberCountForLanguage('EN');
-            langArBtn.textContent = 'AR ' + memberCountForLanguage('AR');
-        }
-        filterGroup.append(filterLabel, langToggle);
         const resultCount = document.createElement('span');
         resultCount.className = 'bookmark-picker-result-count';
-        toolbar.append(filterGroup, resultCount);
+        toolbar.append(resultCount);
         shell.body.appendChild(toolbar);
         const grid = document.createElement('div');
         grid.className = 'bookmark-picker-grid-wrap';
         shell.body.appendChild(grid);
-        function renderGrid(filterLang) {
-            refreshLangToggle();
+        function renderGrid() {
             grid.innerHTML = '';
-            const members = allMembers.filter(function(m) {
-                const l = templateLanguage(m.template);
-                return !l || l === filterLang; // 未标记的模板两边都显示
-            });
+            const members = allMembers.slice();
             resultCount.textContent = '显示 ' + members.length + ' 个模板';
             if (!members.length) {
                 const empty = document.createElement('div');
                 empty.className = 'bookmark-picker-empty';
-                empty.textContent = allMembers.length ? '该语言分组还没有模板' : '暂无可用关联模板';
+                empty.textContent = '暂无可用关联模板';
                 grid.appendChild(empty);
                 return;
             }
@@ -10438,8 +10899,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 if (info && info.width && info.height) thumb.style.aspectRatio = info.width + ' / ' + info.height;
                 else thumb.style.aspectRatio = '3 / 4';
                 renderAssetPreview(thumb, { type: 'layout', asset: template, img: template.previewUrl || '' });
-                const lang = templateLanguage(template);
-                if (lang) { const badge = createLangBadge(lang, true); if (badge) thumb.appendChild(badge); }
                 thumb.title = '打开 ' + (template.name || '');
                 card.appendChild(thumb);
                 const meta = document.createElement('div');
@@ -10469,7 +10928,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             });
             grid.appendChild(list);
         }
-        renderGrid(bookmarkLanguageFilter);
+        renderGrid();
     }
     function renameBookmarkInPicker(bookmark) {
         const overlay = document.getElementById('template-bookmark-dialog');
@@ -10550,8 +11009,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             menu.appendChild(btn);
         }
         item('重命名', false, function() { beginBookmarkMemberRename(bookmark, member, template, nameEl); });
-        item('设为 EN', false, function() { setBookmarkMemberLanguage(bookmark, template, 'EN'); });
-        item('设为 AR', false, function() { setBookmarkMemberLanguage(bookmark, template, 'AR'); });
         item('释放到组外', false, function() { releaseBookmarkMember(bookmark, member); });
         item('删除模板', true, function() { deleteBookmarkMemberTemplate(bookmark, member, template); });
         document.body.appendChild(menu);
@@ -10560,11 +11017,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         setTimeout(function() {
             document.addEventListener('click', closeBookmarkMemberContextMenu, { once: true });
         }, 0);
-    }
-    function setBookmarkMemberLanguage(bookmark, template, lang) {
-        setTemplateLanguage(template, lang);
-        // 语言标签变化会影响分组，重新打开弹窗以刷新分组与图标。
-        openTemplateBookmarkPicker(bookmark.id);
     }
     function releaseBookmarkMember(bookmark, member) {
         const templateId = member.ref.templateId;
@@ -10616,14 +11068,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         }
         const member = { ref: ref, template: template };
 
-        if (message.action === 'language-en') {
-            setBookmarkMemberLanguage(bookmark, template, 'EN');
-            return;
-        }
-        if (message.action === 'language-ar') {
-            setBookmarkMemberLanguage(bookmark, template, 'AR');
-            return;
-        }
         if (message.action === 'release') {
             releaseBookmarkMember(bookmark, member);
             return;
@@ -10746,17 +11190,57 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
     function renderAssetPreview(root, { type, asset, img }) {
         root.innerHTML = '';
+        function appendPreviewImage(src, fit, onError) {
+            if (!src) return null;
+            var image = document.createElement('img');
+            image.alt = '';
+            image.loading = 'lazy';
+            image.decoding = 'async';
+            image.style.width = '100%';
+            image.style.height = '100%';
+            image.style.objectFit = fit || 'contain';
+            image.style.display = 'block';
+            if (onError) image.onerror = onError;
+            image.src = src;
+            root.appendChild(image);
+            return image;
+        }
         if(type === 'bookmark') {
             const cover = getTemplateBookmarkCover(asset);
             if (cover) {
-                // 云端列表先到元数据、预览图后到；在首张关联模板尚未下载预览且图层仍懒加载时，
-                // 暂时沿用书签保存时的封面，避免卡片短暂显示空白。关联模板删除时 cover 为 null，
-                // 则不会误显示已删除模板的旧封面。
-                if (!cover.previewUrl && (!cover.elements || !cover.elements.length) && asset?.previewUrl) {
-                    root.innerHTML = '<img src="' + asset.previewUrl + '" alt="" style="width:100%;height:100%;object-fit:contain;">';
+                const coverSrc = cover.previewUrl || asset?.previewUrl || '';
+                const requestFreshCoverPreview = function() {
+                    const coverId = cover.cloudId || cover.id;
+                    if (!coverId || cover._previewRetrying) return;
+                    cover._previewRetrying = true;
+                    notifyParent({ type: 'vf:request-template-data', id: coverId });
+                    setTimeout(function() { cover._previewRetrying = false; }, 5000);
+                };
+                if (coverSrc) {
+                    appendPreviewImage(coverSrc, 'contain', function() {
+                        this.onerror = null;
+                        this.remove();
+                        // Blob URL 或旧签名地址失效后不能继续复用，否则每次重绘仍会显示破图。
+                        if (cover.previewUrl === coverSrc) cover.previewUrl = '';
+                        if (asset?.previewUrl === coverSrc) asset.previewUrl = '';
+                        if (cover.elements?.length) {
+                            const fallbackCover = Object.assign({}, cover, { previewUrl: '' });
+                            renderAssetPreview(root, { type: 'layout', asset: fallbackCover, img: '' });
+                        } else {
+                            root.innerHTML = '<div class="asset-bookmark-empty">正在恢复预览图…</div>';
+                        }
+                        requestFreshCoverPreview();
+                    });
                     return;
                 }
-                renderAssetPreview(root, { type: cover.kind === 'pack' ? 'pack' : 'layout', asset: cover, img: cover.previewUrl || '' });
+                // 预览尚未到达时先用已加载图层渲染；懒加载模板则立即补请求预览。
+                if (cover.elements?.length) {
+                    const fallbackCover = Object.assign({}, cover, { previewUrl: '' });
+                    renderAssetPreview(root, { type: 'layout', asset: fallbackCover, img: '' });
+                } else {
+                    root.innerHTML = '<div class="asset-bookmark-empty">正在加载预览图…</div>';
+                    requestFreshCoverPreview();
+                }
                 return;
             }
             root.innerHTML = '<div class="asset-bookmark-empty">暂无可用模板</div>';
@@ -10765,16 +11249,16 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         // 优先用 Supabase 存储的真实预览图
         var previewImg = asset?.previewUrl || img || '';
         if (previewImg) {
-            root.innerHTML = '<img src="' + previewImg + '" alt="" style="width:100%;height:100%;object-fit:contain;">';
+            appendPreviewImage(previewImg, 'contain');
             return;
         }
         if(type === 'reference') {
-            root.innerHTML = '<img src="' + (img || asset?.src || '') + '" alt="">';
+            appendPreviewImage(img || asset?.src || '', 'contain');
             return;
         }
         if(type === 'logo') {
             if (asset?.src && asset.src.startsWith('data:')) {
-                root.innerHTML = '<img src="' + asset.src + '" alt="">';
+                appendPreviewImage(asset.src, 'contain');
             } else {
                 root.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;font-size:12px;">🖼</div>';
             }
@@ -11081,6 +11565,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         saveHistory(true);
         // 模板必须优先恢复实际保存尺寸；缺失元数据的旧模板安全回退到 1:1。
         restoreTemplateCanvas(p);
+        currentCanvasLanguage = normalizeCanvasLanguage(p.canvasLanguage);
+        currentCanvasLanguagesInitialized = normalizeCanvasLanguagesInitialized(p.canvasLanguagesInitialized, currentCanvasLanguage);
+        syncCanvasLanguageControl();
         // 图片模版：用预览图创建单图层背景
         if (p.isImageTemplate) {
             var imgSrc = p.previewUrl || '';
@@ -11110,17 +11597,18 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var preset = presetLibrary.find(function(p) { return p.id === id; });
         moveAssetToRecycle('layout', preset);
     }
-    async function saveToPreset(language) {
+    async function saveToPreset() {
         if (linkedArtboardGroupId && linkedArtboardIds.filter(function(id) { return isLinkedArtboard(id); }).length > 1) {
             return saveLinkedArtboardSet();
         }
         if(layers.length === 0) return showToast('画板为空', true);
         const requiresNativePreview = hasTextOrTagLayer(layers);
-        const saveRequest = await askSaveConfirmationForPreview(`版式 ${formatPresetTime()}`, language, requiresNativePreview); if(!saveRequest) return;
+        const saveRequest = await askSaveConfirmationForPreview(`版式 ${formatPresetTime()}`, '', requiresNativePreview); if(!saveRequest) return;
         const name = saveRequest.name;
+        captureCanvasLanguageState(layers, currentCanvasLanguage);
         var elements = JSON.parse(JSON.stringify(layers));
         var tempId = genId('p');
-        var preset = { id: tempId, name, size: currentRatio, elements: elements, _pending: true, tags: language ? ['vf:lang:' + language] : [] };
+        var preset = { id: tempId, name, size: currentRatio, canvasLanguage: currentCanvasLanguage, canvasLanguagesInitialized: cloneData(currentCanvasLanguagesInitialized), elements: elements, _pending: true, tags: [] };
         presetLibrary.push(preset);
         renderAssetLibrary();
         showToast('正在保存到素材库...');
@@ -11142,7 +11630,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var subTag = (diySelectedSubtag && layoutSubtags.indexOf(diySelectedSubtag) !== -1 && diySelectedSubtag !== '全部') ? diySelectedSubtag : '社媒物料';
         // 保存模板时也必须使用当前实际画布尺寸，而不是仍可能为 head 的固定画板预设。
         var canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
-        notifyParent({ type: 'vf:save-template', templateType: 'layout', name: name, data: { size: currentRatio, canvasW: canvasSize.w, canvasH: canvasSize.h, elements: elements }, previewDataUrl: previewDataUrl || '', tempId: tempId, subTag: subTag, language: language || '' });
+        notifyParent({ type: 'vf:save-template', templateType: 'layout', name: name, data: { size: currentRatio, canvasW: canvasSize.w, canvasH: canvasSize.h, canvasLanguage: currentCanvasLanguage, canvasLanguagesInitialized: cloneData(currentCanvasLanguagesInitialized), elements: elements }, previewDataUrl: previewDataUrl || '', tempId: tempId, subTag: subTag, language: '' });
     }
     async function saveLinkedArtboardSet() {
         saveCurrentArtboardState();
@@ -11179,6 +11667,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 w: boardSize.w,
                 h: boardSize.h,
                 linkedGroupId:linkedArtboardGroupId,
+                languageMode:normalizeCanvasLanguage(artboards[id]?.languageMode),
+                languagesInitialized:normalizeCanvasLanguagesInitialized(artboards[id]?.languagesInitialized, artboards[id]?.languageMode),
                 layers:cloneData(artboards[id]?.layers || [])
             };
         });
@@ -11215,6 +11705,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             packArtboards[preset.id] = {
                 id: preset.id,
                 ratio: preset.ratio,
+                languageMode: normalizeCanvasLanguage(artboards[preset.id]?.languageMode),
+                languagesInitialized: normalizeCanvasLanguagesInitialized(artboards[preset.id]?.languagesInitialized, artboards[preset.id]?.languageMode),
                 layers: cloneData(artboards[preset.id]?.layers || [])
             };
         });
@@ -11291,7 +11783,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             return;
         }
         saveHistory(true);
-        var newLayers = cloneLayersForInsert(p.elements, true);
+        var newLayers = cloneLayersForInsert(p.elements, true, { seedInactivePlacementOnFirstSwitch: true });
         // 如果画板上有选中的图层，替换它：新组件继承被替换组件的坐标、缩放、旋转等
         var selectedAny = layers.filter(function(l) { return activeLayerIds.includes(l.id); });
         if (selectedAny.length > 0) {
@@ -11404,7 +11896,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         }
         pendingGroupPresetId = '';
         saveHistory(true);
-        var newLayers = cloneLayersForInsert(p.elements, true);
+        var newLayers = cloneLayersForInsert(p.elements, true, { seedInactivePlacementOnFirstSwitch: true });
         var selectedAny = layers.filter(function(layer) { return activeLayerIds.includes(layer.id); });
         if (selectedAny.length > 0) {
             var inherited = selectedAny[0];
@@ -12065,7 +12557,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 }
                 var preview = await renderPresetPreview(previewElements, previewRatio);
                 if (!isUsablePreviewDataUrl(preview)) preview = generatePlaceholderPreview(lp.name || '导入版式', labelMap[pType] || pType);
-                notifyParent({ type: 'vf:save-template', templateType: pType, name: lp.name || '导入版式', data: { size: lp.size || '', elements: lp.elements || [], artboards: lp.artboards }, previewDataUrl: preview, tempId: genId('p') });
+                notifyParent({ type: 'vf:save-template', templateType: pType, name: lp.name || '导入版式', data: { size: lp.size || '', canvasLanguage: normalizeCanvasLanguage(lp.canvasLanguage), canvasLanguagesInitialized: normalizeCanvasLanguagesInitialized(lp.canvasLanguagesInitialized, lp.canvasLanguage), elements: lp.elements || [], artboards: lp.artboards }, previewDataUrl: preview, tempId: genId('p') });
             }
             for (var j = 0; j < tagCombos.length; j++) {
                 var tp = tagCombos[j];

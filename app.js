@@ -111,7 +111,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
+const TOOL_UI_VERSION = '20260818-bookmark-preview-recovery-v370';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -2817,9 +2817,7 @@ const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
       const info = libraryBookmarkMemberDimensionInfo(member);
       if (!info) return;
       const key = info.width + 'x' + info.height;
-      if (!sizeGroups.has(key)) sizeGroups.set(key, { info: info, languages: new Set() });
-      const language = libraryBookmarkMemberLanguage(member);
-      if (language) sizeGroups.get(key).languages.add(language);
+      if (!sizeGroups.has(key)) sizeGroups.set(key, { info: info });
     });
     return Array.from(sizeGroups.values());
   }
@@ -2827,12 +2825,7 @@ const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
   function renderLibraryBookmarkInlineHover(group) {
     const entries = libraryBookmarkSizeEntries(group);
     const rows = entries.map(function(entry) {
-      const languages = ['EN', 'AR'].filter(function(language) {
-        return entry.languages.has(language);
-      }).map(function(language) {
-        return `<span class="library-bookmark-language-tag lang-${language.toLowerCase()}">${language}</span>`;
-      }).join('');
-      return `<div class="library-bookmark-inline-row">${libraryBookmarkSizeIconMarkup(entry.info)}<div class="library-bookmark-inline-copy"><strong>${escapeHtml(entry.info.ratio)}</strong><span>${entry.info.width} × ${entry.info.height} px</span></div>${languages ? `<div class="library-bookmark-language-tags">${languages}</div>` : ''}</div>`;
+      return `<div class="library-bookmark-inline-row">${libraryBookmarkSizeIconMarkup(entry.info)}<div class="library-bookmark-inline-copy"><strong>${escapeHtml(entry.info.ratio)}</strong><span>${entry.info.width} × ${entry.info.height} px</span></div></div>`;
     }).join('');
     return `<div class="library-bookmark-inline-hover" aria-hidden="true"><div class="library-bookmark-inline-list">${rows || `<div class="library-bookmark-inline-empty">${state.lang === 'zh' ? '暂无可用关联模板' : 'No linked templates'}</div>`}</div></div>`;
   }
@@ -3562,7 +3555,7 @@ const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
             <button class="icon-btn modal-close-circle" id="close-library-bookmark" type="button" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>
           </div>
           <div class="library-bookmark-picker-body">
-            <p class="library-bookmark-picker-intro">${state.lang === 'zh' ? '选择模板即可打开。语言标签控制分组和书签封面，未标记模板会显示在两个分组。' : 'Select a template to open it. Language tags control grouping and the bookmark cover; untagged templates appear in both groups.'}</p>
+            <p class="library-bookmark-picker-intro">${state.lang === 'zh' ? '选择模板即可打开。' : 'Select a template to open it.'}</p>
             <div id="library-bookmark-toolbar" class="library-bookmark-picker-toolbar"></div>
             <div id="library-bookmark-members" class="library-bookmark-grid-wrap"></div>
           </div>
@@ -3615,21 +3608,12 @@ const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
   function chooseLibraryBookmarkCoverItem(items) {
     const list = (items || []).slice();
     if (!list.length) return null;
-    function language(item) {
-      const tags = Array.isArray(item?.source?.tags) ? item.source.tags : [];
-      if (tags.includes('vf:lang:EN')) return 'EN';
-      if (tags.includes('vf:lang:AR')) return 'AR';
-      return '';
-    }
     function isNineSixteen(item) {
       const width = Math.round(Number(item?.source?.canvasW) || Number(item?.preview?.width) || 0);
       const height = Math.round(Number(item?.source?.canvasH) || Number(item?.preview?.height) || 0);
       return width > 0 && height > width && Math.abs(width / height - 9 / 16) < 0.05;
     }
-    return list.find(function(item) { return isNineSixteen(item) && language(item) === 'EN'; })
-      || list.find(isNineSixteen)
-      || list.find(function(item) { return language(item) === 'EN'; })
-      || list[0];
+    return list.find(isNineSixteen) || list[0];
   }
 
   function libraryBookmarkRefFromItem(item) {
@@ -3689,9 +3673,8 @@ const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
     }
     const rows = candidates.map(function(item) {
       const info = libraryTemplateDimensionInfo(item) || libraryPreviewDimensionInfo(item);
-      const language = libraryBookmarkMemberLanguage(item);
       const imageUrl = item.url || item.thumbUrl || '';
-      return `<label class="library-bookmark-editor-row"><input type="checkbox" value="${escapeAttr(item.source.id)}" ${selectedIds.has(item.source.id) ? 'checked' : ''}><span class="library-bookmark-editor-thumb">${imageUrl ? `<img src="${escapeAttr(imageUrl)}" alt="">` : ''}</span><span class="library-bookmark-editor-copy"><strong>${escapeHtml(item.source.title || (state.lang === 'zh' ? '未命名模板' : 'Untitled template'))}</strong><small>${escapeHtml(info ? info.ratio + '  ' + info.pixels : (state.lang === 'zh' ? '实际尺寸读取中' : 'Reading dimensions'))}</small></span>${language ? `<span class="library-bookmark-language-tag lang-${language.toLowerCase()}">${language}</span>` : ''}</label>`;
+      return `<label class="library-bookmark-editor-row"><input type="checkbox" value="${escapeAttr(item.source.id)}" ${selectedIds.has(item.source.id) ? 'checked' : ''}><span class="library-bookmark-editor-thumb">${imageUrl ? `<img src="${escapeAttr(imageUrl)}" alt="">` : ''}</span><span class="library-bookmark-editor-copy"><strong>${escapeHtml(item.source.title || (state.lang === 'zh' ? '未命名模板' : 'Untitled template'))}</strong><small>${escapeHtml(info ? info.ratio + '  ' + info.pixels : (state.lang === 'zh' ? '实际尺寸读取中' : 'Reading dimensions'))}</small></span></label>`;
     }).join('');
     modal.innerHTML = `<section class="modal library-bookmark-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="library-bookmark-editor-title"><div class="library-bookmark-editor-header"><div><h3 id="library-bookmark-editor-title">${existingGroup ? (state.lang === 'zh' ? '编辑模板编组' : 'Edit template group') : (state.lang === 'zh' ? '模板编组' : 'Group templates')}</h3><p>${state.lang === 'zh' ? '书签只关联现有模板，不会复制或修改原模板。至少选择 1 个模板。' : 'Bookmarks only reference existing templates. Select at least one template.'}</p></div><button type="button" id="close-library-bookmark-editor" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}">×</button></div><div class="library-bookmark-editor-list">${rows}</div><div class="library-bookmark-editor-footer"><button type="button" class="library-bookmark-editor-cancel">${state.lang === 'zh' ? '取消' : 'Cancel'}</button><button type="button" class="library-bookmark-editor-save">${existingGroup ? (state.lang === 'zh' ? '保存关联' : 'Save links') : (state.lang === 'zh' ? '创建书签' : 'Create bookmark')}</button></div></section>`;
     modal.hidden = false;
@@ -3771,13 +3754,6 @@ const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
     }
   }
 
-  function libraryBookmarkMemberLanguage(member) {
-    const tags = Array.isArray(member?.source?.tags) ? member.source.tags : [];
-    if (tags.includes('vf:lang:AR')) return 'AR';
-    if (tags.includes('vf:lang:EN')) return 'EN';
-    return '';
-  }
-
   function libraryBookmarkMemberDimensionInfo(member) {
     const width = Math.round(Number(member?.ref?.canvasW) || Number(member?.preview?.width) || 0);
     const height = Math.round(Number(member?.ref?.canvasH) || Number(member?.preview?.height) || 0);
@@ -3798,8 +3774,6 @@ const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
     return `<span class="library-bookmark-size-icon" aria-hidden="true"><i style="width:${frameW}px;height:${frameH}px"></i></span>`;
   }
 
-  let libraryBookmarkLanguageFilter = 'EN';
-
   function hideLibraryBookmarkMemberMenu() {
     const menu = document.getElementById('library-bookmark-member-menu');
     if (menu) menu.hidden = true;
@@ -3817,8 +3791,6 @@ const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
     }
     const actions = [
       { id: 'rename', label: state.lang === 'zh' ? '重命名' : 'Rename' },
-      { id: 'language-en', label: state.lang === 'zh' ? '设为 EN' : 'Set as EN' },
-      { id: 'language-ar', label: state.lang === 'zh' ? '设为 AR' : 'Set as AR' },
       { id: 'release', label: state.lang === 'zh' ? '释放到组外' : 'Release from group' },
       { id: 'delete', label: state.lang === 'zh' ? '删除模板' : 'Delete template', danger: true }
     ];
@@ -3877,44 +3849,12 @@ const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
     if (!toolbar) return;
     toolbar.innerHTML = '';
 
-    const filterGroup = document.createElement('div');
-    filterGroup.className = 'library-bookmark-picker-filter';
-    const filterLabel = document.createElement('span');
-    filterLabel.className = 'library-bookmark-picker-filter-label';
-    filterLabel.textContent = state.lang === 'zh' ? '语言' : 'Language';
-    const languageTabs = document.createElement('div');
-    languageTabs.className = 'library-bookmark-language-tabs';
-    const enButton = document.createElement('button');
-    const arButton = document.createElement('button');
-    [enButton, arButton].forEach(function(button) {
-      button.type = 'button';
-      button.className = 'library-bookmark-language-tab';
-      languageTabs.appendChild(button);
-    });
     const resultCount = document.createElement('span');
     resultCount.className = 'library-bookmark-result-count';
-    filterGroup.append(filterLabel, languageTabs);
-    toolbar.append(filterGroup, resultCount);
+    toolbar.append(resultCount);
 
-    function countForLanguage(language) {
-      return allMembers.filter(function(member) {
-        const memberLanguage = libraryBookmarkMemberLanguage(member);
-        return !memberLanguage || memberLanguage === language;
-      }).length;
-    }
-
-    function renderMembers(language) {
-      libraryBookmarkLanguageFilter = language;
-      enButton.classList.toggle('active', language === 'EN');
-      arButton.classList.toggle('active', language === 'AR');
-      enButton.setAttribute('aria-pressed', language === 'EN' ? 'true' : 'false');
-      arButton.setAttribute('aria-pressed', language === 'AR' ? 'true' : 'false');
-      enButton.textContent = 'EN ' + countForLanguage('EN');
-      arButton.textContent = 'AR ' + countForLanguage('AR');
-      const members = allMembers.filter(function(member) {
-        const memberLanguage = libraryBookmarkMemberLanguage(member);
-        return !memberLanguage || memberLanguage === language;
-      }).sort(function(a, b) {
+    function renderMembers() {
+      const members = allMembers.slice().sort(function(a, b) {
         const aInfo = libraryBookmarkMemberDimensionInfo(a);
         const bInfo = libraryBookmarkMemberDimensionInfo(b);
         const aLength = aInfo ? aInfo.height / Math.max(1, aInfo.width) : 0;
@@ -3925,14 +3865,13 @@ const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
       resultCount.textContent = state.lang === 'zh' ? `显示 ${members.length} 个模板` : `${members.length} templates`;
       listEl.innerHTML = '';
       if (!members.length) {
-        listEl.innerHTML = `<div class="library-bookmark-picker-empty">${allMembers.length ? (state.lang === 'zh' ? '该语言分组还没有模板' : 'No templates in this language group') : (state.lang === 'zh' ? '暂无可用关联模板' : 'No linked templates')}</div>`;
+        listEl.innerHTML = `<div class="library-bookmark-picker-empty">${state.lang === 'zh' ? '暂无可用关联模板' : 'No linked templates'}</div>`;
         return;
       }
       const grid = document.createElement('div');
       grid.className = 'library-bookmark-template-grid';
       members.forEach(function(member) {
         const info = libraryBookmarkMemberDimensionInfo(member);
-        const languageTag = libraryBookmarkMemberLanguage(member);
         const card = document.createElement('div');
         card.className = 'library-bookmark-template-card';
         card.tabIndex = 0;
@@ -3943,12 +3882,6 @@ const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
         thumb.style.aspectRatio = info ? (info.width + ' / ' + info.height) : '3 / 4';
         if (member.thumbUrl) thumb.innerHTML = `<img src="${escapeAttr(member.thumbUrl)}" alt="">`;
         else thumb.innerHTML = `<span class="library-bookmark-template-placeholder">${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`;
-        if (languageTag) {
-          const badge = document.createElement('span');
-          badge.className = 'library-bookmark-template-language lang-' + languageTag.toLowerCase();
-          badge.textContent = languageTag;
-          thumb.appendChild(badge);
-        }
         const meta = document.createElement('div');
         meta.className = 'library-bookmark-template-meta';
         const nameEl = document.createElement('div');
@@ -3973,9 +3906,7 @@ const TOOL_UI_VERSION = '20260817-user-group-tag-menu-v346';
       listEl.appendChild(grid);
     }
 
-    enButton.onclick = function() { renderMembers('EN'); };
-    arButton.onclick = function() { renderMembers('AR'); };
-    renderMembers(libraryBookmarkLanguageFilter);
+    renderMembers();
     const closeBtn = document.getElementById('close-library-bookmark');
     if (closeBtn) closeBtn.onclick = closeLibraryBookmarkPopup;
     modal.onclick = function(event) { if (event.target === modal) closeLibraryBookmarkPopup(); };
@@ -5369,10 +5300,10 @@ function libraryTagsForForm(formData, kind) {
   }
 
   function preserveTemplateLanguageTags(tags, existingTags) {
-    const next = Array.isArray(tags) ? tags.slice() : [];
+    const next = (Array.isArray(tags) ? tags : []).filter(function(tag) { return tag !== 'vf:lang:EN' && tag !== 'vf:lang:AR'; });
     (Array.isArray(existingTags) ? existingTags : []).forEach(function(tag) {
-      // 语言标签 + 移动分组的类型锁定标记都要随编辑保留，否则 vf:type:* 丢失后类型反推会漂移。
-      if ((tag === 'vf:lang:EN' || tag === 'vf:lang:AR' || String(tag).startsWith('vf:type:')) && !next.includes(tag)) next.push(tag);
+      // 仅保留移动分组的类型锁定标记；模板不再保存语言标签。
+      if (String(tag).startsWith('vf:type:') && !next.includes(tag)) next.push(tag);
     });
     return next;
   }
@@ -6789,6 +6720,11 @@ function libraryTagsForForm(formData, kind) {
         jsonData.size = msg.data.size || '';
         jsonData.canvasW = msg.data.canvasW || 0;
         jsonData.canvasH = msg.data.canvasH || 0;
+        jsonData.canvasLanguage = msg.data.canvasLanguage === 'ar' ? 'ar' : 'en';
+        jsonData.canvasLanguagesInitialized = {
+          en: msg.data.canvasLanguagesInitialized?.en === true,
+          ar: msg.data.canvasLanguagesInitialized?.ar === true
+        };
         jsonData.elements = msg.data.elements || [];
       }
       var jsonBlob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
@@ -6824,9 +6760,6 @@ function libraryTagsForForm(formData, kind) {
       };
       var tagsToUse = tagMap[msg.templateType] || ['模版', '社媒物料'];
       var normalizedTags = normalizeLibraryTags('template', tagsToUse);
-      // 语言标签（EN/AR）以 vf: 前缀存储，不出现在素材库分类筛选里，但会随 tags 下发给 DIY 用于分组/封面选择。
-      if (msg.language === 'EN') normalizedTags.push('vf:lang:EN');
-      else if (msg.language === 'AR') normalizedTags.push('vf:lang:AR');
       // 组合组件可保存到任意子分组（标签/KIKI/其他素材/组合），用 vf:type 锁定本质类型，
       // 避免按「标签」等二级标签反向推断成 tagcombo 导致打开错乱。
       if (msg.templateType === 'groupcombo') normalizedTags.push('vf:type:groupcombo');
@@ -7009,6 +6942,24 @@ function libraryTagsForForm(formData, kind) {
         .order('created_at', { ascending: false })
         .limit(500);
       if (error) throw error;
+      // 模板不再区分 EN / AR。读取时一次性清理历史云端语言标签，
+      // 同时更新当前内存数据，避免旧角标或语言筛选再次出现。
+      var languageTaggedSources = (sources || []).filter(function(source) {
+        return Array.isArray(source.tags) && (source.tags.includes('vf:lang:EN') || source.tags.includes('vf:lang:AR'));
+      });
+      for (var cleanupIndex = 0; cleanupIndex < languageTaggedSources.length; cleanupIndex += 20) {
+        await Promise.all(languageTaggedSources.slice(cleanupIndex, cleanupIndex + 20).map(async function(source) {
+          var cleanedTags = source.tags.filter(function(tag) { return tag !== 'vf:lang:EN' && tag !== 'vf:lang:AR'; });
+          var cleanupResult = await state.supabase.from('vf_source_files').update({ tags: cleanedTags }).eq('id', source.id);
+          if (!cleanupResult.error) {
+            source.tags = cleanedTags;
+            var localSource = state.librarySources.find(function(item) { return item.id === source.id; });
+            if (localSource) localSource.tags = cleanedTags;
+          } else {
+            console.warn('Template language tag cleanup failed:', source.id, cleanupResult.error);
+          }
+        }));
+      }
       // DIY 只接收模板库条目及明确标记为组件的 source 条目。
       // 案例库同样使用 vf:kind:source，不能只按该标记直接混入 DIY。
       sources = (sources || []).filter(function(source) {
@@ -7076,13 +7027,8 @@ function libraryTagsForForm(formData, kind) {
             try {
               var { data: pBlob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(previewPath);
               if (pBlob) {
-                var previewDataUrl = await new Promise(function(resolve) {
-                  var reader = new FileReader();
-                  reader.onload = function() { resolve(reader.result); };
-                  reader.onerror = function() { resolve(''); };
-                  reader.readAsDataURL(pBlob);
-                });
-                sourceWindow.postMessage({ type: 'vf:template-preview', id: src.id, previewUrl: previewDataUrl }, location.origin);
+                // Blob 可被 structured clone 高效传给 iframe；不再转成体积增加约 1/3 的 Base64。
+                sourceWindow.postMessage({ type: 'vf:template-preview', id: src.id, previewBlob: pBlob }, location.origin);
               }
             } catch(e) {}
           })());
@@ -7157,7 +7103,7 @@ function libraryTagsForForm(formData, kind) {
         metadata = { artboardPresets: presets, linkedArtboardIds: snapshotIds.length ? snapshotIds : Object.keys(artboards), artboards: artboards };
       } else {
         var canvasSize = templateSnapshotCanvasSize(snapshot);
-        metadata = { size: snapshot.size || '', canvasW: canvasSize.width || 0, canvasH: canvasSize.height || 0 };
+        metadata = { size: snapshot.size || '', canvasW: canvasSize.width || 0, canvasH: canvasSize.height || 0, canvasLanguage: snapshot.canvasLanguage === 'ar' ? 'ar' : 'en' };
       }
       _templateMetadataCache[id] = metadata;
       sourceWindow.postMessage({ type: 'vf:template-metadata', id: id, data: metadata }, location.origin);
@@ -7184,15 +7130,13 @@ function libraryTagsForForm(formData, kind) {
         .select('tags').eq('id', msg.id).limit(1);
       if (error || !rows || !rows.length) throw (error || new Error('模板不存在'));
       var tags = Array.isArray(rows[0].tags) ? rows[0].tags.slice() : [];
-      // 先移除旧的 EN/AR 语言标签，再写入新标签；空语言表示取消标记。
+      // 模板语言功能已移除：兼容旧消息时也只执行清理，不再写入 EN/AR。
       tags = tags.filter(function(t) { return t !== 'vf:lang:EN' && t !== 'vf:lang:AR'; });
-      if (msg.language === 'EN') tags.push('vf:lang:EN');
-      else if (msg.language === 'AR') tags.push('vf:lang:AR');
       var { error: updateError } = await state.supabase.from('vf_source_files').update({ tags: tags }).eq('id', msg.id);
       if (updateError) throw updateError;
       var local = state.librarySources.find(function(s) { return s.id === msg.id; });
       if (local) local.tags = tags;
-      try { sourceWindow.postMessage({ type: 'vf:template-language-set', id: msg.id, language: msg.language || '', tags: tags }, location.origin); } catch (e) {}
+      try { sourceWindow.postMessage({ type: 'vf:template-language-set', id: msg.id, language: '', tags: tags }, location.origin); } catch (e) {}
     } catch (e) { console.warn('Set template language failed:', e); }
   }
 
@@ -7300,13 +7244,7 @@ function libraryTagsForForm(formData, kind) {
       if (previewPath) {
         var { data: pBlob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(previewPath);
         if (pBlob) {
-          var reader = new FileReader();
-          var previewDataUrl = await new Promise(function(resolve) {
-            reader.onload = function() { resolve(reader.result); };
-            reader.onerror = function() { resolve(''); };
-            reader.readAsDataURL(pBlob);
-          });
-          sourceWindow.postMessage({ type: 'vf:template-preview', id: src.id, previewUrl: previewDataUrl }, location.origin);
+          sourceWindow.postMessage({ type: 'vf:template-preview', id: src.id, previewBlob: pBlob }, location.origin);
         }
       }
     } catch (e) { console.warn('Fetch single template failed:', e); }
