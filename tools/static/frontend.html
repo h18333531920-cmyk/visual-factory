@@ -2803,7 +2803,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260817-editor-group-text-limit-v339">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260817-canvas-ctrl-multiselect-v340">
 </head>
 <body>
 
@@ -8551,7 +8551,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if(isDragging) {
             isDragging = false; saveHistory();
             const wrap = e.target.closest('.layer-base');
-            if(!hasDragged && !e.shiftKey && wrap && activeLayerIds.length > 1) {
+            if(!hasDragged && !e.shiftKey && !e.ctrlKey && !e.metaKey && wrap && activeLayerIds.length > 1) {
                 activeLayerIds = expandSelectionToEditorGroups([wrap.dataset.id]);
                 renderCanvas(); renderLayersList(); renderProperties();
             }
