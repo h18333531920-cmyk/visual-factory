@@ -175,8 +175,8 @@
         .logo-layout-pair-right .logo-layout-slot:has(img) { border:none; background:var(--pair-logo-bg,transparent); border-radius:var(--pair-logo-radius,14px); }
         .logo-layout-pair-right .logo-layout-slot img { width:100%; height:100%; padding:0; border-radius:inherit; object-fit:contain; }
         .logo-layout-pair-right .logo-layout-plus { width:auto; height:auto; display:block; border:0; border-radius:0; background:transparent; color:#667085; font-size:34px; }
-        .logo-layout-single { width:100%; height:100%; display:flex; align-items:center; justify-content:center; border-radius:16px; overflow:hidden; }
-        .logo-layout-single .logo-layout-slot { width:100%; height:100%; border:none; background:transparent; border-radius:16px; overflow:hidden; }
+        .logo-layout-single { width:100%; height:100%; display:flex; align-items:center; justify-content:center; border-radius:inherit; overflow:hidden; }
+        .logo-layout-single .logo-layout-slot { width:100%; height:100%; border:none; background:transparent; border-radius:inherit; overflow:hidden; }
         .logo-layout-single .logo-layout-slot img { padding:0; object-fit:contain; }
         .logo-layout-matrix { display:grid; column-gap:12px; row-gap:12px; width:100%; height:100%; background:transparent; }
         .logo-layout-matrix .logo-layout-slot { min-width:0; min-height:0; border:2px dashed #d0d5dd; border-radius:16px; background:#fff; overflow:hidden; }
@@ -2794,7 +2794,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260817-local-emergency-login-v307">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260817-user-template-tag-lock-v327">
 </head>
 <body>
 
@@ -2983,14 +2983,16 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         <div class="canvas-toolbar">
             <div class="canvas-actions">
                 <div class="save-template-menu-wrap" onmouseenter="scheduleCanvasToolbarMenuOpen('save')" onmouseleave="scheduleCanvasToolbarMenuClose('save')">
-                    <button type="button" class="save-template-btn canvas-icon-action" onclick="toggleSaveTemplateMenu(event)" id="canvas-save-btn" data-tooltip="保存模版" aria-label="保存模版">
+                    <button type="button" class="save-template-btn canvas-icon-action" onclick="toggleSaveTemplateMenu(event)" id="canvas-save-btn" data-tooltip="保存模板" aria-label="保存模板">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3.5" width="15" height="17" rx="2.5"></rect><path d="M8 8h8M8 12h8M8 16h4"></path></svg>
+                        <span class="canvas-action-label">保存模板</span>
                     </button>
                     <div class="save-template-dropdown-menu" id="save-template-dropdown-menu"></div>
                 </div>
                 <div class="resize-menu-wrap" onmouseenter="scheduleCanvasToolbarMenuOpen('resize')" onmouseleave="scheduleCanvasToolbarMenuClose('resize')">
                     <button type="button" class="canvas-icon-action" onclick="toggleResizeMenu(event)" data-tooltip="修改尺寸" aria-label="修改尺寸">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="2.5"></rect><path d="M9 4.5v4.25H4.75M15 19.5v-4.25h4.25"></path></svg>
+                        <span class="canvas-action-label">修改尺寸</span>
                     </button>
                     <div class="resize-dropdown-menu" id="resize-dropdown-menu"></div>
                 </div>
@@ -3025,14 +3027,14 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             <div class="safe-guide" id="safe-guide"></div>
         </div>
         <div class="layer-context-menu" id="canvas-context-menu">
-            <button type="button" onclick="saveGroupCombo(); closeCanvasContextMenu();">保存组合</button>
+            <button type="button" onclick="saveGroupCombo(); closeCanvasContextMenu();">保存组件</button>
         </div>
         <div class="layer-context-menu" id="layer-context-menu">
             <button type="button" id="layer-context-add-reference" onclick="addLayerContextReferenceToAI(); closeLayerContextMenu();" hidden>加入生图参考图</button>
             <button type="button" id="layer-context-replace-image" onclick="replaceLayerContextImage(); closeLayerContextMenu();" hidden>替换图片</button>
             <button type="button" id="layer-context-duplicate-layer" onclick="duplicateLayerContext(); closeLayerContextMenu();">复制图层</button>
             <button type="button" onclick="centerLayerOnCanvas(); closeLayerContextMenu();">元素画板居中</button>
-            <button type="button" id="ctx-save-group-btn" onclick="saveGroupCombo(); closeLayerContextMenu();" style="display:none">保存组合</button>
+            <button type="button" id="ctx-save-group-btn" onclick="saveGroupCombo(); closeLayerContextMenu();" style="display:none">保存组件</button>
         </div>
         <div class="artboard-preview-dock" id="artboard-preview-dock"></div>
         <div class="linked-artboard-dock" id="linked-artboard-dock" aria-label="关联画板集合"></div>
@@ -3153,6 +3155,62 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
 <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
 <script>
     /* ================= 全局状态与常量 ================= */
+    const INITIAL_EMBEDDED_INTERFACE_MODE = new URLSearchParams(location.search).get('mode') === 'user' ? 'user' : 'developer';
+    function applyEmbeddedInterfaceMode(mode, rerender) {
+        const nextMode = mode === 'user' ? 'user' : 'developer';
+        document.documentElement.dataset.vfMode = nextMode;
+        if (document.body) document.body.dataset.vfMode = nextMode;
+        if (rerender) {
+            if (typeof closeSaveTemplateMenu === 'function') closeSaveTemplateMenu();
+            if (typeof closeResizeMenu === 'function') closeResizeMenu();
+            if (typeof renderCanvas === 'function') renderCanvas();
+            if (typeof renderProperties === 'function') renderProperties();
+        }
+    }
+    function isUserInterfaceMode() {
+        return document.documentElement.dataset.vfMode === 'user';
+    }
+    function isUserProtectedTemplateText(layer) {
+        return isUserInterfaceMode() && layer?.type === 'text' && layer?._templateLayer === true;
+    }
+    function isUserProtectedTemplateLogo(layer) {
+        return isUserInterfaceMode()
+            && (layer?.type === 'logo' || layer?.type === 'logoLayout')
+            && layer?._templateLayer === true;
+    }
+    function isUserProtectedTemplateTag(layer) {
+        return isUserInterfaceMode()
+            && ['tag', 'discountTag', 'tagPill'].includes(layer?.type)
+            && layer?._templateLayer === true;
+    }
+    function isUserProtectedTemplateContent(layer) {
+        return isUserProtectedTemplateText(layer)
+            || isUserProtectedTemplateLogo(layer)
+            || isUserProtectedTemplateTag(layer);
+    }
+    function getProtectedTemplateDeleteMessage(protectedLayers) {
+        const items = Array.isArray(protectedLayers) ? protectedLayers : [protectedLayers];
+        const hasText = items.some(isUserProtectedTemplateText);
+        const hasLogo = items.some(isUserProtectedTemplateLogo);
+        const hasTag = items.some(isUserProtectedTemplateTag);
+        const labels = [];
+        if (hasText) labels.push('文字');
+        if (hasLogo) labels.push('Logo 组件');
+        if (hasTag) labels.push('标签');
+        return '模板' + (labels.join('、') || '内容') + '不可删除';
+    }
+    function getProtectedTemplateMoveMessage(layer) {
+        if (isUserProtectedTemplateTag(layer)) return '用户模式下不能移动模板标签';
+        return isUserProtectedTemplateLogo(layer)
+            ? '用户模式下不能移动模板 Logo 组件'
+            : '用户模式下不能移动模板文字';
+    }
+    applyEmbeddedInterfaceMode(INITIAL_EMBEDDED_INTERFACE_MODE, false);
+    window.addEventListener('message', function(event) {
+        if (event.source !== window.parent || event.data?.type !== 'vf:interface-mode') return;
+        applyEmbeddedInterfaceMode(event.data.mode, true);
+    });
+
     const ARTBOARD_PRESETS = [
         { id: 'head', ratio: 'head', label: '头图', w: 750, h: 500, apiRatio: '4:3' },
         { id: 'splash', ratio: 'splash', label: '开屏', w: 750, h: 1626, apiRatio: '9:16' },
@@ -3384,6 +3442,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         return false;
     }
     let _groupScaleValue = 1;
+    let _groupRotationValue = 0;
     let _groupScaleOriginals = null;
     let referenceElements = [];
     let referenceElementCategory = 'food';
@@ -4368,6 +4427,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const ok = document.getElementById('mini-dialog-ok');
             const cancel = document.getElementById('mini-dialog-cancel');
             titleEl.innerText = title; message.style.display = 'none'; input.style.display = 'block'; input.value = defaultValue;
+            ok.textContent = '确定'; cancel.textContent = '取消';
             overlay.style.display = 'flex';
             setTimeout(() => { input.focus(); input.select(); }, 30);
             const cleanup = value => { overlay.style.display = 'none'; ok.onclick = null; cancel.onclick = null; input.onkeydown = null; resolve(value); };
@@ -4391,6 +4451,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             message.style.display = 'none';
             input.style.display = 'block';
             input.value = defaultValue;
+            ok.textContent = '确定'; cancel.textContent = '取消';
             overlay.style.display = 'flex';
             setTimeout(() => { input.focus(); input.select(); }, 30);
             let finished = false;
@@ -4427,6 +4488,46 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const name = await askText(title, defaultValue);
         return name ? { name: name, capturePromise: null } : null;
     }
+    // 保存模板使用明确的二次确认。若模板含文字或标签，原生截图必须在
+    // “确认保存”的真实 click 回调里同步开始，否则浏览器会拒绝屏幕捕获。
+    function askSaveConfirmationForPreview(defaultName, language, requiresNativeCapture, captureFactory) {
+        return new Promise(resolve => {
+            const overlay = ensureMiniDialog();
+            const titleEl = document.getElementById('mini-dialog-title');
+            const input = document.getElementById('mini-dialog-input');
+            const message = document.getElementById('mini-dialog-message');
+            const ok = document.getElementById('mini-dialog-ok');
+            const cancel = document.getElementById('mini-dialog-cancel');
+            const languageText = language === 'EN' ? 'EN 模板' : (language === 'AR' ? 'AR 模板' : '未标记语言的模板');
+            titleEl.innerText = '确认保存模板';
+            message.innerText = '将当前画布保存为' + languageText + '？保存后可在资产库的模板中使用。';
+            message.style.display = 'block';
+            input.style.display = 'none';
+            ok.textContent = '确认保存';
+            cancel.textContent = '取消';
+            overlay.style.display = 'flex';
+            let finished = false;
+            const cleanup = () => {
+                overlay.style.display = 'none';
+                ok.onclick = null; cancel.onclick = null;
+            };
+            ok.onclick = () => {
+                if (finished) return;
+                finished = true;
+                cleanup();
+                const capturePromise = requiresNativeCapture
+                    ? (captureFactory || captureNativePreviewDataUrl)()
+                    : null;
+                resolve({ name: defaultName, capturePromise: capturePromise });
+            };
+            cancel.onclick = () => {
+                if (finished) return;
+                finished = true;
+                cleanup();
+                resolve(null);
+            };
+        });
+    }
     function askConfirm(messageText) {
         return new Promise(resolve => {
             const overlay = ensureMiniDialog();
@@ -4436,6 +4537,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const ok = document.getElementById('mini-dialog-ok');
             const cancel = document.getElementById('mini-dialog-cancel');
             titleEl.innerText = '确认操作'; message.innerText = messageText; message.style.display = 'block'; input.style.display = 'none';
+            ok.textContent = '确定'; cancel.textContent = '取消';
             overlay.style.display = 'flex';
             const cleanup = value => { overlay.style.display = 'none'; ok.onclick = null; cancel.onclick = null; resolve(value); };
             ok.onclick = () => cleanup(true);
@@ -6559,6 +6661,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             if (l.logoLayout === 'single') {
                 wrapper.style.background = l.bgColor || '#ffffff';
                 wrapper.style.borderRadius = (l.borderRadius !== undefined ? l.borderRadius : 16) + 'px';
+                // 单一 Logo 的底板是唯一裁切边界；内部容器继承该圆角，避免图片角越出底板。
+                wrapper.style.overflow = 'hidden';
             }
             if (l.logoLayout === 'matrix') {
                 wrapper.style.background = 'transparent';
@@ -6696,7 +6800,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             }
             var editing = textEditLayerId === l.id;
             var safeText = String(l.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-            wrapper.innerHTML = '<div class="layer-text-content" contenteditable="' + (editing ? 'true' : 'false') + '" oninput="syncTextEdit(\'' + l.id + '\', this)" onblur="syncTextEdit(\'' + l.id + '\', this)" style="white-space:' + ws + ';">' + safeText + '</div>';
+            var showUserPlaceholder = interactive && isUserProtectedTemplateText(l) && !String(l.text || '').trim();
+            wrapper.classList.toggle('vf-user-empty-template-text', showUserPlaceholder);
+            wrapper.innerHTML = '<div class="layer-text-content' + (showUserPlaceholder ? ' vf-user-text-placeholder' : '') + '"'
+                + (showUserPlaceholder ? ' data-user-placeholder="Enter text"' : '')
+                + ' contenteditable="' + (editing ? 'true' : 'false') + '" oninput="syncTextEdit(\'' + l.id + '\', this)" onblur="syncTextEdit(\'' + l.id + '\', this)" style="white-space:' + ws + ';">' + safeText + '</div>';
         }
         else if(l.type === 'tag') {
             wrapper.className = 'layer-tag-wrapper layer-base';
@@ -7062,7 +7170,14 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         });
     }
 
-    function deleteLayer(id) { preservePaneScroll(() => { layers = layers.filter(l => l.id !== id); activeLayerIds = activeLayerIds.filter(x => x !== id); renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); }); }
+    function deleteLayer(id) {
+        var target = layers.find(function(layer) { return layer.id === id; });
+        if (isUserProtectedTemplateContent(target)) {
+            showToast(getProtectedTemplateDeleteMessage(target), true);
+            return;
+        }
+        preservePaneScroll(() => { layers = layers.filter(l => l.id !== id); activeLayerIds = activeLayerIds.filter(x => x !== id); renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); });
+    }
     function closeLayerContextMenu() {
         document.getElementById('layer-context-menu')?.classList.remove('open');
     }
@@ -7116,6 +7231,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (!_contextMenuLayerId) return;
         var layer = layers.find(function(l) { return l.id === _contextMenuLayerId; });
         if (!layer) return;
+        if (isUserProtectedTemplateContent(layer)) return showToast(getProtectedTemplateMoveMessage(layer), true);
         var size = SIZES[currentRatio] || { w: 1080, h: 1080 };
         saveHistory();
         layer.x = size.w / 2;
@@ -7136,23 +7252,43 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var menu = document.getElementById('canvas-context-menu');
         if (menu) menu.classList.remove('open');
     }
-    function deleteSelectedLayers() { preservePaneScroll(() => { const ids = new Set(activeLayerIds); layers = layers.filter(l => !ids.has(l.id)); activeLayerIds = []; renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); showToast('已删除选中图层'); }); }
+    function deleteSelectedLayers() {
+        const selectedIds = new Set(activeLayerIds);
+        const protectedIds = new Set(layers.filter(function(layer) {
+            return selectedIds.has(layer.id) && isUserProtectedTemplateContent(layer);
+        }).map(function(layer) { return layer.id; }));
+        const deletableIds = new Set(activeLayerIds.filter(function(id) { return !protectedIds.has(id); }));
+        if (protectedIds.size) {
+            const protectedSelectedLayers = layers.filter(function(layer) { return protectedIds.has(layer.id); });
+            showToast(getProtectedTemplateDeleteMessage(protectedSelectedLayers), true);
+        }
+        if (!deletableIds.size) return;
+        preservePaneScroll(() => {
+            layers = layers.filter(function(layer) { return !deletableIds.has(layer.id); });
+            activeLayerIds = activeLayerIds.filter(function(id) { return protectedIds.has(id); });
+            renderCanvas(); renderLayersList(); renderProperties(); saveHistory();
+            if (!protectedIds.size) showToast('已删除选中图层');
+        });
+    }
     async function clearCurrentArtboardLayers() {
         if(layers.length === 0) return showToast('当前画板没有可清空的图层', true);
-        const layerCount = layers.length;
-        if(!await askConfirm(`清空当前画板的 ${layerCount} 个图层？可通过撤回恢复。`)) return;
+        const protectedLayers = layers.filter(isUserProtectedTemplateContent);
+        const deletableLayers = layers.filter(function(layer) { return !isUserProtectedTemplateContent(layer); });
+        if (!deletableLayers.length && protectedLayers.length) return showToast(getProtectedTemplateDeleteMessage(protectedLayers), true);
+        const protectedHint = protectedLayers.length ? `，${protectedLayers.length} 个受保护的模板内容将保留` : '';
+        if(!await askConfirm(`清空当前画板的 ${deletableLayers.length} 个可删除图层${protectedHint}？可通过撤回恢复。`)) return;
         preservePaneScroll(() => {
-            layers = [];
-            activeLayerIds = [];
+            layers = protectedLayers;
+            activeLayerIds = activeLayerIds.filter(function(id) { return protectedLayers.some(function(layer) { return layer.id === id; }); });
             renderCanvas(); renderLayersList(); renderProperties(); saveHistory();
-            showToast('已清空当前画板图层');
+            showToast(protectedLayers.length ? '已清空其他图层，受保护的模板内容已保留' : '已清空当前画板图层');
         });
     }
     function toggleLock(id) { preservePaneScroll(() => { const l = layers.find(x => x.id === id); if(l) l.locked = !l.locked; renderCanvas(); renderLayersList(); renderProperties(); saveHistory(); }); }
     function toggleLayerVisible(id) { preservePaneScroll(() => { const l = layers.find(x => x.id === id); if(l) { l.visible = l.visible === false ? true : false; } renderCanvas(); renderLayersList(); saveHistory(); }); }
     function initGroupScaleOriginals() {
         var sel = activeLayerIds.map(function(id) { return layers.find(function(l) { return l.id === id; }); }).filter(Boolean);
-        if (sel.length < 2) { _groupScaleOriginals = null; _groupScaleValue = 1; return; }
+        if (sel.length < 2) { _groupScaleOriginals = null; _groupScaleValue = 1; _groupRotationValue = 0; return; }
         // 选区未变则跳过
         var currentIds = sel.map(function(l) { return l.id; }).sort().join(',');
         if (_groupScaleOriginals && _groupScaleOriginals._selKey === currentIds) return;
@@ -7165,17 +7301,19 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 id: l.id,
                 x: Number(l.x) || 0,
                 y: Number(l.y) || 0,
-                scale: Number(l.scale) || 1
+                scale: Number(l.scale) || 1,
+                rotation: Number(l.rotation) || 0
             };
         })};
         _groupScaleValue = 1;
+        _groupRotationValue = 0;
     }
     // 从组件库插入的组合在被选中时，需要使用组合本身的视觉包围盒作为缩放锚点。
     // 不能依赖画板中心：组合内部若包含大背景、图片或文字，简单平均图层坐标会让
     // 第一次拖动统一缩放时看起来整体跳回画板中间。
     function seedInsertedGroupScaleOriginals(insertedLayers) {
         var sel = (insertedLayers || []).filter(Boolean);
-        if (sel.length < 2) { _groupScaleOriginals = null; _groupScaleValue = 1; return; }
+        if (sel.length < 2) { _groupScaleOriginals = null; _groupScaleValue = 1; _groupRotationValue = 0; return; }
         var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
         sel.forEach(function(layer) {
             var scale = Math.abs(Number(layer.scale) || 1);
@@ -7192,10 +7330,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             cx: cx, cy: cy,
             _selKey: sel.map(function(layer) { return layer.id; }).sort().join(','),
             layers: sel.map(function(layer) {
-                return { id: layer.id, x: Number(layer.x) || 0, y: Number(layer.y) || 0, scale: Number(layer.scale) || 1 };
+                return { id: layer.id, x: Number(layer.x) || 0, y: Number(layer.y) || 0, scale: Number(layer.scale) || 1, rotation: Number(layer.rotation) || 0 };
             })
         };
         _groupScaleValue = 1;
+        _groupRotationValue = 0;
     }
     function applyGroupScale(newValue) {
         if (!_groupScaleOriginals) { initGroupScaleOriginals(); }
@@ -7205,7 +7344,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var cy = _groupScaleOriginals.cy;
         _groupScaleOriginals.layers.forEach(function(orig) {
             var l = layers.find(function(x) { return x.id === orig.id; });
-            if (!l || l.locked) return;
+            if (!l || l.locked || isUserProtectedTemplateContent(l)) return;
             // 位置：相对于组中心等比缩放（保持图层间的相对间距）
             l.x = cx + (orig.x - cx) * newValue;
             l.y = cy + (orig.y - cy) * newValue;
@@ -7214,6 +7353,28 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         });
         var sliderVal = document.getElementById('val-groupScale');
         if (sliderVal) sliderVal.innerText = newValue.toFixed(2) + 'x';
+        renderCanvas(); renderLayersList();
+    }
+    function applyGroupRotation(newValue) {
+        if (!_groupScaleOriginals) { initGroupScaleOriginals(); }
+        if (!_groupScaleOriginals) return;
+        _groupRotationValue = newValue;
+        var radians = newValue * Math.PI / 180;
+        var cos = Math.cos(radians);
+        var sin = Math.sin(radians);
+        var cx = _groupScaleOriginals.cx;
+        var cy = _groupScaleOriginals.cy;
+        _groupScaleOriginals.layers.forEach(function(orig) {
+            var l = layers.find(function(x) { return x.id === orig.id; });
+            if (!l || l.locked || isUserProtectedTemplateContent(l)) return;
+            var dx = orig.x - cx;
+            var dy = orig.y - cy;
+            l.x = cx + dx * cos - dy * sin;
+            l.y = cy + dx * sin + dy * cos;
+            l.rotation = orig.rotation + newValue;
+        });
+        var sliderVal = document.getElementById('val-groupRotation');
+        if (sliderVal) sliderVal.innerText = Math.round(newValue) + '°';
         renderCanvas(); renderLayersList();
     }
 
@@ -7424,11 +7585,51 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         });
         renderCanvas(); renderArtboardPreviews();
     };
+    var textMeasureCanvas = document.createElement('canvas');
+    function measureAutoWidthTextLayer(layer, text) {
+        var context = textMeasureCanvas.getContext('2d');
+        var fontSize = Number(layer.fontSize) || 88;
+        var fontWeight = isCustomFont(layer.font)
+            ? resolveFontWeight(layer.font, Number(layer.fontWeight) || 900)
+            : (Number(layer.fontWeight) || 900);
+        context.font = fontWeight + ' ' + fontSize + 'px ' + (layer.font || getDefaultFont());
+        var letterSpacing = Number(layer.letterSpacing) || 0;
+        var width = 0;
+        String(text || '').split('\n').forEach(function(line) {
+            var glyphCount = Array.from(line).length;
+            var lineWidth = context.measureText(line).width + Math.max(0, glyphCount - 1) * letterSpacing;
+            width = Math.max(width, lineWidth);
+        });
+        return width * (Number(layer.scale) || 1);
+    }
+    function setTextContentPreservingAlignedEdge(layer, nextText) {
+        var oldText = String(layer.text || '');
+        var normalizedText = String(nextText == null ? '' : nextText);
+        if (oldText === normalizedText) return;
+        var alignment = getEffectiveTextAlign(layer, getEffectiveTextDirection(oldText));
+        var preserveEdge = (layer.resizeMode || 'autoWidth') === 'autoWidth'
+            && layer.textBoxAnchor === 'center'
+            && (alignment === 'left' || alignment === 'right');
+        // 用户模式下空文字会显示 Enter text；定位时也要计入它的宽度，
+        // 否则占位符仍会以锚点为中心向两侧展开。
+        var oldVisualText = !oldText.trim() && isUserProtectedTemplateText(layer) ? 'Enter text' : oldText;
+        var nextVisualText = !normalizedText.trim() && isUserProtectedTemplateText(layer) ? 'Enter text' : normalizedText;
+        var oldWidth = preserveEdge ? measureAutoWidthTextLayer(layer, oldVisualText) : 0;
+        layer.text = normalizedText;
+        if (!preserveEdge) return;
+        var newWidth = measureAutoWidthTextLayer(layer, nextVisualText);
+        var direction = alignment === 'left' ? 1 : -1;
+        var localDelta = direction * (newWidth - oldWidth) / 2;
+        var angle = (Number(layer.rotation) || 0) * Math.PI / 180;
+        layer.x = (Number(layer.x) || 0) + localDelta * Math.cos(angle);
+        layer.y = (Number(layer.y) || 0) + localDelta * Math.sin(angle);
+    }
     window.updateProp = function(p, v) {
         activeLayerIds.forEach(id => {
             const l = layers.find(x => x.id === id);
             if(l) {
-                l[p] = v;
+                if (p === 'text' && l.type === 'text') setTextContentPreservingAlignedEdge(l, v);
+                else l[p] = v;
                 if(getSharedPropsForLayer(l).includes(p)) propagateSharedLayerChange(l, [p]);
             }
         });
@@ -7506,6 +7707,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             // 统一缩放
             var gsCurrent = Number(_groupScaleValue) || 1;
             batchUI += `<div class="slider-row"><span class="s-label">统一缩放</span><input type="range" min="0.2" max="5" step="0.01" value="${gsCurrent}" oninput="applyGroupScale(parseFloat(this.value))" onchange="saveHistory(); _groupScaleValue=1; _groupScaleOriginals=null; this.value=1; document.getElementById('val-groupScale').innerText='1.00x'; initGroupScaleOriginals();"><span class="slider-val" id="val-groupScale">${gsCurrent.toFixed(2)}x</span></div>`;
+            // 统一旋转：围绕当前选区中心旋转位置，并同步叠加每个图层自身角度。
+            var grCurrent = Number(_groupRotationValue) || 0;
+            batchUI += `<div class="slider-row"><span class="s-label">统一旋转</span><input type="range" min="-180" max="180" step="1" value="${grCurrent}" oninput="applyGroupRotation(parseFloat(this.value))" onchange="saveHistory(); _groupRotationValue=0; _groupScaleOriginals=null; this.value=0; document.getElementById('val-groupRotation').innerText='0°'; initGroupScaleOriginals();"><span class="slider-val" id="val-groupRotation">${Math.round(grCurrent)}°</span></div>`;
             area.innerHTML = batchUI; return;
         }
 
@@ -7555,6 +7759,20 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 dropZone = '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--text-sub);margin-bottom:4px;">Logo 列表（可拖拽排序）</div><div class="matrix-thumb-list" id="matrix-thumb-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:60px;padding:8px;border:2px dashed #cbd5e1;border-radius:10px;background:#f8fafc;align-items:center;">' + thumbHTML + '<div class="matrix-thumb-add" id="matrix-thumb-add" style="width:54px;height:54px;border:2px dashed #d0d5dd;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:22px;cursor:pointer;flex-shrink:0;">+</div></div></div>';
             }
             area.innerHTML = '<div style="text-align:center;color:var(--text-main);font-size:14px;font-weight:bold;padding:10px 0;margin-bottom:12px;border-bottom:1px dashed var(--border);">' + layoutLabel + '</div>' + dropZone + gridSliders + pairBackgroundControl + pairSliders + radiusSlider + '<div class="slider-row"><span class="s-label">不透明度</span><input type="range" min="0" max="1" step="0.05" value="' + (l.opacity !== undefined ? l.opacity : 1) + '" oninput="updateProp(\'opacity\', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-opacity">' + Math.round((l.opacity !== undefined ? l.opacity : 1) * 100) + '%</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="' + (l.scale || 1) + '" oninput="updateProp(\'scale\', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">' + (l.scale || 1) + 'x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="' + (l.rotation || 0) + '" oninput="updateProp(\'rotation\', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">' + (l.rotation || 0) + '°</span></div><button class="btn btn-outline" style="width:100%;margin-top:8px;border-color:var(--primary);color:var(--primary);" onclick="centerLayer()">居中画板</button>';
+            // 用户模式只保留 Logo 内容替换与基础结构选项；几何和样式调整仅供开发者使用。
+            area.querySelectorAll('.slider-row').forEach(function(row) {
+                var label = row.querySelector('.s-label')?.textContent?.trim() || '';
+                if (['行间距', '列间距', '圆角大小', '不透明度', '缩放', '旋转'].includes(label)) {
+                    row.classList.add('vf-user-hidden-logo-control');
+                    if (isUserInterfaceMode()) row.remove();
+                }
+            });
+            Array.from(area.querySelectorAll('button')).forEach(function(button) {
+                if (button.textContent.trim() === '居中画板') {
+                    button.classList.add('vf-user-hidden-logo-control');
+                    if (isUserInterfaceMode()) button.remove();
+                }
+            });
             // 事件绑定
             if (l.logoLayout === 'single') {
                 setTimeout(function() { bindSingleDropZone(l); }, 50);
@@ -7582,7 +7800,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             area.innerHTML = '<div class="property-context-title">文本属性</div>'
                 + '<label class="label">文字内容</label><textarea class="input-text" style="min-height:56px;resize:vertical;line-height:1.45;font-size:13px;" oninput="updateProp(\'text\',this.value)" onchange="saveHistory()">' + escapeHtml(l.text || '') + '</textarea>'
                 + '<div style="font-size:11px;color:var(--text-sub);margin:-6px 0 8px;">💡 双击画布文字可直接编辑</div>'
-                + '<label class="label">字体</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">' + selectedFontOptions + '</select>'
+                + '<div class="vf-developer-font-control"><label class="label">字体</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">' + selectedFontOptions + '</select></div>'
+                + '<div class="vf-developer-text-controls">'
                 + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp(\'fontWeight\',parseInt(this.value));saveHistory();renderCanvas();">' + selectedWeightInfo.html + '</select></div><div><label class="label">颜色</label><input type="color" value="' + escapeHtml(textColor) + '" style="width:100%;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;background:#FFF;cursor:pointer;" oninput="updateProp(\'textCol\',this.value)" onchange="saveHistory()"></div></div>'
                 + '<div style="display:flex; gap:6px; margin:-2px 0 10px;"><button type="button" onclick="setTextColor(\'#000000\')" title="黑色" style="flex:1;height:26px;border:1px solid rgba(16,19,24,.15);border-radius:7px;background:#000000;cursor:pointer;"></button><button type="button" onclick="setTextColor(\'#ffe41f\')" title="黄色" style="flex:1;height:26px;border:1px solid rgba(16,19,24,.15);border-radius:7px;background:#ffe41f;cursor:pointer;"></button></div>'
                 + stepper('fontSize','字号',1,480,1,'px')
@@ -7597,7 +7816,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 + '<label class="label">描边颜色</label><input type="color" value="' + escapeHtml(l.textStrokeCol || '#000000') + '" style="width:100%;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;background:#FFF;cursor:pointer;" oninput="updateProp(\'textStrokeCol\',this.value)" onchange="saveHistory()">'
                 + '<div class="slider-row"><span class="s-label">描边粗细</span><input type="range" min="0" max="30" step="0.5" value="' + (l.textStrokeWidth || 0) + '" oninput="updateProp(\'textStrokeWidth\', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-textStrokeWidth">' + (l.textStrokeWidth || 0) + 'px</span></div>'
                 + '</div></details>'
-                + '<button class="btn btn-outline" style="width:100%;margin-top:4px;" type="button" onclick="centerLayer()">居中画板</button>';
+                + '<button class="btn btn-outline" style="width:100%;margin-top:4px;" type="button" onclick="centerLayer()">居中画板</button></div>';
         }
         else if(l.type === 'tag') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; tagColorPresets.forEach(p => { const alpha = normalizeAlpha(p.shadowOpacity); const isActive = l.bgCol === p.bg && l.shadowCol === p.shadow && normalizeAlpha(l.shadowOpacity ?? 1) === alpha; presetHtml += `<div onclick="handleColorPresetClick(event,'tag','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.bg}; border: 3px solid ${isActive ? '#111827' : '#FFF'}; box-shadow: 2px 2px 0 ${colorWithAlpha(p.shadow, alpha)}; cursor:pointer;" title="双击编辑并同步"></div>`; });
@@ -7611,7 +7830,16 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const subtitleToggleBtn = `<button type="button" onclick="toggleDiscountSubtitle()" style="padding:8px 16px; font-size:12px; font-weight:600; border-radius:8px; border:1px solid var(--border); background:${hasSubtitle ? 'var(--primary)' : '#f3f4f6'}; color:${hasSubtitle ? '#fff' : '#6b7280'}; cursor:pointer; width:100%; margin-bottom:${hasSubtitle ? '8px' : '0'}; transition:all .2s;">${hasSubtitle ? '✕ 移除副标题' : '+ 添加副标题'}</button>`;
             const subPos = l.subtitlePosition || 'bottom';
             const subtitleControls = hasSubtitle ? `<label class="label">副标题文字</label><input type="text" class="input-text" value="${escapeHtml(l.subtitle || '')}" oninput="updateProp('subtitle', this.value)" onchange="saveHistory()"><div style="display:flex; gap:6px; margin-bottom:10px;"><button type="button" onclick="updateProp('subtitlePosition','top');saveHistory();renderProperties();" style="flex:1;padding:6px 10px;font-size:12px;font-weight:600;border-radius:7px;border:1px solid var(--border);background:${subPos==='top'?'var(--primary)':'#f3f4f6'};color:${subPos==='top'?'#fff':'#6b7280'};cursor:pointer;">↑ 顶部</button><button type="button" onclick="updateProp('subtitlePosition','bottom');saveHistory();renderProperties();" style="flex:1;padding:6px 10px;font-size:12px;font-weight:600;border-radius:7px;border:1px solid var(--border);background:${subPos==='bottom'?'var(--primary)':'#f3f4f6'};color:${subPos==='bottom'?'#fff':'#6b7280'};cursor:pointer;">↓ 底部</button></div><div class="slider-row"><span class="s-label">位置偏移</span><input type="range" min="-80" max="80" step="1" value="${l.subtitleOffsetY ?? 8}" oninput="updateProp('subtitleOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-subtitleOffsetY">${l.subtitleOffsetY ?? 8}px</span></div><div class="slider-row"><span class="s-label">字体大小</span><input type="range" min="8" max="48" step="1" value="${l.subtitleFontSize ?? 14}" oninput="updateProp('subtitleFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-subtitleFontSize">${l.subtitleFontSize ?? 14}px</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('subtitleFontWeight',parseInt(this.value));saveHistory();"><option value="300" ${(l.subtitleFontWeight||700)===300?'selected':''}>细体 (300)</option><option value="400" ${(l.subtitleFontWeight||700)===400?'selected':''}>常规 (400)</option><option value="700" ${(l.subtitleFontWeight||700)===700?'selected':''}>加粗 (700)</option><option value="900" ${(l.subtitleFontWeight||700)===900?'selected':''}>黑体 (900)</option></select></div><div></div></div><div class="slider-row"><span class="s-label">白边粗细</span><input type="range" min="0" max="6" step="0.5" value="${l.subtitleStrokeWidth ?? 2}" oninput="updateProp('subtitleStrokeWidth', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-subtitleStrokeWidth">${l.subtitleStrokeWidth ?? 2}px</span></div>` : '';
-            area.innerHTML = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;"><span style="font-size:11px; font-weight:700; color:#6b7280;">语言格式</span><button type="button" onclick="toggleDiscountLang()" style="display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#f3f4f6; padding:0; cursor:pointer;"><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:7px 0 0 7px; transition:all .15s; ${!isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">EN</span><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:0 7px 7px 0; transition:all .15s; ${isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">AR</span></button></div><label class="label">主文字</label><input type="text" class="input-text" value="${escapeHtml(l.mainText)}" oninput="updateProp('mainText', this.value)" onchange="saveHistory()"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><div><label class="label">右上角</label><input type="text" class="input-text" value="${escapeHtml(l.topText)}" oninput="updateProp('topText', this.value)" onchange="saveHistory()"></div><div><label class="label">右下角</label><input type="text" class="input-text" value="${escapeHtml(l.bottomText)}" oninput="updateProp('bottomText', this.value)" onchange="saveHistory()"></div></div>${subtitleToggleBtn}${subtitleControls}<label class="label">字体选择</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();">${selectedWeightInfo.html}</select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">主字大小</span><input type="range" min="48" max="150" step="1" value="${l.mainFontSize ?? 96}" oninput="updateProp('mainFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-mainFontSize">${l.mainFontSize ?? 96}px</span></div><div class="slider-row"><span class="s-label">%大小</span><input type="range" min="20" max="90" step="1" value="${l.topFontSize ?? l.sideFontSize ?? 52}" oninput="updateProp('topFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-topFontSize">${l.topFontSize ?? l.sideFontSize ?? 52}px</span></div><div class="slider-row"><span class="s-label">Off大小</span><input type="range" min="16" max="80" step="1" value="${l.bottomFontSize ?? l.sideFontSize ?? 42}" oninput="updateProp('bottomFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-bottomFontSize">${l.bottomFontSize ?? l.sideFontSize ?? 42}px</span></div><div class="slider-row"><span class="s-label">左右间距</span><input type="range" min="-8" max="32" step="1" value="${l.sideGap ?? 8}" oninput="updateProp('sideGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideGap">${l.sideGap ?? 8}px</span></div><div class="slider-row"><span class="s-label">%/Off间距</span><input type="range" min="-18" max="48" step="1" value="${l.sideLineGap ?? -2}" oninput="updateProp('sideLineGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideLineGap">${l.sideLineGap ?? -2}px</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="18" step="0.5" value="${l.letterSpacing ?? -3}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? -3}px</span></div><div class="slider-row"><span class="s-label">左右边距</span><input type="range" min="8" max="90" step="1" value="${l.tagPaddingX ?? 34}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 34}px</span></div><div class="slider-row"><span class="s-label">上下边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingY ?? 15}" oninput="updateProp('tagPaddingY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingY">${l.tagPaddingY ?? 15}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="36" step="1" value="${l.shadowThickness ?? 12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness ?? 12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 0.45)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 0.45)*100)}%</span></div>`;
+            area.innerHTML = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;"><span style="font-size:11px; font-weight:700; color:#6b7280;">语言格式</span><button type="button" onclick="toggleDiscountLang()" style="display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#f3f4f6; padding:0; cursor:pointer;"><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:7px 0 0 7px; transition:all .15s; ${!isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">EN</span><span style="display:inline-block; padding:6px 14px; font-size:12px; font-weight:700; border-radius:0 7px 7px 0; transition:all .15s; ${isAr ? 'background:var(--primary);color:#fff;' : 'color:#6b7280;'}">AR</span></button></div><label class="label">主文字</label><input data-discount-main-input type="text" class="input-text" value="${escapeHtml(l.mainText)}" oninput="updateProp('mainText', this.value)" onchange="saveHistory()"><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><div><label class="label">右上角</label><input type="text" class="input-text" value="${escapeHtml(l.topText)}" oninput="updateProp('topText', this.value)" onchange="saveHistory()"></div><div><label class="label">右下角</label><input type="text" class="input-text" value="${escapeHtml(l.bottomText)}" oninput="updateProp('bottomText', this.value)" onchange="saveHistory()"></div></div>${subtitleToggleBtn}${subtitleControls}<label class="label">字体选择</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">${fontOptions.replace(`value='${l.font}'`, `value='${l.font}' selected`)}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp('fontWeight',parseInt(this.value));saveHistory();">${selectedWeightInfo.html}</select></div><div></div></div><label class="label">品牌样式</label>${presetHtml}</div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-45" max="45" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div class="slider-row"><span class="s-label">主字大小</span><input type="range" min="48" max="150" step="1" value="${l.mainFontSize ?? 96}" oninput="updateProp('mainFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-mainFontSize">${l.mainFontSize ?? 96}px</span></div><div class="slider-row"><span class="s-label">%大小</span><input type="range" min="20" max="90" step="1" value="${l.topFontSize ?? l.sideFontSize ?? 52}" oninput="updateProp('topFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-topFontSize">${l.topFontSize ?? l.sideFontSize ?? 52}px</span></div><div class="slider-row"><span class="s-label">Off大小</span><input type="range" min="16" max="80" step="1" value="${l.bottomFontSize ?? l.sideFontSize ?? 42}" oninput="updateProp('bottomFontSize', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-bottomFontSize">${l.bottomFontSize ?? l.sideFontSize ?? 42}px</span></div><div class="slider-row"><span class="s-label">左右间距</span><input type="range" min="-8" max="32" step="1" value="${l.sideGap ?? 8}" oninput="updateProp('sideGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideGap">${l.sideGap ?? 8}px</span></div><div class="slider-row"><span class="s-label">%/Off间距</span><input type="range" min="-18" max="48" step="1" value="${l.sideLineGap ?? -2}" oninput="updateProp('sideLineGap', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-sideLineGap">${l.sideLineGap ?? -2}px</span></div><div class="slider-row"><span class="s-label">字间距</span><input type="range" min="-10" max="18" step="0.5" value="${l.letterSpacing ?? -3}" oninput="updateProp('letterSpacing', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-letterSpacing">${l.letterSpacing ?? -3}px</span></div><div class="slider-row"><span class="s-label">左右边距</span><input type="range" min="8" max="90" step="1" value="${l.tagPaddingX ?? 34}" oninput="updateProp('tagPaddingX', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingX">${l.tagPaddingX ?? 34}px</span></div><div class="slider-row"><span class="s-label">上下边距</span><input type="range" min="0" max="200" step="1" value="${l.tagPaddingY ?? 15}" oninput="updateProp('tagPaddingY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagPaddingY">${l.tagPaddingY ?? 15}px</span></div><div class="slider-row"><span class="s-label">文字上下</span><input type="range" min="-100" max="100" step="1" value="${l.tagTextOffsetY ?? 0}" oninput="updateProp('tagTextOffsetY', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-tagTextOffsetY">${l.tagTextOffsetY ?? 0}px</span></div><div class="slider-row"><span class="s-label">投影厚度</span><input type="range" min="0" max="36" step="1" value="${l.shadowThickness ?? 12}" oninput="updateProp('shadowThickness', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowThickness">${l.shadowThickness ?? 12}px</span></div><div class="slider-row"><span class="s-label">投影透明</span><input type="range" min="0" max="1" step="0.05" value="${normalizeAlpha(l.shadowOpacity ?? 0.45)}" oninput="updateProp('shadowOpacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-shadowOpacity">${Math.round(normalizeAlpha(l.shadowOpacity ?? 0.45)*100)}%</span></div>`;
+            if (isUserInterfaceMode()) {
+                const mainInput = area.querySelector('[data-discount-main-input]');
+                let hiddenControl = mainInput?.nextElementSibling;
+                while (hiddenControl) {
+                    const nextControl = hiddenControl.nextElementSibling;
+                    hiddenControl.remove();
+                    hiddenControl = nextControl;
+                }
+            }
         }
         else if(l.type === 'arc') {
             let presetHtml = '<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap: wrap;">'; arcColorPresets.forEach(p => { const isActive = l.cIn === p.cIn && l.cOut === p.cOut; presetHtml += `<div onclick="handleColorPresetClick(event,'arc','${p.id}')" style="width:36px; height:36px; border-radius:50%; background:${p.cIn}; border: 4px solid ${p.cOut}; box-shadow: 0 0 0 ${isActive ? '2px' : '0'} var(--text-main); cursor:pointer;" title="双击编辑并同步"></div>`; });
@@ -7623,6 +7851,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if(activeLayerIds.length === 1) {
             const l = layers.find(x => x.id === activeLayerIds[0]);
             const {w, h} = SIZES[currentRatio];
+            if(isUserProtectedTemplateContent(l)) return showToast(getProtectedTemplateMoveMessage(l), true);
             if(l) { l.x = w/2; l.y = h/2; renderCanvas(); saveHistory(); }
         }
     }
@@ -7630,6 +7859,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if(activeLayerIds.length === 1) {
             const l = layers.find(x => x.id === activeLayerIds[0]);
             const {w} = SIZES[currentRatio];
+            if(isUserProtectedTemplateContent(l)) return showToast(getProtectedTemplateMoveMessage(l), true);
             if(l) { l.x = w/2; renderCanvas(); saveHistory(); }
         }
     }
@@ -7660,7 +7890,18 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .replace(/&#(\d+);/g, function(_, d) { return String.fromCharCode(Number(d)); });
         // 去掉开头/末尾多余换行，压缩连续换行
         text = text.replace(/^\n+/, '').replace(/\n+$/, '').replace(/\n{3,}/g, '\n\n');
-        l.text = text;
+        setTextContentPreservingAlignedEdge(l, text);
+        // contenteditable 输入期间不重建图层 DOM（否则光标会丢失），
+        // 但必须立即同步补偿后的锚点位置，才能让左/右边缘在删字时保持不动。
+        var liveWrapper = document.getElementById(id);
+        if (liveWrapper) {
+            liveWrapper.style.left = l.x + 'px';
+            liveWrapper.style.top = l.y + 'px';
+        }
+        const showUserPlaceholder = isUserProtectedTemplateText(l) && !text.trim();
+        el.classList.toggle('vf-user-text-placeholder', showUserPlaceholder);
+        if (showUserPlaceholder) el.dataset.userPlaceholder = 'Enter text';
+        else delete el.dataset.userPlaceholder;
         // 同步右侧面板
         if (activeLayerIds.length === 1 && activeLayerIds[0] === id) {
             var ta = document.querySelector('#prop-edit-area textarea');
@@ -7676,6 +7917,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             el.classList.remove('layer-text-editing');
         }
         textEditLayerId = null;
+        renderCanvas();
         saveHistory();
     }
     function getTextLayerPixelBounds(l) {
@@ -7806,36 +8048,49 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (prop === 'rotation') return Math.round(val||0) + '°';
         return Math.round(val||0) + '';
     }
+    function enterCanvasTextEdit(layerId) {
+        var layer = layers.find(function(item) { return item.id === layerId; });
+        if (!layer || layer.type !== 'text' || layer.locked) return false;
+        exitTextEdit();
+        if (!activeLayerIds.includes(layerId)) {
+            activeLayerIds = [layerId];
+            layerSelectionAnchorId = layerId;
+            renderCanvas(); renderLayersList(); renderProperties();
+        }
+        textEditLayerId = layerId;
+        var wrapper = document.getElementById(layerId);
+        if (!wrapper) return false;
+        wrapper.classList.add('layer-text-editing');
+        var editable = wrapper.querySelector('.layer-text-content');
+        if (!editable) return false;
+        editable.contentEditable = 'true';
+        editable.style.userSelect = 'text';
+        editable.focus();
+        var range = document.createRange();
+        range.selectNodeContents(editable);
+        range.collapse(false);
+        var selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return true;
+    }
     document.getElementById('canvas-wrapper').addEventListener('mousedown', e => {
         if (e.button === 2) return; // 右键不改变选中状态，留给 contextmenu 处理
         hasDragged = false;
         // 双击文字图层 → 进入编辑
         var wrap = e.target.closest('.layer-base');
+        if (wrap && e.detail === 1 && e.target.closest('.vf-user-text-placeholder')) {
+            e.preventDefault();
+            enterCanvasTextEdit(wrap.dataset.id);
+            isDragging = false;
+            return;
+        }
         if (wrap && e.detail === 2) {
             var dblId = wrap.dataset.id;
             var dblL = layers.find(function(x) { return x.id === dblId; });
             if (dblL && dblL.type === 'text' && !dblL.locked) {
                 e.preventDefault();
-                exitTextEdit();
-                if (!activeLayerIds.includes(dblId)) { activeLayerIds = [dblId]; layerSelectionAnchorId = dblId; renderCanvas(); renderLayersList(); renderProperties(); }
-                textEditLayerId = dblId;
-                var el = document.getElementById(dblId);
-                if (el) {
-                    el.classList.add('layer-text-editing');
-                    var ce = el.querySelector('[contenteditable]');
-                    if (ce) {
-                        ce.contentEditable = 'true';
-                        ce.style.userSelect = 'text';
-                        ce.focus();
-                        // 光标移到末尾
-                        var range = document.createRange();
-                        range.selectNodeContents(ce);
-                        range.collapse(false);
-                        var sel = window.getSelection();
-                        sel.removeAllRanges();
-                        sel.addRange(range);
-                    }
-                }
+                enterCanvasTextEdit(dblId);
                 isDragging = false;
                 return;
             }
@@ -7849,8 +8104,17 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const id = wrap.dataset.id; const l = layers.find(x => x.id === id); if(!l || l.locked) return;
             if(e.shiftKey || e.ctrlKey || e.metaKey || !activeLayerIds.includes(id)) selectLayerWithModifiers(id, e);
             focusInspectorOnSelection();
-            isDragging = true; dragStartX = e.clientX; dragStartY = e.clientY;
-            dragData = activeLayerIds.map(selId => ({ id: selId, ix: layers.find(x => x.id === selId).x, iy: layers.find(x => x.id === selId).y }));
+            // 用户模式下的模板文字只允许改文案，不能改变模板已设定的位置。
+            const protectedTemplateContent = isUserProtectedTemplateContent(l);
+            isDragging = !protectedTemplateContent;
+            dragStartX = e.clientX; dragStartY = e.clientY;
+            dragData = activeLayerIds.map(function(selId) {
+                const selectedLayer = layers.find(function(item) { return item.id === selId; });
+                return selectedLayer && !isUserProtectedTemplateContent(selectedLayer)
+                    ? { id: selId, ix: selectedLayer.x, iy: selectedLayer.y }
+                    : null;
+            }).filter(Boolean);
+            if (!dragData.length) isDragging = false;
             // Logo 内部的双击操作不能在首击时重建 DOM，否则第二击会落在新节点上，浏览器无法识别为双击。
             const isLogoSlot = (l.logoLayout === 'single' || l.logoLayout === 'matrix') && e.target.closest('.logo-layout-slot');
             const isPairInternalLogo = l.logoLayout === 'pair' && e.target.closest('.logo-layout-main, .logo-layout-slot, [data-keeta-logo-main]');
@@ -7950,7 +8214,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         // 资产库切换仅影响左侧内容，不能改变右上角的主操作。
         // 组件不再通过这里上传，任何普通分类下均保存当前画板为模板。
         btn.style.display = '';
-        btn.textContent = '保存模版 ⌄';
+        const label = btn.querySelector('.canvas-action-label');
+        if (label) label.textContent = '保存模板';
         btn.disabled = currentAssetTab === 'recycle';
     }
     function createLangBadge(lang, overlay) {
@@ -8984,7 +9249,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     function createAssetItem({ title, meta, type, asset, img, current = false, onApply, onDelete, onRestore }) {
         // 尺寸 hover 仅属于模板（单画板版式 / 多画板套组），组件卡片不添加该样式。
         const isTemplateAsset = type === 'layout' || type === 'pack' || type === 'bookmark';
-        const item = document.createElement('div'); item.className = `asset-item ${current ? 'current' : ''} ${type === 'font' ? 'font-asset-card' : ''} ${isTemplateAsset ? 'template-preview-card' : ''}`;
+        const isComponentAsset = ['tag', 'logo', 'group', 'reference'].includes(type);
+        const item = document.createElement('div'); item.className = `asset-item ${current ? 'current' : ''} ${type === 'font' ? 'font-asset-card' : ''} ${isTemplateAsset ? 'template-preview-card' : ''} ${isComponentAsset ? 'component-preview-card' : ''}`;
         if (asset?.cloudId) item.dataset.assetId = asset.cloudId;
         else if (asset?.id) item.dataset.assetId = asset.id;
         if (assetMultiSelect && isMoveableComponent(asset)) {
@@ -10460,7 +10726,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         }
         if(layers.length === 0) return showToast('画板为空', true);
         const requiresNativePreview = hasTextOrTagLayer(layers);
-        const saveRequest = await askTextForPreview('命名版式', `版式 ${formatPresetTime()}`, requiresNativePreview); if(!saveRequest) return;
+        const saveRequest = await askSaveConfirmationForPreview(`版式 ${formatPresetTime()}`, language, requiresNativePreview); if(!saveRequest) return;
         const name = saveRequest.name;
         var elements = JSON.parse(JSON.stringify(layers));
         var tempId = genId('p');
@@ -10504,7 +10770,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         // 套组的封面始终来自第一张画板，确保素材库预览有稳定的主视觉。
         if (primaryId !== currentArtboardId) loadArtboard(primaryId, false);
         const requiresNativePreview = boardIds.some(function(id) { return hasTextOrTagLayer(artboards[id]?.layers); });
-        const saveRequest = await askTextForPreview('命名关联画板模板', `关联模板 ${formatPresetTime()}`, requiresNativePreview);
+        const saveRequest = await askSaveConfirmationForPreview(`关联模板 ${formatPresetTime()}`, '', requiresNativePreview);
         if (!saveRequest) {
             if (originalId !== currentArtboardId) loadArtboard(originalId, false);
             return;
@@ -10552,7 +10818,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const requiresNativePreview = getFixedArtboardPresets().some(function(preset) {
             return hasTextOrTagLayer(artboards[preset.id]?.layers);
         });
-        const saveRequest = await askTextForPreview('命名三画板套组', `套组 ${formatPresetTime()}`, requiresNativePreview); if(!saveRequest) return;
+        const saveRequest = await askSaveConfirmationForPreview(`套组 ${formatPresetTime()}`, '', requiresNativePreview); if(!saveRequest) return;
         const name = saveRequest.name;
         const packArtboards = {};
         getFixedArtboardPresets().forEach(preset => {
@@ -10669,27 +10935,73 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         moveAssetToRecycle('tag', preset);
     }
     // ===== 多图层组合 =====
+    var SAVE_COMPONENT_POSITIONS = ['标签', 'KIKI', '其他素材', '组合'];
+    function askSaveComponentPosition() {
+        return new Promise(function(resolve) {
+            var overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:10012;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(17,24,39,.34);backdrop-filter:blur(4px);';
+            var dialog = document.createElement('div');
+            dialog.style.cssText = 'width:min(360px,calc(100vw - 36px));display:flex;flex-direction:column;background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:16px;box-shadow:0 28px 80px rgba(15,23,42,.24);overflow:hidden;';
+            var header = document.createElement('div');
+            header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e5e7eb;';
+            var heading = document.createElement('div');
+            heading.textContent = '保存位置';
+            heading.style.cssText = 'font-size:16px;font-weight:850;color:#17191d;';
+            header.appendChild(heading);
+            var body = document.createElement('div');
+            body.style.cssText = 'padding:16px 18px;';
+            var tip = document.createElement('div');
+            tip.textContent = '选择保存到哪个分组：';
+            tip.style.cssText = 'margin-bottom:12px;color:#667085;font-size:13px;';
+            body.appendChild(tip);
+            var opts = document.createElement('div');
+            opts.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;';
+            function finish(val) {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                resolve(val);
+            }
+            SAVE_COMPONENT_POSITIONS.forEach(function(tag) {
+                var b = document.createElement('button');
+                b.type = 'button'; b.textContent = tag;
+                b.style.cssText = 'padding:8px 16px;border-radius:999px;border:1px solid #e2e8f0;background:#fff;color:#334155;font-size:13px;cursor:pointer;';
+                b.onmouseenter = function() { b.style.borderColor = '#0d9488'; b.style.color = '#0d9488'; };
+                b.onmouseleave = function() { b.style.borderColor = '#e2e8f0'; b.style.color = '#334155'; };
+                b.onclick = function() { finish(tag); };
+                opts.appendChild(b);
+            });
+            body.appendChild(opts);
+            var foot = document.createElement('div');
+            foot.style.cssText = 'padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;';
+            var cancel = document.createElement('button');
+            cancel.type = 'button'; cancel.textContent = '取消';
+            cancel.style.cssText = 'padding:8px 16px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;color:#334155;font-size:13px;cursor:pointer;';
+            cancel.onclick = function() { finish(null); };
+            foot.appendChild(cancel);
+            dialog.append(header, body, foot);
+            overlay.appendChild(dialog);
+            overlay.onclick = function(event) { if (event.target === overlay) finish(null); };
+            document.body.appendChild(overlay);
+        });
+    }
     async function saveGroupCombo() {
         var selected = activeLayerIds.map(function(id) { return layers.find(function(l) { return l.id === id; }); }).filter(Boolean);
         if (selected.length < 2) return showToast('请至少选择两个图层', true);
         var elements = cloneData(selected);
-        var saveRequest = await askTextAndCaptureNativePreview(
-            '命名组合',
-            '组合 ' + formatPresetTime(),
-            function() { return captureNativeGroupPreviewDataUrl(elements); }
-        );
-        if (!saveRequest) return;
-        var name = saveRequest.name;
-        var previewDataUrl = await capturePreviewForSync({ nativeCapture: true, capturePromise: saveRequest.capturePromise });
+        var name = '组合 ' + formatPresetTime();
+        // 必须在“保存组件”的原始点击栈内启动捕获；这里不能先 await。
+        var capturePromise = captureNativeGroupPreviewDataUrl(elements);
+        var previewDataUrl = await capturePreviewForSync({ nativeCapture: true, capturePromise: capturePromise });
         if (!isUsablePreviewDataUrl(previewDataUrl)) {
             return showToast(nativePreviewFailureMessage('组合的原生预览图'), true);
         }
+        var savePosition = await askSaveComponentPosition();
+        if (!savePosition) return;
         var tempId = genId('gp');
-        var preset = { id: tempId, name: name, elements: elements, _pending: true, subTag: '组合', previewUrl: previewDataUrl };
+        var preset = { id: tempId, name: name, elements: elements, _pending: true, subTag: savePosition, previewUrl: previewDataUrl };
         groupPresets.push(preset);
         renderAssetLibrary();
         showToast('正在保存到素材库...');
-        notifyParent({ type: 'vf:save-template', templateType: 'groupcombo', name: name, data: { elements: elements }, previewDataUrl: previewDataUrl || '', tempId: tempId, subTag: '组合' });
+        notifyParent({ type: 'vf:save-template', templateType: 'groupcombo', name: name, data: { elements: elements }, previewDataUrl: previewDataUrl || '', tempId: tempId, subTag: savePosition });
     }
     function applyGroupCombo(id) {
         var p = groupPresets.find(function(x) { return x.id === id; });

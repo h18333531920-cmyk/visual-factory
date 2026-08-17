@@ -2457,6 +2457,29 @@ html body {
   font-size: 0 !important;
   line-height: 0 !important;
 }
+.left-pane .canvas-actions .save-template-menu-wrap > button.save-template-btn.canvas-icon-action,
+.left-pane .canvas-actions .resize-menu-wrap > button.canvas-icon-action {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  width: auto !important;
+  min-width: 88px !important;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+}
+.canvas-toolbar .save-template-menu-wrap > .canvas-icon-action::after,
+.canvas-toolbar .resize-menu-wrap > .canvas-icon-action::after {
+  display: none !important;
+}
+.left-pane .canvas-actions .canvas-action-label {
+  display: inline-block !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
 .left-pane .canvas-actions .canvas-icon-action:hover,
 .left-pane .canvas-actions .canvas-icon-action:focus-visible {
   color: #0f172a !important;
@@ -2956,6 +2979,23 @@ html body {
   display: none !important;
 }
 
+/* v309: component cards use the same image-only treatment as template cards. */
+.asset-pane .asset-item.component-preview-card {
+  overflow: hidden !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+}
+
+.asset-pane .asset-item.component-preview-card .asset-thumb {
+  border: 0 !important;
+  border-radius: 9px !important;
+}
+
+.asset-pane .asset-item.component-preview-card .asset-info {
+  display: none !important;
+}
+
 /* v295: template groups are identified by their members, not by a title. */
 .template-bookmark-hover {
   padding-top: 12px !important;
@@ -2984,4 +3024,46 @@ html body {
 
 .bookmark-picker-dialog .bookmark-picker-body {
   padding-top: 24px !important;
+}
+
+/* v314: user delivery mode keeps template typography editable but position-safe. */
+html[data-vf-mode="user"] .canvas-actions > .save-template-menu-wrap,
+html[data-vf-mode="user"] .canvas-actions > .resize-menu-wrap,
+html[data-vf-mode="user"] .canvas-actions > button[onclick="extendFromHead()"],
+html[data-vf-mode="user"] .canvas-actions > .toolbar-more-wrap {
+  display: none !important;
+}
+
+html[data-vf-mode="user"] .left-pane .canvas-actions {
+  gap: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+html[data-vf-mode="user"] #canvas-wrapper .layer-text-wrapper.vf-user-empty-template-text {
+  cursor: text !important;
+}
+
+html[data-vf-mode="user"] #canvas-wrapper .layer-text-content.vf-user-text-placeholder::before {
+  content: attr(data-user-placeholder);
+  opacity: 0.38;
+  font-style: normal;
+  pointer-events: none;
+}
+
+html[data-vf-mode="user"] body.vf-native-capture-mode .layer-text-content.vf-user-text-placeholder::before {
+  display: none !important;
+}
+
+html[data-vf-mode="user"] .vf-developer-font-control,
+html[data-vf-mode="user"] .vf-developer-text-controls {
+  display: none !important;
+}
+
+html[data-vf-mode="user"] .vf-user-hidden-logo-control {
+  display: none !important;
 }

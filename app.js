@@ -111,7 +111,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260817-local-emergency-login-v307';
+const TOOL_UI_VERSION = '20260817-user-template-tag-lock-v327';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -161,6 +161,10 @@ const TOOL_UI_VERSION = '20260817-local-emergency-login-v307';
   };
   // 「移动分组」功能范围：仅这 5 个组件子分组可移动（背景/LOGO/字体 不参与）。
   const MOVEABLE_COMPONENT_SUBTAGS = ['标签', '品牌圆弧', 'KIKI', '其他素材', '组合'];
+  const INITIAL_INTERFACE_MODE = localStorage.getItem('vf_interface_mode') === 'user' ? 'user' : 'developer';
+  const INTERFACE_MODE_TOGGLE_POSITION_KEY = 'vf_interface_mode_toggle_position';
+  let interfaceModeDragState = null;
+  let suppressInterfaceModeClick = false;
   const state = {
     lang: localStorage.getItem('vf_lang') || 'zh',
     supabase: null,
@@ -168,7 +172,8 @@ const TOOL_UI_VERSION = '20260817-local-emergency-login-v307';
     profile: null,
     localPreview: false,
     emergencyMode: false,
-    uiRestricted: true,
+    interfaceMode: INITIAL_INTERFACE_MODE,
+    uiRestricted: INITIAL_INTERFACE_MODE === 'user',
     route: 'home',
     activeFrame: null,
     toolFrames: {},
@@ -226,6 +231,9 @@ const TOOL_UI_VERSION = '20260817-local-emergency-login-v307';
   function init() {
     cacheEls();
     bindEvents();
+    syncInterfaceModeControl();
+    restoreInterfaceModeTogglePosition();
+    exposeInterfaceModeApi();
     refreshTranslations();
     initSupabase();
     restoreSession();
@@ -236,6 +244,7 @@ const TOOL_UI_VERSION = '20260817-local-emergency-login-v307';
       'login-view', 'app-shell', 'login-form', 'login-email', 'login-password',
       'login-message', 'local-preview-actions', 'nav-list', 'lang-toggle',
       'sign-out-btn', 'route-kicker', 'route-title', 'content', 'user-chip',
+      'global-interface-mode-toggle', 'global-interface-mode-label',
       'project-modal', 'project-form', 'project-title-input',
       'project-save-note', 'project-modal-message', 'close-project-modal',
       'cancel-project-modal'
@@ -252,6 +261,12 @@ const TOOL_UI_VERSION = '20260817-local-emergency-login-v307';
     els.loginForm.addEventListener('submit', handleLogin);
     els.signOutBtn.addEventListener('click', signOut);
     els.langToggle.addEventListener('click', toggleLanguage);
+    els.globalInterfaceModeToggle.addEventListener('click', handleInterfaceModeToggleClick);
+    els.globalInterfaceModeToggle.addEventListener('pointerdown', startInterfaceModeToggleDrag);
+    els.globalInterfaceModeToggle.addEventListener('pointermove', moveInterfaceModeToggleDrag);
+    els.globalInterfaceModeToggle.addEventListener('pointerup', finishInterfaceModeToggleDrag);
+    els.globalInterfaceModeToggle.addEventListener('pointercancel', cancelInterfaceModeToggleDrag);
+    window.addEventListener('resize', clampInterfaceModeTogglePosition);
     els.projectForm.addEventListener('submit', saveProject);
     els.closeProjectModal.addEventListener('click', closeProjectModal);
     els.cancelProjectModal.addEventListener('click', closeProjectModal);
@@ -537,6 +552,211 @@ const TOOL_UI_VERSION = '20260817-local-emergency-login-v307';
     renderNav();
     renderUserChip();
     navigate((location.hash || '#home').slice(1));
+  }
+
+  function interfaceModePayload() {
+    return {
+      type: 'vf:interface-mode',
+      mode: state.interfaceMode,
+      isDeveloper: state.interfaceMode === 'developer',
+      isUser: state.interfaceMode === 'user'
+    };
+  }
+
+  function syncInterfaceModeControl() {
+    const mode = state.interfaceMode === 'user' ? 'user' : 'developer';
+    state.interfaceMode = mode;
+    state.uiRestricted = mode === 'user';
+    document.documentElement.dataset.vfMode = mode;
+    document.body.dataset.vfMode = mode;
+    if (els.appShell) els.appShell.dataset.vfMode = mode;
+    const toggle = els.globalInterfaceModeToggle;
+    const label = els.globalInterfaceModeLabel;
+    const isDeveloper = mode === 'developer';
+    if (toggle) {
+      toggle.dataset.mode = mode;
+      toggle.setAttribute('aria-pressed', String(isDeveloper));
+      toggle.setAttribute('aria-label', state.lang === 'zh'
+        ? (isDeveloper ? '切换到用户模式' : '切换到开发者模式')
+        : (isDeveloper ? 'Switch to user mode' : 'Switch to developer mode'));
+      toggle.removeAttribute('title');
+      const mark = toggle.querySelector('.global-interface-mode-mark');
+      if (mark) mark.textContent = isDeveloper ? 'DEV' : 'USER';
+    }
+    if (label) label.textContent = state.lang === 'zh'
+      ? (isDeveloper ? '开发者模式' : '用户模式')
+      : (isDeveloper ? 'Developer' : 'User mode');
+    window.VF_INTERFACE_MODE = mode;
+  }
+
+  function broadcastInterfaceMode(targetFrame) {
+    const frames = targetFrame ? [targetFrame] : Object.values(state.toolFrames || {});
+    frames.forEach(frame => {
+      try {
+        if (frame?.contentDocument?.documentElement) frame.contentDocument.documentElement.dataset.vfMode = state.interfaceMode;
+        if (frame?.contentDocument?.body) frame.contentDocument.body.dataset.vfMode = state.interfaceMode;
+      } catch (_error) {}
+      try { frame?.contentWindow?.postMessage(interfaceModePayload(), location.origin); } catch (_error) {}
+    });
+  }
+
+  function exposeInterfaceModeApi() {
+    window.VF_GET_INTERFACE_MODE = () => state.interfaceMode;
+    window.VF_SET_INTERFACE_MODE = mode => setInterfaceMode(mode);
+  }
+
+  function setInterfaceMode(mode, options = {}) {
+    const nextMode = mode === 'user' ? 'user' : 'developer';
+    const changed = state.interfaceMode !== nextMode;
+    state.interfaceMode = nextMode;
+    state.uiRestricted = nextMode === 'user';
+    localStorage.setItem('vf_interface_mode', nextMode);
+    syncInterfaceModeControl();
+    broadcastInterfaceMode();
+    window.dispatchEvent(new CustomEvent('vf:interface-mode-change', { detail: interfaceModePayload() }));
+    if (options.rerender === false || !els.appShell || els.appShell.hidden) return nextMode;
+
+    const routeAllowed = ROUTES.some(route => route.id === state.route
+      && (!route.adminOnly || currentRole() === 'admin')
+      && (!state.uiRestricted || RESTRICTED_UI_ROUTES.has(route.id)));
+    if (!routeAllowed) {
+      navigate('library');
+    } else if (state.route === 'admin') {
+      renderNav();
+      void renderAdmin();
+    } else if (state.route === 'library' && state.uiRestricted) {
+      setRestrictedLibraryDefault();
+      renderNav();
+      void renderLibrary();
+    } else if (changed) {
+      renderNav();
+    }
+    return nextMode;
+  }
+
+  function toggleInterfaceMode() {
+    setInterfaceMode(state.interfaceMode === 'developer' ? 'user' : 'developer');
+  }
+
+  function handleInterfaceModeToggleClick(event) {
+    if (suppressInterfaceModeClick) {
+      suppressInterfaceModeClick = false;
+      event.preventDefault();
+      return;
+    }
+    toggleInterfaceMode();
+  }
+
+  function clampInterfaceModeTogglePoint(x, y) {
+    const toggle = els.globalInterfaceModeToggle;
+    const width = toggle?.offsetWidth || 48;
+    const height = toggle?.offsetHeight || 48;
+    const safe = window.innerWidth <= 720 ? 12 : 16;
+    return {
+      x: Math.max(safe, Math.min(window.innerWidth - width - safe, x)),
+      y: Math.max(safe, Math.min(window.innerHeight - height - safe, y))
+    };
+  }
+
+  function positionInterfaceModeToggle(x, y, animate = false) {
+    const toggle = els.globalInterfaceModeToggle;
+    if (!toggle) return;
+    const point = clampInterfaceModeTogglePoint(x, y);
+    toggle.style.left = point.x + 'px';
+    toggle.style.top = point.y + 'px';
+    toggle.style.right = 'auto';
+    toggle.style.bottom = 'auto';
+    toggle.dataset.tooltipSide = point.x + toggle.offsetWidth / 2 < window.innerWidth / 2 ? 'right' : 'left';
+    if (!animate) toggle.style.transition = 'none';
+    requestAnimationFrame(function() {
+      if (!animate) toggle.style.removeProperty('transition');
+    });
+  }
+
+  function persistInterfaceModeTogglePosition(side, y) {
+    const toggle = els.globalInterfaceModeToggle;
+    const available = Math.max(1, window.innerHeight - (toggle?.offsetHeight || 48));
+    localStorage.setItem(INTERFACE_MODE_TOGGLE_POSITION_KEY, JSON.stringify({
+      side: side === 'left' ? 'left' : 'right',
+      yRatio: Math.max(0, Math.min(1, y / available))
+    }));
+  }
+
+  function restoreInterfaceModeTogglePosition() {
+    const toggle = els.globalInterfaceModeToggle;
+    if (!toggle) return;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(INTERFACE_MODE_TOGGLE_POSITION_KEY) || 'null'); } catch (_error) {}
+    if (!saved || (saved.side !== 'left' && saved.side !== 'right')) {
+      toggle.dataset.tooltipSide = 'left';
+      return;
+    }
+    const safe = window.innerWidth <= 720 ? 12 : 16;
+    const x = saved.side === 'left' ? safe : window.innerWidth - toggle.offsetWidth - safe;
+    const y = Number(saved.yRatio || 0) * Math.max(1, window.innerHeight - toggle.offsetHeight);
+    positionInterfaceModeToggle(x, y, false);
+  }
+
+  function startInterfaceModeToggleDrag(event) {
+    if (event.button !== undefined && event.button !== 0) return;
+    const toggle = els.globalInterfaceModeToggle;
+    const rect = toggle.getBoundingClientRect();
+    interfaceModeDragState = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: rect.left,
+      originY: rect.top,
+      dragging: false
+    };
+    toggle.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  }
+
+  function moveInterfaceModeToggleDrag(event) {
+    const drag = interfaceModeDragState;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.dragging && Math.hypot(dx, dy) < 4) return;
+    drag.dragging = true;
+    suppressInterfaceModeClick = true;
+    els.globalInterfaceModeToggle.dataset.dragging = 'true';
+    positionInterfaceModeToggle(drag.originX + dx, drag.originY + dy, false);
+    event.preventDefault();
+  }
+
+  function finishInterfaceModeToggleDrag(event) {
+    const drag = interfaceModeDragState;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const toggle = els.globalInterfaceModeToggle;
+    toggle.releasePointerCapture?.(event.pointerId);
+    if (drag.dragging) {
+      const rect = toggle.getBoundingClientRect();
+      const side = rect.left + rect.width / 2 < window.innerWidth / 2 ? 'left' : 'right';
+      const safe = window.innerWidth <= 720 ? 12 : 16;
+      const snapX = side === 'left' ? safe : window.innerWidth - rect.width - safe;
+      const point = clampInterfaceModeTogglePoint(snapX, rect.top);
+      toggle.dataset.dragging = 'false';
+      positionInterfaceModeToggle(point.x, point.y, true);
+      persistInterfaceModeTogglePosition(side, point.y);
+      // 部分触摸浏览器拖动结束后不会派发 click，避免下一次正常点击被误吞。
+      setTimeout(function() { suppressInterfaceModeClick = false; }, 350);
+    }
+    interfaceModeDragState = null;
+  }
+
+  function cancelInterfaceModeToggleDrag(event) {
+    if (!interfaceModeDragState || interfaceModeDragState.pointerId !== event.pointerId) return;
+    els.globalInterfaceModeToggle.dataset.dragging = 'false';
+    interfaceModeDragState = null;
+    setTimeout(function() { suppressInterfaceModeClick = false; }, 0);
+  }
+
+  function clampInterfaceModeTogglePosition() {
+    const toggle = els.globalInterfaceModeToggle;
+    if (!toggle || !toggle.style.left) return;
+    restoreInterfaceModeTogglePosition();
   }
 
   function renderNav() {
@@ -5274,13 +5494,13 @@ function libraryTagsForForm(formData, kind) {
     const legacyRole = currentRole() === 'operator' ? 'viewer' : currentRole();
     const map = {
       library: {
-        src: `./tools/library/index.html?embedded=1&role=${encodeURIComponent(legacyRole)}&v=${TOOL_UI_VERSION}`
+        src: `./tools/library/index.html?embedded=1&role=${encodeURIComponent(legacyRole)}&mode=${encodeURIComponent(state.interfaceMode)}&v=${TOOL_UI_VERSION}`
       },
       static: {
-        src: `./tools/static/frontend.html?embedded=1&v=${TOOL_UI_VERSION}`
+        src: `./tools/static/frontend.html?embedded=1&mode=${encodeURIComponent(state.interfaceMode)}&v=${TOOL_UI_VERSION}`
       },
       dynamic: {
-        src: `./tools/dynamic/animator.html?embedded=1&v=${TOOL_UI_VERSION}`
+        src: `./tools/dynamic/animator.html?embedded=1&mode=${encodeURIComponent(state.interfaceMode)}&v=${TOOL_UI_VERSION}`
       }
     };
     const item = map[type];
@@ -5300,9 +5520,11 @@ function libraryTagsForForm(formData, kind) {
       if (type === 'static') frame.allow = 'display-capture';
       frame.dataset.toolFrame = type;
       state.toolFrames[type] = frame;
+      frame.addEventListener('load', function() { broadcastInterfaceMode(frame); });
     }
     mount.appendChild(frame);
     state.activeFrame = frame;
+    setTimeout(function() { broadcastInterfaceMode(frame); }, 0);
     // 静态 DIY iframe 会被保留在内存中。每次重新打开时重新下发云端清单，
     // 使素材库中刚删除的背景、Logo 等组件不会继续显示旧缓存。
     if (type === 'static') {
@@ -6239,9 +6461,7 @@ function libraryTagsForForm(formData, kind) {
     const restrictionToggle = document.getElementById('ui-restriction-toggle');
     if (restrictionToggle) {
       restrictionToggle.addEventListener('change', function() {
-        state.uiRestricted = restrictionToggle.checked;
-        renderNav();
-        void renderAdmin();
+        setInterfaceMode(restrictionToggle.checked ? 'user' : 'developer');
       });
     }
     if (!state.uiRestricted) await loadCategories();
@@ -6607,6 +6827,9 @@ function libraryTagsForForm(formData, kind) {
       // 语言标签（EN/AR）以 vf: 前缀存储，不出现在素材库分类筛选里，但会随 tags 下发给 DIY 用于分组/封面选择。
       if (msg.language === 'EN') normalizedTags.push('vf:lang:EN');
       else if (msg.language === 'AR') normalizedTags.push('vf:lang:AR');
+      // 组合组件可保存到任意子分组（标签/KIKI/其他素材/组合），用 vf:type 锁定本质类型，
+      // 避免按「标签」等二级标签反向推断成 tagcombo 导致打开错乱。
+      if (msg.templateType === 'groupcombo') normalizedTags.push('vf:type:groupcombo');
       var sourceInsert = await state.supabase.from('vf_source_files').insert([{
         id: sourceId,
         title: finalName,
@@ -7397,6 +7620,7 @@ function libraryTagsForForm(formData, kind) {
       node.textContent = t(node.dataset.i18n);
     });
     els.langToggle.textContent = state.lang === 'zh' ? 'EN' : '中文';
+    syncInterfaceModeControl();
   }
 
   function currentRole() {
