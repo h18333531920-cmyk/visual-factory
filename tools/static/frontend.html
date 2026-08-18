@@ -2935,7 +2935,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260818-bookmark-bootstrap-v404">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260818-matrix-upload-once-v406">
 </head>
 <body>
 
@@ -7056,6 +7056,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             item.onclick = function() {
                 layer.mainLogoStyle = variant.id;
                 layer.mainLogoSrc = getCloudKeetaLogoSrc(variant.id, '');
+                syncLogoLayoutContentAcrossLanguages(layer);
                 activeLayerIds = [layer.id];
                 saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                 closePicker();
@@ -7094,6 +7095,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 item.onclick = function() {
                     layer.slots = Array.isArray(layer.slots) ? layer.slots : [];
                     layer.slots[slotIndex] = { src:asset.src, name:asset.name || 'Logo' };
+                    syncLogoLayoutContentAcrossLanguages(layer);
                     activeLayerIds = [layer.id];
                     saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                     closePicker();
@@ -8060,6 +8062,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     layer.bgColor = getDetectedLogoBackground(info);
                     layer.slots = layer.slots || [];
                     layer.slots[0] = { src: dataUrl, name: file.name || 'Logo' };
+                    syncLogoLayoutContentAcrossLanguages(layer);
                     saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                     showToast('已更新 Logo');
                 });
@@ -8076,6 +8079,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var list = document.getElementById('matrix-thumb-list');
         var addBtn = document.getElementById('matrix-thumb-add');
         if (!list || !addBtn) return;
+        // renderProperties 可能在同一帧内被连续调用，并留下多个延迟绑定任务。
+        // 同一个 DOM 只允许绑定一次，否则一次 drop 会被多个监听器重复消费。
+        if (list.dataset.matrixManagerBound === String(layer.id)) return;
+        list.dataset.matrixManagerBound = String(layer.id);
         // 同步 slots 并重渲染
         function syncAndRefresh() {
             var filled = [];
@@ -8086,25 +8093,33 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             // 补到 rows*cols
             var total = (layer.rows || 2) * (layer.cols || 2);
             while (layer.slots.length < total) layer.slots.push({});
+            syncLogoLayoutContentAcrossLanguages(layer);
             saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
         }
         function handleFiles(files) {
             var validFiles = Array.from(files).filter(function(f) { return f.type.match(/image\/(png|jpeg|webp)/); });
             if (validFiles.length === 0) { showToast('请拖入 PNG/JPG/WebP 图片', true); return; }
-            var processed = 0;
-            validFiles.forEach(function(file) {
-                var reader = new FileReader();
-                reader.onload = function(ev) {
-                    layer.slots = layer.slots || [];
-                    var slot = { src: ev.target.result, name: file.name || 'Logo' };
-                    layer.slots.push(slot);
-                    detectImageBackgroundColor(ev.target.result).then(function(info) {
-                        slot.bgColor = getDetectedLogoBackground(info);
-                        processed++;
-                        if (processed >= validFiles.length) syncAndRefresh();
-                    });
-                };
-                reader.readAsDataURL(file);
+            // 整批文件只合并、保存和重绘一次；不要在各 FileReader 回调里逐个 push，
+            // 避免异步完成顺序和重复事件把同一批图片追加多次。
+            Promise.all(validFiles.map(function(file) {
+                return new Promise(function(resolve, reject) {
+                    var reader = new FileReader();
+                    reader.onload = function(ev) {
+                        var slot = { src: ev.target.result, name: file.name || 'Logo' };
+                        detectImageBackgroundColor(ev.target.result).then(function(info) {
+                            slot.bgColor = getDetectedLogoBackground(info, slot);
+                            resolve(slot);
+                        }).catch(function() { resolve(slot); });
+                    };
+                    reader.onerror = function() { reject(new Error('Logo 图片读取失败')); };
+                    reader.readAsDataURL(file);
+                });
+            })).then(function(newSlots) {
+                var existingSlots = (layer.slots || []).filter(function(slot) { return slot && slot.src; });
+                layer.slots = existingSlots.concat(newSlots);
+                syncAndRefresh();
+            }).catch(function(error) {
+                showToast(error.message || 'Logo 图片读取失败', true);
             });
         }
         // 拖拽上传到缩略图列表（仅处理外部文件拖入）
@@ -8606,6 +8621,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         reader.onload = function(readEvent) {
             layer.slots = Array.isArray(layer.slots) ? layer.slots : [];
             layer.slots[0] = { src: readEvent.target.result, name: file.name || 'Logo' };
+            syncLogoLayoutContentAcrossLanguages(layer);
             saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
             showToast('已更新编组中的 Logo');
         };
@@ -12223,6 +12239,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             selectedImg.originalW = sourceImage.naturalWidth || sourceImage.width;
             selectedImg.originalH = sourceImage.naturalHeight || sourceImage.height;
             selectedImg.fitMode = assetType === 'logo' ? 'contain' : 'cover';
+            if (assetType === 'logo') syncStandaloneLogoSourceAcrossLanguages(selectedImg);
             // 清理 solid 特有属性
             delete selectedImg.color;
             delete selectedImg.role;
@@ -13400,9 +13417,48 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (!variants) return;
         var currentSnapshot = snapshotLayerLanguageVariant(layer, layers);
         ['en', 'ar'].forEach(function(language) {
-            var variant = variants[language] ? cloneData(variants[language]) : cloneData(currentSnapshot);
+            var variant = language === normalizeCanvasLanguage(currentCanvasLanguage)
+                ? cloneData(currentSnapshot)
+                : (variants[language] ? cloneData(variants[language]) : cloneData(currentSnapshot));
             variant.slots = [cloneData(result.slot)];
             applyPairWideComponentOffset(variant, result.isWide === true);
+            variants[language] = variant;
+        });
+    }
+
+    // Logo 图片属于同一个组件的共享内容；EN / AR 只分别记录组件的位置、缩放和旋转。
+    // 单一 Logo 与 Logo 矩阵的所有增删、替换和排序都通过这里同步图片槽位，避免
+    // 当前语言改完后切换到另一语言又恢复为旧 Logo。
+    function syncLogoLayoutContentAcrossLanguages(layer) {
+        if (!layer || layer.type !== 'logoLayout') return;
+        var variants = ensureLayerLanguageVariants(layer, layers, currentCanvasLanguage);
+        if (!variants) return;
+        var activeLanguage = normalizeCanvasLanguage(currentCanvasLanguage);
+        var currentSnapshot = snapshotLayerLanguageVariant(layer, layers);
+        var sharedSlots = cloneData(Array.isArray(layer.slots) ? layer.slots : []);
+        ['en', 'ar'].forEach(function(language) {
+            var variant = language === activeLanguage
+                ? cloneData(currentSnapshot)
+                : (variants[language] ? cloneData(variants[language]) : cloneData(currentSnapshot));
+            variant.slots = cloneData(sharedSlots);
+            // 左右 Logo 的 Keeta 主 Logo 选择也是图片内容，保持双语一致；几何字段不覆盖。
+            if (Object.prototype.hasOwnProperty.call(layer, 'mainLogoSrc')) variant.mainLogoSrc = layer.mainLogoSrc;
+            if (Object.prototype.hasOwnProperty.call(layer, 'mainLogoStyle')) variant.mainLogoStyle = layer.mainLogoStyle;
+            variants[language] = variant;
+        });
+    }
+
+    function syncStandaloneLogoSourceAcrossLanguages(layer) {
+        if (!layer || layer.type !== 'logo') return;
+        var variants = ensureLayerLanguageVariants(layer, layers, currentCanvasLanguage);
+        if (!variants) return;
+        var activeLanguage = normalizeCanvasLanguage(currentCanvasLanguage);
+        var currentSnapshot = snapshotLayerLanguageVariant(layer, layers);
+        ['en', 'ar'].forEach(function(language) {
+            var variant = language === activeLanguage
+                ? cloneData(currentSnapshot)
+                : (variants[language] ? cloneData(variants[language]) : cloneData(currentSnapshot));
+            variant.src = layer.src;
             variants[language] = variant;
         });
     }
@@ -13454,6 +13510,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     activeLayer.slots.push(slot);
                     detectImageBackgroundColor(ev.target.result).then(function(info) {
                         slot.bgColor = getDetectedLogoBackground(info, slot);
+                        syncLogoLayoutContentAcrossLanguages(activeLayer);
                         saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                     });
                 };
@@ -13486,6 +13543,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 slot.bgColor = bg;
                 layer.slots[target.slotIndex] = slot;
                 if (layer.logoLayout !== 'matrix') layer.bgColor = bg;
+                syncLogoLayoutContentAcrossLanguages(layer);
                 saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                 showToast('已添加 Logo');
             });
@@ -13515,6 +13573,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             target.src = src;
             target.originalW = image.naturalWidth || image.width || target.originalW;
             target.originalH = image.naturalHeight || image.height || target.originalH;
+            if (target.type === 'logo') syncStandaloneLogoSourceAcrossLanguages(target);
             saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
             showToast('已替换图片');
         } catch(error) {
