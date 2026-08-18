@@ -111,7 +111,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260818-matrix-upload-once-v406';
+const TOOL_UI_VERSION = '20260818-preview-reuse-v407';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -7117,7 +7117,7 @@ function libraryTagsForForm(formData, kind) {
     try {
       // 同时拉取 template 和 source 类型的资产，确保素材库里上传的背景图也能在 DIY 里显示
       var { data: sources, error } = await state.supabase.from('vf_source_files')
-        .select('id, title, tags, source_path')
+        .select('id, title, tags, source_path, updated_at')
         .or('tags.cs.{vf:kind:template},tags.cs.{vf:kind:source}')
         .order('created_at', { ascending: false })
         .limit(500);
@@ -7181,7 +7181,7 @@ function libraryTagsForForm(formData, kind) {
         var t = s.tags || [];
         var templateType = resolveTemplateType(t);
         var dims = previewDims[s.id] || {};
-        templates.push({ id: s.id, name: s.title, templateType: templateType, tags: t, previewW: dims.w || 0, previewH: dims.h || 0 });
+        templates.push({ id: s.id, name: s.title, templateType: templateType, tags: t, previewW: dims.w || 0, previewH: dims.h || 0, updatedAt: s.updated_at || '' });
       }
       var bookmarkTemplates = templates.filter(function(template) { return template.templateType === 'bookmark'; });
       await Promise.all(bookmarkTemplates.map(async function(template) {

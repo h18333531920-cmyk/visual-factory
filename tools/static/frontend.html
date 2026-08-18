@@ -2935,7 +2935,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260818-matrix-upload-once-v406">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260818-preview-reuse-v407">
 </head>
 <body>
 
@@ -9653,6 +9653,28 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             }
         } else if (event.data.type === 'vf:templates-loaded') {
             // 从 Supabase 加载，但保留本地 _pending 未完成的保存
+            // 同一会话刷新/切换模板时保留未变化资产的 Blob 预览，避免列表先退回
+            // mini 占位图，再重新下载并闪回真实预览。
+            function cloudLibraryRenderKey(collections) {
+                return collections.map(function(arr) {
+                    return (arr || []).map(function(item) {
+                        var key = item?.cloudId || item?.id || '';
+                        var refs = item?.kind === 'bookmark'
+                            ? normalizeTemplateBookmarkRefs(item.templateRefs || []).map(function(ref) { return ref.templateId; }).join(',')
+                            : '';
+                        return [key, item?.name || '', item?.kind || '', item?.updatedAt || '', refs, item?._pending ? '1' : '0'].join(':');
+                    }).join('|');
+                }).join('||');
+            }
+            var previousLibraryRenderKey = cloudLibraryRenderKey([presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets]);
+            var assetListAlreadyRendered = !!document.querySelector('#asset-list-ui .asset-item');
+            var previousCloudItems = new Map();
+            [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
+                (arr || []).forEach(function(item) {
+                    var cloudKey = item?.cloudId || item?.id;
+                    if (cloudKey && !item?._pending) previousCloudItems.set(cloudKey, item);
+                });
+            });
             var pendingLayouts = presetLibrary.filter(function(p) { return p._pending; });
             var pendingTags = tagPresetLibrary.filter(function(p) { return p._pending; });
             var pendingLogos = logoAssets.filter(function(l) { return l._pending; });
@@ -9691,6 +9713,41 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     presetLibrary.push({ id: ct.id, cloudId: ct.id, name: ct.name, size: '', elements: [], _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
                 }
             });
+            var templateSummaryById = new Map(templates.map(function(template) { return [template.id, template]; }));
+            [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
+                (arr || []).forEach(function(item, index) {
+                    if (item?._pending) return;
+                    var cloudKey = item?.cloudId || item?.id;
+                    var summary = templateSummaryById.get(cloudKey) || {};
+                    var previous = previousCloudItems.get(cloudKey);
+                    item.updatedAt = summary.updatedAt || '';
+                    // 有版本时间时必须一致；旧会话尚无时间字段时也可安全复用一次。
+                    var unchanged = !!previous && (!item.updatedAt || !previous.updatedAt || item.updatedAt === previous.updatedAt);
+                    if (unchanged) {
+                        // 保留对象身份与已加载的元数据，列表无需重建时原卡片事件仍然有效。
+                        previous.name = item.name;
+                        previous.tags = item.tags;
+                        previous.previewW = item.previewW;
+                        previous.previewH = item.previewH;
+                        previous.updatedAt = item.updatedAt;
+                        if (item.kind) previous.kind = item.kind;
+                        if (item.kind === 'bookmark' && summary.metadataLoaded === true) {
+                            previous.templateRefs = normalizeTemplateBookmarkRefs(summary.templateRefs || []);
+                            previous.coverTemplateId = summary.coverTemplateId || '';
+                            previous._metadataLoaded = true;
+                        }
+                        previous._previewCurrent = !!previous.previewUrl;
+                        previous._previewRetrying = false;
+                        arr[index] = previous;
+                        return;
+                    }
+                    // 模板确实更新时也暂留旧图，新 Blob 到达前不退回空白占位。
+                    if (previous?.previewUrl) {
+                        item.previewUrl = previous.previewUrl;
+                        item._previewCurrent = false;
+                    }
+                });
+            });
             // 把还没收到保存确认的 _pending 项加回去
             presetLibrary.push.apply(presetLibrary, pendingLayouts);
             tagPresetLibrary.push.apply(tagPresetLibrary, pendingTags);
@@ -9699,23 +9756,32 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             groupPresets.push.apply(groupPresets, pendingGroups);
             // 三个 Keeta 预设先读取线上 Logo 组件，保证部署环境也能直接使用。
             ensureCloudKeetaLogosLoaded();
-            renderAssetLibrary();
+            var nextLibraryRenderKey = cloudLibraryRenderKey([presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets]);
+            // 切换画板常会重复收到完全相同的模板摘要。此时保留现有 DOM，避免卡片
+            // 被清空重建造成一帧闪白；首次加载或列表内容真的变化时才重绘。
+            if (!assetListAlreadyRendered || previousLibraryRenderKey !== nextLibraryRenderKey) renderAssetLibrary();
             // 后台预加载云端字体
             setTimeout(function() { preloadCloudFonts(); }, 2000);
         } else if (event.data.type === 'vf:template-preview') {
             // 优先接收 Blob：避免在素材列表中塞入几十个巨大 Base64 字符串。
             var pid = event.data.id;
+            var currentPreviewItem = null;
+            [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].some(function(arr) {
+                currentPreviewItem = arr.find(function(item) { return item.cloudId === pid || item.id === pid; }) || null;
+                return !!currentPreviewItem;
+            });
+            // 版本未变化且现有 Blob 仍有效时，不再创建新地址或重绘卡片。
+            if (currentPreviewItem?._previewCurrent && currentPreviewItem.previewUrl) return;
             var pUrl = event.data.previewBlob instanceof Blob
                 ? URL.createObjectURL(event.data.previewBlob)
                 : (event.data.previewUrl || '');
             if (pUrl) {
+                var previousPreviewUrl = currentPreviewItem?.previewUrl || '';
                 [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
                     var item = arr.find(function(x) { return x.cloudId === pid; });
                     if (item) {
-                        if (item.previewUrl && item.previewUrl !== pUrl && String(item.previewUrl).startsWith('blob:')) {
-                            try { URL.revokeObjectURL(item.previewUrl); } catch (e) {}
-                        }
                         item.previewUrl = pUrl;
+                        item._previewCurrent = true;
                         item._previewRetrying = false;
                     }
                 });
@@ -9738,18 +9804,41 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                             existingImg.style.height = '100%';
                             existingImg.style.objectFit = 'contain';
                             existingImg.style.display = 'block';
-                            // 如果有 mini canvas 等非 img 非 hover-info 的内容，先清除
-                            var toRemove = [];
+                            // 新图加载前保留 mini canvas / 骨架图，并把新图叠在其上淡入。
+                            // 以前这里先删占位内容再设置 src，会产生很明显的一帧空白。
+                            thumb.style.position = 'relative';
+                            existingImg.style.position = 'absolute';
+                            existingImg.style.inset = '0';
+                            existingImg.style.opacity = '0';
+                            existingImg.style.transition = 'opacity 120ms ease';
+                            existingImg.style.zIndex = '1';
+                            var fallbackNodes = [];
                             thumb.childNodes.forEach(function(c) {
                                 if (c.nodeType === 1 && !c.classList.contains('asset-template-hover-info') && c.tagName !== 'IMG') {
-                                    toRemove.push(c);
+                                    fallbackNodes.push(c);
                                 }
                             });
-                            toRemove.forEach(function(c) { c.remove(); });
+                            existingImg.onload = function() {
+                                requestAnimationFrame(function() { existingImg.style.opacity = '1'; });
+                                setTimeout(function() {
+                                    fallbackNodes.forEach(function(c) { if (c.isConnected) c.remove(); });
+                                }, 150);
+                            };
+                            existingImg.onerror = function() {
+                                if (currentPreviewItem) currentPreviewItem._previewCurrent = false;
+                                existingImg.remove();
+                            };
                             thumb.insertBefore(existingImg, thumb.querySelector('.asset-template-hover-info') || null);
                         }
                         existingImg.src = pUrl;
                     }
+                }
+                // 让正在显示旧图的 img 有时间完成新 Blob 的解码，再释放旧地址。
+                // 立即 revoke 会在快速切换模板时制造短暂空白。
+                if (previousPreviewUrl && previousPreviewUrl !== pUrl && String(previousPreviewUrl).startsWith('blob:')) {
+                    setTimeout(function() {
+                        try { URL.revokeObjectURL(previousPreviewUrl); } catch (e) {}
+                    }, 5000);
                 }
             }
         } else if (event.data.type === 'vf:template-metadata') {
