@@ -2937,7 +2937,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260818-static-arc-text-contrast-v419">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260818-canvas-background-v420">
 </head>
 <body>
 
@@ -3809,12 +3809,77 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             && layer?.type === 'arc'
             && layer?._templateLayer === true;
     }
+    const CANVAS_BACKGROUND_ROLE = 'canvas-background';
+    function hasExplicitCanvasBackgroundIdentity(layer) {
+        return !!layer
+            && layer.type === 'image'
+            && (layer.role === CANVAS_BACKGROUND_ROLE
+                || layer.role === 'extended-background'
+                || layer._canvasBackground === true);
+    }
+    function findLegacyTemplateBackgroundLayer(sourceLayers = layers, canvasSize = SIZES[currentRatio]) {
+        const size = canvasSize || { w:1080, h:1080 };
+        const candidates = (sourceLayers || []).filter(function(item) {
+            if (!item || item.type !== 'image' || item._templateLayer !== true || item.visible === false) return false;
+            const box = getLayerBounds(item);
+            const overlapW = Math.max(0, Math.min(size.w, box.x2) - Math.max(0, box.x1));
+            const overlapH = Math.max(0, Math.min(size.h, box.y2) - Math.max(0, box.y1));
+            const coversMainCanvas = box.w >= size.w * 0.92
+                && box.h >= size.h * 0.92
+                && overlapW * overlapH >= size.w * size.h * 0.82;
+            return coversMainCanvas;
+        }).sort(function(a, b) { return (Number(a.zIndex) || 0) - (Number(b.zIndex) || 0); });
+        return candidates[0] || null;
+    }
+    function isCanvasBackgroundImage(layer, sourceLayers = layers, canvasSize = SIZES[currentRatio]) {
+        if (!layer || layer.type !== 'image') return false;
+        if (hasExplicitCanvasBackgroundIdentity(layer)) return true;
+        return findLegacyTemplateBackgroundLayer(sourceLayers, canvasSize)?.id === layer.id;
+    }
+    function markCanvasBackgroundLayer(layer) {
+        if (!layer || layer.type !== 'image') return layer;
+        layer.role = CANVAS_BACKGROUND_ROLE;
+        layer._canvasBackground = true;
+        layer._languageSharedBackground = true;
+        return layer;
+    }
+    function getMinimumCanvasBackgroundScale(layer, canvasSize = SIZES[currentRatio]) {
+        if (!layer || layer.type !== 'image') return 0.01;
+        const size = canvasSize || { w:1080, h:1080 };
+        const radians = (Number(layer.rotation) || 0) * Math.PI / 180;
+        const cos = Math.cos(radians), sin = Math.sin(radians);
+        const corners = [{x:0,y:0}, {x:size.w,y:0}, {x:size.w,y:size.h}, {x:0,y:size.h}];
+        const projectedX = corners.map(function(point) { return point.x * cos + point.y * sin; });
+        const projectedY = corners.map(function(point) { return point.x * -sin + point.y * cos; });
+        const requiredWidth = Math.max.apply(null, projectedX) - Math.min.apply(null, projectedX);
+        const requiredHeight = Math.max.apply(null, projectedY) - Math.min.apply(null, projectedY);
+        const baseW = Math.max(1, Math.abs(Number(layer.baseW) || size.w));
+        const baseH = Math.max(1, Math.abs(Number(layer.baseH) || size.h));
+        return Math.max(requiredWidth / baseW, requiredHeight / baseH);
+    }
+    function fitCanvasBackgroundAfterReplacement(layer, canvasSize = SIZES[currentRatio]) {
+        if (!layer || layer.type !== 'image') return layer;
+        const size = canvasSize || { w:1080, h:1080 };
+        markCanvasBackgroundLayer(layer);
+        // 替换背景时不按新图片的像素比例改变背景框，而由 cover 在原背景框内
+        // 等比铺满。这样横图换竖图（或反过来）只会裁掉溢出区域，不会露白。
+        layer.fitMode = 'cover';
+        const minimumScale = getMinimumCanvasBackgroundScale(layer, size);
+        layer.scale = Math.max(Math.abs(Number(layer.scale) || 1), minimumScale);
+        // 旧背景可能曾被拖到边缘之外；替换时一并恢复到不会露白的位置。
+        const safePosition = clampCanvasBackgroundPosition(layer, Number(layer.x) || size.w / 2, Number(layer.y) || size.h / 2);
+        layer.x = safePosition.x;
+        layer.y = safePosition.y;
+        return layer;
+    }
+    function markTemplateBackgroundLayer(sourceLayers = layers, canvasSize = SIZES[currentRatio]) {
+        const explicit = (sourceLayers || []).find(hasExplicitCanvasBackgroundIdentity);
+        const background = explicit || findLegacyTemplateBackgroundLayer(sourceLayers, canvasSize);
+        return background ? markCanvasBackgroundLayer(background) : null;
+    }
     function isUserTemplateBackgroundImage(layer) {
         if (!isUserInterfaceMode() || layer?.type !== 'image' || layer?._templateLayer !== true) return false;
-        if (layer.role === 'extended-background') return true;
-        const templateLayers = layers.filter(function(item) { return item?._templateLayer === true; });
-        const lowestZ = Math.min.apply(null, templateLayers.map(function(item) { return Number(item.zIndex) || 0; }));
-        return (Number(layer.zIndex) || 0) === lowestZ;
+        return isCanvasBackgroundImage(layer, layers);
     }
     function isUserProtectedTemplateContent(layer) {
         return isUserProtectedTemplateText(layer)
@@ -3941,6 +4006,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     let layerSelectionAnchorId = null;
     let _contextMenuLayerId = null;
     let _pendingImageReplacementLayerId = null;
+    // 仅当 AI 参考图来自画板背景时记录。生成结果会插在旧背景正上方，
+    // 不会像普通生图那样跑到全部组件的最顶层。
+    let _aiBackgroundSourceLayerId = null;
     let customFonts = [];
     let layers = []; // 万物皆图层
     let showSafeGuide = false;
@@ -3993,6 +4061,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
     function isLanguageSharedBackgroundLayer(layer, sourceLayers = layers) {
         if (!layer) return false;
+        if (layer.type === 'image' && isCanvasBackgroundImage(layer, sourceLayers)) return true;
         if (layer._languageSharedBackground === true) return true;
         const tags = [].concat(layer.tags || [], layer.subTag || [], layer._subTag || []).map(String);
         if (tags.some(function(tag) { return tag === '背景' || tag.toLowerCase() === 'background'; })) return true;
@@ -5789,10 +5858,41 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         try {
             const img = await loadImageElement(src);
             const frame = getImageFrameForMode(img.naturalWidth || img.width, img.naturalHeight || img.height, 'shortSide');
-            addLayer('image', { src, ...frame, originalW: img.naturalWidth || img.width, originalH: img.naturalHeight || img.height });
+            const sourceBackground = layers.find(function(layer) {
+                return layer.id === _aiBackgroundSourceLayerId && isCanvasBackgroundImage(layer, layers);
+            });
+            if (sourceBackground) {
+                markCanvasBackgroundLayer(sourceBackground);
+                // addLayer 会在当前选中层的正上方腾出一层；以旧背景作锚点即可
+                // 保证新背景只高于旧背景，不遮住文字、Logo 和标签。
+                activeLayerIds = [sourceBackground.id];
+                const generated = addLayer('image', {
+                    src, ...frame,
+                    originalW: img.naturalWidth || img.width,
+                    originalH: img.naturalHeight || img.height,
+                    role: CANVAS_BACKGROUND_ROLE,
+                    _canvasBackground: true,
+                    _languageSharedBackground: true,
+                    _templateLayer: sourceBackground._templateLayer === true
+                });
+                _aiBackgroundSourceLayerId = generated?.id || sourceBackground.id;
+            } else {
+                addLayer('image', { src, ...frame, originalW: img.naturalWidth || img.width, originalH: img.naturalHeight || img.height });
+            }
         } catch(e) {
             // 尺寸读取失败时使用铺满模式
-            addLayer('image', { src, fitMode: 'contain' });
+            const sourceBackground = layers.find(function(layer) {
+                return layer.id === _aiBackgroundSourceLayerId && isCanvasBackgroundImage(layer, layers);
+            });
+            if (sourceBackground) {
+                activeLayerIds = [sourceBackground.id];
+                const generated = addLayer('image', {
+                    src, fitMode: 'cover', role: CANVAS_BACKGROUND_ROLE,
+                    _canvasBackground: true, _languageSharedBackground: true,
+                    _templateLayer: sourceBackground._templateLayer === true
+                });
+                _aiBackgroundSourceLayerId = generated?.id || sourceBackground.id;
+            } else addLayer('image', { src, fitMode: 'contain' });
             showToast('图片已生成，但尺寸读取失败，已按铺满模式放入', true);
         }
     }
@@ -6442,6 +6542,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             target = layers.find(function(l) { return l.type === 'image' || l.type === 'logo'; });
         }
         if(!target) return showToast('请先选中一个图片图层', true);
+        const replacingCanvasBackground = target.type === 'image' && isCanvasBackgroundImage(target, layers);
         showToast('正在替换…');
         // 预加载图片，避免 renderCanvas 时同步解码大数据 URL 造成卡顿
         var preloaded;
@@ -6455,6 +6556,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             target.originalW = undefined;
             target.originalH = undefined;
         }
+        if (replacingCanvasBackground) fitCanvasBackgroundAfterReplacement(target);
         renderCanvas(); renderLayersList(); renderProperties(); saveHistory();
         showToast('已替换为：' + (ref.name || '背景'));
     }
@@ -7414,6 +7516,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         focusInspectorOnSelection();
         if(['logo', 'logoLayout', 'tag', 'discountTag', 'arc'].includes(type)) markNewlyAddedLayers([newL]);
         saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+        return newL;
     }
 
     // Keeta 的三个预设 Logo 必须来自线上 Logo 组件库。下面的本地路径只用于
@@ -8579,6 +8682,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             showToast('请选择一张图片图层', true);
             return;
         }
+        if (isCanvasBackgroundImage(layer, layers)) {
+            markCanvasBackgroundLayer(layer);
+            _aiBackgroundSourceLayerId = layer.id;
+        } else {
+            _aiBackgroundSourceLayerId = null;
+        }
         addReferenceElementToAI({ name: getLayerName(layer), src: layer.src })
             .catch(err => showToast(err.message || '参考图读取失败', true));
     }
@@ -9268,6 +9377,13 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     if (setTextContentPreservingAlignedEdge(l, v) === false) rejectedTextInput = true;
                 }
                 else l[p] = v;
+                if (l.type === 'image' && isCanvasBackgroundImage(l, layers) && (p === 'scale' || p === 'rotation')) {
+                    markCanvasBackgroundLayer(l);
+                    l.scale = Math.max(Math.abs(Number(l.scale) || 1), getMinimumCanvasBackgroundScale(l));
+                    const safePosition = clampCanvasBackgroundPosition(l, l.x, l.y);
+                    l.x = safePosition.x;
+                    l.y = safePosition.y;
+                }
                 if(getSharedPropsForLayer(l).includes(p)) propagateSharedLayerChange(l, [p]);
             }
         });
@@ -9280,6 +9396,16 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         }
         if(activeLayerIds.length === 1) { const el = document.getElementById('val-'+p); if(el) el.innerText = formatPropValue(p, v); }
         return !rejectedTextInput;
+    };
+    window.updateLayerScaleFromInput = function(input) {
+        updateProp('scale', parseFloat(input.value));
+        const selected = activeLayerIds.length === 1 ? layers.find(function(layer) { return layer.id === activeLayerIds[0]; }) : null;
+        const appliedScale = Number(selected?.scale) || 1;
+        // updateProp 可能把背景缩放钳制在安全下限；同步修正滑块和右侧数值，
+        // 避免滑块视觉上仍继续向左、下一次放大时背景又突然吸附。
+        input.value = String(appliedScale);
+        const valueLabel = document.getElementById('val-scale');
+        if (valueLabel) valueLabel.innerText = formatPropValue('scale', appliedScale);
     };
     window.setTextColor = function(color) {
         activeLayerIds.forEach(id => {
@@ -9505,8 +9631,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if(l.type === 'image' || l.type === 'logo') {
             const title = l.type === 'logo' ? 'Logo属性调整' : '图片属性调整';
             const fitMode = l.fitMode || 'cover';
+            const minimumImageScale = l.type === 'image' && isCanvasBackgroundImage(l, layers)
+                ? getMinimumCanvasBackgroundScale(l)
+                : 0.01;
             const fitControls = l.type === 'image' ? `<label class="label">图片适配</label><div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px;"><button class="btn ${fitMode === 'cover' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="applyImageFitMode('cover')">铺满</button><button class="btn ${fitMode === 'contain' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="applyImageFitMode('contain')">完整</button><button class="btn btn-outline" type="button" onclick="applyImageFitMode('original')">原图</button></div><div style="font-size:11px; color:var(--text-sub); line-height:1.55; margin:-4px 0 14px;">铺满会裁切；完整不裁切；原图按原比例放入画布。</div>` : '';
-            area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">${title}</div>${fitControls}<div class="slider-row"><span class="s-label">不透明度</span><input type="range" min="0" max="1" step="0.05" value="${l.opacity !== undefined ? l.opacity : 1}" oninput="updateProp('opacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-opacity">${Math.round((l.opacity !== undefined ? l.opacity : 1) * 100)}%</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="${l.scale}" oninput="updateProp('scale', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div style="display:flex; gap:8px; margin-top:16px;"><button class="btn btn-outline" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="centerLayer()">居中</button><button class="btn btn-outline" style="flex:1;" onclick="toggleFlipX()" title="镜像反转">镜像</button></div>`;
+            area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">${title}</div>${fitControls}<div class="slider-row"><span class="s-label">不透明度</span><input type="range" min="0" max="1" step="0.05" value="${l.opacity !== undefined ? l.opacity : 1}" oninput="updateProp('opacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-opacity">${Math.round((l.opacity !== undefined ? l.opacity : 1) * 100)}%</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="${minimumImageScale}" max="10" step="0.05" value="${l.scale}" oninput="updateLayerScaleFromInput(this)" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div style="display:flex; gap:8px; margin-top:16px;"><button class="btn btn-outline" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="centerLayer()">居中</button><button class="btn btn-outline" style="flex:1;" onclick="toggleFlipX()" title="镜像反转">镜像</button></div>`;
             if (isUserTemplateBackgroundImage(l)) {
                 area.querySelectorAll('.slider-row').forEach(function(row) {
                     const label = row.querySelector('.s-label')?.textContent?.trim() || '';
@@ -9686,6 +9815,35 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     /* ================= 图层统一拖拽引擎 ================= */
     let isDragging = false, dragStartX = 0, dragStartY = 0, dragData = [], hasDragged = false, dragGroupBoxData = null;
     var textEditLayerId = null;
+    // 把背景矩形约束为始终覆盖整张画板。算法在背景自身的旋转坐标系中计算，
+    // 因此普通背景、放大背景和旋转后的背景都不会从任一边露出白底。
+    function clampCanvasBackgroundPosition(layer, desiredX, desiredY) {
+        if (!isCanvasBackgroundImage(layer, layers)) return { x:desiredX, y:desiredY };
+        const size = SIZES[currentRatio] || { w:1080, h:1080 };
+        const radians = (Number(layer.rotation) || 0) * Math.PI / 180;
+        const cos = Math.cos(radians), sin = Math.sin(radians);
+        const axisX = { x:cos, y:sin };
+        const axisY = { x:-sin, y:cos };
+        const corners = [{x:0,y:0}, {x:size.w,y:0}, {x:size.w,y:size.h}, {x:0,y:size.h}];
+        const project = function(point, axis) { return point.x * axis.x + point.y * axis.y; };
+        const qx = corners.map(function(point) { return project(point, axisX); });
+        const qy = corners.map(function(point) { return project(point, axisY); });
+        const scale = Math.max(0.0001, Math.abs(Number(layer.scale) || 1));
+        const halfW = Math.abs(Number(layer.baseW) || size.w) * scale / 2;
+        const halfH = Math.abs(Number(layer.baseH) || size.h) * scale / 2;
+        const clampProjection = function(value, minimum, maximum) {
+            // 若旧数据本身比画板小，则固定在允许区间中点，至少不会继续把缺口拖大。
+            if (minimum > maximum) return (minimum + maximum) / 2;
+            return Math.max(minimum, Math.min(maximum, value));
+        };
+        const center = { x:Number(desiredX) || 0, y:Number(desiredY) || 0 };
+        const centerX = clampProjection(project(center, axisX), Math.max.apply(null, qx) - halfW, Math.min.apply(null, qx) + halfW);
+        const centerY = clampProjection(project(center, axisY), Math.max.apply(null, qy) - halfH, Math.min.apply(null, qy) + halfH);
+        return {
+            x:axisX.x * centerX + axisY.x * centerY,
+            y:axisX.y * centerX + axisY.y * centerY
+        };
+    }
     function restoreCanvasTextEditorValue(el, text) {
         if (!el) return;
         el.textContent = String(text || '');
@@ -10035,6 +10193,17 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             if(e.shiftKey) {
                 if(Math.abs(dx) >= Math.abs(dy)) dy = 0;
                 else dx = 0;
+            }
+            const backgroundDrag = dragData.find(function(data) {
+                const layer = layers.find(function(item) { return item.id === data.id; });
+                return layer && isCanvasBackgroundImage(layer, layers);
+            });
+            if (backgroundDrag) {
+                const backgroundLayer = layers.find(function(item) { return item.id === backgroundDrag.id; });
+                markCanvasBackgroundLayer(backgroundLayer);
+                const constrained = clampCanvasBackgroundPosition(backgroundLayer, backgroundDrag.ix + dx, backgroundDrag.iy + dy);
+                dx = constrained.x - backgroundDrag.ix;
+                dy = constrained.y - backgroundDrag.iy;
             }
             dragData.forEach(data => { const l = layers.find(x => x.id === data.id); if(l) { l.x = data.ix + dx; l.y = data.iy + dy; document.getElementById(data.id).style.left = l.x + 'px'; document.getElementById(data.id).style.top = l.y + 'px'; }});
             const groupBox = document.querySelector('#dynamic-layers > .editor-group-selection-box');
@@ -10842,6 +11011,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 // 否则连续点击时会发生叠加或被新背景遮住。
                 var newEls = adaptPresetElementsToCurrent(d.elements, d.size);
                 newEls.forEach(function(l) { l._templateLayer = true; });
+                markTemplateBackgroundLayer(newEls, SIZES[currentRatio]);
                 layers = newEls;
                 // 与资产库直接打开模板保持一致：加载完成后不默认选中任何图层。
                 // 旧逻辑会选中全部非图片组件，导致从书签入口进入时满画布都是选择框。
@@ -10854,6 +11024,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 var nextArtboards = normalizeArtboardSnapshot(d.artboards || {});
                 Object.keys(nextArtboards).forEach(function(boardId) {
                     nextArtboards[boardId].layers.forEach(function(layer) { layer._templateLayer = true; });
+                    const board = nextArtboards[boardId];
+                    const boardSize = { w:Number(board.w) || SIZES[board.ratio]?.w || 1080, h:Number(board.h) || SIZES[board.ratio]?.h || 1080 };
+                    markTemplateBackgroundLayer(board.layers, boardSize);
                 });
                 artboards = nextArtboards;
                 activeTemplatePackId = event.data.sourceId || '';
@@ -12745,7 +12918,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 zIndex: 1, scale: 1, rotation: 0, flipX: false,
                 baseW: size.w, baseH: size.h,
                 src: imgSrc, fitMode: 'cover',
-                visible: true, locked: false, _templateLayer: true
+                visible: true, locked: false, _templateLayer: true,
+                role: CANVAS_BACKGROUND_ROLE, _canvasBackground: true,
+                _languageSharedBackground: true
             }];
             activeLayerIds = [];
             saveHistory(true); renderCanvas(); renderLayersList(); renderProperties(); showToast('已应用图片模板');
@@ -12755,6 +12930,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         // 并可能被新模板背景遮住，表现为随机消失。
         const newLayers = adaptPresetElementsToCurrent(p.elements, p.size);
         newLayers.forEach(function(layer) { layer._templateLayer = true; });
+        markTemplateBackgroundLayer(newLayers, SIZES[currentRatio]);
         layers = newLayers;
         activeLayerIds = [];
         saveHistory(true); renderCanvas(); renderLayersList(); renderProperties(); showToast('已切换到该模板');
@@ -12904,6 +13080,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const nextArtboards = normalizeArtboardSnapshot(pack.artboards || {});
         Object.keys(nextArtboards).forEach(function(boardId) {
             nextArtboards[boardId].layers.forEach(function(layer) { layer._templateLayer = true; });
+            const board = nextArtboards[boardId];
+            const boardSize = { w:Number(board.w) || SIZES[board.ratio]?.w || 1080, h:Number(board.h) || SIZES[board.ratio]?.h || 1080 };
+            markTemplateBackgroundLayer(board.layers, boardSize);
         });
         artboards = nextArtboards;
         activeTemplatePackId = pack.id;
@@ -13138,6 +13317,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         // 如果画板上有选中的可替换图层，替换它
         var selectedImg = layers.find(function(l) { return activeLayerIds.includes(l.id) && (l.type === 'logo' || l.type === 'image' || l.type === 'solid'); });
         if (selectedImg) {
+            const replacingCanvasBackground = selectedImg.type === 'image' && isCanvasBackgroundImage(selectedImg, layers);
             saveHistory();
             selectedImg.src = logo.src;
             selectedImg.type = assetType;
@@ -13147,7 +13327,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             if (assetType === 'logo') syncStandaloneLogoSourceAcrossLanguages(selectedImg);
             // 清理 solid 特有属性
             delete selectedImg.color;
-            delete selectedImg.role;
+            if (replacingCanvasBackground && assetType === 'image') fitCanvasBackgroundAfterReplacement(selectedImg);
+            else delete selectedImg.role;
             commitLinkedReplacement(selectedImg, [selectedImg]);
             saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast('已替换');
             return;
@@ -14521,6 +14702,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if(!target || (target.type !== 'image' && target.type !== 'logo')) {
             return showToast('原图层已不存在，未替换图片', true);
         }
+        const replacingCanvasBackground = target.type === 'image' && isCanvasBackgroundImage(target, layers);
         try {
             const src = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -14533,6 +14715,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             target.src = src;
             target.originalW = image.naturalWidth || image.width || target.originalW;
             target.originalH = image.naturalHeight || image.height || target.originalH;
+            if (replacingCanvasBackground) fitCanvasBackgroundAfterReplacement(target);
             if (target.type === 'logo') syncStandaloneLogoSourceAcrossLanguages(target);
             saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
             showToast('已替换图片');
