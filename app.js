@@ -111,7 +111,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260818-group-text-color-v410';
+const TOOL_UI_VERSION = '20260818-static-user-toolbar-v418';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -620,6 +620,13 @@ const TOOL_UI_VERSION = '20260818-group-text-color-v410';
         if (frame?.contentDocument?.body) frame.contentDocument.body.dataset.vfMode = state.interfaceMode;
       } catch (_error) {}
       try { frame?.contentWindow?.postMessage(interfaceModePayload(), location.origin); } catch (_error) {}
+    });
+  }
+
+  function broadcastUiLanguage(targetFrame) {
+    const frames = targetFrame ? [targetFrame] : Object.values(state.toolFrames || {});
+    frames.forEach(frame => {
+      try { frame?.contentWindow?.postMessage({ type: 'vf:ui-language', lang: state.lang }, location.origin); } catch (_error) {}
     });
   }
 
@@ -5546,7 +5553,7 @@ function libraryTagsForForm(formData, kind) {
         src: `./tools/library/index.html?embedded=1&role=${encodeURIComponent(legacyRole)}&mode=${encodeURIComponent(state.interfaceMode)}&v=${TOOL_UI_VERSION}`
       },
       static: {
-        src: `./tools/static/frontend.html?embedded=1&mode=${encodeURIComponent(state.interfaceMode)}&v=${TOOL_UI_VERSION}`
+        src: `./tools/static/frontend.html?embedded=1&mode=${encodeURIComponent(state.interfaceMode)}&lang=${encodeURIComponent(state.lang)}&v=${TOOL_UI_VERSION}`
       },
       dynamic: {
         src: `./tools/dynamic/animator.html?embedded=1&mode=${encodeURIComponent(state.interfaceMode)}&v=${TOOL_UI_VERSION}`
@@ -5569,11 +5576,17 @@ function libraryTagsForForm(formData, kind) {
       if (type === 'static') frame.allow = 'display-capture';
       frame.dataset.toolFrame = type;
       state.toolFrames[type] = frame;
-      frame.addEventListener('load', function() { broadcastInterfaceMode(frame); });
+      frame.addEventListener('load', function() {
+        broadcastInterfaceMode(frame);
+        broadcastUiLanguage(frame);
+      });
     }
     mount.appendChild(frame);
     state.activeFrame = frame;
-    setTimeout(function() { broadcastInterfaceMode(frame); }, 0);
+    setTimeout(function() {
+      broadcastInterfaceMode(frame);
+      broadcastUiLanguage(frame);
+    }, 0);
     // 静态 DIY iframe 会被保留在内存中。每次重新打开时重新下发云端清单，
     // 使素材库中刚删除的背景、Logo 等组件不会继续显示旧缓存。
     if (type === 'static') {
@@ -7747,8 +7760,11 @@ function libraryTagsForForm(formData, kind) {
     state.lang = state.lang === 'zh' ? 'en' : 'zh';
     localStorage.setItem('vf_lang', state.lang);
     refreshTranslations();
+    renderNav();
+    const activeRoute = ROUTES.find(route => route.id === state.route);
+    if (activeRoute && els.routeTitle) els.routeTitle.textContent = t(activeRoute.title);
     renderUserChip();
-    navigate(state.route);
+    broadcastUiLanguage();
   }
 
   function refreshTranslations() {

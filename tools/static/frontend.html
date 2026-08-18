@@ -1615,6 +1615,8 @@
         html[data-vf-mode="user"] #asset-multi-select-btn,
         html[data-vf-mode="user"] .asset-tab[data-asset-tab="recycle"] { display: none !important; }
         html[data-vf-mode="user"] .asset-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+        html[data-vf-mode="user"] .workspace-tabs { display: none !important; }
+        html[data-vf-mode="user"] .editor-layout { height: 100vh !important; }
 
         .asset-pane #refresh-asset-btn.asset-refresh-capsule {
             width: auto !important;
@@ -2935,7 +2937,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260818-group-text-color-v410">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260818-static-user-toolbar-v418">
 </head>
 <body>
 
@@ -3174,6 +3176,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         <div class="layer-context-menu" id="canvas-context-menu">
             <button type="button" id="canvas-group-selection-btn" onclick="groupSelectedLayers(); closeCanvasContextMenu();">编组</button>
             <button type="button" id="canvas-ungroup-selection-btn" onclick="ungroupSelectedLayers(); closeCanvasContextMenu();" hidden>取消编组</button>
+            <button type="button" id="canvas-sync-language-geometry-btn" onclick="syncSelectedGeometryToOtherLanguage(); closeCanvasContextMenu();" hidden>同步到 AR</button>
             <button type="button" id="canvas-save-group-btn" onclick="saveGroupCombo(); closeCanvasContextMenu();">保存组件</button>
         </div>
         <div class="layer-context-menu" id="layer-context-menu">
@@ -3184,6 +3187,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             <button type="button" onclick="centerLayerOnCanvas(); closeLayerContextMenu();">元素画板居中</button>
             <button type="button" id="ctx-group-selection-btn" onclick="groupSelectedLayers(); closeLayerContextMenu();" hidden>编组</button>
             <button type="button" id="ctx-ungroup-selection-btn" onclick="ungroupSelectedLayers(); closeLayerContextMenu();" hidden>取消编组</button>
+            <button type="button" id="ctx-sync-language-geometry-btn" onclick="syncSelectedGeometryToOtherLanguage(); closeLayerContextMenu();" hidden>同步到 AR</button>
             <button type="button" id="ctx-save-group-btn" onclick="saveGroupCombo(); closeLayerContextMenu();" style="display:none">保存组件</button>
         </div>
         <div class="artboard-preview-dock" id="artboard-preview-dock"></div>
@@ -3304,6 +3308,468 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
 <script src="https://unpkg.com/@pdf-lib/fontkit/dist/fontkit.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
 <script>
+    /* ================= UI localization =================
+       This layer translates editor chrome only. Canvas content, asset names and
+       user-entered copy are deliberately excluded so UI language never mutates
+       design data or the EN/AR canvas-version state. */
+    let VF_UI_LANGUAGE = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'zh';
+    document.documentElement.lang = VF_UI_LANGUAGE === 'en' ? 'en' : 'zh-CN';
+    document.documentElement.dataset.uiLang = VF_UI_LANGUAGE;
+    const VF_UI_TEXT_ORIGINALS = new WeakMap();
+    const VF_UI_ATTRIBUTE_ORIGINALS = new WeakMap();
+    const VF_UI_EN = Object.freeze({
+        '提示信息': 'Notification',
+        '上传到组件库': 'Upload to Component Library',
+        '选择分类': 'Choose a category',
+        '背景': 'Background',
+        '其他素材': 'Other assets',
+        '社媒物料': 'Social Media',
+        'C端物料': 'Consumer Materials',
+        '品牌圆弧': 'Brand Arc',
+        '自定义': 'Custom',
+        '组合': 'Group',
+        '套组': 'Set',
+        '版式': 'Layout',
+        '画板': 'Artboard',
+        '参考元素': 'Reference Element',
+        '标签组': 'Tag Group',
+        '折扣标签': 'Discount Tag',
+        '折扣': 'Discount',
+        '色块': 'Color Block',
+        '图像': 'Image',
+        '取消': 'Cancel',
+        '上传': 'Upload',
+        '上传字体': 'Upload Fonts',
+        '点击添加或拖拽字体文件到该处（.ttf/.otf/.ttc/.woff）': 'Click or drag font files here (.ttf/.otf/.ttc/.woff)',
+        '我拥有以上字体的商业版权': 'I have commercial rights to the fonts above',
+        '确认上传': 'Confirm Upload',
+        '完成': 'Done',
+        '添加': 'Add',
+        '移除': 'Remove',
+        '移除底图': 'Remove Base Image',
+        '打开': 'Open',
+        '打开模板': 'Open Template',
+        '保存到模版库': 'Save to Template Library',
+        '保存组合': 'Save Group',
+        '编辑画板尺寸': 'Edit Artboard Size',
+        '导出格式': 'Export Format',
+        '版本': 'Version',
+        '布局': 'Layout',
+        '参考图': 'Reference Image',
+        '常规标签': 'Standard Tag',
+        '标签底色': 'Tag Background',
+        '底色': 'Background Color',
+        '底图': 'Base Image',
+        '文字': 'Text',
+        '头图': 'Header',
+        '开屏': 'Splash',
+        '自定义字体': 'Custom Font',
+        '黑色': 'Black',
+        '黄色': 'Yellow',
+        '白色 Logo': 'White Logo',
+        '黄色 Logo': 'Yellow Logo',
+        '黑色 Logo': 'Black Logo',
+        '解锁': 'Unlock',
+        '镜像反转': 'Flip',
+        '宽度': 'Width',
+        '画板宽度': 'Artboard Width',
+        '画板高度': 'Artboard Height',
+        '选择 Logo': 'Choose Logo',
+        '继续添加参考图': 'Add More Reference Images',
+        '正在导出高清海报': 'Exporting High-Resolution Poster',
+        '渲染引擎正在剥离涂层并切片，请勿关闭...': 'The render engine is preparing and slicing the artwork. Please keep this page open…',
+        '品牌资产与全局设置': 'Brand Assets & Global Settings',
+        '即梦 API 连接': 'Jimeng API Connection',
+        '即梦 API 未检测': 'Jimeng API not checked',
+        '粘贴即梦 sessionid…': 'Paste Jimeng sessionid…',
+        '粘贴即梦 Session ID': 'Paste Jimeng Session ID',
+        '保存': 'Save',
+        '一键获取': 'Fetch Automatically',
+        '检测': 'Check',
+        '检测连接': 'Check Connection',
+        '保存凭证': 'Save Credentials',
+        '自动获取': 'Fetch Automatically',
+        '粘贴即梦网站的 sessionid Cookie，或点击"一键获取"从云端拉取管理员同步的凭证。': 'Paste the sessionid cookie from Jimeng, or select “Fetch Automatically” to retrieve the credentials synced by an administrator.',
+        '字体上传': 'Font Upload',
+        '拖拽字体文件到这里上传': 'Drag font files here to upload',
+        '或点击选择多个 .ttf / .otf / .ttc / .woff / .woff2 文件': 'or click to select multiple .ttf, .otf, .ttc, .woff or .woff2 files',
+        '上传后会自动按字体家族合并字重，并同步到当前的字体列表。': 'Uploaded weights are grouped automatically by font family and added to the current font list.',
+        '资产备份与迁移': 'Asset Backup & Migration',
+        '导出资产备份': 'Export Asset Backup',
+        '导入资产备份': 'Import Asset Backup',
+        '导入版式': 'Import Layouts',
+        '导入标签组': 'Import Tag Groups',
+        '导入Logo': 'Import Logos',
+        '正式版和测试版按域名隔离。先在正式版导出资产备份，再到测试版导入，可恢复版式、标签组、色彩、字体与 Logo。': 'Production and test environments are isolated by domain. Export a backup from production and import it into the test environment to restore layouts, tag groups, colors, fonts and logos.',
+        '生图关键词标签': 'Image-Generation Keyword Tags',
+        '+ 添加关键词标签': '+ Add Keyword Tag',
+        '标签色彩预设管理': 'Tag Color Presets',
+        '+ 添加新色彩预设': '+ Add Color Preset',
+        '圆弧色彩预设管理': 'Arc Color Presets',
+        '+ 添加新圆弧预设': '+ Add Arc Preset',
+        '保存并同步全部预设': 'Save & Sync All Presets',
+        '会同时保存并同步生图关键词、标签配色和圆弧配色；关键词仅在此窗口管理，不会显示在素材库。': 'Saves and syncs image-generation keywords, tag colors and arc colors. Keywords are managed only here and do not appear in the asset library.',
+        '新建画板': 'New Artboard',
+        '自定义尺寸': 'Custom Size',
+        '宽': 'Width',
+        '高': 'Height',
+        '创建': 'Create',
+        '预设画板': 'Artboard Presets',
+        '头图 750*500': 'Header 750 × 500',
+        '开屏 1000*2168': 'Splash 1000 × 2168',
+        '关闭': 'Close',
+        '资产库': 'Asset Library',
+        '多选': 'Select Multiple',
+        '刷新': 'Refresh',
+        '刷新资产库': 'Refresh Asset Library',
+        '模板': 'Templates',
+        '组件': 'Components',
+        '回收站': 'Recycle Bin',
+        '搜索名称、比例或尺寸…': 'Search by name, ratio or size…',
+        '搜索组件名称…': 'Search components…',
+        '移动分组': 'Move to Group',
+        '创建书签': 'Create Bookmark',
+        '释放以添加资产': 'Drop to add assets',
+        '加入生图参考图': 'Add as Image Reference',
+        '模板编组': 'Group Templates',
+        '重命名素材': 'Rename Asset',
+        '删除': 'Delete',
+        '展开或折叠资产库': 'Expand or collapse Asset Library',
+        '保存模板': 'Save Template',
+        '修改尺寸': 'Resize',
+        '一键延展': 'Extend Canvas',
+        '导出': 'Export',
+        '更多': 'More',
+        '尺寸': 'Size',
+        '设置': 'Settings',
+        '安全区': 'Safe Area',
+        '画板语言版本': 'Canvas Language Version',
+        '将 EN 内容和位置复制到 AR': 'Copy EN content and positions to AR',
+        '编组': 'Group',
+        '取消编组': 'Ungroup',
+        '同步到 AR': 'Sync to AR',
+        '同步到 EN': 'Sync to EN',
+        '◻ 方形': '◻ Square',
+        '▬ 横版': '▬ Horizontal',
+        '🪄 去除背景': '🪄 Remove Background',
+        '↩ 还原背景': '↩ Restore Background',
+        '超限': 'Over limit',
+        '保存组件': 'Save Component',
+        '替换图片': 'Replace Image',
+        '复制图层': 'Duplicate Layer',
+        '隐藏当前版本': 'Hide in Current Version',
+        '元素画板居中': 'Center on Artboard',
+        '关联画板集合': 'Linked Artboards',
+        '画布检查器': 'Canvas Inspector',
+        '图层': 'Layers',
+        '编辑': 'Edit',
+        '生图': 'Generate',
+        'AI 正在处理...': 'AI is processing…',
+        '撤回': 'Undo',
+        '重做': 'Redo',
+        '关闭检查器': 'Close Inspector',
+        '按选中图片原始尺寸适配画布': 'Fit artboard to the selected image’s original size',
+        '清空当前画板的全部图层': 'Clear all layers on the current artboard',
+        '拖动调整图层列表高度': 'Drag to resize the layer list',
+        '请在上方或画板中选择图层': 'Select a layer above or on the artboard',
+        '重新获取即梦 Session ID': 'Refresh Jimeng Session ID',
+        '刷新即梦凭证': 'Refresh Jimeng Credentials',
+        '拖拽或上传参考图，最多 8 张；也可以只输入文字描述。': 'Drag or upload up to 8 reference images, or enter a text prompt only.',
+        '上传参考图、输入文字描述或点选标签': 'Upload reference images, enter a prompt, or select tags',
+        '添加图片参考': 'Add Reference Image',
+        'Skills 技能': 'Skills',
+        '生成尺寸 · 1:1': 'Output Size · 1:1',
+        '生成尺寸 1:1': 'Output Size 1:1',
+        '自动（跟画板）': 'Auto (match artboard)',
+        '即梦模型 · 5.0 Lite': 'Jimeng Model · 5.0 Lite',
+        '即梦模型 5.0 Lite': 'Jimeng Model 5.0 Lite',
+        '一键生图': 'Generate Image',
+        '确定': 'Confirm',
+        '确认': 'Confirm',
+        '确认操作': 'Confirm Action',
+        '确认保存': 'Confirm Save',
+        '确认保存模板': 'Confirm Template Save',
+        'EN 模板': 'an EN template',
+        'AR 模板': 'an AR template',
+        '未标记语言的模板': 'an unlabelled template',
+        '未命名模板': 'Untitled Template',
+        '文本属性': 'Text Properties',
+        '文字内容': 'Text',
+        '文案内容': 'Copy',
+        '字体': 'Font',
+        '字体选择': 'Font',
+        '字重': 'Weight',
+        '黑体': 'Black',
+        '特粗': 'Extra Bold',
+        '加粗': 'Bold',
+        '中等': 'Medium',
+        '常规': 'Regular',
+        '细体': 'Light',
+        '颜色': 'Color',
+        '字号': 'Font Size',
+        '对齐': 'Alignment',
+        '左对齐': 'Align Left',
+        '居中': 'Center',
+        '右对齐': 'Align Right',
+        '高级设置': 'Advanced Settings',
+        '居中画板': 'Center on Artboard',
+        '图片属性调整': 'Image Adjustments',
+        '图片适配': 'Image Fit',
+        '铺满': 'Fill',
+        '完整': 'Fit',
+        '原图': 'Original',
+        '不透明度': 'Opacity',
+        '缩放': 'Scale',
+        '旋转': 'Rotation',
+        '镜像': 'Flip',
+        '单一Logo': 'Single Logo',
+        '单一 Logo': 'Single Logo',
+        'Logo左右组合': 'Side-by-Side Logos',
+        'Logo 左右组合': 'Side-by-Side Logos',
+        'Logo矩阵': 'Logo Grid',
+        'Logo 矩阵': 'Logo Grid',
+        'Logo 列表（最多 8 个，可拖拽排序）': 'Logo List (up to 8; drag to reorder)',
+        'Logo 列表（可拖拽排序）': 'Logo List (drag to reorder)',
+        '圆角大小': 'Corner Radius',
+        '行间距': 'Row Gap',
+        '列间距': 'Column Gap',
+        '拖拽 Logo 图片到此处上传': 'Drag a logo image here to upload',
+        '拖拽右侧 Logo 图片到此处上传': 'Drag the right-side logo image here to upload',
+        '拖拽或点击替换 Logo': 'Drag or click to replace logo',
+        '方形': 'Square',
+        '横版': 'Horizontal',
+        '去除背景': 'Remove Background',
+        '还原背景': 'Restore Background',
+        'Logo 底色': 'Logo Background',
+        '自动识别': 'Auto Detect',
+        '保持透明': 'Keep Transparent',
+        '品牌样式': 'Brand Style',
+        '标签高度': 'Tag Height',
+        '标签配色': 'Tag Colors',
+        '圆环配色': 'Arc Colors',
+        '圆角': 'Corner Radius',
+        '字间距': 'Letter Spacing',
+        '内边距': 'Padding',
+        '文字上下': 'Vertical Text Offset',
+        '投影厚度': 'Shadow Depth',
+        '投影透明': 'Shadow Opacity',
+        '语言格式': 'Language',
+        '主文字': 'Primary Text',
+        '右上角': 'Top Right',
+        '右下角': 'Bottom Right',
+        '+ 添加副标题': '+ Add Subtitle',
+        '编组内容': 'Group Contents',
+        '编组文字颜色': 'Group Text Color',
+        '全部': 'All',
+        '图片图层': 'Image',
+        '文本': 'Text',
+        '添加Logo': 'Add Logo',
+        '圆弧': 'Arc',
+        '标签': 'Tag',
+        '清空': 'Clear',
+        '重命名': 'Rename',
+        '下载预览图': 'Download Preview',
+        '下载模板': 'Download Template',
+        '打开静态模板': 'Open Static Template',
+        '编辑模板编组': 'Edit Template Group',
+        '释放编组': 'Release Group',
+        '查看详情': 'View Details',
+        '编辑信息': 'Edit Details',
+        '选择模板即可打开。': 'Select a template to open it.',
+        '模板快捷书签': 'Template Bookmark',
+        '模板书签': 'Template Bookmark',
+        '多画板模板集合': 'Multi-Artboard Template Set',
+        '暂无可用关联模板': 'No linked templates available',
+        '保存关联': 'Save Links',
+        '读取中': 'Loading',
+        '正在读取书签关联模板，请稍候…': 'Loading bookmarked templates…',
+        '正在创建模板编组...': 'Creating template group…',
+        '正在更新模板编组...': 'Updating template group…',
+        '正在保存到素材库...': 'Saving to Asset Library…',
+        '正在保存并同步全部预设…': 'Saving and syncing all presets…',
+        '模型正在生成画面...': 'The model is generating an image…',
+        '参考图读取失败': 'Failed to read reference image',
+        'Logo 图片读取失败': 'Failed to read logo image',
+        '图片读取失败': 'Failed to read image',
+        '图片加载失败': 'Failed to load image',
+        '原图读取失败': 'Failed to read original image',
+        '未知错误': 'Unknown error',
+        '请稍后重试': 'Please try again shortly',
+        '操作失败': 'Operation failed',
+        '无法连接服务器': 'Unable to connect to the server',
+        '无法生成文件': 'Unable to generate the file',
+        '画板为空，无法导出': 'The artboard is empty and cannot be exported',
+        '请输入 64 到 6000 px 的宽度和高度': 'Enter a width and height between 64 and 6000 px',
+        '请拖入 PNG/JPG/WebP 图片': 'Drop a PNG, JPG or WebP image',
+        '请先选中一张图片图层': 'Select an image layer first',
+        '请至少选择 1 个模板': 'Select at least one template',
+        '文字最多两行，不可出现第三行': 'Text is limited to two lines',
+        'Logo 处理失败，请换一张图片重试': 'Logo processing failed. Try another image.',
+        'Logo 矩阵最多只能添加 8 个 Logo': 'A logo grid supports up to 8 logos',
+        '背景已去除': 'Background removed',
+        '已替换': 'Replaced',
+        '该字体已安装，可直接使用': 'This font is already installed and ready to use',
+        '副本': 'Copy',
+        '输入这个标签代表的完整关键词': 'Enter the full prompt represented by this tag',
+        '模板文字不可删除': 'Template text cannot be deleted',
+        '模板 Logo 组件不可删除': 'Template logo components cannot be deleted',
+        '模板标签不可删除': 'Template tags cannot be deleted',
+        '模板圆环不可删除': 'Template arcs cannot be deleted',
+        '用户模式下不能移动模板圆弧': 'Template arcs cannot be moved in User Mode',
+        '用户模式下不能移动模板标签': 'Template tags cannot be moved in User Mode',
+        '用户模式下不能移动模板 Logo 组件': 'Template logo components cannot be moved in User Mode',
+        '用户模式下不能移动模板文字': 'Template text cannot be moved in User Mode'
+    });
+    const VF_UI_EN_PATTERNS = [
+        [/^已选择\s*(\d+)\s*个图层$/, (_, count) => `${count} layer${count === '1' ? '' : 's'} selected`],
+        [/^已选\s*(\d+)\s*项$/, (_, count) => `${count} item${count === '1' ? '' : 's'} selected`],
+        [/^已选\s*(\d+)\s*个模板$/, (_, count) => `${count} template${count === '1' ? '' : 's'} selected`],
+        [/^显示\s*(\d+)\s*个模板$/, (_, count) => `${count} template${count === '1' ? '' : 's'} shown`],
+        [/^最多\s*(\d+)\s*张参考图$/, (_, count) => `Up to ${count} reference images`],
+        [/^将当前画布保存为(.+?)？保存后可在资产库的模板中使用。$/, (_, type) => `Save the current canvas as ${translateVFUiString(type, 'en')}? It will be available under Templates in the Asset Library.`],
+        [/^模板(.+?)不可删除$/, (_, type) => `Template ${type} cannot be deleted`],
+        [/^同步到\s*(EN|AR)$/, (_, language) => `Sync to ${language}`],
+        [/^已添加 Logo（(\d+) 个）$/, (_, count) => `${count} logo${count === '1' ? '' : 's'} added`],
+        [/^Logo 矩阵最多 8 个，已添加前\s*(\d+)\s*个$/, (_, count) => `Logo grids support up to 8 logos; the first ${count} were added`],
+        [/^(全部|标签|背景|品牌圆弧|字体|组合|其他素材)\s*·\s*(\d+)$/, (_, label, count) => `${translateVFUiString(label, 'en')} · ${count}`],
+        [/^1倍（原图）$/, () => '1× (Original)'],
+        [/^(0\.5|1|1\.5|2|3)倍$/, (_, scale) => `${scale}×`],
+        [/^已切换到\s*(EN|AR)\s*版本$/, (_, language) => `Switched to the ${language} version`],
+        [/^已切换为(横版|方形)布局$/, (_, shape) => `Switched to ${translateVFUiString(shape, 'en')} layout`],
+        [/^已切换至\s*(.+)$/, (_, preset) => `Switched to ${translateVFUiString(preset, 'en')}`],
+        [/^正在去除背景\.\.\.$/, () => 'Removing background…'],
+        [/^确定删除模板「(.+)」？模板会先进入回收站，刷新网页后才会彻底删除。$/, (_, name) => `Delete “${name}”? The template will move to the Recycle Bin and be permanently removed after the page is refreshed.`],
+        [/^确定删除模板「(.+)」？此操作不可恢复，删除后所有引用它的书签都会移除该成员。$/, (_, name) => `Permanently delete “${name}”? This cannot be undone, and the template will be removed from every bookmark that references it.`]
+        ,[/^❌ 导出失败：(.*)$/, (_, detail) => `❌ Export failed: ${detail}`]
+        ,[/^❌ 保存失败：(.*)$/, (_, detail) => `❌ Save failed: ${detail}`]
+        ,[/^❌ 原生 PNG 导出失败：(.*)$/, (_, detail) => `❌ Native PNG export failed: ${detail}`]
+        ,[/^❌ 批量导出失败：(.*)$/, (_, detail) => `❌ Batch export failed: ${detail}`]
+        ,[/^❌ 模板编组更新失败：(.*)$/, (_, detail) => `❌ Failed to update template group: ${detail}`]
+        ,[/^提示词优化失败：(.*)$/, (_, detail) => `Prompt optimization failed: ${detail}`]
+        ,[/^✅ 已保存到素材库：(.*)$/, (_, name) => `✅ Saved to Asset Library: ${name}`]
+        ,[/^已应用组合：(.*)$/, (_, name) => `Group applied: ${name}`]
+        ,[/^已安装字体：(.*)$/, (_, name) => `Installed font: ${name}`]
+        ,[/^(\d+(?:\.\d+)?)倍 PNG 导出成功$/, (_, scale) => `${scale}× PNG exported successfully`]
+        ,[/^(\d+(?:\.\d+)?)倍 JPG 导出成功$/, (_, scale) => `${scale}× JPG exported successfully`]
+    ];
+    function translateVFUiString(value, language = VF_UI_LANGUAGE) {
+        if (language !== 'en' || typeof value !== 'string' || !value) return value;
+        const leading = value.match(/^\s*/)?.[0] || '';
+        const trailing = value.match(/\s*$/)?.[0] || '';
+        const core = value.trim();
+        if (!core) return value;
+        if (Object.prototype.hasOwnProperty.call(VF_UI_EN, core)) return leading + VF_UI_EN[core] + trailing;
+        for (const [pattern, formatter] of VF_UI_EN_PATTERNS) {
+            const match = core.match(pattern);
+            if (match) return leading + formatter(...match) + trailing;
+        }
+        return value;
+    }
+    function shouldSkipVFUiTranslation(element) {
+        if (!element || element.nodeType !== 1) return false;
+        return Boolean(element.closest(
+            '#dynamic-layers, #asset-grid, #layer-list, #linked-artboard-dock, #ai-prompt-input, '
+            + '.asset-item, .asset-card, .layer-name, .layer-preview, .ai-reference-thumb, '
+            + '[contenteditable="true"], [data-user-content]'
+        ));
+    }
+    function translateVFUiElementAttributes(element) {
+        if (!element || element.nodeType !== 1 || shouldSkipVFUiTranslation(element)) return;
+        ['title', 'aria-label', 'placeholder', 'data-tooltip', 'data-placeholder'].forEach(attribute => {
+            if (!element.hasAttribute(attribute)) return;
+            const current = element.getAttribute(attribute);
+            let originals = VF_UI_ATTRIBUTE_ORIGINALS.get(element);
+            if (!originals) {
+                originals = Object.create(null);
+                VF_UI_ATTRIBUTE_ORIGINALS.set(element, originals);
+            }
+            let original = originals[attribute];
+            if (original === undefined) {
+                original = current;
+            } else {
+                const previousEnglish = translateVFUiString(original, 'en');
+                if (current !== original && current !== previousEnglish) original = current;
+            }
+            originals[attribute] = original;
+            const target = VF_UI_LANGUAGE === 'en' ? translateVFUiString(original, 'en') : original;
+            if (target !== current) element.setAttribute(attribute, target);
+        });
+    }
+    function translateVFUiTextNode(node) {
+        if (!node || node.nodeType !== Node.TEXT_NODE) return;
+        const parent = node.parentElement;
+        if (!parent || shouldSkipVFUiTranslation(parent) || ['SCRIPT', 'STYLE', 'TEXTAREA'].includes(parent.tagName)) return;
+        const current = node.nodeValue;
+        let original = VF_UI_TEXT_ORIGINALS.get(node);
+        if (original === undefined) {
+            original = current;
+        } else {
+            const previousEnglish = translateVFUiString(original, 'en');
+            if (current !== original && current !== previousEnglish) original = current;
+        }
+        VF_UI_TEXT_ORIGINALS.set(node, original);
+        const target = VF_UI_LANGUAGE === 'en' ? translateVFUiString(original, 'en') : original;
+        if (target !== current) node.nodeValue = target;
+    }
+    function translateVFUiTree(root) {
+        if (!root) return;
+        if (root.nodeType === Node.TEXT_NODE) {
+            translateVFUiTextNode(root);
+            return;
+        }
+        if (root.nodeType === 1) translateVFUiElementAttributes(root);
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                translateVFUiTextNode(node);
+            } else {
+                translateVFUiElementAttributes(node);
+            }
+        }
+    }
+    function applyVFUiLanguage(language) {
+        VF_UI_LANGUAGE = language === 'en' ? 'en' : 'zh';
+        document.documentElement.lang = VF_UI_LANGUAGE === 'en' ? 'en' : 'zh-CN';
+        document.documentElement.dataset.uiLang = VF_UI_LANGUAGE;
+        if (document.body) translateVFUiTree(document.body);
+    }
+    function initializeVFUiLocalization() {
+        if (!document.body || document.body.dataset.vfUiLocalized === '1') return;
+        document.body.dataset.vfUiLocalized = '1';
+        translateVFUiTree(document.body);
+        const observer = new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                if (mutation.type === 'characterData') {
+                    translateVFUiTextNode(mutation.target);
+                    return;
+                }
+                if (mutation.type === 'attributes') {
+                    translateVFUiElementAttributes(mutation.target);
+                    return;
+                }
+                mutation.addedNodes.forEach(translateVFUiTree);
+            });
+        });
+        observer.observe(document.body, {
+            subtree: true,
+            childList: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['title', 'aria-label', 'placeholder', 'data-tooltip', 'data-placeholder']
+        });
+        window.vfUiLocalizationObserver = observer;
+    }
+    window.addEventListener('message', function(event) {
+        if (event.source !== window.parent || event.data?.type !== 'vf:ui-language') return;
+        applyVFUiLanguage(event.data.lang);
+    });
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeVFUiLocalization, { once: true });
+    } else {
+        initializeVFUiLocalization();
+    }
+
     /* ================= 全局状态与常量 ================= */
     const INITIAL_EMBEDDED_INTERFACE_MODE = new URLSearchParams(location.search).get('mode') === 'user' ? 'user' : 'developer';
     function applyEmbeddedInterfaceMode(mode, rerender) {
@@ -3491,6 +3957,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     const LANGUAGE_VARIANT_DISCOUNT_PROPS = ['mainText', 'topText', 'bottomText', 'subtitle', 'discountLang', 'sideLineGap', 'topFontSize', 'bottomFontSize'];
     const LANGUAGE_VARIANT_LOGO_LAYOUT_PROPS = ['slots', 'mainLogoSrc', 'mainLogoStyle', '_pairWideAutoOffset', '_pairWideAutoScaleFactor'];
     const LANGUAGE_VARIANT_LINKED_GEOMETRY_PROPS = LANGUAGE_VARIANT_PLACEMENT_PROPS.concat(['resizeMode', 'maxWidth', 'textBoxHeight', 'textBoxAnchor', 'textDirection', 'textDirectionMode', 'textAlign', 'textAlignMode', '_userAutoWrapped', '_userAutoFitBaseLetterSpacing']);
+    // 右键“同步到另一语言”只复制几何数据，不覆盖文字、Logo 图片或标签内容。
+    const LANGUAGE_VARIANT_MANUAL_GEOMETRY_PROPS = LANGUAGE_VARIANT_PLACEMENT_PROPS.concat([
+        'resizeMode', 'maxWidth', 'textBoxHeight', 'textBoxAnchor',
+        '_userAutoWrapped', '_userAutoFitBaseLetterSpacing',
+        '_pairWideAutoOffset', '_pairWideAutoScaleFactor'
+    ]);
 
     function normalizeCanvasLanguage(language) {
         return String(language || '').toLowerCase() === 'ar' ? 'ar' : 'en';
@@ -4826,7 +5298,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             return;
         }
         toast.style.display = '';
-        toast.innerText = msg;
+        toast.innerText = translateVFUiString(String(msg ?? ''));
         toast.style.background = isError ? 'var(--danger)' : 'var(--text-main)';
         toast.style.opacity = 1;
         toast.style.transform = 'translate(-50%, 0)';
@@ -4859,8 +5331,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const message = document.getElementById('mini-dialog-message');
             const ok = document.getElementById('mini-dialog-ok');
             const cancel = document.getElementById('mini-dialog-cancel');
-            titleEl.innerText = title; message.style.display = 'none'; input.style.display = 'block'; input.value = defaultValue;
-            ok.textContent = '确定'; cancel.textContent = '取消';
+            titleEl.innerText = translateVFUiString(title); message.style.display = 'none'; input.style.display = 'block'; input.value = defaultValue;
+            ok.textContent = translateVFUiString('确定'); cancel.textContent = translateVFUiString('取消');
             overlay.style.display = 'flex';
             setTimeout(() => { input.focus(); input.select(); }, 30);
             const cleanup = value => { overlay.style.display = 'none'; ok.onclick = null; cancel.onclick = null; input.onkeydown = null; resolve(value); };
@@ -4880,11 +5352,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const message = document.getElementById('mini-dialog-message');
             const ok = document.getElementById('mini-dialog-ok');
             const cancel = document.getElementById('mini-dialog-cancel');
-            titleEl.innerText = title;
+            titleEl.innerText = translateVFUiString(title);
             message.style.display = 'none';
             input.style.display = 'block';
             input.value = defaultValue;
-            ok.textContent = '确定'; cancel.textContent = '取消';
+            ok.textContent = translateVFUiString('确定'); cancel.textContent = translateVFUiString('取消');
             overlay.style.display = 'flex';
             setTimeout(() => { input.focus(); input.select(); }, 30);
             let finished = false;
@@ -4932,12 +5404,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const ok = document.getElementById('mini-dialog-ok');
             const cancel = document.getElementById('mini-dialog-cancel');
             const languageText = language === 'EN' ? 'EN 模板' : (language === 'AR' ? 'AR 模板' : '未标记语言的模板');
-            titleEl.innerText = '确认保存模板';
-            message.innerText = '将当前画布保存为' + languageText + '？保存后可在资产库的模板中使用。';
+            titleEl.innerText = translateVFUiString('确认保存模板');
+            message.innerText = translateVFUiString('将当前画布保存为' + languageText + '？保存后可在资产库的模板中使用。');
             message.style.display = 'block';
             input.style.display = 'none';
-            ok.textContent = '确认保存';
-            cancel.textContent = '取消';
+            ok.textContent = translateVFUiString('确认保存');
+            cancel.textContent = translateVFUiString('取消');
             overlay.style.display = 'flex';
             let finished = false;
             const cleanup = () => {
@@ -4969,8 +5441,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const message = document.getElementById('mini-dialog-message');
             const ok = document.getElementById('mini-dialog-ok');
             const cancel = document.getElementById('mini-dialog-cancel');
-            titleEl.innerText = '确认操作'; message.innerText = messageText; message.style.display = 'block'; input.style.display = 'none';
-            ok.textContent = '确定'; cancel.textContent = '取消';
+            titleEl.innerText = translateVFUiString('确认操作'); message.innerText = translateVFUiString(messageText); message.style.display = 'block'; input.style.display = 'none';
+            ok.textContent = translateVFUiString('确定'); cancel.textContent = translateVFUiString('取消');
             overlay.style.display = 'flex';
             const cleanup = value => { overlay.style.display = 'none'; ok.onclick = null; cancel.onclick = null; resolve(value); };
             ok.onclick = () => cleanup(true);
@@ -7006,11 +7478,51 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         });
         if (changed) { renderCanvas(); renderLayersList(); renderProperties(); }
     }
+    function getLogoMatrixRowCounts(count) {
+        var total = Math.max(0, Math.min(8, Number(count) || 0));
+        if (total <= 4) return [Math.max(1, total)];
+        if (total === 5) return [3, 2];
+        if (total === 6) return [3, 3];
+        if (total === 7) return [4, 3];
+        return [4, 4];
+    }
+    function applyLogoMatrixAutoLayout(layer) {
+        if (!layer || layer.type !== 'logoLayout' || layer.logoLayout !== 'matrix') return null;
+        var filledSlots = (Array.isArray(layer.slots) ? layer.slots : [])
+            .filter(function(slot) { return slot && slot.src; })
+            .slice(0, 8);
+        layer.slots = filledSlots;
+        var rowCounts = getLogoMatrixRowCounts(filledSlots.length);
+        var rows = rowCounts.length;
+        var cols = Math.max.apply(Math, rowCounts);
+        var slotSize = Math.max(24, Number(layer.slotSize) || 140);
+        var rowGap = Math.max(0, Number(layer.matrixRowGap !== undefined ? layer.matrixRowGap : 12) || 0);
+        var colGap = Math.max(0, Number(layer.matrixColGap !== undefined ? layer.matrixColGap : 12) || 0);
+        layer.rows = rows;
+        layer.cols = cols;
+        layer.baseW = cols * slotSize + Math.max(0, cols - 1) * colGap;
+        layer.baseH = rows * slotSize + Math.max(0, rows - 1) * rowGap;
+        return { slots:filledSlots, rowCounts:rowCounts, rows:rows, cols:cols, slotSize:slotSize, rowGap:rowGap, colGap:colGap };
+    }
     function addLogoLayout(layout) {
         const {w, h} = SIZES[currentRatio];
         let config;
         if(layout === 'matrix') {
-            config = { logoLayout:'matrix', baseW:292, baseH:292, rows:2, cols:2, slotSize:140, matrixRowGap:12, matrixColGap:12, slots:[{}, {}, {}, {}] };
+            config = {
+                logoLayout:'matrix',
+                baseW:140,
+                baseH:140,
+                rows:1,
+                cols:1,
+                slotSize:140,
+                matrixRowGap:16,
+                matrixColGap:14,
+                borderRadius:22,
+                opacity:1,
+                scale:1.36,
+                rotation:0,
+                slots:[]
+            };
         } else if(layout === 'single') {
             config = { logoLayout:'single', baseW:210, baseH:210, slots:[{}] };
         } else {
@@ -7028,6 +7540,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     function chooseLocalLogoForLayout(layerId, slotIndex) {
         pendingLogoLayoutSlot = { layerId:layerId, slotIndex:slotIndex };
         const input = document.getElementById('logo-layout-upload');
+        input.multiple = false;
         if(input) { input.value = ''; input.click(); }
     }
     function openKeetaLogoStylePicker(layerId) {
@@ -7156,21 +7669,29 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const slots = Array.isArray(l.slots) ? l.slots : [];
             if (interactive) scheduleLogoLayoutBackgroundRecovery(l);
             if(l.logoLayout === 'matrix') {
-                var rows = l.rows || 2, cols = l.cols || 2;
-                var slotSize = l.slotSize || 140;
-                var matrixRowGap = Math.max(0, Number(l.matrixRowGap !== undefined ? l.matrixRowGap : 12) || 0);
-                var matrixColGap = Math.max(0, Number(l.matrixColGap !== undefined ? l.matrixColGap : 12) || 0);
-                l.baseW = cols * slotSize + (cols - 1) * matrixColGap;
-                l.baseH = rows * slotSize + (rows - 1) * matrixRowGap;
+                var matrixLayout = applyLogoMatrixAutoLayout(l);
+                var slotSize = matrixLayout.slotSize;
+                var matrixRowGap = matrixLayout.rowGap;
+                var matrixColGap = matrixLayout.colGap;
                 wrapper.style.width = l.baseW + 'px'; wrapper.style.height = l.baseH + 'px';
-                var total = rows * cols;
-                wrapper.innerHTML = '<div class="logo-layout-matrix" style="grid-template-columns:repeat(' + cols + ',' + slotSize + 'px);grid-template-rows:repeat(' + rows + ',' + slotSize + 'px);column-gap:' + matrixColGap + 'px;row-gap:' + matrixRowGap + 'px;">' + Array.from({length: total}, function(_, i) { return getLogoLayoutSlotHTML(slots[i], i); }).join('') + '</div>';
+                var matrixSlotIndex = 0;
+                var matrixRowsHtml = matrixLayout.rowCounts.map(function(rowCount) {
+                    var rowHtml = Array.from({length:rowCount}, function() {
+                        var slotIndex = matrixSlotIndex++;
+                        return getLogoLayoutSlotHTML(matrixLayout.slots[slotIndex], slotIndex);
+                    }).join('');
+                    return '<div class="logo-layout-matrix-row" style="display:flex;justify-content:center;gap:' + matrixColGap + 'px;width:100%;height:' + slotSize + 'px;">' + rowHtml + '</div>';
+                }).join('');
+                wrapper.innerHTML = '<div class="logo-layout-matrix" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:' + matrixRowGap + 'px;width:100%;height:100%;">' + matrixRowsHtml + '</div>';
                 // 每个槽位独立背景色 + 圆角
                 var br = l.borderRadius !== undefined ? l.borderRadius : 16;
                 wrapper.querySelectorAll('[data-logo-slot]').forEach(function(slotEl) {
                     var si = Number(slotEl.dataset.logoSlot);
-                    var slot = slots[si];
+                    var slot = matrixLayout.slots[si];
                     var bg = (slot && slot.bgColor) ? slot.bgColor : '#fff';
+                    slotEl.style.flex = '0 0 ' + slotSize + 'px';
+                    slotEl.style.width = slotSize + 'px';
+                    slotEl.style.height = slotSize + 'px';
                     slotEl.style.background = bg;
                     slotEl.style.borderRadius = br + 'px';
                     if (slot && slot.src) slotEl.style.border = 'none';
@@ -7930,9 +8451,15 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const activeGroup = getActiveEditorGroup();
         const groupButton = document.getElementById(prefix === 'canvas' ? 'canvas-group-selection-btn' : 'ctx-group-selection-btn');
         const ungroupButton = document.getElementById(prefix === 'canvas' ? 'canvas-ungroup-selection-btn' : 'ctx-ungroup-selection-btn');
+        const syncGeometryButton = document.getElementById(prefix === 'canvas' ? 'canvas-sync-language-geometry-btn' : 'ctx-sync-language-geometry-btn');
         const saveButton = document.getElementById(prefix === 'canvas' ? 'canvas-save-group-btn' : 'ctx-save-group-btn');
         if (groupButton) groupButton.hidden = activeLayerIds.length < 2 || !!activeGroup || isUserInterfaceMode();
         if (ungroupButton) ungroupButton.hidden = !activeGroup || isUserInterfaceMode();
+        if (syncGeometryButton) {
+            const targetLanguage = normalizeCanvasLanguage(currentCanvasLanguage) === 'en' ? 'AR' : 'EN';
+            syncGeometryButton.hidden = isUserInterfaceMode() || activeLayerIds.length < 1;
+            syncGeometryButton.textContent = '同步到 ' + targetLanguage;
+        }
         if (saveButton) saveButton.hidden = isUserInterfaceMode();
     }
     function hasVisibleContextMenuAction(menu) {
@@ -7971,6 +8498,58 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         });
         showToast('已在 ' + language.toUpperCase() + ' 版本隐藏该组件');
     }
+    function syncSelectedGeometryToOtherLanguage() {
+        if (isUserInterfaceMode()) return;
+        var selectedIds = expandSelectionToEditorGroups(activeLayerIds.length ? activeLayerIds : [_contextMenuLayerId].filter(Boolean));
+        var selectedLayers = selectedIds.map(function(id) {
+            return layers.find(function(layer) { return layer.id === id; });
+        }).filter(Boolean);
+        if (!selectedLayers.length) return showToast('请先选择要同步的元素', true);
+
+        var sourceLanguage = normalizeCanvasLanguage(currentCanvasLanguage);
+        var targetLanguage = sourceLanguage === 'en' ? 'ar' : 'en';
+        var syncedCount = 0;
+        selectedLayers.forEach(function(layer) {
+            if (isLanguageSharedBackgroundLayer(layer, layers)) return;
+            var variants = ensureLayerLanguageVariants(layer, layers, sourceLanguage);
+            if (!variants) return;
+            var currentSnapshot = snapshotLayerLanguageVariant(layer, layers);
+            variants[sourceLanguage] = cloneData(currentSnapshot);
+
+            // 目标语言尚未建立时，先生成一份完整基线，防止切换时丢失内容；
+            // 随后只对几何字段进行覆盖。折扣标签会保持目标语言模式。
+            if (!variants[targetLanguage]) {
+                variants[targetLanguage] = layer.type === 'discountTag'
+                    ? createDiscountLanguageVariant(currentSnapshot, targetLanguage)
+                    : cloneData(currentSnapshot);
+            }
+            var targetVariant = variants[targetLanguage];
+            var supportedProps = new Set(getLanguageVariantProps(layer, layers));
+            LANGUAGE_VARIANT_MANUAL_GEOMETRY_PROPS.forEach(function(prop) {
+                if (!supportedProps.has(prop)) return;
+                if (Object.prototype.hasOwnProperty.call(currentSnapshot, prop)) {
+                    targetVariant[prop] = cloneLanguageValue(currentSnapshot[prop]);
+                } else {
+                    delete targetVariant[prop];
+                }
+            });
+            if (layer._languagePendingPlacement) {
+                delete layer._languagePendingPlacement[targetLanguage];
+                if (!Object.keys(layer._languagePendingPlacement).length) delete layer._languagePendingPlacement;
+            }
+            syncedCount++;
+        });
+        if (!syncedCount) return showToast('选中的元素在两个语言版本中本来就是共享的', true);
+
+        currentCanvasLanguagesInitialized[targetLanguage] = true;
+        if (artboards[currentArtboardId]) {
+            artboards[currentArtboardId].languagesInitialized = cloneData(currentCanvasLanguagesInitialized);
+        }
+        saveHistory();
+        renderArtboardPreviews();
+        showToast('已将 ' + syncedCount + ' 个元素的位置和大小同步到 ' + targetLanguage.toUpperCase() + '，内容未修改');
+    }
+    window.syncSelectedGeometryToOtherLanguage = syncSelectedGeometryToOtherLanguage;
     function addLayerContextReferenceToAI() {
         const layer = layers.find(function(item) { return item.id === _contextMenuLayerId; });
         if(!layer?.src || (layer.type !== 'image' && layer.type !== 'logo')) {
@@ -8233,9 +8812,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             reader.onload = function(ev) {
                 var dataUrl = ev.target.result;
                 detectImageBackgroundColor(dataUrl).then(function(info) {
-                    layer.bgColor = getDetectedLogoBackground(info);
+                    layer.bgColor = getContrastingLogoBackground(info);
                     layer.slots = layer.slots || [];
-                    layer.slots[0] = { src: dataUrl, name: file.name || 'Logo' };
+                    layer.slots[0] = { src: dataUrl, name: file.name || 'Logo', bgColor:layer.bgColor };
                     syncLogoLayoutContentAcrossLanguages(layer);
                     saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
                     showToast('已更新 Logo');
@@ -8252,7 +8831,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     function bindMatrixThumbManager(layer) {
         var list = document.getElementById('matrix-thumb-list');
         var addBtn = document.getElementById('matrix-thumb-add');
-        if (!list || !addBtn) return;
+        if (!list) return;
         // renderProperties 可能在同一帧内被连续调用，并留下多个延迟绑定任务。
         // 同一个 DOM 只允许绑定一次，否则一次 drop 会被多个监听器重复消费。
         if (list.dataset.matrixManagerBound === String(layer.id)) return;
@@ -8261,27 +8840,28 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         function syncAndRefresh() {
             var filled = [];
             (layer.slots || []).forEach(function(s) { if (s && s.src) filled.push(s); });
-            while (layer.slots.length < filled.length) layer.slots.push({});
-            for (var i = 0; i < filled.length; i++) layer.slots[i] = filled[i];
-            if (layer.slots.length > filled.length) layer.slots.length = filled.length;
-            // 补到 rows*cols
-            var total = (layer.rows || 2) * (layer.cols || 2);
-            while (layer.slots.length < total) layer.slots.push({});
+            layer.slots = filled.slice(0, 8);
+            applyLogoMatrixAutoLayout(layer);
             syncLogoLayoutContentAcrossLanguages(layer);
             saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
         }
         function handleFiles(files) {
-            var validFiles = Array.from(files).filter(function(f) { return f.type.match(/image\/(png|jpeg|webp)/); });
-            if (validFiles.length === 0) { showToast('请拖入 PNG/JPG/WebP 图片', true); return; }
+            var validFiles = Array.from(files).filter(function(f) { return /^image\/(png|jpeg|webp|svg\+xml)$/.test(f.type); });
+            if (validFiles.length === 0) { showToast('请拖入 PNG/JPG/WebP/SVG 图片', true); return; }
+            var existingCount = (layer.slots || []).filter(function(slot) { return slot && slot.src; }).length;
+            var remaining = Math.max(0, 8 - existingCount);
+            if (!remaining) { showToast('Logo 矩阵最多只能添加 8 个 Logo', true); return; }
+            var acceptedFiles = validFiles.slice(0, remaining);
+            if (validFiles.length > remaining) showToast('Logo 矩阵最多 8 个，已添加前 ' + remaining + ' 个', true);
             // 整批文件只合并、保存和重绘一次；不要在各 FileReader 回调里逐个 push，
             // 避免异步完成顺序和重复事件把同一批图片追加多次。
-            Promise.all(validFiles.map(function(file) {
+            Promise.all(acceptedFiles.map(function(file) {
                 return new Promise(function(resolve, reject) {
                     var reader = new FileReader();
                     reader.onload = function(ev) {
                         var slot = { src: ev.target.result, name: file.name || 'Logo' };
                         detectImageBackgroundColor(ev.target.result).then(function(info) {
-                            slot.bgColor = getDetectedLogoBackground(info, slot);
+                            slot.bgColor = getContrastingLogoBackground(info, slot);
                             resolve(slot);
                         }).catch(function() { resolve(slot); });
                     };
@@ -8290,7 +8870,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 });
             })).then(function(newSlots) {
                 var existingSlots = (layer.slots || []).filter(function(slot) { return slot && slot.src; });
-                layer.slots = existingSlots.concat(newSlots);
+                layer.slots = existingSlots.concat(newSlots).slice(0, 8);
                 syncAndRefresh();
             }).catch(function(error) {
                 showToast(error.message || 'Logo 图片读取失败', true);
@@ -8301,10 +8881,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         list.addEventListener('dragleave', function(e) { if (dragIdx >= 0) return; list.style.borderColor = '#cbd5e1'; list.style.background = '#f8fafc'; });
         list.addEventListener('drop', function(e) { e.preventDefault(); e.stopPropagation(); list.style.borderColor = '#cbd5e1'; list.style.background = '#f8fafc'; if (dragIdx >= 0) return; if (e.dataTransfer.files && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
         // 点击 + 按钮
-        addBtn.addEventListener('click', function() {
-            var input = document.getElementById('logo-layout-upload');
-            if (input) { input.value = ''; input.click(); }
-        });
+        if (addBtn) {
+            addBtn.addEventListener('click', function() {
+                var input = document.getElementById('logo-layout-upload');
+                if (input) { input.value = ''; input.multiple = true; input.click(); }
+            });
+        }
         // 删除按钮
         list.addEventListener('click', function(e) {
             var delBtn = e.target.closest('[data-matrix-thumb-del]');
@@ -8933,19 +9515,21 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 }
                 pairSliders = '';
             } else if (l.logoLayout === 'matrix') {
-                var r = l.rows || 2, c = l.cols || 2;
+                applyLogoMatrixAutoLayout(l);
                 var rowGap = Math.max(0, Number(l.matrixRowGap !== undefined ? l.matrixRowGap : 12) || 0);
                 var colGap = Math.max(0, Number(l.matrixColGap !== undefined ? l.matrixColGap : 12) || 0);
-                gridSliders = '<div class="slider-row"><span class="s-label">行数</span><input type="range" min="1" max="6" step="1" value="' + r + '" oninput="updateMatrixGrid(parseInt(this.value), null)" onchange="saveHistory()"><span class="slider-val" id="val-rows">' + r + '</span></div><div class="slider-row"><span class="s-label">列数</span><input type="range" min="1" max="6" step="1" value="' + c + '" oninput="updateMatrixGrid(null, parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-cols">' + c + '</span></div><div class="slider-row"><span class="s-label">行间距</span><input type="range" min="0" max="60" step="1" value="' + rowGap + '" oninput="updateProp(\'matrixRowGap\', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-matrixRowGap">' + rowGap + 'px</span></div><div class="slider-row"><span class="s-label">列间距</span><input type="range" min="0" max="60" step="1" value="' + colGap + '" oninput="updateProp(\'matrixColGap\', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-matrixColGap">' + colGap + 'px</span></div>';
+                gridSliders = '<div class="slider-row"><span class="s-label">行间距</span><input type="range" min="0" max="60" step="1" value="' + rowGap + '" oninput="updateProp(\'matrixRowGap\', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-matrixRowGap">' + rowGap + 'px</span></div><div class="slider-row"><span class="s-label">列间距</span><input type="range" min="0" max="60" step="1" value="' + colGap + '" oninput="updateProp(\'matrixColGap\', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-matrixColGap">' + colGap + 'px</span></div>';
                 // 缩略图管理器
                 var filledSlots = (l.slots || []).filter(function(s) { return s && s.src; });
                 var thumbHTML = '';
                 filledSlots.forEach(function(s, i) {
                     thumbHTML += '<div class="matrix-thumb" draggable="true" data-matrix-thumb="' + i + '" style="width:54px;height:54px;border-radius:8px;overflow:hidden;border:2px solid #e5e7eb;cursor:grab;flex-shrink:0;position:relative;background:#f9fafb;"><img src="' + s.src + '" draggable="false" style="width:100%;height:100%;object-fit:cover;pointer-events:none;"><button data-matrix-thumb-del="' + i + '" style="position:absolute;top:0;right:0;width:18px;height:18px;border:none;border-radius:0 6px 0 6px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;line-height:18px;cursor:pointer;padding:0;" title="删除">×</button></div>';
                 });
-                dropZone = '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--text-sub);margin-bottom:4px;">Logo 列表（可拖拽排序）</div><div class="matrix-thumb-list" id="matrix-thumb-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:60px;padding:8px;border:2px dashed #cbd5e1;border-radius:10px;background:#f8fafc;align-items:center;">' + thumbHTML + '<div class="matrix-thumb-add" id="matrix-thumb-add" style="width:54px;height:54px;border:2px dashed #d0d5dd;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:22px;cursor:pointer;flex-shrink:0;">+</div></div></div>';
+                var matrixAddHtml = filledSlots.length < 8 ? '<div class="matrix-thumb-add" id="matrix-thumb-add" style="width:54px;height:54px;border:2px dashed #d0d5dd;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:22px;cursor:pointer;flex-shrink:0;">+</div>' : '';
+                dropZone = '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--text-sub);margin-bottom:4px;">Logo 列表（最多 8 个，可拖拽排序）</div><div class="matrix-thumb-list" id="matrix-thumb-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:60px;padding:8px;border:2px dashed #cbd5e1;border-radius:10px;background:#f8fafc;align-items:center;">' + thumbHTML + matrixAddHtml + '</div></div>';
             }
-            area.innerHTML = '<div style="text-align:center;color:var(--text-main);font-size:14px;font-weight:bold;padding:10px 0;margin-bottom:12px;border-bottom:1px dashed var(--border);">' + layoutLabel + '</div>' + dropZone + gridSliders + pairBackgroundControl + pairSliders + radiusSlider + '<div class="slider-row"><span class="s-label">不透明度</span><input type="range" min="0" max="1" step="0.05" value="' + (l.opacity !== undefined ? l.opacity : 1) + '" oninput="updateProp(\'opacity\', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-opacity">' + Math.round((l.opacity !== undefined ? l.opacity : 1) * 100) + '%</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="' + (l.scale || 1) + '" oninput="updateProp(\'scale\', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">' + (l.scale || 1) + 'x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="' + (l.rotation || 0) + '" oninput="updateProp(\'rotation\', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">' + (l.rotation || 0) + '°</span></div><button class="btn btn-outline" style="width:100%;margin-top:8px;border-color:var(--primary);color:var(--primary);" onclick="centerLayer()">居中画板</button>';
+            var opacitySlider = l.logoLayout === 'matrix' ? '' : '<div class="slider-row"><span class="s-label">不透明度</span><input type="range" min="0" max="1" step="0.05" value="' + (l.opacity !== undefined ? l.opacity : 1) + '" oninput="updateProp(\'opacity\', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-opacity">' + Math.round((l.opacity !== undefined ? l.opacity : 1) * 100) + '%</span></div>';
+            area.innerHTML = '<div style="text-align:center;color:var(--text-main);font-size:14px;font-weight:bold;padding:10px 0;margin-bottom:12px;border-bottom:1px dashed var(--border);">' + layoutLabel + '</div>' + dropZone + gridSliders + pairBackgroundControl + pairSliders + radiusSlider + opacitySlider + '<div class="slider-row"><span class="s-label">缩放</span><input type="range" min="0.01" max="10" step="0.05" value="' + (l.scale || 1) + '" oninput="updateProp(\'scale\', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-scale">' + (l.scale || 1) + 'x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="' + (l.rotation || 0) + '" oninput="updateProp(\'rotation\', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">' + (l.rotation || 0) + '°</span></div><button class="btn btn-outline" style="width:100%;margin-top:8px;border-color:var(--primary);color:var(--primary);" onclick="centerLayer()">居中画板</button>';
             // 用户模式只保留 Logo 内容替换与基础结构选项；几何和样式调整仅供开发者使用。
             area.querySelectorAll('.slider-row').forEach(function(row) {
                 var label = row.querySelector('.s-label')?.textContent?.trim() || '';
@@ -13251,6 +13835,17 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         return 'rgb(' + info.r + ',' + info.g + ',' + info.b + ')';
     }
 
+    function getContrastingLogoBackground(info, slot) {
+        var detected = getDetectedLogoBackground(info, slot);
+        if (detected !== 'transparent') return detected;
+        // 矩阵和单一 Logo 槽位必须始终有对比底色。
+        // 透明字标按不透明图案的平均亮度判断：
+        // 浅色图案用黑底，深色图案用白底。
+        var luminance = Number(info && info.foregroundLuminance);
+        if (!Number.isFinite(luminance)) return '#ffffff';
+        return luminance >= 0.46 ? '#000000' : '#ffffff';
+    }
+
     function detectImageBackgroundColor(src) {
         return new Promise(function(resolve) {
             var img = new Image();
@@ -13293,10 +13888,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     // 红底黄字的 Logo 会因为黄色较亮而被误配成黑底。
                     var buckets = {};
                     var opaqueCount = 0;
+                    var opaqueRed = 0, opaqueGreen = 0, opaqueBlue = 0;
                     for (var i = 0; i < allData.length; i += 4) {
                         if (allData[i+3] < 64) continue;
                         var pr = allData[i], pg = allData[i+1], pb = allData[i+2];
                         opaqueCount++;
+                        opaqueRed += pr; opaqueGreen += pg; opaqueBlue += pb;
                         var qr = Math.round(pr / 24) * 24;
                         var qg = Math.round(pg / 24) * 24;
                         var qb = Math.round(pb / 24) * 24;
@@ -13330,7 +13927,15 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     }
                     // 不带实色底板的透明图一律保持透明；显示对比度由画板本身决定，
                     // 组件不擅自添加黑底、白底或主体色底。
-                    resolve({ r:0, g:0, b:0, w:w, h:h, transparent:true, method:'transparent' });
+                    var foregroundColor = opaqueCount
+                        ? { r:opaqueRed / opaqueCount, g:opaqueGreen / opaqueCount, b:opaqueBlue / opaqueCount }
+                        : { r:0, g:0, b:0 };
+                    resolve({
+                        r:0, g:0, b:0, w:w, h:h,
+                        transparent:true,
+                        method:'transparent',
+                        foregroundLuminance:relativeColorLuminance(foregroundColor)
+                    });
                     return;
                 }
                 // 非透明图片：采样边缘颜色
@@ -13357,19 +13962,22 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
 
     // 兼容已经保存过的旧 Logo 组件：旧算法可能把透明 PNG 自动写成黑底、白底或主体色。
-    // v4 会把真透明图恢复成透明，仅为确有连续实色底板的圆角图片补齐底色。
+    // 矩阵和单一 Logo 会为真透明图补高对比黑/白底；左右组合仍沿用原有背景规则。
     function scheduleLogoLayoutBackgroundRecovery(layer) {
         if (!layer || layer.type !== 'logoLayout') return;
         var slots = Array.isArray(layer.slots) ? layer.slots : [];
         var filledSlots = slots.filter(function(slot) { return slot && slot.src; });
         if (!filledSlots.length) return;
-        var sourceKey = 'v4:' + filledSlots.map(function(slot) { return String(slot.src).slice(-160); }).join('|');
+        var needsContrastBackground = layer.logoLayout === 'matrix' || layer.logoLayout === 'single';
+        var sourceKey = (needsContrastBackground ? 'logo-contrast-v2:' : 'v4:') + filledSlots.map(function(slot) { return String(slot.src).slice(-160); }).join('|');
         if (layer._logoBackgroundProbeKey === sourceKey) return;
         layer._logoBackgroundProbeKey = sourceKey;
         Promise.all(filledSlots.map(function(slot) {
             return detectImageBackgroundColor(slot.src).then(function(info) {
                 if (!info) return false;
-                var color = getDetectedLogoBackground(info, slot);
+                var color = needsContrastBackground
+                    ? getContrastingLogoBackground(info, slot)
+                    : getDetectedLogoBackground(info, slot);
                 var changed = slot.bgColor !== color;
                 slot.bgColor = color;
                 if (layer.logoLayout !== 'matrix' && layer.bgColor !== color) {
@@ -13380,6 +13988,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             }).catch(function() { return false; });
         })).then(function(results) {
             if (!results.some(Boolean)) return;
+            if (needsContrastBackground) syncLogoLayoutContentAcrossLanguages(layer);
             saveHistory();
             renderCanvas();
             renderLayersList();
@@ -13729,6 +14338,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     // 当前语言改完后切换到另一语言又恢复为旧 Logo。
     function syncLogoLayoutContentAcrossLanguages(layer) {
         if (!layer || layer.type !== 'logoLayout') return;
+        if (layer.logoLayout === 'matrix') applyLogoMatrixAutoLayout(layer);
         var variants = ensureLayerLanguageVariants(layer, layers, currentCanvasLanguage);
         if (!variants) return;
         var activeLanguage = normalizeCanvasLanguage(currentCanvasLanguage);
@@ -13739,6 +14349,15 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 ? cloneData(currentSnapshot)
                 : (variants[language] ? cloneData(variants[language]) : cloneData(currentSnapshot));
             variant.slots = cloneData(sharedSlots);
+            if (layer.logoLayout === 'matrix') {
+                variant.rows = layer.rows;
+                variant.cols = layer.cols;
+                variant.baseW = layer.baseW;
+                variant.baseH = layer.baseH;
+                variant.slotSize = layer.slotSize;
+                variant.matrixRowGap = layer.matrixRowGap;
+                variant.matrixColGap = layer.matrixColGap;
+            }
             // 左右 Logo 的 Keeta 主 Logo 选择也是图片内容，保持双语一致；几何字段不覆盖。
             if (Object.prototype.hasOwnProperty.call(layer, 'mainLogoSrc')) variant.mainLogoSrc = layer.mainLogoSrc;
             if (Object.prototype.hasOwnProperty.call(layer, 'mainLogoStyle')) variant.mainLogoStyle = layer.mainLogoStyle;
@@ -13792,27 +14411,45 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
 
     document.getElementById('logo-layout-upload').addEventListener('change', e => {
-        var file = e.target.files[0];
+        var selectedFiles = Array.from(e.target.files || []);
+        var file = selectedFiles[0];
         var target = pendingLogoLayoutSlot;
         pendingLogoLayoutSlot = null;
+        e.target.multiple = false;
         e.target.value = '';
         if (!file) return;
         // 无 pending target → 矩阵 "+" 按钮触发，追加到当前矩阵
         if (!target) {
             var activeLayer = activeLayerIds.length === 1 ? layers.find(function(l) { return l.id === activeLayerIds[0]; }) : null;
             if (activeLayer && activeLayer.type === 'logoLayout' && activeLayer.logoLayout === 'matrix') {
-                var reader = new FileReader();
-                reader.onload = function(ev) {
-                    activeLayer.slots = activeLayer.slots || [];
-                    var slot = { src: ev.target.result, name: file.name || 'Logo' };
-                    activeLayer.slots.push(slot);
-                    detectImageBackgroundColor(ev.target.result).then(function(info) {
-                        slot.bgColor = getDetectedLogoBackground(info, slot);
-                        syncLogoLayoutContentAcrossLanguages(activeLayer);
-                        saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+                var currentMatrixCount = (activeLayer.slots || []).filter(function(slot) { return slot && slot.src; }).length;
+                if (currentMatrixCount >= 8) {
+                    showToast('Logo 矩阵最多只能添加 8 个 Logo', true);
+                    return;
+                }
+                var remainingMatrixSlots = 8 - currentMatrixCount;
+                var matrixFiles = selectedFiles.filter(function(item) { return /^image\/(png|jpeg|webp|svg\+xml)$/.test(item.type); }).slice(0, remainingMatrixSlots);
+                if (!matrixFiles.length) { showToast('请选择 PNG/JPG/WebP/SVG 图片', true); return; }
+                if (selectedFiles.length > remainingMatrixSlots) showToast('Logo 矩阵最多 8 个，已添加前 ' + remainingMatrixSlots + ' 个', true);
+                Promise.all(matrixFiles.map(function(matrixFile) {
+                    return new Promise(function(resolve, reject) {
+                        var reader = new FileReader();
+                        reader.onload = function(ev) {
+                            var slot = { src:ev.target.result, name:matrixFile.name || 'Logo' };
+                            detectImageBackgroundColor(ev.target.result).then(function(info) {
+                                slot.bgColor = getContrastingLogoBackground(info, slot);
+                                resolve(slot);
+                            }).catch(function() { resolve(slot); });
+                        };
+                        reader.onerror = function() { reject(new Error('Logo 图片读取失败')); };
+                        reader.readAsDataURL(matrixFile);
                     });
-                };
-                reader.readAsDataURL(file);
+                })).then(function(newMatrixSlots) {
+                    activeLayer.slots = (activeLayer.slots || []).filter(function(slot) { return slot && slot.src; }).concat(newMatrixSlots).slice(0, 8);
+                    applyLogoMatrixAutoLayout(activeLayer);
+                    syncLogoLayoutContentAcrossLanguages(activeLayer);
+                    saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
+                }).catch(function(error) { showToast(error.message || 'Logo 图片读取失败', true); });
             }
             return;
         }
@@ -13837,7 +14474,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             }
             detectImageBackgroundColor(dataUrl).then(function(info) {
                 var slot = { src:dataUrl, name:file.name || 'Logo' };
-                var bg = getDetectedLogoBackground(info, slot);
+                var bg = (layer.logoLayout === 'matrix' || layer.logoLayout === 'single')
+                    ? getContrastingLogoBackground(info, slot)
+                    : getDetectedLogoBackground(info, slot);
                 slot.bgColor = bg;
                 layer.slots[target.slotIndex] = slot;
                 if (layer.logoLayout !== 'matrix') layer.bgColor = bg;
