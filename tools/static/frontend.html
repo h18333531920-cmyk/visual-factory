@@ -2935,7 +2935,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260818-preview-reuse-v407">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260818-group-text-color-v410">
 </head>
 <body>
 
@@ -7446,6 +7446,179 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
         showToast('已取消编组');
     }
+
+    var _autoTextContrastTimer = 0;
+    var _autoTextContrastRun = 0;
+    var _backgroundPixelSourceCache = new Map();
+
+    function parseCanvasColor(value, fallback = { r:255, g:255, b:255, a:1 }) {
+        if (!value || value === 'transparent') return fallback;
+        try {
+            var canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 1;
+            var context = canvas.getContext('2d');
+            context.clearRect(0, 0, 1, 1);
+            context.fillStyle = String(value);
+            context.fillRect(0, 0, 1, 1);
+            var data = context.getImageData(0, 0, 1, 1).data;
+            return { r:data[0], g:data[1], b:data[2], a:data[3] / 255 };
+        } catch (error) {
+            return fallback;
+        }
+    }
+
+    function loadBackgroundPixelSource(src) {
+        var key = String(src || '');
+        if (!key) return Promise.resolve(null);
+        if (_backgroundPixelSourceCache.has(key)) return _backgroundPixelSourceCache.get(key);
+        var request = new Promise(function(resolve) {
+            var image = new Image();
+            if (/^https?:/i.test(key)) image.crossOrigin = 'anonymous';
+            image.onload = function() {
+                try {
+                    var naturalW = Math.max(1, image.naturalWidth || image.width || 1);
+                    var naturalH = Math.max(1, image.naturalHeight || image.height || 1);
+                    var sampleScale = Math.min(1, 720 / Math.max(naturalW, naturalH));
+                    var width = Math.max(1, Math.round(naturalW * sampleScale));
+                    var height = Math.max(1, Math.round(naturalH * sampleScale));
+                    var canvas = document.createElement('canvas');
+                    canvas.width = width; canvas.height = height;
+                    var context = canvas.getContext('2d', { willReadFrequently:true });
+                    context.drawImage(image, 0, 0, width, height);
+                    // 立即读取一次以确认远程图片没有污染 canvas。
+                    context.getImageData(0, 0, 1, 1);
+                    resolve({ context:context, width:width, height:height, naturalW:naturalW, naturalH:naturalH });
+                } catch (error) {
+                    resolve(null);
+                }
+            };
+            image.onerror = function() { resolve(null); };
+            image.src = key;
+        });
+        _backgroundPixelSourceCache.set(key, request);
+        return request;
+    }
+
+    async function sampleImageLayerColorAt(layer, canvasX, canvasY) {
+        var source = await loadBackgroundPixelSource(layer?.src);
+        if (!source) return null;
+        var boxW = Math.max(1, Number(layer.baseW) || source.naturalW);
+        var boxH = Math.max(1, Number(layer.baseH) || source.naturalH);
+        var scale = Math.max(0.0001, Math.abs(Number(layer.scale) || 1));
+        var angle = (Number(layer.rotation) || 0) * Math.PI / 180;
+        var dx = (Number(canvasX) || 0) - (Number(layer.x) || 0);
+        var dy = (Number(canvasY) || 0) - (Number(layer.y) || 0);
+        // 逆向还原 DOM 中 rotate + scale 后的局部坐标。
+        var localX = (dx * Math.cos(angle) + dy * Math.sin(angle)) / scale + boxW / 2;
+        var localY = (-dx * Math.sin(angle) + dy * Math.cos(angle)) / scale + boxH / 2;
+        if (layer.flipX) localX = boxW - localX;
+        if (localX < 0 || localY < 0 || localX > boxW || localY > boxH) return null;
+        var contain = layer.fitMode === 'contain' || layer.type === 'logo';
+        var fitScale = contain
+            ? Math.min(boxW / source.naturalW, boxH / source.naturalH)
+            : Math.max(boxW / source.naturalW, boxH / source.naturalH);
+        var drawnW = source.naturalW * fitScale;
+        var drawnH = source.naturalH * fitScale;
+        var imageX = (localX - (boxW - drawnW) / 2) / fitScale;
+        var imageY = (localY - (boxH - drawnH) / 2) / fitScale;
+        if (imageX < 0 || imageY < 0 || imageX >= source.naturalW || imageY >= source.naturalH) return null;
+        try {
+            var px = Math.max(0, Math.min(source.width - 1, Math.floor(imageX / source.naturalW * source.width)));
+            var py = Math.max(0, Math.min(source.height - 1, Math.floor(imageY / source.naturalH * source.height)));
+            var data = source.context.getImageData(px, py, 1, 1).data;
+            var alpha = (data[3] / 255) * (layer.opacity !== undefined ? Number(layer.opacity) : 1);
+            if (alpha < 0.18) return null;
+            return { r:data[0], g:data[1], b:data[2], a:alpha };
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async function sampleBackgroundColorAt(textLayer, canvasX, canvasY) {
+        var textZ = Number(textLayer.zIndex) || 0;
+        var candidates = layers.filter(function(layer) {
+            if (!layer || layer.id === textLayer.id || !isLayerVisibleInCanvasLanguage(layer)) return false;
+            if (!['image', 'solid'].includes(layer.type) || (Number(layer.zIndex) || 0) >= textZ) return false;
+            var bounds = getLayerBounds(layer);
+            return canvasX >= bounds.x1 && canvasX <= bounds.x2 && canvasY >= bounds.y1 && canvasY <= bounds.y2;
+        }).sort(function(a, b) { return (Number(b.zIndex) || 0) - (Number(a.zIndex) || 0); });
+        for (var index = 0; index < candidates.length; index++) {
+            var candidate = candidates[index];
+            if (candidate.type === 'solid') return parseCanvasColor(candidate.color || '#ffffff');
+            var sampled = await sampleImageLayerColorAt(candidate, canvasX, canvasY);
+            if (sampled) return sampled;
+        }
+        return { r:255, g:255, b:255, a:1 };
+    }
+
+    function relativeColorLuminance(color) {
+        function linear(channel) {
+            var value = Math.max(0, Math.min(255, Number(channel) || 0)) / 255;
+            return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+        }
+        return 0.2126 * linear(color.r) + 0.7152 * linear(color.g) + 0.0722 * linear(color.b);
+    }
+
+    async function detectTextContrastColor(layer) {
+        var bounds = getLayerBounds(layer);
+        var xRatios = [0.18, 0.5, 0.82];
+        var yRatios = bounds.h > 90 ? [0.22, 0.5, 0.78] : [0.35, 0.65];
+        var samples = [];
+        for (var yi = 0; yi < yRatios.length; yi++) {
+            for (var xi = 0; xi < xRatios.length; xi++) {
+                samples.push(await sampleBackgroundColorAt(
+                    layer,
+                    bounds.x1 + bounds.w * xRatios[xi],
+                    bounds.y1 + bounds.h * yRatios[yi]
+                ));
+            }
+        }
+        if (!samples.length) return '#000000';
+        // 使用中位亮度，避免文字框边缘刚好压到一小块高光或阴影时来回跳色。
+        var luminances = samples.map(relativeColorLuminance).sort(function(a, b) { return a - b; });
+        var luminance = luminances[Math.floor(luminances.length / 2)];
+        return luminance >= 0.32 ? '#000000' : '#ffe41f';
+    }
+
+    function scheduleAutomaticTextContrast() {
+        clearTimeout(_autoTextContrastTimer);
+        var runId = ++_autoTextContrastRun;
+        _autoTextContrastTimer = setTimeout(async function() {
+            var backgroundSignature = layers.filter(function(layer) {
+                return ['image', 'solid'].includes(layer.type) && isLayerVisibleInCanvasLanguage(layer);
+            }).map(function(layer) {
+                return [layer.id, layer.src || layer.color || '', layer.x, layer.y, layer.baseW, layer.baseH, layer.scale, layer.rotation, layer.fitMode, layer.flipX, layer.opacity, layer.zIndex].join(':');
+            }).join('|');
+            var changed = false;
+            var textLayers = layers.filter(function(layer) {
+                return layer.type === 'text' && isLayerVisibleInCanvasLanguage(layer) && layer._textColorMode !== 'manual';
+            });
+            for (var index = 0; index < textLayers.length; index++) {
+                var layer = textLayers[index];
+                var bounds = getLayerBounds(layer);
+                var probeKey = [currentCanvasLanguage, backgroundSignature, bounds.x1, bounds.y1, bounds.w, bounds.h].join('::');
+                if (layer._autoTextContrastProbeKey === probeKey) continue;
+                var color = await detectTextContrastColor(layer);
+                if (runId !== _autoTextContrastRun || layer._textColorMode === 'manual') return;
+                // 只在一次采样完整结束后记录，避免采样途中又触发渲染时，
+                // 新任务误以为该区域已经检测过而永久跳过。
+                layer._autoTextContrastProbeKey = probeKey;
+                if (String(layer.textCol || '').toLowerCase() === color) continue;
+                layer.textCol = color;
+                layer._textColorMode = 'auto';
+                if (layer._languageVariants && typeof layer._languageVariants === 'object') {
+                    ['en', 'ar'].forEach(function(language) {
+                        if (layer._languageVariants[language]) layer._languageVariants[language].textCol = color;
+                    });
+                }
+                changed = true;
+            }
+            if (!changed || runId !== _autoTextContrastRun) return;
+            renderCanvas();
+            if (activeLayerIds.some(function(id) { return textLayers.some(function(layer) { return layer.id === id; }); })) renderProperties();
+        }, 120);
+    }
+
     function renderCanvas() {
         const container = document.getElementById('dynamic-layers'); container.innerHTML = '';
         const hintEl = document.getElementById('empty-hint');
@@ -7457,6 +7630,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         });
         if (activeGroup) syncEditorGroupSelectionBox(container);
         renderArtboardPreviews();
+        if (isUserInterfaceMode()) scheduleAutomaticTextContrast();
     }
     function renderArtboardPreviews() {
         saveCurrentArtboardState();
@@ -8505,9 +8679,22 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     window.setTextColor = function(color) {
         activeLayerIds.forEach(id => {
             const l = layers.find(x => x.id === id);
-            if(l && l.type === 'text') l.textCol = color;
+            if(l && l.type === 'text') {
+                // 字体颜色属于双语共享样式：文案和位置各自保存，但颜色在 EN / AR
+                // 两边保持一致。同步已有 variant 字段也兼容早期保存的数据。
+                l.textCol = color;
+                l._textColorMode = 'manual';
+                if (l._languageVariants && typeof l._languageVariants === 'object') {
+                    ['en', 'ar'].forEach(function(language) {
+                        if (l._languageVariants[language]) {
+                            l._languageVariants[language].textCol = color;
+                            l._languageVariants[language]._textColorMode = 'manual';
+                        }
+                    });
+                }
+            }
         });
-        saveHistory(); renderCanvas(); renderProperties();
+        saveHistory(); renderCanvas(); renderArtboardPreviews(); renderProperties();
     };
     function detectTextDirection(text = '') {
         let rtl = 0, ltr = 0;
@@ -8675,6 +8862,20 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 batchUI += `<div class="slider-row"><span class="s-label">统一旋转</span><input type="range" min="-180" max="180" step="1" value="${grCurrent}" oninput="applyGroupRotation(parseFloat(this.value))" onchange="saveHistory(); _groupRotationValue=0; _groupScaleOriginals=null; this.value=0; document.getElementById('val-groupRotation').innerText='0°'; initGroupScaleOriginals();"><span class="slider-val" id="val-groupRotation">${Math.round(grCurrent)}°</span></div>`;
             }
             if (activeEditorGroup) {
+                const groupTextMembers = activeEditorGroup.members.filter(function(member) { return member.type === 'text'; });
+                if (isUserInterfaceMode() && groupTextMembers.length) {
+                    const allGroupTextBlack = groupTextMembers.every(function(member) {
+                        const color = String(member.textCol || '').toLowerCase();
+                        return color === '#000000' || color === '#000';
+                    });
+                    const allGroupTextYellow = groupTextMembers.every(function(member) {
+                        return String(member.textCol || '').toLowerCase() === '#ffe41f';
+                    });
+                    batchUI += '<div class="vf-user-text-color-control vf-user-group-text-color-control"><label class="label">编组文字颜色</label><div class="vf-user-text-color-options">'
+                        + '<button type="button" class="vf-user-text-color-option' + (allGroupTextBlack ? ' active' : '') + ' is-black" onclick="setTextColor(\'#000000\')"><span></span>黑色</button>'
+                        + '<button type="button" class="vf-user-text-color-option' + (allGroupTextYellow ? ' active' : '') + ' is-yellow" onclick="setTextColor(\'#ffe41f\')"><span></span>黄色</button>'
+                        + '</div></div>';
+                }
                 const ungroupAction = isUserInterfaceMode() ? '' : '<button type="button" class="btn btn-outline" style="height:30px;padding:0 10px;font-size:11px;" onclick="ungroupSelectedLayers()">取消编组</button>';
                 const groupHeaderStyle = isUserInterfaceMode()
                     ? 'display:flex;align-items:center;justify-content:space-between;margin:0 0 10px;'
@@ -8783,9 +8984,17 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             };
             var widthStepper = stepper('maxWidth','宽度',10,4000,10,'px');
             var heightStepper = '';
+            var normalizedTextColor = String(textColor || '').toLowerCase();
+            var userTextColorControl = isUserInterfaceMode()
+                ? '<div class="vf-user-text-color-control"><label class="label">字体颜色</label><div class="vf-user-text-color-options">'
+                    + '<button type="button" class="vf-user-text-color-option' + (normalizedTextColor === '#000000' || normalizedTextColor === '#000' ? ' active' : '') + ' is-black" onclick="setTextColor(\'#000000\')"><span></span>黑色</button>'
+                    + '<button type="button" class="vf-user-text-color-option' + (normalizedTextColor === '#ffe41f' ? ' active' : '') + ' is-yellow" onclick="setTextColor(\'#ffe41f\')"><span></span>黄色</button>'
+                    + '</div></div>'
+                : '';
             area.innerHTML = '<div class="property-context-title">文本属性</div>'
                 + '<label class="label">文字内容</label><textarea class="input-text" dir="' + getEffectiveTextDirection(l) + '" style="min-height:56px;resize:vertical;line-height:1.45;font-size:13px;direction:' + getEffectiveTextDirection(l) + ';text-align:' + textAlign + ';unicode-bidi:isolate;" oninput="updateProp(\'text\',this.value);this.dir=detectStrongTextDirection(this.value)||this.dir;this.style.direction=this.dir;this.style.textAlign=this.dir===\'rtl\'?\'right\':\'left\';" onchange="saveHistory()">' + escapeHtml(l.text || '') + '</textarea>'
                 + '<div style="font-size:11px;color:var(--text-sub);margin:-6px 0 8px;">💡 双击画布文字可直接编辑</div>'
+                + userTextColorControl
                 + '<div class="vf-developer-font-control"><label class="label">字体</label><select class="input-select" onchange="selectLayerFontFamily(this.value)">' + selectedFontOptions + '</select></div>'
                 + '<div class="vf-developer-text-controls">'
                 + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div><label class="label">字重</label><select class="input-select" onchange="updateProp(\'fontWeight\',parseInt(this.value));saveHistory();renderCanvas();">' + selectedWeightInfo.html + '</select></div><div><label class="label">颜色</label><input type="color" value="' + escapeHtml(textColor) + '" style="width:100%;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;background:#FFF;cursor:pointer;" oninput="updateProp(\'textCol\',this.value)" onchange="saveHistory()"></div></div>'

@@ -3062,6 +3062,47 @@ html[data-vf-mode="user"] .vf-developer-text-controls {
   display: none !important;
 }
 
+.vf-user-text-color-control {
+  margin: 4px 0 12px;
+}
+
+.vf-user-text-color-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.vf-user-text-color-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--text-main);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.vf-user-text-color-option span {
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(16, 24, 40, .16);
+  border-radius: 50%;
+}
+
+.vf-user-text-color-option.is-black span { background: #000; }
+.vf-user-text-color-option.is-yellow span { background: #ffe41f; }
+.vf-user-text-color-option.active {
+  border-color: #101828;
+  box-shadow: 0 0 0 1px #101828;
+}
+
 html[data-vf-mode="user"] .vf-user-hidden-logo-control {
   display: none !important;
 }
