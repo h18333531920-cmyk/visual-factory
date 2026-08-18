@@ -111,7 +111,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260818-static-user-toolbar-v418';
+const TOOL_UI_VERSION = '20260818-static-arc-text-contrast-v419';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
