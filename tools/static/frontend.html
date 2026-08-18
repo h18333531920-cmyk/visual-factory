@@ -1612,8 +1612,6 @@
 
         html[data-vf-mode="user"] .canvas-language-copy { display: none !important; }
         html[data-vf-mode="user"] .left-pane .canvas-language-switch { grid-template-columns: repeat(2, 48px); }
-        html[data-vf-mode="user"] .left-pane .inspector-launcher [data-inspector-tab="layers"],
-        html[data-vf-mode="user"] [data-inspector-panel="layers"] { display: none !important; }
         html[data-vf-mode="user"] #asset-multi-select-btn,
         html[data-vf-mode="user"] .asset-tab[data-asset-tab="recycle"] { display: none !important; }
         html[data-vf-mode="user"] .asset-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
@@ -2937,7 +2935,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260818-default-hidden-dev-ball-v402">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260818-bookmark-bootstrap-v404">
 </head>
 <body>
 
@@ -3314,7 +3312,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (document.body) document.body.dataset.vfMode = nextMode;
         if (rerender) {
             if (nextMode === 'user') {
-                if (typeof closeInspectorDrawer === 'function' && activeInspectorPanel === 'layers') closeInspectorDrawer();
                 if (typeof currentAssetTab !== 'undefined' && currentAssetTab === 'recycle' && typeof switchAssetTab === 'function') switchAssetTab('layout');
                 if (typeof assetMultiSelect !== 'undefined' && assetMultiSelect && typeof exitAssetMultiSelect === 'function') exitAssetMultiSelect();
                 if (typeof templateBookmarkSelectMode !== 'undefined' && templateBookmarkSelectMode && typeof exitTemplateBookmarkMultiSelect === 'function') exitTemplateBookmarkMultiSelect(false);
@@ -3428,10 +3425,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     const INSPECTOR_PANEL_LABELS = { layers: '图层', edit: '编辑', ai: '生图' };
     function switchInspectorPanel(panel) {
         const next = ['layers', 'edit', 'ai'].includes(panel) ? panel : 'layers';
-        if (next === 'layers' && isUserInterfaceMode()) {
-            closeInspectorDrawer();
-            return;
-        }
         activeInspectorPanel = next;
         inspectorDrawerOpen = true;
         const rightPane = document.querySelector('.right-pane');
@@ -9663,7 +9656,19 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 } else if (ct.templateType === 'logo') {
                     logoAssets.push({ id: ct.id, cloudId: ct.id, name: ct.name, src: '', _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
                 } else if (ct.templateType === 'bookmark') {
-                    presetLibrary.push({ id: ct.id, cloudId: ct.id, kind: 'bookmark', name: ct.name, templateRefs: [], coverTemplateId: '', _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
+                    presetLibrary.push({
+                        id: ct.id,
+                        cloudId: ct.id,
+                        kind: 'bookmark',
+                        name: ct.name,
+                        templateRefs: normalizeTemplateBookmarkRefs(ct.templateRefs || []),
+                        coverTemplateId: ct.coverTemplateId || '',
+                        _lazy: true,
+                        _metadataLoaded: ct.metadataLoaded === true,
+                        tags: ct.tags || [],
+                        previewW: ct.previewW || 0,
+                        previewH: ct.previewH || 0
+                    });
                 } else if (ct.templateType === 'pack') {
                     presetLibrary.push({ id: ct.id, cloudId: ct.id, kind: 'pack', name: ct.name, artboards: {}, _lazy: true, tags: ct.tags || [], previewW: ct.previewW || 0, previewH: ct.previewH || 0 });
                 } else {

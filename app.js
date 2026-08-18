@@ -111,7 +111,7 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260818-default-hidden-dev-ball-v402';
+const TOOL_UI_VERSION = '20260818-bookmark-bootstrap-v404';
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -7172,7 +7172,9 @@ function libraryTagsForForm(formData, kind) {
           });
         }
       }
-      // 先发元数据（不包含预览 URL），再后台下载预览图 + JSON
+      // 先准备轻量元数据（不包含预览 URL），再后台下载预览图 + JSON。
+      // 书签关系必须在首次列表绘制前可用；否则 iframe 会先把书签成员当普通模板
+      // 全部渲染出来，等书签 JSON 到达后再移走，既浪费 DOM 工作也会明显闪烁。
       var templates = [];
       for (var i = 0; i < (sources || []).length; i++) {
         var s = sources[i];
@@ -7181,11 +7183,24 @@ function libraryTagsForForm(formData, kind) {
         var dims = previewDims[s.id] || {};
         templates.push({ id: s.id, name: s.title, templateType: templateType, tags: t, previewW: dims.w || 0, previewH: dims.h || 0 });
       }
+      var bookmarkTemplates = templates.filter(function(template) { return template.templateType === 'bookmark'; });
+      await Promise.all(bookmarkTemplates.map(async function(template) {
+        var bookmarkSource = (sources || []).find(function(source) { return source.id === template.id; });
+        try {
+          var bookmarkMetadata = await loadTemplateMetadata(template.id, bookmarkSource);
+          template.templateRefs = Array.isArray(bookmarkMetadata.templateRefs) ? bookmarkMetadata.templateRefs : [];
+          template.coverTemplateId = bookmarkMetadata.coverTemplateId || '';
+          template.metadataLoaded = true;
+        } catch (bookmarkError) {
+          // 单个旧书签损坏时仍允许素材库打开；后续常规元数据预取会继续重试。
+          console.warn('Bootstrap bookmark metadata failed:', template.id, bookmarkError);
+        }
+      }));
       sourceWindow.postMessage({ type: 'vf:templates-loaded', templates: templates }, location.origin);
       // 尺寸信息在列表出现后马上预取。悬停时只展示已到达的数据，不能再把网络请求
       // 放到 mouseenter 里，否则每次移入卡片都会出现可感知的等待。
       var metadataTemplateIds = templates.filter(function(template) {
-        return template.templateType === 'layout' || template.templateType === 'pack' || template.templateType === 'bookmark';
+        return template.templateType === 'layout' || template.templateType === 'pack' || (template.templateType === 'bookmark' && !template.metadataLoaded);
       }).map(function(template) { return template.id; });
       (async function preloadTemplateMetadata() {
         var METADATA_BATCH = 3;
@@ -7226,17 +7241,14 @@ function libraryTagsForForm(formData, kind) {
   var _templatePreviewMap = {};
   var _templateMetadataCache = {};
 
-  async function handleFetchTemplateMetadata(id, sourceWindow) {
-    if (state.localPreview || !state.supabase || !id) return;
-    try {
+  async function loadTemplateMetadata(id, sourceOverride) {
       var cached = _templateMetadataCache[id];
-      if (cached) {
-        sourceWindow.postMessage({ type: 'vf:template-metadata', id: id, data: cached }, location.origin);
-        return;
-      }
+      if (cached) return cached;
       // 复用主列表已经取得的 source_path，避免在预取几十张卡片时额外并发数据库查询。
       // 这也是此前 metadata 偶发 Failed to fetch、卡片停在“0 个尺寸”的根源之一。
-      var source = (state.librarySources || []).find(function(item) { return item.id === id && item.source_path; });
+      var source = sourceOverride && sourceOverride.source_path
+        ? sourceOverride
+        : (state.librarySources || []).find(function(item) { return item.id === id && item.source_path; });
       if (!source) {
         var { data: sources, error } = await state.supabase.from('vf_source_files')
           .select('id, source_path').eq('id', id).limit(1);
@@ -7286,6 +7298,13 @@ function libraryTagsForForm(formData, kind) {
         metadata = { size: snapshot.size || '', canvasW: canvasSize.width || 0, canvasH: canvasSize.height || 0, canvasLanguage: snapshot.canvasLanguage === 'ar' ? 'ar' : 'en' };
       }
       _templateMetadataCache[id] = metadata;
+      return metadata;
+  }
+
+  async function handleFetchTemplateMetadata(id, sourceWindow) {
+    if (state.localPreview || !state.supabase || !id) return;
+    try {
+      var metadata = await loadTemplateMetadata(id);
       sourceWindow.postMessage({ type: 'vf:template-metadata', id: id, data: metadata }, location.origin);
     } catch (error) {
       console.warn('Fetch template metadata failed:', error);
