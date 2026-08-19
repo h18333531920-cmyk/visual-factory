@@ -135,6 +135,15 @@
         .layer-image-wrapper:active { cursor: grabbing; }
         .layer-image-div { width: 100%; height: 100%; background-size: cover; background-position: center; pointer-events: none; }
         .layer-image-img { width: 100%; height: 100%; display: block; pointer-events: none; }
+        .layer-replacement-loading { position:absolute; inset:0; z-index:90; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:inherit; background:rgba(15,23,42,.22); pointer-events:none; }
+        .layer-replacement-loading-preview { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+        .layer-replacement-loading::before { content:''; position:absolute; inset:0; z-index:1; background:rgba(15,23,42,.22); }
+        .layer-replacement-loading-pill { position:relative; z-index:2; display:flex; min-width:126px; padding:11px 15px 14px; overflow:hidden; border:1px solid rgba(255,255,255,.5); border-radius:999px; color:#fff; background:rgba(15,23,42,.82); box-shadow:0 10px 30px rgba(15,23,42,.24); align-items:center; justify-content:center; gap:9px; font-size:13px; font-weight:800; line-height:1; backdrop-filter:blur(8px); }
+        .layer-replacement-loading-spinner { width:14px; height:14px; border:2px solid rgba(255,255,255,.38); border-top-color:#fff; border-radius:50%; animation:layer-replacement-spin .72s linear infinite; }
+        .layer-replacement-loading-progress { position:absolute; right:10px; bottom:5px; left:10px; height:2px; overflow:hidden; border-radius:99px; background:rgba(255,255,255,.2); }
+        .layer-replacement-loading-progress::after { content:''; position:absolute; top:0; bottom:0; width:42%; border-radius:inherit; background:#fff; animation:layer-replacement-progress 1.05s ease-in-out infinite; }
+        @keyframes layer-replacement-spin { to { transform:rotate(360deg); } }
+        @keyframes layer-replacement-progress { from { left:-45%; } to { left:105%; } }
         .layer-solid-wrapper { position: absolute; transform-origin: center center; pointer-events: auto; }
 
         .empty-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #9CA3AF; background: #FFFFFF; z-index: 0; pointer-events: none;}
@@ -2937,7 +2946,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260818-canvas-background-v420">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260819-canvas-background-v421">
 </head>
 <body>
 
@@ -3289,9 +3298,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                             <div class="ai-dropdown" id="ai-model-menu">
                                 <button type="button" data-jimeng-model="jimeng-image-5.0-pro" onclick="selectJimengModel('jimeng-image-5.0-pro')">5.0 Pro</button>
                                 <button type="button" data-jimeng-model="jimeng-image-5.0-lite" onclick="selectJimengModel('jimeng-image-5.0-lite')">5.0 Lite</button>
-                                <button type="button" data-jimeng-model="jimeng-image-4.7" onclick="selectJimengModel('jimeng-image-4.7')">4.7</button>
-                                <button type="button" data-jimeng-model="jimeng-image-4.6" onclick="selectJimengModel('jimeng-image-4.6')">4.6</button>
-                                <button type="button" data-jimeng-model="jimeng-image-4.1" onclick="selectJimengModel('jimeng-image-4.1')">4.1</button>
                             </div>
                         </div>
                         </div>
@@ -4272,6 +4278,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         'jimeng-image-4.6': '4.6',
         'jimeng-image-4.1': '4.1'
     };
+    // 生图模型白名单：菜单只暴露 5.0 两个模型，其余模型隐藏但仍保留标签映射（历史兼容）
+    const JIMENG_ENABLED_MODELS = ['jimeng-image-5.0-pro', 'jimeng-image-5.0-lite'];
     let aiFeatureMode = 'generate';
     let aiGenerationSize = '1:1';
     let aiProvider = 'jimeng';
@@ -4390,6 +4398,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     let pendingGroupPresetId = '';
     let pendingTagPresetId = '';
     let pendingLogoAssetId = '';
+    let pendingLogoReplacementTargetId = '';
+    let pendingLogoReplacementPreviewSrc = '';
+    let pendingLogoReplacementTimer = 0;
+    const replacingImageLayerIds = new Set();
     let pendingBookmarkAction = null;
     let currentAssetTab = 'layout';
     let draggingLayerId = null;
@@ -6120,7 +6132,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             const input = document.getElementById('jimeng-session-input');
             if(input) input.value = jimengSessionId;
         }
-        try { jimengModel = localStorage.getItem('jimeng_model') || 'jimeng-image-5.0-lite'; } catch(_) {}
+        try {
+            var _savedModel = localStorage.getItem('jimeng_model');
+            jimengModel = JIMENG_ENABLED_MODELS.indexOf(_savedModel) !== -1 ? _savedModel : 'jimeng-image-5.0-lite';
+        } catch(_) { jimengModel = 'jimeng-image-5.0-lite'; }
         try {
             var savedRatio = localStorage.getItem('jimeng_ratio');
             if(savedRatio === 'auto' || savedRatio === '') aiGenerationSize = 'auto';
@@ -8004,6 +8019,22 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         }
         if(active) wrapper.classList.add('is-active-layer');
         if(newlyAddedLayerIds.has(l.id)) wrapper.classList.add('is-new-layer');
+        if(interactive && replacingImageLayerIds.has(l.id)) {
+            const replacementLoading = document.createElement('div');
+            replacementLoading.className = 'layer-replacement-loading';
+            if (pendingLogoReplacementPreviewSrc && (l.type === 'image' || l.type === 'solid')) {
+                const replacementPreview = document.createElement('img');
+                replacementPreview.className = 'layer-replacement-loading-preview';
+                replacementPreview.src = pendingLogoReplacementPreviewSrc;
+                replacementPreview.alt = '';
+                replacementLoading.appendChild(replacementPreview);
+            }
+            const replacementPill = document.createElement('div');
+            replacementPill.className = 'layer-replacement-loading-pill';
+            replacementPill.innerHTML = '<span class="layer-replacement-loading-spinner"></span><span>正在替换背景…</span><span class="layer-replacement-loading-progress"></span>';
+            replacementLoading.appendChild(replacementPill);
+            wrapper.appendChild(replacementLoading);
+        }
         return wrapper;
     }
     function getEditorGroupId(layer) {
@@ -8532,7 +8563,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 <div class="layer-thumb layer-thumb-${l.type}">${thumb}</div>
                 <div class="layer-info">
                     <span class="layer-name-text">${escapeHtml(getLayerDisplayTitle(l))}</span>
-                    <span class="layer-type-label">${getLayerTypeLabel(l)}</span>
+                    <span class="layer-type-label">${getLayerTypeLabel(l)}${isCanvasBackgroundImage(l, layers) ? '<b class="layer-bg-badge">背景</b>' : ''}</span>
                 </div>
             </div>
             <div class="layer-actions">
@@ -9635,7 +9666,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 ? getMinimumCanvasBackgroundScale(l)
                 : 0.01;
             const fitControls = l.type === 'image' ? `<label class="label">图片适配</label><div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px;"><button class="btn ${fitMode === 'cover' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="applyImageFitMode('cover')">铺满</button><button class="btn ${fitMode === 'contain' ? 'btn-dark' : 'btn-outline'}" type="button" onclick="applyImageFitMode('contain')">完整</button><button class="btn btn-outline" type="button" onclick="applyImageFitMode('original')">原图</button></div><div style="font-size:11px; color:var(--text-sub); line-height:1.55; margin:-4px 0 14px;">铺满会裁切；完整不裁切；原图按原比例放入画布。</div>` : '';
-            area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">${title}</div>${fitControls}<div class="slider-row"><span class="s-label">不透明度</span><input type="range" min="0" max="1" step="0.05" value="${l.opacity !== undefined ? l.opacity : 1}" oninput="updateProp('opacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-opacity">${Math.round((l.opacity !== undefined ? l.opacity : 1) * 100)}%</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="${minimumImageScale}" max="10" step="0.05" value="${l.scale}" oninput="updateLayerScaleFromInput(this)" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div style="display:flex; gap:8px; margin-top:16px;"><button class="btn btn-outline" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="centerLayer()">居中</button><button class="btn btn-outline" style="flex:1;" onclick="toggleFlipX()" title="镜像反转">镜像</button></div>`;
+            area.innerHTML = `<div style="text-align: center; color: var(--text-main); font-size: 14px; font-weight:bold; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--border);">${title}</div>${fitControls}<div class="slider-row"><span class="s-label">不透明度</span><input type="range" min="0" max="1" step="0.05" value="${l.opacity !== undefined ? l.opacity : 1}" oninput="updateProp('opacity', parseFloat(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-opacity">${Math.round((l.opacity !== undefined ? l.opacity : 1) * 100)}%</span></div><div class="slider-row"><span class="s-label">缩放</span><input type="range" min="${minimumImageScale}" max="2" step="0.05" value="${l.scale}" oninput="updateLayerScaleFromInput(this)" onchange="saveHistory()"><span class="slider-val" id="val-scale">${l.scale}x</span></div><div class="slider-row"><span class="s-label">旋转</span><input type="range" min="-180" max="180" step="1" value="${l.rotation}" oninput="updateProp('rotation', parseInt(this.value))" onchange="saveHistory()"><span class="slider-val" id="val-rotation">${l.rotation}°</span></div><div style="display:flex; gap:8px; margin-top:16px;"><button class="btn btn-outline" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="centerLayer()">居中</button><button class="btn btn-outline" style="flex:1;" onclick="toggleFlipX()" title="镜像反转">镜像</button></div>`;
             if (isUserTemplateBackgroundImage(l)) {
                 area.querySelectorAll('.slider-row').forEach(function(row) {
                     const label = row.querySelector('.s-label')?.textContent?.trim() || '';
@@ -11178,7 +11209,14 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var row = document.getElementById('diy-subtag-row');
         if (!row) return;
         var tags = DIY_SUBTAGS[currentAssetTab] || [];
-        if (tags.length <= 1) { row.innerHTML = ''; return; }
+        // 用户模式：组件面板只保留「背景」分组，隐藏标签/LOGO/KIKI/其他素材/组合等
+        var userComponentOnlyBackground = currentAssetTab === 'component' && isUserInterfaceMode();
+        if (userComponentOnlyBackground) {
+            tags = ['背景'];
+            if (diySubtagFilter !== '背景') diySubtagFilter = '背景';
+            if (diySelectedSubtag !== '背景') diySelectedSubtag = '背景';
+        }
+        if (tags.length <= 1 && !userComponentOnlyBackground) { row.innerHTML = ''; return; }
         // 计算每个二级标签下的项目数量
         var counts = {};
         tags.forEach(function(t) { counts[t] = 0; });
@@ -13296,26 +13334,65 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         // 老数据没有 subTag，默认当作 logo（兼容旧行为）
         return 'logo';
     }
+    function getSelectedReplaceableAssetLayer() {
+        return layers.find(function(layer) {
+            return activeLayerIds.includes(layer.id) && (layer.type === 'logo' || layer.type === 'image' || layer.type === 'solid');
+        }) || null;
+    }
+    function beginLogoAssetReplacement(layer, previewSrc) {
+        replacingImageLayerIds.clear();
+        pendingLogoReplacementTargetId = layer && layer.id ? layer.id : '';
+        pendingLogoReplacementPreviewSrc = previewSrc || '';
+        clearTimeout(pendingLogoReplacementTimer);
+        if (!pendingLogoReplacementTargetId) return;
+        replacingImageLayerIds.add(pendingLogoReplacementTargetId);
+        renderCanvas();
+        // 云端请求没有字节级进度事件，超时后至少不要让遮罩永久留在画板上。
+        pendingLogoReplacementTimer = setTimeout(function() {
+            replacingImageLayerIds.clear();
+            pendingLogoReplacementTargetId = '';
+            pendingLogoReplacementPreviewSrc = '';
+            pendingLogoAssetId = '';
+            renderCanvas();
+            showToast('背景素材加载超时，请重试', true);
+        }, 30000);
+    }
+    function finishLogoAssetReplacement(shouldRender) {
+        clearTimeout(pendingLogoReplacementTimer);
+        pendingLogoReplacementTimer = 0;
+        if (pendingLogoReplacementTargetId) replacingImageLayerIds.delete(pendingLogoReplacementTargetId);
+        pendingLogoReplacementTargetId = '';
+        pendingLogoReplacementPreviewSrc = '';
+        if (shouldRender) renderCanvas();
+    }
     async function addLogoFromAsset(id) {
         const logo = logoAssets.find(l => l.id === id); if(!logo) return;
+        var selectedImg = pendingLogoReplacementTargetId
+            ? layers.find(function(layer) { return layer.id === pendingLogoReplacementTargetId; })
+            : getSelectedReplaceableAssetLayer();
         // 云端组件初始仅有缩略图，src 尚未下载。先取完整资源，不能把选中图层的
         // src 直接写成空字符串。
         if (logo._lazy || !logo.src) {
+            beginLogoAssetReplacement(selectedImg, logo.previewUrl || '');
             pendingLogoAssetId = id;
-            showToast('正在加载素材内容，请稍候…');
+            showToast(selectedImg ? '正在下载并替换背景…' : '正在加载素材内容…');
             notifyParent({ type: 'vf:request-template-data', id: logo.cloudId || logo.id });
             return;
         }
+        if (selectedImg && !replacingImageLayerIds.has(selectedImg.id)) beginLogoAssetReplacement(selectedImg, logo.previewUrl || '');
         var assetType = getLogoAssetType(logo);
         let sourceImage;
         try {
             sourceImage = await loadImageElement(logo.src);
         } catch (error) {
+            finishLogoAssetReplacement(true);
             showToast('素材读取失败，未替换当前图层', true);
             return;
         }
         // 如果画板上有选中的可替换图层，替换它
-        var selectedImg = layers.find(function(l) { return activeLayerIds.includes(l.id) && (l.type === 'logo' || l.type === 'image' || l.type === 'solid'); });
+        selectedImg = pendingLogoReplacementTargetId
+            ? layers.find(function(layer) { return layer.id === pendingLogoReplacementTargetId; })
+            : selectedImg;
         if (selectedImg) {
             const replacingCanvasBackground = selectedImg.type === 'image' && isCanvasBackgroundImage(selectedImg, layers);
             saveHistory();
@@ -13330,9 +13407,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             if (replacingCanvasBackground && assetType === 'image') fitCanvasBackgroundAfterReplacement(selectedImg);
             else delete selectedImg.role;
             commitLinkedReplacement(selectedImg, [selectedImg]);
+            finishLogoAssetReplacement(false);
             saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast('已替换');
             return;
         }
+        finishLogoAssetReplacement(false);
         const size = { w: sourceImage.naturalWidth || sourceImage.width, h: sourceImage.naturalHeight || sourceImage.height };
         var targetW = assetType === 'logo' ? 260 : Math.min(size.w, 800);
         var targetH = Math.max(60, targetW * size.h / size.w);

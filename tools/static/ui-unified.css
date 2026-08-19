@@ -457,6 +457,12 @@ html body {
 .ai-dropdown button:hover,
 .ai-dropdown button.active { color: var(--ui-ink) !important; background: #f1f5f9 !important; }
 
+/* 隐藏带 hidden 属性的下拉菜单按钮（覆盖 .ai-dropdown button 的 display 规则） */
+.ai-dropdown button[hidden],
+.right-pane .ai-control-icons .ai-dropdown > button[hidden] {
+  display: none !important;
+}
+
 .export-dropdown-menu .export-format-switcher {
   display: flex !important;
   margin: 0 0 10px !important;
@@ -958,6 +964,18 @@ html body {
   letter-spacing: .01em !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
+}
+.layer-bg-badge {
+  display: inline-block !important;
+  margin-left: 4px !important;
+  padding: 1px 5px !important;
+  border-radius: 6px !important;
+  background: #eef2ff !important;
+  color: #4f46e5 !important;
+  font-size: 8.5px !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+  vertical-align: 0.5px !important;
 }
 
 .layer-actions {
