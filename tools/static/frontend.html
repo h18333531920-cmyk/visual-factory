@@ -2946,7 +2946,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260819-canvas-background-v421">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260819-canvas-text-two-line-v428">
 </head>
 <body>
 
@@ -3181,6 +3181,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             <div class="empty-hint" id="empty-hint" style="display:none"></div>
             <div id="dynamic-layers"></div>
             <div class="safe-guide" id="safe-guide"></div>
+            <div id="canvas-font-loading-overlay">
+                <div class="canvas-font-loading-inner">
+                    <span class="canvas-font-loading-spinner"></span>
+                    <span class="canvas-font-loading-label">正在加载…</span>
+                </div>
+            </div>
         </div>
         <div class="layer-context-menu" id="canvas-context-menu">
             <button type="button" id="canvas-group-selection-btn" onclick="groupSelectedLayers(); closeCanvasContextMenu();">编组</button>
@@ -9146,20 +9152,52 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         renderCanvas(); renderArtboardPreviews();
     };
     var textMeasureCanvas = document.createElement('canvas');
-    function measureAutoWidthTextLayer(layer, text, letterSpacingOverride) {
-        var context = textMeasureCanvas.getContext('2d');
-        var fontSize = Number(layer.fontSize) || 88;
-        var fontWeight = isCustomFont(layer.font)
+    // HT Heliopolis / Dela Gothic 等自定义字体的空格与问号 glyph advance 在 Canvas
+    // measureText 里会失真（比浏览器 DOM 排版窄），导致按 Canvas 算出的单行宽度偏小、
+    // 折行判断失准。自定义字体统一改用 DOM 测量，与真实渲染保持一致。
+    function measureDomSingleLineWidth(layer, text, letterSpacing) {
+        var probe = document.createElement('div');
+        probe.style.position = 'fixed';
+        probe.style.left = '-100000px';
+        probe.style.top = '0';
+        probe.style.visibility = 'hidden';
+        probe.style.pointerEvents = 'none';
+        probe.style.whiteSpace = 'pre';
+        probe.style.fontFamily = layer.font || getDefaultFont();
+        probe.style.fontWeight = isCustomFont(layer.font)
             ? resolveFontWeight(layer.font, Number(layer.fontWeight) || 900)
             : (Number(layer.fontWeight) || 900);
-        context.font = fontWeight + ' ' + fontSize + 'px ' + (layer.font || getDefaultFont());
-        var letterSpacing = Number.isFinite(Number(letterSpacingOverride)) ? Number(letterSpacingOverride) : (Number(layer.letterSpacing) || 0);
-        var width = 0;
+        probe.style.fontSize = (Number(layer.fontSize) || 88) + 'px';
+        probe.style.letterSpacing = (Number.isFinite(Number(letterSpacing)) ? Number(letterSpacing) : 0) + 'px';
+        probe.style.lineHeight = '1';
+        document.body.appendChild(probe);
+        var maxW = 0;
         String(text || '').split('\n').forEach(function(line) {
-            var glyphCount = Array.from(line).length;
-            var lineWidth = context.measureText(line).width + Math.max(0, glyphCount - 1) * letterSpacing;
-            width = Math.max(width, lineWidth);
+            probe.textContent = line || ' ';
+            var w = probe.getBoundingClientRect().width;
+            if (w > maxW) maxW = w;
         });
+        probe.remove();
+        return maxW;
+    }
+    function measureAutoWidthTextLayer(layer, text, letterSpacingOverride) {
+        var fontSize = Number(layer.fontSize) || 88;
+        var letterSpacing = Number.isFinite(Number(letterSpacingOverride)) ? Number(letterSpacingOverride) : (Number(layer.letterSpacing) || 0);
+        var rawText = String(text || '');
+        var width;
+        if (isCustomFont(layer.font)) {
+            width = measureDomSingleLineWidth(layer, rawText, letterSpacing);
+        } else {
+            var context = textMeasureCanvas.getContext('2d');
+            var fontWeight = (Number(layer.fontWeight) || 900);
+            context.font = fontWeight + ' ' + fontSize + 'px ' + (layer.font || getDefaultFont());
+            width = 0;
+            rawText.split('\n').forEach(function(line) {
+                var glyphCount = Array.from(line).length;
+                var lineWidth = context.measureText(line).width + Math.max(0, glyphCount - 1) * letterSpacing;
+                width = Math.max(width, lineWidth);
+            });
+        }
         return width * (Number(layer.scale) || 1);
     }
     function measureNaturalTextLayerLayout(layer, text, layoutOverride) {
@@ -9176,7 +9214,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         probe.style.fontWeight = isCustomFont(layer.font)
             ? resolveFontWeight(layer.font, Number(layer.fontWeight) || 900)
             : (Number(layer.fontWeight) || 900);
-        probe.style.fontSize = (Number(layer.fontSize) || 88) + 'px';
+        probe.style.fontSize = (Number.isFinite(Number(layoutOverride?.fontSize)) ? Number(layoutOverride.fontSize) : (Number(layer.fontSize) || 88)) + 'px';
         probe.style.lineHeight = String(Number(layer.lineHeight) || 0.95);
         var measuredLetterSpacing = Number.isFinite(Number(layoutOverride?.letterSpacing))
             ? Number(layoutOverride.letterSpacing)
@@ -9184,6 +9222,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         probe.style.letterSpacing = measuredLetterSpacing + 'px';
         probe.style.whiteSpace = mode === 'autoWidth' ? 'pre' : 'pre-wrap';
         probe.style.overflowWrap = 'anywhere';
+        probe.style.wordBreak = 'break-word';
         var measuredDirection = detectStrongTextDirection(text) || getEffectiveTextDirection(layer);
         probe.dir = measuredDirection;
         probe.style.direction = measuredDirection;
@@ -9194,11 +9233,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         document.body.appendChild(probe);
         var height = probe.getBoundingClientRect().height;
         probe.remove();
-        var fallbackHeight = (Number(layer.fontSize) || 88) * (Number(layer.lineHeight) || 0.95);
+        var fallbackHeight = (Number.isFinite(Number(layoutOverride?.fontSize)) ? Number(layoutOverride.fontSize) : (Number(layer.fontSize) || 88)) * (Number(layer.lineHeight) || 0.95);
         // Range.getClientRects() 在 RTL 文本混入 []、数字或拉丁标点时，
         // 会把同一行拆成多个 bidi 片段，不能用片段数量判断行数。
         // 直接用实际排版高度除以行高，才与用户看到的行数一致。
-        var measuredLineCount = Math.max(1, Math.round((height || fallbackHeight) / fallbackHeight));
+        var measuredLineCount = Math.max(1, Math.ceil(((height || fallbackHeight) - 0.5) / fallbackHeight));
         var explicitLineCount = Math.max(1, String(text || '').split('\n').length);
         return {
             height: (height || fallbackHeight) * (Number(layer.scale) || 1),
@@ -9252,6 +9291,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             : (Number(layer.letterSpacing) || 0);
         var plan = { accepted: true, resizeMode: currentMode, maxWidth: Number(layer.maxWidth) || 620, letterSpacing: baseLetterSpacing };
         var availableWidth = getUserTextAvailableWidth(layer, text);
+        // 关键修复：测量时始终使用 availableWidth，而不是 layer.maxWidth。
+        // 粘贴时 layer.maxWidth 可能还是旧值（较小），导致测量用更小的宽度，
+        // 从而算出更多的行数。使用 availableWidth 可以确保测量基于实际可用空间。
+        plan.maxWidth = availableWidth;
         var naturalWidth = measureAutoWidthTextLayer(layer, text, baseLetterSpacing) / Math.max(0.01, Math.abs(Number(layer.scale) || 1));
         var maxTighten = Math.min(4, Math.max(1.5, (Number(layer.fontSize) || 88) * 0.04));
         if (currentMode === 'fixedSize') {
@@ -9279,7 +9322,24 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             }
         }
         var measuredLayout = measureNaturalTextLayerLayout(layer, text || ' ', plan);
-        if (measuredLayout.lineCount > 2) {
+        // 直接测量 contenteditable 的实际渲染行数，作为辅助验证
+        // 粘贴时 contenteditable 的布局和 probe 可能不一致，导致测量偏差
+        var actualLineCount = null;
+        var ceEl = document.getElementById(layer.id);
+        if (ceEl) {
+            var ceInner = ceEl.querySelector('.layer-text-content');
+            if (ceInner) {
+                var ceLineHeight = Number(layer.fontSize) * Number(layer.lineHeight) || 88 * 0.95;
+                var ceHeight = ceInner.scrollHeight || ceInner.getBoundingClientRect().height;
+                actualLineCount = Math.max(1, Math.ceil((ceHeight - 0.5) / ceLineHeight));
+            }
+        }
+        // 取测量值和实际值的最大值，确保保守判断
+        var effectiveLineCount = measuredLayout.lineCount;
+        if (actualLineCount !== null) {
+            effectiveLineCount = Math.max(effectiveLineCount, actualLineCount);
+        }
+        if (effectiveLineCount > 2) {
             // 仅差一点时允许最多收紧约 1.5–4px 字间距，分四档尝试。
             // 这个范围肉眼不会明显变形，但可以消化一个短词造成的第三行。
             for (var tightenStep = 1; tightenStep <= 4; tightenStep++) {
@@ -9290,11 +9350,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                     plan.letterSpacing = candidateSpacing;
                     plan.autoFitBaseLetterSpacing = baseLetterSpacing;
                     measuredLayout = candidateLayout;
+                    effectiveLineCount = candidateLayout.lineCount;
                     break;
                 }
             }
         }
-        if (measuredLayout.lineCount > 2) return { accepted: false };
+        if (effectiveLineCount > 2) return { accepted: false };
         var height = measuredLayout.height;
         // 自动高度文字以当前顶部为锚点；第二行也必须留在画布内。
         var canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
@@ -9418,6 +9479,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 if(getSharedPropsForLayer(l).includes(p)) propagateSharedLayerChange(l, [p]);
             }
         });
+        if (p === 'text') {
+            activeLayerIds.forEach(id => {
+                const l = layers.find(x => x.id === id);
+                if (l && l.type === 'text') enforceTwoLineAfterFontLoad(l);
+            });
+        }
         renderCanvas(); renderArtboardPreviews();
         if (rejectedTextInput) {
             var textEditor = document.querySelector('#prop-edit-area textarea');
@@ -9545,6 +9612,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             layer[prop] = value;
             reflowEditorGroupAfterMemberResize(layer, oldBounds);
         }
+        if (prop === 'text' && layer.type === 'text') enforceTwoLineAfterFontLoad(layer);
         if (getSharedPropsForLayer(layer).includes(prop)) propagateSharedLayerChange(layer, [prop]);
         renderCanvas(); renderLayersList(); renderArtboardPreviews();
     }
@@ -9888,7 +9956,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     window.syncTextEdit = function(id, el) {
         var l = layers.find(function(x) { return x.id === id; });
         if (!l) return;
-        // 把 contenteditable 的 innerHTML 转回纯文本
         var html = el.innerHTML || '';
         var text = html
             .replace(/<br\s*\/?>/gi, '\n')
@@ -9899,7 +9966,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .replace(/&gt;/g, '>')
             .replace(/&quot;/g, '"')
             .replace(/&#(\d+);/g, function(_, d) { return String.fromCharCode(Number(d)); });
-        // 去掉开头/末尾多余换行，压缩连续换行
         text = text.replace(/^\n+/, '').replace(/\n+$/, '').replace(/\n{3,}/g, '\n\n');
         if (setTextContentPreservingAlignedEdge(l, text) === false) {
             restoreCanvasTextEditorValue(el, l.text || '');
@@ -9947,6 +10013,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             var ta = document.querySelector('#prop-edit-area textarea');
             if (ta) ta.value = text;
         }
+        // 自定义字体可能仍在异步加载：加载完成后再按同一字体重新校验两行上限，
+        // 避免「测量两行 / 渲染三行」的竞态。
+        enforceTwoLineAfterFontLoad(l);
     };
     function exitTextEdit() {
         if (!textEditLayerId) return;
@@ -10088,33 +10157,70 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (prop === 'rotation') return Math.round(val||0) + '°';
         return Math.round(val||0) + '';
     }
-    function enterCanvasTextEdit(layerId) {
-        var layer = layers.find(function(item) { return item.id === layerId; });
-        if (!layer || layer.type !== 'text' || layer.locked) return false;
-        exitTextEdit();
-        if (!activeLayerIds.includes(layerId)) {
-            activeLayerIds = [layerId];
-            layerSelectionAnchorId = layerId;
-            renderCanvas(); renderLayersList(); renderProperties();
-        }
-        textEditLayerId = layerId;
-        var wrapper = document.getElementById(layerId);
-        if (!wrapper) return false;
-        wrapper.classList.add('layer-text-editing');
-        var editable = wrapper.querySelector('.layer-text-content');
-        if (!editable) return false;
-        editable.contentEditable = 'true';
-        editable.style.userSelect = 'text';
-        editable.focus();
-        var range = document.createRange();
-        range.selectNodeContents(editable);
-        range.collapse(false);
-        var selection = window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
-        return true;
+function enterCanvasTextEdit(layerId) {
+var layer = layers.find(function(item) { return item.id === layerId; });
+if (!layer || layer.type !== 'text' || layer.locked) return false;
+exitTextEdit();
+if (!activeLayerIds.includes(layerId)) {
+activeLayerIds = [layerId];
+layerSelectionAnchorId = layerId;
+renderCanvas(); renderLayersList(); renderProperties();
+}
+textEditLayerId = layerId;
+var wrapper = document.getElementById(layerId);
+if (!wrapper) return false;
+wrapper.classList.add('layer-text-editing');
+var editable = wrapper.querySelector('.layer-text-content');
+if (!editable) return false;
+editable.contentEditable = 'true';
+editable.style.userSelect = 'text';
+// 粘贴处理：先预检查最终文本是否能在 2 行内，再决定一次性插入还是拒绝。
+// 避免逐字符输入时中间状态超出 2 行导致无法完成粘贴。
+editable.onpaste = function(e) {
+    e.preventDefault();
+    var pasteText = (e.clipboardData || window.clipboardData).getData('text/plain');
+    if (!pasteText) return;
+
+    // 获取当前 contenteditable 的纯文本（用浏览器原生的 Range.toString，最可靠）
+    var sel = window.getSelection();
+    var range = sel.getRangeAt(0);
+
+    // 光标前的文本
+    var preRange = document.createRange();
+    preRange.selectNodeContents(editable);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    var beforeText = preRange.toString();
+
+    // 光标后的文本
+    var postRange = document.createRange();
+    postRange.selectNodeContents(editable);
+    postRange.setStart(range.endContainer, range.endOffset);
+    var afterText = postRange.toString();
+
+    // 计算最终文本
+    var finalText = beforeText + pasteText + afterText;
+
+    // 预检查：最终文本是否能在 2 行内
+    var plan = prepareUserTextLayout(l, finalText);
+    if (!plan || !plan.accepted) {
+        showToast('文字最多两行，不可出现第三行', true);
+        return;
     }
+
+    // 预检查通过：一次性插入全部文本
+    document.execCommand('insertText', false, pasteText);
+};
+editable.focus();
+var range = document.createRange();
+range.selectNodeContents(editable);
+range.collapse(false);
+var selection = window.getSelection();
+selection.removeAllRanges();
+selection.addRange(range);
+return true;
+}
     document.getElementById('canvas-wrapper').addEventListener('mousedown', e => {
+        if (canvasFontLoadingDepth > 0) return; // 字体加载中锁定画板
         if (e.button === 2) return; // 右键不改变选中状态，留给 contextmenu 处理
         hasDragged = false;
         // 双击文字图层 → 进入编辑
@@ -10171,6 +10277,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     });
     // 画布右键菜单
     document.getElementById('canvas-wrapper').addEventListener('contextmenu', function(e) {
+        if (canvasFontLoadingDepth > 0) return; // 字体加载中锁定画板
         var wrap = e.target.closest('.layer-base');
         // 多选时 → 保存组合
         if (activeLayerIds.length >= 2) {
@@ -10776,8 +10883,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             // 切换画板常会重复收到完全相同的模板摘要。此时保留现有 DOM，避免卡片
             // 被清空重建造成一帧闪白；首次加载或列表内容真的变化时才重绘。
             if (!assetListAlreadyRendered || previousLibraryRenderKey !== nextLibraryRenderKey) renderAssetLibrary();
-            // 后台预加载云端字体
-            setTimeout(function() { preloadCloudFonts(); }, 2000);
+            // 收到云端字体清单后立即预加载，遮罩覆盖下载过程，完成后释放画板打开遮罩
+            preloadCloudFontsWithLock();
         } else if (event.data.type === 'vf:template-preview') {
             // 优先接收 Blob：避免在素材列表中塞入几十个巨大 Base64 字符串。
             var pid = event.data.id;
@@ -12927,6 +13034,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
     function applyLayoutPreset(id) {
         const p = presetLibrary.find(x => x.id === id); if(!p) return;
+        console.log('[TEXT2LINE] applyLayoutPreset name="' + (p.name || '') + '" kind=' + (p.kind || 'layout') + ' isUser=' + isUserInterfaceMode());
         if (p._lazy) {
             pendingLayoutPresetId = id;
             showToast('正在加载模板内容，请稍候…');
@@ -12972,6 +13080,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         layers = newLayers;
         activeLayerIds = [];
         saveHistory(true); renderCanvas(); renderLayersList(); renderProperties(); showToast('已切换到该模板');
+        showCanvasFontLoadingOverlay();
+        ensureTemplateFontsLoaded(newLayers).then(function() {
+            enforceTextTwoLineLimit(layers);
+            renderCanvas();
+            hideCanvasFontLoadingOverlay();
+        });
     }
     async function deleteLayoutPreset(id) {
         if(!await askConfirm('删除这个版式预设？')) return;
@@ -13133,6 +13247,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         saveHistory(true);
         renderAssetLibrary();
         showToast('已应用三画板套组');
+        showCanvasFontLoadingOverlay();
+        ensureTemplateFontsLoaded(layers).then(function() {
+            enforceTextTwoLineLimit(layers);
+            renderCanvas();
+            hideCanvasFontLoadingOverlay();
+        });
     }
     async function saveTagComboPreset() {
         const tags = getSelectedTagLayers();
@@ -13423,6 +13543,130 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             var logo = logoAssets.find(function(l) { return l.id === id; });
             moveAssetToRecycle('logo', logo);
         });
+    }
+
+    // ===== 画板字体加载锁定（模板应用后等字体就绪再渲染，避免 fallback 字体竞态导致折行三行） =====
+    let canvasFontLoadingDepth = 0;
+    let canvasFontLoadingShownAt = 0;
+    function showCanvasFontLoadingOverlay() {
+        canvasFontLoadingDepth++;
+        canvasFontLoadingShownAt = Date.now();
+        const overlay = document.getElementById('canvas-font-loading-overlay');
+        if (overlay) overlay.hidden = false;
+    }
+    function hideCanvasFontLoadingOverlay() {
+        canvasFontLoadingDepth = Math.max(0, canvasFontLoadingDepth - 1);
+        if (canvasFontLoadingDepth !== 0) return;
+        // 至少展示 600ms，保证「置灰锁定」肉眼可见，不会因字体已加载/加载失败而一闪而过
+        const hold = Math.max(0, 600 - (Date.now() - canvasFontLoadingShownAt));
+        setTimeout(function() {
+            if (canvasFontLoadingDepth !== 0) return;
+            const overlay = document.getElementById('canvas-font-loading-overlay');
+            if (overlay) overlay.hidden = true;
+        }, hold);
+    }
+    // 云端字体清单到达并预加载完成后的信号（画板打开遮罩要等它，避免 fontAssets 未到时就误判「字体已就绪」）
+    let _cloudFontsReadyResolve = null;
+    const _cloudFontsReadyPromise = new Promise(function(r) { _cloudFontsReadyResolve = r; });
+    function markCloudFontsReady() {
+        if (_cloudFontsReadyResolve) { _cloudFontsReadyResolve(); _cloudFontsReadyResolve = null; }
+    }
+    function preloadCloudFontsWithLock() {
+        showCanvasFontLoadingOverlay();
+        preloadCloudFonts().then(function() {
+            renderCanvas();
+            markCloudFontsReady();
+            hideCanvasFontLoadingOverlay();
+        }).catch(function() {
+            markCloudFontsReady();
+            hideCanvasFontLoadingOverlay();
+        });
+    }
+    async function ensureTemplateFontsLoaded(targetLayers) {
+        const ids = new Set();
+        (targetLayers || []).forEach(function(l) {
+            if (l.font && isCustomFont(l.font)) {
+                const m = String(l.font).match(/CF_[A-Za-z0-9_]+/);
+                if (m) ids.add(m[0]);
+            }
+        });
+        const tasks = [];
+        ids.forEach(function(familyId) {
+            let face = null;
+            document.fonts.forEach(function(f) {
+                if (String(f.family).replace(/"/g, '') === familyId) face = f;
+            });
+            if (face) {
+                tasks.push(face.load().catch(function(){}));
+                return;
+            }
+            // 未注册：从云端字体资产按 familyId 匹配并安装
+            const asset = fontAssets.find(function(f) { return f.fontFamilyId === familyId; });
+            if (asset) tasks.push(applyFontFromAsset(asset.id, true).catch(function(){}));
+        });
+        if (!tasks.length) return;
+        await Promise.race([
+            Promise.all(tasks),
+            new Promise(function(resolve) { setTimeout(resolve, 8000); }) // 8s 兜底，防字体加载失败永久锁死
+        ]);
+        try { await document.fonts.ready; } catch(e) {}
+    }
+
+    // ===== 模板应用后强制两行（复用用户模式的两行上限） =====
+    // 字体就绪后再测量，同一字体下 lineCount 才准确；超过两行时先收紧字距，
+    // 压不下再缩小字号，确保模板文字在用户环境渲染不超过两行。
+    function enforceTextTwoLineLimit(targetLayers) {
+        if (!isUserInterfaceMode()) return;
+        (targetLayers || []).forEach(function(layer) {
+            if (!layer || layer.type !== 'text') return;
+            var text = String(layer.text || '');
+            if (!text.trim() || text.split('\n').length > 2) return;
+            var layout = measureNaturalTextLayerLayout(layer, text || ' ');
+            if (layout.lineCount <= 2) return;
+            var baseLetterSpacing = Number(layer.letterSpacing) || 0;
+            var baseFontSize = Number(layer.fontSize) || 88;
+            var maxTighten = Math.min(4, Math.max(1.5, baseFontSize * 0.04));
+            var fixed = false;
+            // 1) 优先收紧字距（视觉影响最小，不改变字号）
+            for (var step = 1; step <= 4; step++) {
+                var candSpacing = baseLetterSpacing - maxTighten * step / 4;
+                var candLayout = measureNaturalTextLayerLayout(layer, text || ' ', { letterSpacing: candSpacing });
+                if (candLayout.lineCount <= 2) {
+                    layer.letterSpacing = candSpacing;
+                    fixed = true;
+                    break;
+                }
+            }
+            if (fixed) return;
+            // 2) 字距压不下时，缩小字号兜底（最多 3 档，每档 4%）
+            for (var fs = 1; fs <= 3; fs++) {
+                var candFontSize = Math.round(baseFontSize * (1 - 0.04 * fs));
+                var candL = measureNaturalTextLayerLayout(layer, text || ' ', { fontSize: candFontSize });
+                if (candL.lineCount <= 2) {
+                    layer.fontSize = candFontSize;
+                    break;
+                }
+            }
+        });
+    }
+
+    // 字体异步加载竞态兜底：提交文本时自定义字体可能尚未加载完成，测量会先落在
+    // fallback 字体上（偏窄 → 误判为两行），字体加载后换成更宽的字体才渲染成三行。
+    // 字体真正就绪后，用同一字体重新测量并按既有逻辑压回两行。
+    function enforceTwoLineAfterFontLoad(layer) {
+        if (!isUserInterfaceMode()) return;
+        if (!layer || layer.type !== 'text') return;
+        if (!isCustomFont(layer.font)) return;
+        var m = String(layer.font).match(/CF_[A-Za-z0-9_]+/);
+        var familyId = m ? m[0] : '';
+        if (!familyId) return;
+        document.fonts.load(familyId, String(layer.text || ' ')).then(function() {
+            if (!layer || layer.type !== 'text') return;
+            if (String(layer.text || '').split('\n').length > 2) return;
+            enforceTextTwoLineLimit([layer]);
+            renderCanvas();
+            renderProperties();
+        }).catch(function() {});
     }
 
     async function applyFontFromAsset(id, silent) {
@@ -16439,6 +16683,22 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         renderPromptTags();
         refreshAIConsole();
         saveHistory();
+        unlockCanvasAfterFontsReady();
+    }
+    async function unlockCanvasAfterFontsReady() {
+        showCanvasFontLoadingOverlay();
+        try {
+            await Promise.race([
+                (async function() {
+                    await document.fonts.ready;
+                    await _cloudFontsReadyPromise;
+                    await document.fonts.ready;
+                })(),
+                new Promise(function(resolve) { setTimeout(resolve, 10000); })
+            ]);
+        } catch (e) {}
+        renderCanvas();
+        hideCanvasFontLoadingOverlay();
     }
     function setupLayerListResize() {
         const list = document.getElementById('layer-list-ui');

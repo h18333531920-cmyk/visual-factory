@@ -463,6 +463,44 @@ html body {
   display: none !important;
 }
 
+/* 画板字体加载遮罩：模板字体加载期间置灰锁定画板 */
+#canvas-font-loading-overlay {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 999999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  /* 深灰遮罩：不依赖 backdrop-filter（父级 transform/overflow 会让它失效），
+     白底画布上也清晰可见，明确表达「置灰锁定」 */
+  background: rgba(15, 23, 42, 0.42) !important;
+  pointer-events: auto !important;
+  cursor: wait !important;
+}
+#canvas-font-loading-overlay[hidden] { display: none !important; }
+.canvas-font-loading-inner {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+  padding: 14px 20px !important;
+  border-radius: 999px !important;
+  background: rgba(15, 23, 42, 0.82) !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.24) !important;
+}
+.canvas-font-loading-spinner {
+  width: 15px !important;
+  height: 15px !important;
+  border: 2px solid rgba(255, 255, 255, 0.35) !important;
+  border-top-color: #fff !important;
+  border-radius: 50% !important;
+  animation: vf-canvas-font-spin 0.8s linear infinite !important;
+}
+@keyframes vf-canvas-font-spin { to { transform: rotate(360deg); } }
+
 .export-dropdown-menu .export-format-switcher {
   display: flex !important;
   margin: 0 0 10px !important;
