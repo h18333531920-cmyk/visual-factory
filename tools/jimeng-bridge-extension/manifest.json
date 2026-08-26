@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "GCC Design · 即梦本机桥",
   "description": "在用户已登录且主动配对的即梦标签页与 GCC Design 之间建立本机创作桥接。",
-  "version": "0.1.2",
-  "permissions": ["tabs", "storage", "activeTab", "scripting", "cookies"],
+  "version": "0.1.3",
+  "permissions": ["tabs", "storage", "activeTab", "scripting", "cookies", "alarms"],
   "host_permissions": [
     "http://localhost:8791/*",
     "http://127.0.0.1:8791/*",

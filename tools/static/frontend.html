@@ -2946,7 +2946,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260819-canvas-text-two-line-v428">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260819-canvas-text-two-line-v429">
 </head>
 <body>
 
@@ -4289,7 +4289,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     let aiFeatureMode = 'generate';
     let aiGenerationSize = '1:1';
     let aiProvider = 'jimeng';
-    let JIMENG_API_URL = 'https://attributes-royalty-margin-silicon.trycloudflare.com'; // 兜底地址；优先从 KV（jimeng-session）动态读取
+    let JIMENG_API_URL = 'https://jimeng.gccdesign.app'; // 固定服务器入口；优先从 KV（jimeng-session）动态读取
+    const JIMENG_CLOUD_FALLBACK_URL = 'https://gccdesign.app/api/jimeng';
     let jimengApiReady = false;
     let jimengSessionId = '';
     let jimengCookies = {};
@@ -9244,10 +9245,103 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             lineCount: Math.max(measuredLineCount, explicitLineCount)
         };
     }
+    // 用画板上已渲染的文字节点克隆测量候选文案。这能完整继承
+    // 实际字体、字重、行高、断词规则和 class CSS，避免通用 probe 与画板
+    // 的细微差异造成「测量两行，实际三行」。
+    function measureRenderedTextLayerLayout(layer, text, layoutOverride) {
+        var source = layer && document.getElementById(layer.id);
+        var sourceContent = source && source.querySelector('.layer-text-content');
+        if (!source || !sourceContent) return null;
+        var clone = source.cloneNode(true);
+        var content = clone.querySelector('.layer-text-content');
+        if (!content) return null;
+        var mode = layoutOverride?.resizeMode || layer.resizeMode || 'autoWidth';
+        var maxWidth = Number(layoutOverride?.maxWidth ?? layer.maxWidth) || 620;
+        var fontSize = Number.isFinite(Number(layoutOverride?.fontSize))
+            ? Number(layoutOverride.fontSize)
+            : (Number(layer.fontSize) || 88);
+        var letterSpacing = Number.isFinite(Number(layoutOverride?.letterSpacing))
+            ? Number(layoutOverride.letterSpacing)
+            : (Number(layer.letterSpacing) || 0);
+        clone.removeAttribute('id');
+        clone.classList.remove('is-active-layer', 'layer-text-editing', 'vf-user-empty-template-text');
+        clone.style.position = 'fixed';
+        clone.style.left = '-100000px';
+        clone.style.top = '0';
+        clone.style.visibility = 'hidden';
+        clone.style.pointerEvents = 'none';
+        clone.style.transform = 'none';
+        clone.style.transformOrigin = 'left top';
+        clone.style.fontSize = fontSize + 'px';
+        clone.style.letterSpacing = letterSpacing + 'px';
+        clone.style.width = mode === 'autoWidth' ? 'max-content' : (maxWidth + 'px');
+        clone.style.height = 'auto';
+        clone.style.overflow = 'visible';
+        content.removeAttribute('contenteditable');
+        content.removeAttribute('oninput');
+        content.removeAttribute('onblur');
+        content.classList.remove('vf-user-text-placeholder');
+        content.removeAttribute('data-user-placeholder');
+        content.style.whiteSpace = mode === 'autoWidth' ? 'pre' : 'pre-wrap';
+        content.style.overflowWrap = 'anywhere';
+        content.textContent = String(text || ' ');
+        document.body.appendChild(clone);
+        var contentStyle = getComputedStyle(content);
+        var lineHeight = parseFloat(contentStyle.lineHeight);
+        if (!Number.isFinite(lineHeight) || lineHeight <= 0) {
+            lineHeight = fontSize * (Number(layer.lineHeight) || 0.95);
+        }
+        var rect = content.getBoundingClientRect();
+        var height = rect.height || lineHeight;
+        var lineCount = Math.max(1, Math.ceil((height - 0.5) / lineHeight));
+        var explicitLineCount = Math.max(1, String(text || '').split('\n').length);
+        clone.remove();
+        return {
+            height: height * (Number(layer.scale) || 1),
+            lineCount: Math.max(lineCount, explicitLineCount)
+        };
+    }
+    function measureUserTextCandidateLayout(layer, text, layoutOverride) {
+        // 空模板文字在画板上是一个带 ::before 占位符的特殊 DOM 状态。
+        // 即使克隆后移除占位 class，浏览器仍可能在这一帧保留占位节点的
+        // 旧布局信息，导致第一次整段粘贴被误判成三行。空白恢复输入时直接
+        // 使用独立 probe 测量真实候选文字；输入首个字符后两种测量会重新一致。
+        if (isUserProtectedTemplateText(layer) && !String(layer.text || '').trim()) {
+            return measureNaturalTextLayerLayout(layer, text, layoutOverride);
+        }
+        return measureRenderedTextLayerLayout(layer, text, layoutOverride)
+            || measureNaturalTextLayerLayout(layer, text, layoutOverride);
+    }
     function measureNaturalTextLayerHeight(layer, text, layoutOverride) {
         return measureNaturalTextLayerLayout(layer, text, layoutOverride).height;
     }
-    function getUserTextAvailableWidth(layer, nextText) {
+    function snapshotUserTextFrame(layer, textOverride, layoutOverride) {
+        var scale = Math.max(0.01, Math.abs(Number(layer.scale) || 1));
+        var mode = layoutOverride?.resizeMode || layer.resizeMode || 'autoWidth';
+        var text = textOverride === undefined ? String(layer.text || '') : String(textOverride || '');
+        var width = mode === 'autoWidth'
+            ? measureAutoWidthTextLayer(layer, text || ' ', layoutOverride?.letterSpacing)
+            : (Number(layoutOverride?.maxWidth ?? layer.maxWidth) || 620) * scale;
+        var height = measureNaturalTextLayerHeight(layer, text || ' ', layoutOverride);
+        var align = getEffectiveTextAlign(layer, detectStrongTextDirection(text) || getEffectiveTextDirection(layer));
+        var cx = Number(layer.x) || 0;
+        if (layer.textBoxAnchor !== 'center') {
+            if (align === 'left') cx += width / 2;
+            else if (align === 'right') cx -= width / 2;
+        }
+        var cy = Number(layer.y) || 0;
+        return {
+            width: width,
+            height: height,
+            cx: cx,
+            cy: cy,
+            leftEdge: cx - width / 2,
+            rightEdge: cx + width / 2,
+            topEdge: cy - height / 2,
+            bottomEdge: cy + height / 2
+        };
+    }
+    function getUserTextAvailableWidth(layer, nextText, preservedLayout) {
         var canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
         var scale = Math.max(0.01, Math.abs(Number(layer.scale) || 1));
         var x = Number(layer.x) || canvasSize.w / 2;
@@ -9262,22 +9356,30 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 ? measureAutoWidthTextLayer(layer, layer.text || ' ')
                 : (Number(layer.maxWidth) || 620) * scale;
             if (align === 'right') {
-                var currentRightEdge = Math.min(canvasSize.w - safeMargin, x + currentVisualWidth / 2);
-                var currentRightMargin = Math.max(safeMargin, canvasSize.w - currentRightEdge);
-                availableVisual = Math.max(0, currentRightEdge - currentRightMargin);
+                // RTL 从右侧阅读边缘向左使用空间。空白恢复时沿用清空前
+                // 的真实右边缘，而不是占位符或旧 maxWidth 推算出的宽度。
+                var currentRightEdge = Number.isFinite(Number(preservedLayout?.rightEdge))
+                    ? Number(preservedLayout.rightEdge)
+                    : x + currentVisualWidth / 2;
+                currentRightEdge = Math.min(canvasSize.w - safeMargin, currentRightEdge);
+                availableVisual = Math.max(0, currentRightEdge - safeMargin);
             } else if (align === 'left') {
-                var currentLeftEdge = Math.max(safeMargin, x - currentVisualWidth / 2);
-                var currentLeftMargin = Math.max(safeMargin, currentLeftEdge);
-                availableVisual = Math.max(0, canvasSize.w - currentLeftMargin - currentLeftEdge);
+                // LTR 从左侧阅读边缘向右使用空间。旧算法把 leftEdge 同时
+                // 当成坐标和边距减了两次，正是空文本直接粘贴被误判的原因。
+                var currentLeftEdge = Number.isFinite(Number(preservedLayout?.leftEdge))
+                    ? Number(preservedLayout.leftEdge)
+                    : x - currentVisualWidth / 2;
+                currentLeftEdge = Math.max(safeMargin, currentLeftEdge);
+                availableVisual = Math.max(0, canvasSize.w - safeMargin - currentLeftEdge);
             } else {
                 availableVisual = Math.max(0, Math.min(x - safeMargin, canvasSize.w - safeMargin - x) * 2);
             }
         } else if (align === 'right') {
-            var rightAnchorMargin = Math.max(safeMargin, canvasSize.w - x);
-            availableVisual = Math.max(0, x - rightAnchorMargin);
+            // 旧模板的 x 就是右侧阅读边缘，不能再减一次右侧坐标。
+            availableVisual = Math.max(0, Math.min(canvasSize.w - safeMargin, x) - safeMargin);
         } else {
-            var leftAnchorMargin = Math.max(safeMargin, x);
-            availableVisual = Math.max(0, canvasSize.w - leftAnchorMargin - x);
+            // 旧模板的 x 就是左侧阅读边缘，从这里一直使用到右安全边距。
+            availableVisual = Math.max(0, canvasSize.w - safeMargin - Math.max(safeMargin, x));
         }
         return Math.max(24, availableVisual / scale);
     }
@@ -9285,12 +9387,32 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (!isUserInterfaceMode() || layer?.type !== 'text') return { accepted: true };
         var text = String(nextText == null ? '' : nextText);
         if (text.split('\n').length > 2) return { accepted: false };
-        var currentMode = layer.resizeMode || 'autoWidth';
-        var baseLetterSpacing = Number.isFinite(Number(layer._userAutoFitBaseLetterSpacing))
+        var restoringEmptyLayout = !String(layer.text || '').trim()
+            && text.trim()
+            && layer._userEmptyTextRestoreLayout;
+        var currentMode = restoringEmptyLayout?.resizeMode || layer.resizeMode || 'autoWidth';
+        var savedBaseLetterSpacing = Number(restoringEmptyLayout?.baseLetterSpacing);
+        var baseLetterSpacing = Number.isFinite(savedBaseLetterSpacing)
+            ? savedBaseLetterSpacing
+            : Number.isFinite(Number(layer._userAutoFitBaseLetterSpacing))
             ? Number(layer._userAutoFitBaseLetterSpacing)
             : (Number(layer.letterSpacing) || 0);
-        var plan = { accepted: true, resizeMode: currentMode, maxWidth: Number(layer.maxWidth) || 620, letterSpacing: baseLetterSpacing };
-        var availableWidth = getUserTextAvailableWidth(layer, text);
+        var savedMaxWidth = Number(restoringEmptyLayout?.maxWidth);
+        var plan = { accepted: true, resizeMode: currentMode, maxWidth: savedMaxWidth > 0 ? savedMaxWidth : (Number(layer.maxWidth) || 620), letterSpacing: baseLetterSpacing };
+        // 清空受保护的模板文案只改变显示内容，让画板显示 Enter text。
+        // 文本框的宽度、折行模式和字距必须保持不变，方便用户随后把文字
+        // 原样粘贴回来；占位符不是一次真实的排版变更。
+        if (!text.trim() && isUserProtectedTemplateText(layer)) {
+            plan.preserveEmptyLayout = true;
+            return plan;
+        }
+        // 剪切后把原文直接粘回，是一次纯恢复操作。原文在清空前已经是画板上的
+        // 合法布局，不应再次经过字体尚未稳定、占位符 DOM 等瞬时状态的测量。
+        if (restoringEmptyLayout && text === restoringEmptyLayout.text) {
+            plan.restoreExactLayout = true;
+            return plan;
+        }
+        var availableWidth = getUserTextAvailableWidth(layer, text, restoringEmptyLayout || null);
         // 关键修复：测量时始终使用 availableWidth，而不是 layer.maxWidth。
         // 粘贴时 layer.maxWidth 可能还是旧值（较小），导致测量用更小的宽度，
         // 从而算出更多的行数。使用 availableWidth 可以确保测量基于实际可用空间。
@@ -9321,31 +9443,15 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 plan.autoWrapped = true;
             }
         }
-        var measuredLayout = measureNaturalTextLayerLayout(layer, text || ' ', plan);
-        // 直接测量 contenteditable 的实际渲染行数，作为辅助验证
-        // 粘贴时 contenteditable 的布局和 probe 可能不一致，导致测量偏差
-        var actualLineCount = null;
-        var ceEl = document.getElementById(layer.id);
-        if (ceEl) {
-            var ceInner = ceEl.querySelector('.layer-text-content');
-            if (ceInner) {
-                var ceLineHeight = Number(layer.fontSize) * Number(layer.lineHeight) || 88 * 0.95;
-                var ceHeight = ceInner.scrollHeight || ceInner.getBoundingClientRect().height;
-                actualLineCount = Math.max(1, Math.ceil((ceHeight - 0.5) / ceLineHeight));
-            }
-        }
-        // 取测量值和实际值的最大值，确保保守判断
+        var measuredLayout = measureUserTextCandidateLayout(layer, text || ' ', plan);
         var effectiveLineCount = measuredLayout.lineCount;
-        if (actualLineCount !== null) {
-            effectiveLineCount = Math.max(effectiveLineCount, actualLineCount);
-        }
         if (effectiveLineCount > 2) {
             // 仅差一点时允许最多收紧约 1.5–4px 字间距，分四档尝试。
             // 这个范围肉眼不会明显变形，但可以消化一个短词造成的第三行。
             for (var tightenStep = 1; tightenStep <= 4; tightenStep++) {
                 var candidateSpacing = baseLetterSpacing - maxTighten * tightenStep / 4;
                 var candidatePlan = Object.assign({}, plan, { letterSpacing: candidateSpacing });
-                var candidateLayout = measureNaturalTextLayerLayout(layer, text || ' ', candidatePlan);
+                var candidateLayout = measureUserTextCandidateLayout(layer, text || ' ', candidatePlan);
                 if (candidateLayout.lineCount <= 2) {
                     plan.letterSpacing = candidateSpacing;
                     plan.autoFitBaseLetterSpacing = baseLetterSpacing;
@@ -9355,13 +9461,35 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 }
             }
         }
-        if (effectiveLineCount > 2) return { accepted: false };
+        if (effectiveLineCount > 2) {
+            console.debug('[vf-text-limit]', {
+                reason: 'line-count',
+                text: text,
+                currentText: String(layer.text || ''),
+                restoringEmptyLayout: restoringEmptyLayout || null,
+                availableWidth: availableWidth,
+                plan: plan,
+                measuredLayout: measuredLayout
+            });
+            return { accepted: false };
+        }
         var height = measuredLayout.height;
         // 自动高度文字以当前顶部为锚点；第二行也必须留在画布内。
         var canvasSize = SIZES[currentRatio] || { w: 1080, h: 1080 };
         var oldHeight = measureNaturalTextLayerHeight(layer, String(layer.text || ' ') || ' ');
         var oldTop = (Number(layer.y) || canvasSize.h / 2) - oldHeight / 2;
-        if (oldTop + height > canvasSize.h + 0.5) return { accepted: false };
+        if (oldTop + height > canvasSize.h + 0.5) {
+            console.debug('[vf-text-limit]', {
+                reason: 'canvas-bottom',
+                text: text,
+                oldTop: oldTop,
+                height: height,
+                canvasHeight: canvasSize.h,
+                plan: plan,
+                measuredLayout: measuredLayout
+            });
+            return { accepted: false };
+        }
         return plan;
     }
     function snapshotEditorGroupBounds(layer) {
@@ -9397,8 +9525,26 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var normalizedText = String(nextText == null ? '' : nextText);
         if (oldText === normalizedText) return;
         var oldEditorGroupBounds = snapshotEditorGroupBounds(layer);
+        // 清空前先保存真实文本框的排版区域。占位符只负责提示用户，并不
+        // 代表文本框实际可用宽度；第一次重新输入/粘贴要沿用这份布局判断。
+        var emptyTextRestoreLayout = null;
+        if (oldText.trim() && !normalizedText.trim() && isUserProtectedTemplateText(layer)) {
+            var oldBounds = snapshotUserTextFrame(layer, oldText);
+            emptyTextRestoreLayout = {
+                text: oldText,
+                leftEdge: oldBounds.leftEdge,
+                rightEdge: oldBounds.rightEdge,
+                resizeMode: layer.resizeMode || 'autoWidth',
+                maxWidth: Number(layer.maxWidth) || 620,
+                baseLetterSpacing: Number.isFinite(Number(layer._userAutoFitBaseLetterSpacing))
+                    ? Number(layer._userAutoFitBaseLetterSpacing)
+                    : (Number(layer.letterSpacing) || 0)
+            };
+        }
+        var restoringFromEmpty = !oldText.trim() && normalizedText.trim();
         var userLayout = prepareUserTextLayout(layer, normalizedText);
         if (!userLayout.accepted) return false;
+        if (emptyTextRestoreLayout) layer._userEmptyTextRestoreLayout = emptyTextRestoreLayout;
         var oldAlignment = getEffectiveTextAlign(layer, getEffectiveTextDirection(oldText));
         var nextStrongDirection = detectStrongTextDirection(normalizedText);
         var nextAutomaticAlign = nextStrongDirection === 'rtl' ? 'right' : (nextStrongDirection === 'ltr' ? 'left' : '');
@@ -9429,6 +9575,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             layer.textBoxAnchor = 'center';
         }
         layer.text = normalizedText;
+        if (restoringFromEmpty) delete layer._userEmptyTextRestoreLayout;
         syncTextDirectionFromContent(layer, normalizedText);
         if (userLayout.resizeMode) layer.resizeMode = userLayout.resizeMode;
         if (userLayout.maxWidth) layer.maxWidth = userLayout.maxWidth;
@@ -9650,7 +9797,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (layer.type === 'text') {
             const groupTextDirection = detectStrongTextDirection(layer.text || '') || getEffectiveTextDirection(layer);
             const groupTextAlign = groupTextDirection === 'rtl' ? 'right' : 'left';
-            control = '<textarea class="input" rows="2" dir="' + groupTextDirection + '" style="width:100%;resize:vertical;direction:' + groupTextDirection + ';text-align:' + groupTextAlign + ';unicode-bidi:isolate;" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'text\',this.value,this);this.dir=detectStrongTextDirection(this.value)||\'' + groupTextDirection + '\';this.style.direction=this.dir;this.style.textAlign=this.dir===\'rtl\'?\'right\':\'left\';" onchange="commitEditorGroupMemberChange()">' + escapeHtml(layer.text || '') + '</textarea>';
+            control = '<textarea class="input" rows="2" data-editor-group-text-layer-id="' + escapeHtml(layer.id) + '" dir="' + groupTextDirection + '" style="width:100%;resize:vertical;direction:' + groupTextDirection + ';text-align:' + groupTextAlign + ';unicode-bidi:isolate;" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'text\',this.value,this);this.dir=detectStrongTextDirection(this.value)||\'' + groupTextDirection + '\';this.style.direction=this.dir;this.style.textAlign=this.dir===\'rtl\'?\'right\':\'left\';" onchange="commitEditorGroupMemberChange()">' + escapeHtml(layer.text || '') + '</textarea>';
         } else if (layer.type === 'tag') {
             control = '<input class="input" style="width:100%;" value="' + escapeHtml(layer.text || '') + '" oninput="updateEditorGroupMemberProp(\'' + layer.id + '\',\'text\',this.value)" onchange="commitEditorGroupMemberChange()">';
         } else if (layer.type === 'discountTag') {
@@ -10008,10 +10155,20 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         el.classList.toggle('vf-user-text-placeholder', showUserPlaceholder);
         if (showUserPlaceholder) el.dataset.userPlaceholder = 'Enter text';
         else delete el.dataset.userPlaceholder;
-        // 同步右侧面板
+        // 同步右侧面板。编组选中时右侧会同时渲染多个 textarea，必须按图层 ID
+        // 精确更新，不能只寻找第一个文本框，否则画板内联编辑后面板仍显示旧值。
         if (activeLayerIds.length === 1 && activeLayerIds[0] === id) {
             var ta = document.querySelector('#prop-edit-area textarea');
             if (ta) ta.value = text;
+        } else if (activeLayerIds.includes(id)) {
+            var groupTextarea = document.querySelector('#prop-edit-area textarea[data-editor-group-text-layer-id="' + CSS.escape(id) + '"]');
+            if (groupTextarea) {
+                groupTextarea.value = text;
+                var panelDirection = detectStrongTextDirection(text) || getEffectiveTextDirection(l);
+                groupTextarea.dir = panelDirection;
+                groupTextarea.style.direction = panelDirection;
+                groupTextarea.style.textAlign = panelDirection === 'rtl' ? 'right' : 'left';
+            }
         }
         // 自定义字体可能仍在异步加载：加载完成后再按同一字体重新校验两行上限，
         // 避免「测量两行 / 渲染三行」的竞态。
@@ -10178,37 +10335,46 @@ editable.style.userSelect = 'text';
 // 避免逐字符输入时中间状态超出 2 行导致无法完成粘贴。
 editable.onpaste = function(e) {
     e.preventDefault();
-    var pasteText = (e.clipboardData || window.clipboardData).getData('text/plain');
+    var pasteText = (e.clipboardData || window.clipboardData).getData('text/plain').replace(/\r\n?/g, '\n');
     if (!pasteText) return;
 
     // 获取当前 contenteditable 的纯文本（用浏览器原生的 Range.toString，最可靠）
     var sel = window.getSelection();
-    var range = sel.getRangeAt(0);
+    var range = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+    var selectionInsideEditor = range
+        && editable.contains(range.startContainer)
+        && editable.contains(range.endContainer);
 
     // 光标前的文本
-    var preRange = document.createRange();
-    preRange.selectNodeContents(editable);
-    preRange.setEnd(range.startContainer, range.startOffset);
-    var beforeText = preRange.toString();
+    var beforeText = editable.innerText || editable.textContent || '';
+    var afterText = '';
+    if (selectionInsideEditor) {
+        var preRange = document.createRange();
+        preRange.selectNodeContents(editable);
+        preRange.setEnd(range.startContainer, range.startOffset);
+        beforeText = preRange.toString();
 
-    // 光标后的文本
-    var postRange = document.createRange();
-    postRange.selectNodeContents(editable);
-    postRange.setStart(range.endContainer, range.endOffset);
-    var afterText = postRange.toString();
+        // 光标后的文本
+        var postRange = document.createRange();
+        postRange.selectNodeContents(editable);
+        postRange.setStart(range.endContainer, range.endOffset);
+        afterText = postRange.toString();
+    }
 
     // 计算最终文本
     var finalText = beforeText + pasteText + afterText;
 
     // 预检查：最终文本是否能在 2 行内
-    var plan = prepareUserTextLayout(l, finalText);
+    var plan = prepareUserTextLayout(layer, finalText);
     if (!plan || !plan.accepted) {
         showToast('文字最多两行，不可出现第三行', true);
         return;
     }
 
     // 预检查通过：一次性插入全部文本
-    document.execCommand('insertText', false, pasteText);
+    if (selectionInsideEditor && document.execCommand('insertText', false, pasteText)) return;
+    restoreCanvasTextEditorValue(editable, finalText);
+    syncTextEdit(layer.id, editable);
 };
 editable.focus();
 var range = document.createRange();
@@ -13621,7 +13787,7 @@ return true;
             if (!layer || layer.type !== 'text') return;
             var text = String(layer.text || '');
             if (!text.trim() || text.split('\n').length > 2) return;
-            var layout = measureNaturalTextLayerLayout(layer, text || ' ');
+            var layout = measureUserTextCandidateLayout(layer, text || ' ');
             if (layout.lineCount <= 2) return;
             var baseLetterSpacing = Number(layer.letterSpacing) || 0;
             var baseFontSize = Number(layer.fontSize) || 88;
@@ -13630,7 +13796,7 @@ return true;
             // 1) 优先收紧字距（视觉影响最小，不改变字号）
             for (var step = 1; step <= 4; step++) {
                 var candSpacing = baseLetterSpacing - maxTighten * step / 4;
-                var candLayout = measureNaturalTextLayerLayout(layer, text || ' ', { letterSpacing: candSpacing });
+                var candLayout = measureUserTextCandidateLayout(layer, text || ' ', { letterSpacing: candSpacing });
                 if (candLayout.lineCount <= 2) {
                     layer.letterSpacing = candSpacing;
                     fixed = true;
@@ -13641,7 +13807,7 @@ return true;
             // 2) 字距压不下时，缩小字号兜底（最多 3 档，每档 4%）
             for (var fs = 1; fs <= 3; fs++) {
                 var candFontSize = Math.round(baseFontSize * (1 - 0.04 * fs));
-                var candL = measureNaturalTextLayerLayout(layer, text || ' ', { fontSize: candFontSize });
+                var candL = measureUserTextCandidateLayout(layer, text || ' ', { fontSize: candFontSize });
                 if (candL.lineCount <= 2) {
                     layer.fontSize = candFontSize;
                     break;
@@ -15516,23 +15682,49 @@ return true;
                 body.images = aiReferenceImages.map(function(item) { return item.src; });
             }
             updateAIProgress('正在提交生成请求到即梦…', 30);
-            // 异步流程：提交（快）→ 轮询（快）。每次 HTTP 请求都很短，绕开 Cloudflare 隧道 100s 超时。
-            // 代理在后台持续轮询即梦直到出图，这里只负责短请求查询任务状态。
-            const submitRes = await fetch(JIMENG_API_URL + '/v1/images/generations/async', {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + jimengSessionId, 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
+            // 优先经由用户本机中转；本机隧道断开时，自动降级到线上 Pages Function。
+            // 这样保留原有架构，也避免电脑待机或 trycloudflare 故障导致线上完全不可用。
+            let submitApi = JIMENG_API_URL;
+            let submitRes;
+            const submitViaCloudFallback = function() {
+                submitApi = JIMENG_CLOUD_FALLBACK_URL;
+                const fallbackBody = Object.assign({}, body, { cookies: jimengCookies || {} });
+                return fetch(submitApi, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + jimengSessionId,
+                        'Content-Type': 'application/json',
+                        'X-Jimeng-Cookies': JSON.stringify(jimengCookies || {})
+                    },
+                    body: JSON.stringify(fallbackBody)
+                });
+            };
+            try {
+                submitRes = await fetch(submitApi + '/v1/images/generations/async', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + jimengSessionId, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            } catch(localTunnelError) {
+                updateAIProgress('本机中转暂时不可用，正在切换备用服务…', 34);
+                submitRes = await submitViaCloudFallback();
+            }
+            // 部分隧道故障会返回 Cloudflare 网关错误，而不是直接抛出网络异常。
+            // 这些状态同样触发备用服务，业务类 4xx 错误仍保留原始提示。
+            if(submitApi !== JIMENG_CLOUD_FALLBACK_URL && [502, 503, 504, 520, 521, 522, 523, 524, 530].includes(submitRes.status)) {
+                updateAIProgress('本机中转暂时不可用，正在切换备用服务…', 34);
+                submitRes = await submitViaCloudFallback();
+            }
             if(!submitRes.ok) {
                 var subErr = '';
                 try { var se = await submitRes.json(); subErr = se.message || se.errmsg || ''; } catch(_) {}
                 throw new Error('即梦提交失败 HTTP ' + submitRes.status + (subErr ? '：' + subErr : ''));
             }
             const submitPayload = await submitRes.json();
-            const taskId = submitPayload && submitPayload.task_id;
+            const taskId = submitPayload && (submitPayload.task_id || submitPayload.taskId);
             if(!taskId) throw new Error('即梦未返回任务编号');
             updateAIProgress('任务已提交，即梦正在生成图片…', 45);
-            var items = await pollJimengAsyncTask(taskId);
+            var items = await pollJimengAsyncTask(taskId, submitApi);
             var images = [];
             for(var j = 0; j < items.length; j++) {
                 var item = items[j];
@@ -15562,14 +15754,20 @@ return true;
         }
     }
     
-    async function pollJimengAsyncTask(taskId) {
+    async function pollJimengAsyncTask(taskId, taskApi) {
         if(!taskId) throw new Error('缺少即梦任务编号');
+        const useCloudFallback = taskApi === JIMENG_CLOUD_FALLBACK_URL;
         const maxAttempts = 90; // 每 3s 一次，约 4.5 分钟
         for(let i = 0; i < maxAttempts; i += 1) {
             await new Promise(resolve => setTimeout(resolve, i < 3 ? 2000 : 3000));
             updateAIProgress('即梦正在生成图片，请耐心等待…', Math.min(88, 50 + Math.round((i / maxAttempts) * 36)));
-            const res = await fetch(JIMENG_API_URL + '/v1/images/generations/async?task_id=' + encodeURIComponent(taskId), {
-                headers: { 'Authorization': 'Bearer ' + jimengSessionId }
+            const pollUrl = useCloudFallback
+                ? taskApi + '?task_id=' + encodeURIComponent(taskId)
+                : taskApi + '/v1/images/generations/async?task_id=' + encodeURIComponent(taskId);
+            const pollHeaders = { 'Authorization': 'Bearer ' + jimengSessionId };
+            if(useCloudFallback) pollHeaders['X-Jimeng-Cookies'] = JSON.stringify(jimengCookies || {});
+            const res = await fetch(pollUrl, {
+                headers: pollHeaders
             });
             if(!res.ok) {
                 let msg = '';
@@ -15577,6 +15775,11 @@ return true;
                 throw new Error('即梦查询失败（HTTP ' + res.status + (msg ? '：' + msg : '') + ')');
             }
             const payload = await res.json();
+            if(useCloudFallback) {
+                if(payload && payload.pending === false && payload.data && payload.data.length) return payload.data;
+                if(payload && payload.pending === false) throw new Error(payload.message || '即梦未返回图片');
+                continue;
+            }
             const status = payload && payload.status;
             if(status === 'done' && payload.data && payload.data.length) {
                 return payload.data;

@@ -12,18 +12,50 @@ function isDiyTab(tab) {
       || ['localhost', '127.0.0.1'].includes(url.hostname);
   } catch { return false; }
 }
+function normalizedJimengUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl || '');
+    if (!JIMENG_URL.test(url.hostname)) return '';
+    url.hash = '';
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^(from|source|enter_from|utm_|timestamp|t$)/i.test(key)) url.searchParams.delete(key);
+    }
+    url.searchParams.sort();
+    return url.toString().replace(/\/$/, '');
+  } catch { return ''; }
+}
 async function pairedTabId() {
   return (await chrome.storage.local.get('pairedJimengTabId')).pairedJimengTabId;
 }
+async function recoverPairedTab(urlKey) {
+  if (!urlKey) return null;
+  const candidates = (await chrome.tabs.query({}))
+    .filter(tab => isJimengTab(tab) && normalizedJimengUrl(tab.url) === urlKey)
+    .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+  const tab = candidates[0];
+  if (!tab) return null;
+  await chrome.storage.local.set({ pairedJimengTabId: tab.id, pairedJimengUrlKey: urlKey });
+  return tab;
+}
+async function clearPair() {
+  await chrome.storage.local.remove(['pairedJimengTabId', 'pairedJimengUrlKey']);
+}
 async function status() {
-  const tabId = await pairedTabId();
+  const stored = await chrome.storage.local.get(['pairedJimengTabId', 'pairedJimengUrlKey']);
+  const tabId = stored.pairedJimengTabId;
   if (!tabId) return { connected: false, reason: '尚未选择即梦标签页' };
   try {
     const tab = await chrome.tabs.get(tabId);
-    if (!isJimengTab(tab)) return { connected: false, reason: '已配对标签页不是即梦页面' };
+    if (!isJimengTab(tab)) throw new Error('paired-tab-is-not-jimeng');
+    const nextUrlKey = normalizedJimengUrl(tab.url);
+    if (nextUrlKey && nextUrlKey !== stored.pairedJimengUrlKey) {
+      await chrome.storage.local.set({ pairedJimengUrlKey: nextUrlKey });
+    }
     return { connected: true, tabId, title: tab.title || '即梦', url: tab.url };
   } catch {
-    await chrome.storage.local.remove('pairedJimengTabId');
+    const recovered = await recoverPairedTab(stored.pairedJimengUrlKey);
+    if (recovered) return { connected: true, tabId: recovered.id, title: recovered.title || '即梦', url: recovered.url, recovered: true };
+    await clearPair();
     return { connected: false, reason: '已配对的即梦标签页已关闭' };
   }
 }
@@ -50,7 +82,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       const tab = await chrome.tabs.get(message.tabId);
       if (!isJimengTab(tab)) throw new Error('请选择已打开的即梦网页标签页');
       await ensureJimengBridge(tab.id);
-      await chrome.storage.local.set({ pairedJimengTabId: tab.id });
+      await chrome.storage.local.set({ pairedJimengTabId: tab.id, pairedJimengUrlKey: normalizedJimengUrl(tab.url) });
       const next = await status();
       await sendToDiy({ type: 'vf:jimeng-status', ...next });
       return respond(next);
@@ -92,8 +124,33 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
 
 chrome.tabs.onRemoved.addListener(async tabId => {
   if (tabId === await pairedTabId()) {
-    await chrome.storage.local.remove('pairedJimengTabId');
-    await sendToDiy({ type: 'vf:jimeng-status', connected: false, reason: '已配对的即梦标签页已关闭' });
+    const next = await status();
+    await sendToDiy({ type: 'vf:jimeng-status', ...next });
+  }
+});
+
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (!changeInfo.url || tabId !== await pairedTabId()) return;
+  if (isJimengTab(tab)) {
+    await chrome.storage.local.set({ pairedJimengUrlKey: normalizedJimengUrl(tab.url) });
+    return;
+  }
+  const next = await status();
+  await sendToDiy({ type: 'vf:jimeng-status', ...next });
+});
+
+// Chrome 的预渲染、标签页恢复或“节省内存”可能用新 tabId 替换旧标签页。
+// 同步迁移配对关系，避免页面仍在但扩展显示断开。
+chrome.tabs.onReplaced.addListener(async (addedTabId, removedTabId) => {
+  if (removedTabId !== await pairedTabId()) return;
+  try {
+    const tab = await chrome.tabs.get(addedTabId);
+    if (!isJimengTab(tab)) throw new Error('replacement-is-not-jimeng');
+    await chrome.storage.local.set({ pairedJimengTabId: addedTabId, pairedJimengUrlKey: normalizedJimengUrl(tab.url) });
+    await sendToDiy({ type: 'vf:jimeng-status', connected: true, tabId: addedTabId, title: tab.title || '即梦', url: tab.url });
+  } catch {
+    const next = await status();
+    await sendToDiy({ type: 'vf:jimeng-status', ...next });
   }
 });
 
@@ -101,6 +158,7 @@ chrome.tabs.onRemoved.addListener(async tabId => {
 const JIMENG_SESSION_API = 'https://visual-factory.pages.dev/api/jimeng-session';
 const SYNC_SECRET = 'vf-jimeng-sync-2026';
 const SYNC_INTERVAL_MIN = 30;
+const SYNC_ALARM = 'vf-jimeng-session-sync';
 
 // 即梦可能在不同域名/路径下存了多个同名 sessionid。单一 chrome.cookies.get
 // 只会取到其中一条（常是失效的旧值），导致"自动获取的码"和 F12 里真实有效的
@@ -178,11 +236,32 @@ async function syncSessionIdToCloud() {
   }
 }
 
-// 启动时立即同步一次
-syncSessionIdToCloud();
+// Manifest V3 的 service worker 会被 Chrome 随时休眠，普通 setInterval 会随之消失。
+// chrome.alarms 会持久保存并在到点后唤醒扩展，适合维持会话同步。
+async function ensureSyncAlarm() {
+  const alarm = await chrome.alarms.get(SYNC_ALARM);
+  if (!alarm || alarm.periodInMinutes !== SYNC_INTERVAL_MIN) {
+    await chrome.alarms.create(SYNC_ALARM, { delayInMinutes: 1, periodInMinutes: SYNC_INTERVAL_MIN });
+  }
+}
 
-// 每 30 分钟同步一次
-setInterval(syncSessionIdToCloud, SYNC_INTERVAL_MIN * 60 * 1000);
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === SYNC_ALARM) syncSessionIdToCloud();
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+  ensureSyncAlarm();
+  syncSessionIdToCloud();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  ensureSyncAlarm();
+  syncSessionIdToCloud();
+});
+
+// service worker 本次被唤醒时也校验定时任务，并立即尝试同步一次。
+ensureSyncAlarm();
+syncSessionIdToCloud();
 
 // 也监听 storage 变化（当用户保存 sessionid 时立即同步）
 chrome.storage.onChanged.addListener((changes, area) => {
