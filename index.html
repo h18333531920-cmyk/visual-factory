@@ -4,9 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GCC Design</title>
-  <script src="./tools/vendor/supabase-js.js?v=20260805-unified-v76"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="./styles.css?v=20260819-canvas-text-two-line-v429">
+  <script src="./tools/vendor/supabase-js.js?v=20260805-unified-v76" defer></script>
+  <link rel="stylesheet" href="./styles.css?v=20260827-fast-static-session-v481">
   <style>
     .library-control-strip {
       margin-left: 0 !important;
@@ -886,7 +885,7 @@
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="./config.js?v=20260805-unified-v76"></script>
-    <script src="./app.js?v=20260819-canvas-text-two-line-v429" defer></script>
+    <script src="./app.js?v=20260827-fast-static-session-v481" defer></script>
 </head>
 <body>
   <button id="global-interface-mode-toggle" class="global-interface-mode-toggle" type="button" data-mode="user" data-tooltip-side="left" aria-pressed="false" aria-label="切换到开发者模式" hidden>
@@ -894,7 +893,12 @@
     <span id="global-interface-mode-label" class="global-interface-mode-label">用户模式</span>
     <span class="global-interface-mode-dot" aria-hidden="true"></span>
   </button>
-  <main id="login-view" class="login-view">
+  <main id="login-view" class="login-view is-session-checking">
+    <div class="login-session-check" role="status" aria-live="polite">
+      <span class="tool-entry-spinner" aria-hidden="true"></span>
+      <strong>正在验证登录状态</strong>
+      <span>验证完成后将自动进入工作台…</span>
+    </div>
     <section class="login-panel">
       <div class="brand-mark">G</div>
       <h1 data-i18n="loginTitle">GCC Design</h1>

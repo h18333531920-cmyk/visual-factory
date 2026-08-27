@@ -111,7 +111,8 @@
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
+const TOOL_UI_VERSION = '20260827-fast-static-session-v481';
+let chartLibraryPromise = null;
   const LIBRARY_SOURCE_PAGE_SIZE = 500;
   const LIBRARY_SOURCE_MAX_ROWS = 5000;
   const LIBRARY_RENDER_STEP = 80;
@@ -339,18 +340,38 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     if (!cache) {
       cache = document.createElement('div');
       cache.id = 'tool-frame-cache';
+      cache.className = 'tool-frame-cache';
       cache.hidden = true;
-      document.body.appendChild(cache);
+      els.appShell.querySelector('.main-area').appendChild(cache);
     }
     return cache;
   }
 
   function parkActiveToolFrame() {
-    if (!state.activeFrame) return;
-    if (state.activeFrame.parentElement) {
-      toolFrameCache().appendChild(state.activeFrame);
-    }
+    const cache = document.getElementById('tool-frame-cache');
+    if (cache) cache.hidden = true;
+    if (els.content) els.content.hidden = false;
     state.activeFrame = null;
+  }
+
+  function ensureToolFrameMount(type) {
+    const cache = toolFrameCache();
+    let mount = cache.querySelector(`[data-tool-mount="${type}"]`);
+    if (!mount) {
+      mount = document.createElement('div');
+      mount.className = 'tool-frame-mount';
+      mount.dataset.toolMount = type;
+      mount.hidden = true;
+      if (type === 'static') {
+        mount.innerHTML = `<div class="tool-entry-loading" role="status" aria-live="polite">
+          <span class="tool-entry-spinner" aria-hidden="true"></span>
+          <strong>${state.lang === 'zh' ? '正在准备 DIY 画板' : 'Preparing the DIY canvas'}</strong>
+          <span>${state.lang === 'zh' ? '首次加载较长，请耐心等待' : 'The first load may take longer. Please wait.'}</span>
+        </div>`;
+      }
+      cache.appendChild(mount);
+    }
+    return mount;
   }
 
   function initSupabase() {
@@ -373,7 +394,21 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
       if (restored) return;
     }
     if (!state.supabase) {
+      showLogin();
       showLoginMessage('Supabase config is missing or SDK failed to load.', true);
+      return;
+    }
+    const initialRoute = (location.hash || '#home').slice(1);
+    const cachedStaticSession = initialRoute === 'static' ? readCachedSupabaseSession() : null;
+    if (cachedStaticSession) {
+      // 静态 DIY 不需要管理员权限才能绘制本地编辑器。先用 Supabase 已持久化
+      // 的 session 立即显示框架，再后台刷新 token 与权威 profile，避免多标签页
+      // 锁或 token refresh 让“验证登录状态”长时间占屏。
+      state.session = cachedStaticSession;
+      syncAccessToken();
+      state.profile = sessionProfileFallback(cachedStaticSession.user);
+      showApp();
+      void verifyCachedStaticSession();
       return;
     }
     const { data } = await state.supabase.auth.getSession();
@@ -383,9 +418,63 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
       showLogin();
       return;
     }
-    await loadProfile();
-    showApp();
+    if (initialRoute === 'static') {
+      // The profile query is a separate network round-trip and is not required to
+      // start the static editor. Use the signed-in user's metadata immediately so
+      // the DIY frame and its loading state mount on the first authenticated paint,
+      // then reconcile the authoritative profile without rebuilding the frame.
+      state.profile = sessionProfileFallback(state.session.user);
+      showApp();
+      void loadProfile().then(function() {
+        renderUserChip();
+        renderNav();
+      }).catch(function(error) {
+        console.warn('Profile refresh after app start failed:', error);
+      });
+    } else {
+      // Admin and library routes still wait for the authoritative role so a stale
+      // metadata role cannot briefly expose or redirect a protected route.
+      await loadProfile();
+      showApp();
+    }
     void logAssetEvent('login');
+  }
+
+  function readCachedSupabaseSession() {
+    try {
+      const projectRef = new URL(config.supabaseUrl).hostname.split('.')[0];
+      if (!projectRef) return null;
+      const raw = localStorage.getItem(`sb-${projectRef}-auth-token`);
+      if (!raw) return null;
+      const stored = JSON.parse(raw);
+      const session = stored?.currentSession || stored?.session || stored;
+      return session?.access_token && session?.user?.id ? session : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  async function verifyCachedStaticSession() {
+    try {
+      const { data, error } = await state.supabase.auth.getSession();
+      if (error) throw error;
+      if (!data.session) {
+        state.session = null;
+        syncAccessToken();
+        showLogin();
+        return;
+      }
+      state.session = data.session;
+      syncAccessToken();
+      await loadProfile();
+      renderUserChip();
+      renderNav();
+      void logAssetEvent('login');
+    } catch (error) {
+      // 短暂网络错误不能把已持久化的 DIY 会话立即踢回登录页；
+      // Supabase 的后续 auth 事件仍会同步最终状态。
+      console.warn('Background session verification failed:', error);
+    }
   }
 
   async function handleLogin(event) {
@@ -481,18 +570,22 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
   async function loadProfile() {
     const user = state.session && state.session.user;
     if (!user || !state.supabase) return;
-    const fallback = {
-      id: user.id,
-      email: user.email || '',
-      display_name: user.user_metadata?.display_name || user.email || 'User',
-      role: user.user_metadata?.role || 'operator'
-    };
+    const fallback = sessionProfileFallback(user);
     const { data, error } = await state.supabase
       .from('vf_profiles')
       .select('id,email,display_name,role,status')
       .eq('id', user.id)
       .maybeSingle();
     state.profile = data || { ...fallback, setup_error: error ? error.message : '' };
+  }
+
+  function sessionProfileFallback(user) {
+    return {
+      id: user.id,
+      email: user.email || '',
+      display_name: user.user_metadata?.display_name || user.email || 'User',
+      role: user.user_metadata?.role || 'operator'
+    };
   }
 
   function startLocalPreview(role) {
@@ -548,16 +641,39 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
   }
 
   function showLogin() {
+    els.loginView.classList.remove('is-session-checking');
     els.loginView.hidden = false;
     els.appShell.hidden = true;
   }
 
   function showApp() {
+    els.loginView.classList.remove('is-session-checking');
     els.loginView.hidden = true;
     els.appShell.hidden = false;
     renderNav();
     renderUserChip();
     navigate((location.hash || '#home').slice(1));
+    scheduleStaticToolPrewarm();
+  }
+
+  function loadChartLibrary() {
+    if (window.Chart) return Promise.resolve(window.Chart);
+    if (chartLibraryPromise) return chartLibraryPromise;
+    chartLibraryPromise = new Promise(function(resolve, reject) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+      script.async = true;
+      script.onload = function() {
+        if (window.Chart) resolve(window.Chart);
+        else reject(new Error('Chart.js loaded without a global Chart constructor.'));
+      };
+      script.onerror = function() {
+        chartLibraryPromise = null;
+        reject(new Error('Chart.js failed to load.'));
+      };
+      document.head.appendChild(script);
+    });
+    return chartLibraryPromise;
   }
 
   function interfaceModePayload() {
@@ -839,7 +955,6 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     if (state.route === 'home') renderCreativeHome();
     if (state.route === 'library') {
       if (state.uiRestricted) setRestrictedLibraryDefault();
-      state.libraryDataLoaded = false;
       renderLibrary();
     }
     if (state.route === 'static') renderTool('static');
@@ -1186,8 +1301,13 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     parkActiveToolFrame();
     const canUpload = canUploadAssets();
     const activeKind = state.libraryFilters.kind || 'all';
-    var kindCounts = { source: 0, gallery: 0, template: 0 };
+    const libraryCountsPending = isLibraryCountPending();
+    // DIY 预热可能已填入轻量 source 数据，但 previews、签名 URL 和书签
+    // 关系仍未就绪。数字可以提前显示，首次进入素材库仍必须保留加载动画。
+    const libraryInitialLoadPending = !state.libraryDataLoaded;
+    var kindCounts = { all: 0, source: 0, gallery: 0, template: 0 };
     if (state.librarySources) {
+      kindCounts.all = state.librarySources.length;
       for (var i = 0; i < state.librarySources.length; i++) {
         var k = libraryKindOfSource(state.librarySources[i]);
         if (k === 'source' || k === 'gallery' || k === 'template') kindCounts[k]++;
@@ -1253,7 +1373,7 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
         <section class="library-control-strip" style="margin-left:0!important;margin-inline:0!important;padding-left:0!important;padding-right:0!important;background:transparent!important;border:none!important;border-radius:0!important;width:100%!important;grid-template-columns:minmax(0,1fr) auto!important">
           <div class="library-kind-tabs" role="tablist" style="position:relative;">
             <div class="kind-tab-indicator" style="position:absolute;bottom:0;height:3px;background:#111827;border-radius:999px;transition:left 0.3s ease,width 0.3s ease;pointer-events:none;z-index:1;"></div>
-            ${LIBRARY_KIND_TABS.map(tab => `<button type="button" class="${activeKind === tab.id ? 'active' : ''}" data-library-kind="${tab.id}">${escapeHtml(state.lang === 'zh' ? tab.zh : tab.en)}<small> · ${kindCounts[tab.id] || 0}</small></button>`).join('')}
+            ${LIBRARY_KIND_TABS.map(tab => `<button type="button" class="${activeKind === tab.id ? 'active' : ''}" data-library-kind="${tab.id}">${escapeHtml(state.lang === 'zh' ? tab.zh : tab.en)}<small> · ${libraryCountsPending ? '…' : (kindCounts[tab.id] || 0)}</small></button>`).join('')}
           </div>
           <div class="library-control-actions">
             <div class="search-wrap">
@@ -1310,7 +1430,7 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
                   <div id="library-tag-rows" class="library-tag-rows">${renderLibraryTagRows(activeKind)}</div>
         </section>
 
-        <section id="library-status" class="library-status">${state.lang === 'zh' ? '正在读取素材库...' : 'Loading library...'}</section>
+        <section id="library-status" class="library-status${libraryInitialLoadPending ? ' is-loading' : ''}">${libraryInitialLoadPending ? libraryLoadingMarkup(state.lang === 'zh' ? '正在加载素材库…' : 'Loading library…') : ''}</section>
         <section class="library-board" style="margin-left:0!important;margin-inline:0!important;padding-left:0!important;width:100%!important">
           <section id="library-grid" class="library-grid"></section>
           <aside id="library-inspector" class="library-inspector"></aside>
@@ -1335,7 +1455,6 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     wireLibraryShell();
     if (homeMode) wireHomeCommandComposer();
     await loadLibraryData();
-    refreshKindTabCounts();
     if (state.libraryScrollToSource) {
       var targetId = state.libraryScrollToSource;
       state.libraryScrollToSource = null;
@@ -1351,8 +1470,9 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
   }
 
   function refreshKindTabCounts() {
-    var counts = { source: 0, gallery: 0, template: 0 };
+    var counts = { all: 0, source: 0, gallery: 0, template: 0 };
     if (state.librarySources) {
+      counts.all = state.librarySources.length;
       for (var i = 0; i < state.librarySources.length; i++) {
         var k = libraryKindOfSource(state.librarySources[i]);
         if (counts[k] !== undefined) counts[k]++;
@@ -1360,11 +1480,45 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     }
     document.querySelectorAll('[data-library-kind]').forEach(function(btn) {
       var kind = btn.dataset.libraryKind;
-      if (kind !== 'all' && counts[kind] !== undefined) {
+      if (counts[kind] !== undefined) {
         var label = btn.textContent.replace(/ · .*$/, '');
         btn.innerHTML = label + '<small> · ' + counts[kind] + '</small>';
       }
     });
+  }
+
+  function isLibraryCountPending() {
+    return !state.libraryDataLoaded && (!Array.isArray(state.librarySources) || state.librarySources.length === 0);
+  }
+
+  function libraryLoadingMarkup(label) {
+    return `<span class="library-loading-indicator" role="status" aria-live="polite"><span class="library-loading-spinner" aria-hidden="true"></span><span>${escapeHtml(label || (state.lang === 'zh' ? '正在加载素材库…' : 'Loading library…'))}</span></span>`;
+  }
+
+  function setLibraryLoadingState(active, label) {
+    const status = document.getElementById('library-status');
+    if (!status) return;
+    status.classList.toggle('is-loading', !!active);
+    if (active) status.innerHTML = libraryLoadingMarkup(label);
+  }
+
+  function refreshLibraryFilterCounts() {
+    refreshKindTabCounts();
+    var tagRows = document.getElementById('library-tag-rows');
+    if (tagRows) {
+      tagRows.innerHTML = renderLibraryTagRows(state.libraryFilters.kind || 'all');
+      wireLibraryTagButtons();
+      requestAnimationFrame(function() {
+        updateKindTabIndicator();
+        alignTagRows();
+      });
+    }
+  }
+
+  function refreshLibraryLoadedUi() {
+    renderLibrarySelects();
+    refreshLibraryFilterCounts();
+    renderLibraryGrid();
   }
 
   function renderUploadModal() {
@@ -2131,7 +2285,7 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
               const label = value === 'all' ? (state.lang === 'zh' ? '全部' : 'All') : value;
               const active = (state.libraryFilters[row.key] || 'all') === value;
               const count = value === 'all' ? countKindSources(kind, parentFilters) : countTagOccurrences(kind, value, parentFilters);
-              return `<button type="button" class="${active ? 'active' : ''}" data-library-tag-key="${row.key}" data-library-tag-value="${escapeAttr(value)}">${escapeHtml(label)}<small> · ${count}</small></button>`;
+              return `<button type="button" class="${active ? 'active' : ''}" data-library-tag-key="${row.key}" data-library-tag-value="${escapeAttr(value)}">${escapeHtml(label)}<small> · ${isLibraryCountPending() ? '…' : count}</small></button>`;
             }).join('')}
           </div>
         </div>
@@ -2190,9 +2344,7 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     const status = document.getElementById('library-status');
     if (!state.localPreview && state.libraryDataLoaded) {
       // 先快速渲染内存数据，后台静默刷新 Supabase
-      renderLibrarySelects();
-      renderLibraryGrid();
-      refreshKindTabCounts();
+      refreshLibraryLoadedUi();
       // 后台从 Supabase 拉最新数据合并（处理其他设备/用户的变更）
       setTimeout(async function() {
         try { state.libraryDataLoaded = false; await loadLibraryData(); } catch(e) {}
@@ -2201,31 +2353,39 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     }
     if (!state.localPreview && state.libraryDataPromise) {
       await state.libraryDataPromise;
-      renderLibrarySelects();
-      renderLibraryGrid();
+      refreshLibraryLoadedUi();
       return;
     }
     try {
       if (state.localPreview || !state.supabase) {
-        status.textContent = state.lang === 'zh' ? '正在读取旧平台恢复素材...' : 'Loading recovered platform assets...';
+        if (isLibraryCountPending()) setLibraryLoadingState(true, state.lang === 'zh' ? '正在读取旧平台恢复素材…' : 'Loading recovered platform assets…');
         const recovered = await loadRecoveredPlatformLibrary();
         if (!recovered) loadLocalLibraryDemo();
         return;
       }
-      status.textContent = state.lang === 'zh' ? '正在读取分类和素材...' : 'Loading options and assets...';
+      if (isLibraryCountPending()) setLibraryLoadingState(true, state.lang === 'zh' ? '正在读取分类和素材…' : 'Loading options and assets…');
       state.libraryDataPromise = (async () => {
         await seedActivityTypes();
-        await loadLibraryOptions();
-        await loadLibraryFavorites();
-        await loadLibrarySources();
-        await loadLibraryPreviews();
-        await loadLibraryBookmarkGroups();
+        // 分类、收藏和素材清单彼此独立，并行读取可显著缩短线上首屏等待。
+        await Promise.all([
+          loadLibraryOptions(),
+          loadLibraryFavorites(),
+          loadLibrarySources()
+        ]);
+        // source 到达后立即更新主分类及全部标签数字；预览图和书签封面
+        // 可以继续在后台读取，不能让计数一直停留在初始的 0。
+        refreshLibraryFilterCounts();
+        await Promise.all([
+          loadLibraryPreviews(),
+          loadLibraryBookmarkGroups()
+        ]);
         state.libraryDataLoaded = true;
       })();
       await state.libraryDataPromise;
-      renderLibrarySelects();
-      renderLibraryGrid();
+      refreshLibraryLoadedUi();
     } catch (error) {
+      if (!status) return;
+      status.classList.remove('is-loading');
       status.innerHTML = `
         <strong>${state.lang === 'zh' ? '素材库还未就绪' : 'Library is not ready'}</strong>
         <p>${escapeHtml(error.message)}</p>
@@ -2244,12 +2404,6 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     state.libraryPreviewUrlSignedAt = {};
     state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
     await loadLibraryData();
-    refreshKindTabCounts();
-    renderLibraryGrid();
-    // 刷新筛选标签计数
-    var tagRows = document.getElementById('library-tag-rows');
-    if (tagRows) tagRows.innerHTML = renderLibraryTagRows(state.libraryFilters.kind || 'all');
-    wireLibraryTagButtons();
   }
 
   async function seedActivityTypes() {
@@ -2378,18 +2532,29 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     const bookmarkSources = state.librarySources.filter(function(source) {
       return (source.tags || []).includes('模板书签');
     });
-    for (const source of bookmarkSources) {
-      try {
-        const snapshot = await loadLibraryTemplateSnapshot({ source: source });
-        const refs = Array.isArray(snapshot?.templateRefs) ? snapshot.templateRefs : [];
-        refs.forEach(function(ref) {
+    // 书签快照原来逐个串行下载；线上有多个书签时会直接叠加网络往返时间。
+    // 分批并行既缩短等待，也避免一次性向存储服务发出过多请求。
+    for (const sourceBatch of chunkArray(bookmarkSources, 8)) {
+      const batchGroups = await Promise.all(sourceBatch.map(async function(source) {
+        try {
+          const snapshot = await loadLibraryTemplateSnapshot({ source: source });
+          return {
+            source: source,
+            refs: Array.isArray(snapshot?.templateRefs) ? snapshot.templateRefs : [],
+            coverTemplateId: snapshot?.coverTemplateId || ''
+          };
+        } catch (_error) {
+          // 单个书签快照读取失败不影响整体；跳过即可。
+          return null;
+        }
+      }));
+      batchGroups.filter(Boolean).forEach(function(group) {
+        group.refs.forEach(function(ref) {
           const id = typeof ref === 'string' ? ref : ref?.templateId;
           if (id) memberIds.add(id);
         });
-        groups.push({ source: source, refs: refs, coverTemplateId: snapshot?.coverTemplateId || '' });
-      } catch (_error) {
-        // 单个书签快照读取失败不影响整体；跳过即可。
-      }
+        groups.push(group);
+      });
     }
     state.libraryBookmarkMemberIds = memberIds;
     state.libraryBookmarkGroups = groups;
@@ -2639,6 +2804,7 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     const sourceBadge = state.libraryRecoveryLabel
       ? `<span class="library-stat recovery"><small>${state.lang === 'zh' ? '来源' : 'Source'}</small><strong>${escapeHtml(state.libraryRecoveryLabel)}</strong></span>`
       : '';
+    status.classList.remove('is-loading');
     status.innerHTML = `${sourceBadge}`;
     if (visibleItems.length === 0) {
       state.librarySelectedPreviewId = '';
@@ -2703,8 +2869,7 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
       state.libraryFavorites = new Set();
       state.libraryRecoveryLabel = state.lang === 'zh' ? `旧平台恢复 ${data.totalSources || data.sources.length}` : `Recovered ${data.totalSources || data.sources.length}`;
       state.libraryDataLoaded = true;
-      renderLibrarySelects();
-      renderLibraryGrid();
+      refreshLibraryLoadedUi();
       return true;
     } catch (error) {
       console.warn('Recovered platform library unavailable:', error);
@@ -2788,8 +2953,7 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     };
     state.libraryFavorites = new Set(['local-preview-1']);
     state.libraryDataLoaded = true;
-    renderLibrarySelects();
-    renderLibraryGrid();
+    refreshLibraryLoadedUi();
   }
 
   function localPreviewArtwork(title, colorA, colorB, ink) {
@@ -2948,6 +3112,85 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     return `<div class="library-bookmark-inline-hover" aria-hidden="true"><div class="library-bookmark-inline-list">${rows || `<div class="library-bookmark-inline-empty">${state.lang === 'zh' ? '暂无可用关联模板' : 'No linked templates'}</div>`}</div></div>`;
   }
 
+  function prepareDecodedLibraryImage(image, host) {
+    if (!image || image.dataset.previewRevealBound === '1') return;
+    image.dataset.previewRevealBound = '1';
+    image.classList.add('library-progressive-image');
+    host = host || image.closest('.library-thumb, .library-bookmark-template-thumb, .library-bookmark-editor-thumb, .inspector-preview, #library-detail-preview');
+    if (host) {
+      host.classList.add('library-preview-shell', 'is-preview-loading');
+      host.classList.remove('is-preview-ready', 'is-preview-error');
+    }
+    let revealed = false;
+    const reveal = function() {
+      if (revealed) return;
+      revealed = true;
+      const decoded = typeof image.decode === 'function'
+        ? image.decode().catch(function() {})
+        : Promise.resolve();
+      decoded.then(function() {
+        requestAnimationFrame(function() {
+          image.classList.add('is-ready');
+          if (host) {
+            host.classList.remove('is-preview-loading');
+            host.classList.add('is-preview-ready');
+          }
+        });
+      });
+    };
+    image.addEventListener('load', reveal, { once: true });
+    image.addEventListener('error', function() {
+      const fallbackSrc = image.dataset.fallbackSrc || '';
+      if (fallbackSrc && image.dataset.fallbackTried !== '1') {
+        image.dataset.fallbackTried = '1';
+        image.src = fallbackSrc;
+        return;
+      }
+      if (host) {
+        host.classList.remove('is-preview-loading');
+        host.classList.add('is-preview-error');
+      }
+    });
+    if (image.complete && image.naturalWidth) reveal();
+  }
+
+  function prepareDecodedLibraryImages(root) {
+    (root || document).querySelectorAll('img.library-progressive-image, img.lazy-img').forEach(function(image) {
+      prepareDecodedLibraryImage(image);
+    });
+  }
+
+  function mountDecodedBookmarkPreview(thumb, url, member) {
+    if (!thumb || !url) return;
+    const image = document.createElement('img');
+    image.alt = '';
+    image.decoding = 'async';
+    image.loading = 'eager';
+    thumb.appendChild(image);
+    prepareDecodedLibraryImage(image, thumb);
+    if (member) {
+      image.addEventListener('error', function() {
+        void recoverBookmarkMemberPreview(member).then(function(recoveredUrl) {
+          if (!recoveredUrl || !thumb.isConnected) return;
+          thumb.replaceChildren();
+          mountDecodedBookmarkPreview(thumb, recoveredUrl);
+        });
+      }, { once: true });
+    }
+    image.src = url;
+  }
+
+  function updateOpenBookmarkPreview(sourceId, url) {
+    if (!sourceId || !url) return;
+    const card = document.querySelector(`#library-bookmark-members [data-template-source-id="${CSS.escape(sourceId)}"]`);
+    const thumb = card?.querySelector('.library-bookmark-template-thumb');
+    if (!thumb) return;
+    const current = thumb.querySelector('img');
+    if (current?.src === url) return;
+    thumb.replaceChildren();
+    mountDecodedBookmarkPreview(thumb, url);
+  }
+
   function renderLibraryCard(item) {
     const source = item.source;
     const preview = item.preview;
@@ -3001,7 +3244,7 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
       <article class="library-card library-bookmark-card ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" data-bookmark-source="${escapeAttr(source.id)}" tabindex="0">
         <div class="library-thumb-wrap">
           <div class="multi-check"></div>
-          <div class="library-thumb" style="${bookmarkThumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t){t.classList.add('img-loaded');if(this.naturalWidth&&this.naturalHeight)t.style.setProperty('--preview-ratio',this.naturalWidth+' / '+this.naturalHeight)}" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
+          <div class="library-thumb" style="${bookmarkThumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" decoding="async" class="lazy-img library-progressive-image" ${item.thumbUrl && item.url ? `data-fallback-src="${escapeAttr(item.url)}"` : ''} onload="var t=this.closest('.library-thumb');if(t&&this.naturalWidth&&this.naturalHeight)t.style.setProperty('--preview-ratio',this.naturalWidth+' / '+this.naturalHeight)"></div>
           <div class="library-bookmark-summary">
             <span class="library-bookmark-badge" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m10 3-7 4 7 4 7-4-7-4Z"/><path d="m3 11 7 4 7-4"/><path d="m3 15 7 4 7-4"/></svg></span>
             <span class="library-bookmark-count">${memberCount}</span>
@@ -3018,7 +3261,7 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
       <article class="library-card ${isTemplateArtwork ? 'template-preview-card' : ''} ${selected ? 'selected' : ''}" data-preview-id="${preview.id}" tabindex="0">
         <div class="library-thumb-wrap">
           <div class="multi-check"></div>
-          <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t){t.classList.add('img-loaded');if(this.naturalWidth&&this.naturalHeight)t.style.setProperty('--preview-ratio',this.naturalWidth+' / '+this.naturalHeight)}" onerror="this.classList.add('loaded');var t=this.closest('.library-thumb');if(t)t.classList.add('img-loaded');${item.thumbUrl && item.url ? `this.onerror=null;this.src='${escapeAttr(item.url)}'` : ''}"></div>
+          <div class="library-thumb" style="${thumbStyle}"><img src="${escapeAttr(item.thumbUrl || item.url)}" alt="${escapeAttr(source.title)}" loading="lazy" decoding="async" class="lazy-img library-progressive-image" ${item.thumbUrl && item.url ? `data-fallback-src="${escapeAttr(item.url)}"` : ''} onload="var t=this.closest('.library-thumb');if(t&&this.naturalWidth&&this.naturalHeight)t.style.setProperty('--preview-ratio',this.naturalWidth+' / '+this.naturalHeight)"></div>
           <div class="library-card-icons">
             <button class="favorite-btn ${favorite ? 'active' : ''}" type="button" data-action="favorite" title="${state.lang === 'zh' ? '收藏' : 'Favorite'}" aria-label="${state.lang === 'zh' ? '收藏' : 'Favorite'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3Z"/></svg></button>
             ${kind !== 'template' ? `<button class="card-download-btn" type="button" data-action="download-preview" title="${previewLabel}" aria-label="${previewLabel}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button>` : ''}
@@ -3167,6 +3410,7 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
         selectLibraryItem(card.dataset.previewId);
       });
     });
+    prepareDecodedLibraryImages(document.getElementById('library-grid'));
     // 图片懒加载淡入
     var lazyImages = document.querySelectorAll('img.lazy-img:not(.observed)');
     if (lazyImages.length && 'IntersectionObserver' in window) {
@@ -3519,7 +3763,7 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
       : (state.lang === 'zh' ? '下载源文件' : 'Download source');
     inspector.innerHTML = `
       <div class="inspector-sticky">
-        <div class="inspector-preview">${item.url ? `<img src="${escapeAttr(item.url)}" alt="${escapeAttr(source.title)}">` : `<span>${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`}</div>
+        <div class="inspector-preview">${item.url ? `<img src="${escapeAttr(item.url)}" alt="${escapeAttr(source.title)}" decoding="async" class="library-progressive-image">` : `<span>${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`}</div>
         <div class="inspector-content">
           <div>
             <div class="kicker">${escapeHtml(libraryKindLabel(kind))} / ${escapeHtml(sourceFileLabel(source))}</div>
@@ -3543,6 +3787,7 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
         </div>
       </div>
     `;
+    prepareDecodedLibraryImages(inspector);
     wireLibraryInspectorActions();
   }
 
@@ -3604,8 +3849,9 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     const previewEl = document.getElementById('library-detail-preview');
     if (previewEl) {
       previewEl.innerHTML = previewUrl
-        ? `<img src="${escapeAttr(previewUrl)}" alt="${escapeAttr(source.title)}" style="width:100%;height:auto;display:block;">`
+        ? `<img src="${escapeAttr(previewUrl)}" alt="${escapeAttr(source.title)}" decoding="async" class="library-progressive-image" style="width:100%;height:auto;display:block;">`
         : `<span style="color:#94a3b8;font-size:14px;">${state.lang === 'zh' ? '预览生成中' : 'Preview loading...'}</span>`;
+		      prepareDecodedLibraryImages(previewEl);
 		      previewEl.scrollTop = 0;
 		      previewEl.onwheel = function(e) {
 		        var atTop = previewEl.scrollTop <= 0;
@@ -3798,9 +4044,10 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     const rows = candidates.map(function(item) {
       const info = libraryTemplateDimensionInfo(item) || libraryPreviewDimensionInfo(item);
       const imageUrl = item.url || item.thumbUrl || '';
-      return `<label class="library-bookmark-editor-row"><input type="checkbox" value="${escapeAttr(item.source.id)}" ${selectedIds.has(item.source.id) ? 'checked' : ''}><span class="library-bookmark-editor-thumb">${imageUrl ? `<img src="${escapeAttr(imageUrl)}" alt="">` : ''}</span><span class="library-bookmark-editor-copy"><strong>${escapeHtml(item.source.title || (state.lang === 'zh' ? '未命名模板' : 'Untitled template'))}</strong><small>${escapeHtml(info ? info.ratio + '  ' + info.pixels : (state.lang === 'zh' ? '实际尺寸读取中' : 'Reading dimensions'))}</small></span></label>`;
+      return `<label class="library-bookmark-editor-row"><input type="checkbox" value="${escapeAttr(item.source.id)}" ${selectedIds.has(item.source.id) ? 'checked' : ''}><span class="library-bookmark-editor-thumb">${imageUrl ? `<img src="${escapeAttr(imageUrl)}" alt="" decoding="async" class="library-progressive-image">` : ''}</span><span class="library-bookmark-editor-copy"><strong>${escapeHtml(item.source.title || (state.lang === 'zh' ? '未命名模板' : 'Untitled template'))}</strong><small>${escapeHtml(info ? info.ratio + '  ' + info.pixels : (state.lang === 'zh' ? '实际尺寸读取中' : 'Reading dimensions'))}</small></span></label>`;
     }).join('');
     modal.innerHTML = `<section class="modal library-bookmark-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="library-bookmark-editor-title"><div class="library-bookmark-editor-header"><div><h3 id="library-bookmark-editor-title">${existingGroup ? (state.lang === 'zh' ? '编辑模板编组' : 'Edit template group') : (state.lang === 'zh' ? '模板编组' : 'Group templates')}</h3><p>${state.lang === 'zh' ? '书签只关联现有模板，不会复制或修改原模板。至少选择 1 个模板。' : 'Bookmarks only reference existing templates. Select at least one template.'}</p></div><button type="button" id="close-library-bookmark-editor" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}">×</button></div><div class="library-bookmark-editor-list">${rows}</div><div class="library-bookmark-editor-footer"><button type="button" class="library-bookmark-editor-cancel">${state.lang === 'zh' ? '取消' : 'Cancel'}</button><button type="button" class="library-bookmark-editor-save">${existingGroup ? (state.lang === 'zh' ? '保存关联' : 'Save links') : (state.lang === 'zh' ? '创建书签' : 'Create bookmark')}</button></div></section>`;
+    prepareDecodedLibraryImages(modal);
     modal.hidden = false;
     document.body.style.overflow = 'hidden';
     modal.onclick = function(event) { if (event.target === modal) closeLibraryTemplateBookmarkEditor(); };
@@ -3855,11 +4102,14 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
       let url = '';
       let thumbUrl = '';
       if (preview) {
-        url = state.libraryPreviewUrls[preview.preview_path] || '';
+        url = _templatePreviewBlobUrls[preview.preview_path] || state.libraryPreviewUrls[preview.preview_path] || '';
         const thumbPath = source.source_path ? source.source_path.replace(/\/[^/]+$/, '/_thumb.jpg') : '';
         thumbUrl = state.libraryPreviewUrls[thumbPath] || '';
       }
-      return { ref: ref, source: source, preview: preview, url: url, thumbUrl: thumbUrl || url };
+      // Full previews are guaranteed records; generated _thumb files are optional.
+      // Prefer the full preview so a signed-but-missing thumbnail cannot leave the
+      // picker as a permanent grey card.
+      return { ref: ref, source: source, preview: preview, url: url, thumbUrl: url || thumbUrl };
     }).filter(Boolean);
   }
 
@@ -3867,15 +4117,59 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     const members = libraryBookmarkMemberItems(group);
     const paths = [];
     members.forEach(function(m) {
-      if (m.preview && m.preview.preview_path && !state.libraryPreviewUrls[m.preview.preview_path]) paths.push(m.preview.preview_path);
+      if (m.preview && m.preview.preview_path) paths.push(m.preview.preview_path);
       if (m.source && m.source.source_path) {
         const thumbPath = m.source.source_path.replace(/\/[^/]+$/, '/_thumb.jpg');
-        if (thumbPath && !state.libraryPreviewUrls[thumbPath]) paths.push(thumbPath);
+        if (thumbPath) paths.push(thumbPath);
       }
     });
     if (paths.length) {
-      try { await signLibraryPreviewUrls(paths); } catch (e) { /* 静默 */ }
+      try {
+        // signLibraryPreviewUrls checks the signed-at timestamp and renews stale
+        // URLs. Do not filter merely by URL presence here.
+        await signLibraryPreviewUrls(paths);
+      } catch (error) {
+        console.warn('Bookmark preview signing failed; individual recovery will run:', error);
+      }
     }
+  }
+
+  var _bookmarkMemberPreviewPromises = {};
+  function recoverBookmarkMemberPreview(member) {
+    const previewPath = member?.preview?.preview_path || '';
+    if (!previewPath || !state.supabase) return Promise.resolve('');
+    if (_templatePreviewBlobUrls[previewPath]) return Promise.resolve(_templatePreviewBlobUrls[previewPath]);
+    if (_bookmarkMemberPreviewPromises[previewPath]) return _bookmarkMemberPreviewPromises[previewPath];
+    _bookmarkMemberPreviewPromises[previewPath] = (async function() {
+      const result = await state.supabase.storage.from(LIBRARY_BUCKET).download(previewPath);
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error('Empty bookmark preview');
+      _templatePreviewBlobs[previewPath] = result.data;
+      const objectUrl = URL.createObjectURL(result.data);
+      _templatePreviewBlobUrls[previewPath] = objectUrl;
+      return objectUrl;
+    })().catch(function(error) {
+      console.warn('Bookmark preview recovery failed:', previewPath, error);
+      return '';
+    }).finally(function() {
+      delete _bookmarkMemberPreviewPromises[previewPath];
+    });
+    return _bookmarkMemberPreviewPromises[previewPath];
+  }
+
+  function repairOpenBookmarkMemberPreviews(group) {
+    libraryBookmarkMemberItems(group).forEach(function(member) {
+      const selector = `#library-bookmark-members [data-template-source-id="${CSS.escape(member.source.id)}"]`;
+      const thumb = document.querySelector(selector)?.querySelector('.library-bookmark-template-thumb');
+      if (!thumb) return;
+      const image = thumb.querySelector('img');
+      if (image && (!image.complete || image.naturalWidth > 0)) return;
+      void recoverBookmarkMemberPreview(member).then(function(url) {
+        if (!url || !thumb.isConnected) return;
+        thumb.replaceChildren();
+        mountDecodedBookmarkPreview(thumb, url);
+      });
+    });
   }
 
   function libraryBookmarkMemberDimensionInfo(member) {
@@ -3950,6 +4244,24 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     }, 0);
   }
 
+  function libraryBookmarkPopupCacheKey(group) {
+    const refs = (group?.refs || []).map(function(ref) {
+      return typeof ref === 'string' ? ref : ref?.templateId;
+    }).filter(Boolean);
+    return [group?.source?.id || '', group?.source?.updated_at || '', refs.join(',')].join('|');
+  }
+
+  function prefetchLibraryBookmarkMemberSnapshots(group) {
+    const members = libraryBookmarkMemberItems(group);
+    void (async function() {
+      for (const batch of chunkArray(members, 2)) {
+        await Promise.all(batch.map(function(member) {
+          return loadLibraryTemplateSnapshot({ source: member.source }).catch(function() {});
+        }));
+      }
+    })();
+  }
+
   async function openLibraryBookmarkPopup(sourceId) {
     let group = state.libraryBookmarkGroups.find(function(g) { return g.source.id === sourceId; });
     if (!group) {
@@ -3964,9 +4276,18 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     const modal = ensureLibraryBookmarkModal();
     const listEl = document.getElementById('library-bookmark-members');
     if (!listEl) return;
-    listEl.innerHTML = `<div class="library-bookmark-picker-loading">${state.lang === 'zh' ? '正在读取关联模板…' : 'Loading linked templates…'}</div>`;
     modal.hidden = false;
     document.body.style.overflow = 'hidden';
+    prefetchLibraryBookmarkMemberSnapshots(group);
+    const popupCacheKey = libraryBookmarkPopupCacheKey(group);
+    const popupRenderedAt = Number(modal.dataset.bookmarkRenderedAt || 0);
+    if (modal.dataset.bookmarkCacheKey === popupCacheKey
+      && Date.now() - popupRenderedAt < 10 * 60 * 1000
+      && listEl.querySelector('.library-bookmark-template-grid')) {
+      repairOpenBookmarkMemberPreviews(group);
+      return;
+    }
+    listEl.innerHTML = `<div class="library-bookmark-picker-loading" role="status" aria-live="polite"><span class="library-loading-spinner" aria-hidden="true"></span><span>${state.lang === 'zh' ? '正在读取关联模板…' : 'Loading linked templates…'}</span></div>`;
     await signLibraryBookmarkMemberUrls(group);
     const allMembers = libraryBookmarkMemberItems(group);
     const toolbar = document.getElementById('library-bookmark-toolbar');
@@ -3998,13 +4319,14 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
         const info = libraryBookmarkMemberDimensionInfo(member);
         const card = document.createElement('div');
         card.className = 'library-bookmark-template-card';
+        card.dataset.templateSourceId = member.source.id;
         card.tabIndex = 0;
         card.setAttribute('role', 'button');
         card.setAttribute('aria-label', (state.lang === 'zh' ? '打开模板 ' : 'Open template ') + (member.source.title || member.ref?.name || ''));
         const thumb = document.createElement('div');
         thumb.className = 'library-bookmark-template-thumb';
         thumb.style.aspectRatio = info ? (info.width + ' / ' + info.height) : '3 / 4';
-        if (member.thumbUrl) thumb.innerHTML = `<img src="${escapeAttr(member.thumbUrl)}" alt="">`;
+        if (member.thumbUrl) mountDecodedBookmarkPreview(thumb, member.thumbUrl, member);
         else thumb.innerHTML = `<span class="library-bookmark-template-placeholder">${state.lang === 'zh' ? '预览生成中' : 'Preview'}</span>`;
         const meta = document.createElement('div');
         meta.className = 'library-bookmark-template-meta';
@@ -4031,6 +4353,9 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     }
 
     renderMembers();
+    repairOpenBookmarkMemberPreviews(group);
+    modal.dataset.bookmarkCacheKey = popupCacheKey;
+    modal.dataset.bookmarkRenderedAt = String(Date.now());
     const closeBtn = document.getElementById('close-library-bookmark');
     if (closeBtn) closeBtn.onclick = closeLibraryBookmarkPopup;
     modal.onclick = function(event) { if (event.target === modal) closeLibraryBookmarkPopup(); };
@@ -5240,8 +5565,12 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
     }
     try {
       const snapshot = await loadLibraryTemplateSnapshot(item);
-      location.hash = 'static';
-      navigate('static');
+      // 从 DIY 内的模板组切换模板时，当前 iframe 已经可用。再次 navigate('static')
+      // 会先把 iframe 移入隐藏缓存再重新挂载，期间只剩整页空白。
+      if (state.route !== 'static' || !state.activeFrame || state.activeFrame !== state.toolFrames.static) {
+        location.hash = 'static';
+        navigate('static');
+      }
       if (snapshot.schema === 'vf-project-snapshot/v1') {
         validateProjectSnapshot(snapshot, 'static');
         await waitForToolImporter();
@@ -5259,22 +5588,35 @@ const TOOL_UI_VERSION = '20260819-canvas-text-two-line-v429';
   }
 
   var _templateSnapshotCache = {};
+  var _templatePreviewBlobUrls = {};
+  var _templatePreviewBlobs = {};
+  var _templateSnapshotPromises = {};
   async function loadLibraryTemplateSnapshot(item) {
     var path = item.source.source_path;
-    // 如果刚上传的，优先用缓存
+    // 已完成和正在进行的同一路径下载都直接复用，避免模板组预取与点击打开
+    // 同时触发两次 Storage 请求。
     if (_templateSnapshotCache[path]) return _templateSnapshotCache[path];
-    // 重试最多 3 次，处理 Storage 复制延迟
-    for (var attempt = 0; attempt < 3; attempt++) {
-      try {
-        var { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).download(path);
-        if (error) throw error;
-        var json = JSON.parse(await data.text());
-        _templateSnapshotCache[path] = json;
-        return json;
-      } catch (e) {
-        if (attempt < 2) await new Promise(function(r) { setTimeout(r, 800); });
-        else throw e;
+    if (_templateSnapshotPromises[path]) return _templateSnapshotPromises[path];
+    var request = (async function() {
+      // 重试最多 3 次，处理 Storage 复制延迟
+      for (var attempt = 0; attempt < 3; attempt++) {
+        try {
+          var { data, error } = await state.supabase.storage.from(LIBRARY_BUCKET).download(path);
+          if (error) throw error;
+          var json = JSON.parse(await data.text());
+          _templateSnapshotCache[path] = json;
+          return json;
+        } catch (e) {
+          if (attempt < 2) await new Promise(function(r) { setTimeout(r, 800); });
+          else throw e;
+        }
       }
+    })();
+    _templateSnapshotPromises[path] = request;
+    try {
+      return await request;
+    } finally {
+      if (_templateSnapshotPromises[path] === request) delete _templateSnapshotPromises[path];
     }
   }
 
@@ -5546,7 +5888,7 @@ function libraryTagsForForm(formData, kind) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  function renderTool(type) {
+  function toolFrameDefinition(type) {
     const legacyRole = currentRole() === 'operator' ? 'viewer' : currentRole();
     const map = {
       library: {
@@ -5559,46 +5901,124 @@ function libraryTagsForForm(formData, kind) {
         src: `./tools/dynamic/animator.html?embedded=1&mode=${encodeURIComponent(state.interfaceMode)}&v=${TOOL_UI_VERSION}`
       }
     };
-    const item = map[type];
-    els.content.innerHTML = `
-      <div class="tool-layout">
-        <div id="tool-frame-mount" class="tool-frame-mount"></div>
-      </div>
-    `;
-    const mount = document.getElementById('tool-frame-mount');
-    let frame = state.toolFrames[type];
-    if (!frame) {
-      frame = document.createElement('iframe');
-      frame.id = `tool-frame-${type}`;
-      frame.className = 'tool-frame';
-      frame.src = item.src;
-      frame.title = type;
-      if (type === 'static') frame.allow = 'display-capture';
-      frame.dataset.toolFrame = type;
-      state.toolFrames[type] = frame;
-      frame.addEventListener('load', function() {
-        broadcastInterfaceMode(frame);
-        broadcastUiLanguage(frame);
-      });
+    return map[type];
+  }
+
+  function createToolFrame(type) {
+    const item = toolFrameDefinition(type);
+    const frame = document.createElement('iframe');
+    frame.id = `tool-frame-${type}`;
+    frame.className = 'tool-frame';
+    frame.src = item.src;
+    frame.title = type;
+    if (type === 'static') {
+      frame.allow = 'display-capture';
+      frame.dataset.staticAssetsReady = '0';
+      frame.dataset.staticCatalogReady = '0';
+      frame.dataset.staticCatalogSyncedAt = '0';
     }
-    mount.appendChild(frame);
+    frame.dataset.toolFrame = type;
+    state.toolFrames[type] = frame;
+    frame.addEventListener('load', function() {
+      if (type === 'static') {
+        frame.dataset.staticAssetsReady = '0';
+        frame.dataset.staticCatalogReady = '0';
+        frame.dataset.staticCatalogSyncedAt = '0';
+      }
+      broadcastInterfaceMode(frame);
+      broadcastUiLanguage(frame);
+      if (type === 'static' && state.route === 'static' && state.activeFrame === frame) {
+        notifyToolHostVisible(frame);
+      }
+    });
+    return frame;
+  }
+
+  function notifyToolHostVisible(frame) {
+    if (!frame || !frame.contentWindow) return;
+    try {
+      frame.contentWindow.postMessage({ type: 'vf:host-visible' }, location.origin);
+    } catch (_error) {}
+  }
+
+  function setStaticToolLoading(frame, loading) {
+    if (!frame) return;
+    const mount = frame.parentElement && frame.parentElement.classList.contains('tool-frame-mount')
+      ? frame.parentElement
+      : null;
+    frame.classList.toggle('is-entry-loading', !!loading);
+    if (!mount) return;
+    const indicator = mount.querySelector('.tool-entry-loading');
+    if (indicator) indicator.hidden = !loading;
+    if (frame._vfEntryLoadingTimer) {
+      clearTimeout(frame._vfEntryLoadingTimer);
+      frame._vfEntryLoadingTimer = 0;
+    }
+    // 即使云端目录异常，也不能让加载层永久挡住本地画板。
+    if (loading) {
+      frame._vfEntryLoadingTimer = setTimeout(function() {
+        frame._vfEntryLoadingTimer = 0;
+        if (state.route === 'static' && state.activeFrame === frame) setStaticToolLoading(frame, false);
+      }, 15000);
+    }
+  }
+
+  function scheduleStaticToolPrewarm() {
+    if (state.route === 'static' || state.toolFrames.static) return;
+    const prewarm = function() {
+      if (els.appShell.hidden || state.route === 'static' || state.toolFrames.static) return;
+      const frame = createToolFrame('static');
+      frame.dataset.prewarming = '1';
+      ensureToolFrameMount('static').appendChild(frame);
+    };
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(prewarm, { timeout: 600 });
+    } else {
+      setTimeout(prewarm, 250);
+    }
+  }
+
+  function renderTool(type) {
+    const cache = toolFrameCache();
+    els.content.hidden = true;
+    cache.hidden = false;
+    cache.querySelectorAll('[data-tool-mount]').forEach(item => { item.hidden = true; });
+    const mount = ensureToolFrameMount(type);
+    mount.hidden = false;
+    let frame = state.toolFrames[type];
+    if (!frame) frame = createToolFrame(type);
+    if (type === 'static') frame.dataset.prewarming = '0';
+    // Keep each iframe under one permanent mount for its whole lifetime. Moving
+    // an iframe between DOM parents reloads its browsing context in Chromium,
+    // which caused every Library -> DIY return to show the full white startup.
+    if (frame.parentElement !== mount) mount.appendChild(frame);
     state.activeFrame = frame;
+    if (type === 'static') setStaticToolLoading(frame, frame.dataset.staticCatalogReady !== '1');
     setTimeout(function() {
       broadcastInterfaceMode(frame);
       broadcastUiLanguage(frame);
+      if (type === 'static' && state.route === 'static' && state.activeFrame === frame) {
+        notifyToolHostVisible(frame);
+      }
     }, 0);
-    // 静态 DIY iframe 会被保留在内存中。每次重新打开时重新下发云端清单，
-    // 使素材库中刚删除的背景、Logo 等组件不会继续显示旧缓存。
+    // 静态 DIY iframe 和已经完成的云端目录都会保留在内存中。短时间内切换模板
+    // 不再重复拉取整套目录；超过一分钟后再次进入才做一次后台校准。
     if (type === 'static') {
       const syncStaticAssets = function() {
-        handleFetchTemplates(frame.contentWindow);
+        queueStaticTemplateFetch(frame.contentWindow);
       };
       if (frame.dataset.staticAssetsReady === '1') {
-        setTimeout(syncStaticAssets, 0);
+        const syncedAt = Number(frame.dataset.staticCatalogSyncedAt || 0);
+        const catalogStale = !syncedAt || Date.now() - syncedAt > 60000;
+        if (frame.dataset.staticCatalogReady !== '1' || catalogStale) setTimeout(syncStaticAssets, 0);
       } else {
         frame.addEventListener('load', function() {
-          frame.dataset.staticAssetsReady = '1';
-          syncStaticAssets();
+          frame.dataset.staticAssetsReady = '0';
+          // 正常情况由 iframe 的 vf:static-ready 握手触发；兜底计时防止旧缓存
+          // 或脚本异常让资产同步永久停住。
+          setTimeout(function() {
+            if (frame.dataset.staticAssetsReady !== '1' && state.route === 'static') syncStaticAssets();
+          }, 1800);
         }, { once: true });
       }
     }
@@ -5883,6 +6303,7 @@ function libraryTagsForForm(formData, kind) {
   async function renderAnalyticsPage() {
     parkActiveToolFrame();
     var zh = state.lang === 'zh';
+    await loadChartLibrary();
 
     // ===== HTML + Scoped CSS =====
     els.content.innerHTML = '\
@@ -6792,6 +7213,26 @@ function libraryTagsForForm(formData, kind) {
     }, 2000);
   }
   // ===== 静态DIY模板 ↔ 素材库同步 =====
+  var staticTemplateFetchByWindow = new WeakMap();
+  function queueStaticTemplateFetch(sourceWindow) {
+    if (!sourceWindow) return Promise.resolve();
+    var active = staticTemplateFetchByWindow.get(sourceWindow);
+    if (active) return active;
+    var timeoutId = 0;
+    var timeout = new Promise(function(resolve) {
+      timeoutId = setTimeout(function() {
+        try { sourceWindow.postMessage({ type: 'vf:templates-loaded', error: '资产清单读取超时，正在自动重试' }, location.origin); } catch (_error) {}
+        resolve();
+      }, 20000);
+    });
+    var request = Promise.race([Promise.resolve(handleFetchTemplates(sourceWindow)), timeout]).finally(function() {
+      clearTimeout(timeoutId);
+      if (staticTemplateFetchByWindow.get(sourceWindow) === request) staticTemplateFetchByWindow.delete(sourceWindow);
+    });
+    staticTemplateFetchByWindow.set(sourceWindow, request);
+    return request;
+  }
+
   async function handleToolMessage(event) {
     var msg = event.data;
     if (!msg || !msg.type) return;
@@ -6799,6 +7240,20 @@ function libraryTagsForForm(formData, kind) {
     if (!msg.type.startsWith('vf:')) return;
     var sourceWindow = event.source;
     switch (msg.type) {
+      case 'vf:static-ready':
+        var readyFrame = state.toolFrames.static;
+        if (readyFrame && readyFrame.contentWindow === sourceWindow) readyFrame.dataset.staticAssetsReady = '1';
+        // 预热必须包含云端目录；只预热 iframe 外壳会把真正的长等待推迟到用户点击 DIY 时。
+        queueStaticTemplateFetch(sourceWindow);
+        break;
+      case 'vf:static-catalog-ready':
+        var catalogFrame = state.toolFrames.static;
+        if (catalogFrame && catalogFrame.contentWindow === sourceWindow) {
+          catalogFrame.dataset.staticCatalogReady = '1';
+          catalogFrame.dataset.staticCatalogSyncedAt = String(Date.now());
+          if (state.route === 'static' && state.activeFrame === catalogFrame) setStaticToolLoading(catalogFrame, false);
+        }
+        break;
       case 'vf:save-template':
         await handleSaveTemplate(msg, sourceWindow);
         refreshLibraryIfOpen();
@@ -6812,7 +7267,7 @@ function libraryTagsForForm(formData, kind) {
         refreshLibraryIfOpen();
         break;
       case 'vf:request-templates':
-        handleFetchTemplates(sourceWindow);
+        queueStaticTemplateFetch(sourceWindow);
         break;
       case 'vf:request-template-data':
         handleFetchSingleTemplate(msg.id, sourceWindow);
@@ -7166,24 +7621,29 @@ function libraryTagsForForm(formData, kind) {
       // 查询所有预览图
       var sourceIds = (sources || []).map(function(s) { return s.id; });
       var previewMap = {};
+      var previewDims = {}; // { sourceId: { w, h } }
+      var previews = [];
       if (sourceIds.length > 0) {
-        var { data: previews } = await state.supabase.from('vf_asset_previews')
-          .select('source_file_id, preview_path, width, height')
-          .in('source_file_id', sourceIds)
-          .order('sort_order', { ascending: true })
-          .limit(sourceIds.length || 50);
-        var previewDims = {}; // { sourceId: { w, h } }
-        if (previews) {
-          // 每个 source 取第一个预览图
-          var seen = {};
-          previews.forEach(function(p) {
-            if (!seen[p.source_file_id] && p.preview_path) {
-              seen[p.source_file_id] = true;
-              previewMap[p.source_file_id] = p.preview_path;
-              if (p.width && p.height) previewDims[p.source_file_id] = { w: p.width, h: p.height };
-            }
-          });
+        // Keep the same complete preview record shape used by the Library route.
+        // The old DIY bootstrap omitted `id`, then merged by preview.id, causing
+        // all records to overwrite the same undefined key.
+        for (const idBatch of chunkArray(sourceIds, SUPABASE_IN_BATCH_SIZE)) {
+          const previewResult = await state.supabase.from('vf_asset_previews')
+            .select('id,source_file_id,preview_path,preview_filename,preview_mime_type,preview_size_bytes,width,height,sort_order,created_at')
+            .in('source_file_id', idBatch)
+            .order('sort_order', { ascending: true });
+          if (previewResult.error) throw previewResult.error;
+          previews.push(...(previewResult.data || []));
         }
+        // 每个 source 取第一个预览图
+        var seen = {};
+        previews.forEach(function(p) {
+          if (!seen[p.source_file_id] && p.preview_path) {
+            seen[p.source_file_id] = true;
+            previewMap[p.source_file_id] = p.preview_path;
+            if (p.width && p.height) previewDims[p.source_file_id] = { w: p.width, h: p.height };
+          }
+        });
       }
       // 先准备轻量元数据（不包含预览 URL），再后台下载预览图 + JSON。
       // 书签关系必须在首次列表绘制前可用；否则 iframe 会先把书签成员当普通模板
@@ -7200,7 +7660,12 @@ function libraryTagsForForm(formData, kind) {
       await Promise.all(bookmarkTemplates.map(async function(template) {
         var bookmarkSource = (sources || []).find(function(source) { return source.id === template.id; });
         try {
-          var bookmarkMetadata = await loadTemplateMetadata(template.id, bookmarkSource);
+          var bookmarkMetadata = await Promise.race([
+            loadTemplateMetadata(template.id, bookmarkSource),
+            new Promise(function(_resolve, reject) {
+              setTimeout(function() { reject(new Error('Bookmark metadata timeout')); }, 5000);
+            })
+          ]);
           template.templateRefs = Array.isArray(bookmarkMetadata.templateRefs) ? bookmarkMetadata.templateRefs : [];
           template.coverTemplateId = bookmarkMetadata.coverTemplateId || '';
           template.metadataLoaded = true;
@@ -7209,6 +7674,44 @@ function libraryTagsForForm(formData, kind) {
           console.warn('Bootstrap bookmark metadata failed:', template.id, bookmarkError);
         }
       }));
+      // DIY 预热只能在父页面素材库尚未开始读取时填充内存。
+      // 素材库正在加载、已加载或当前可见时都不能被 DIY 的局部查询覆盖。
+      var shouldWarmParentLibrary =
+        state.route !== 'library' &&
+        !state.libraryDataLoaded &&
+        !state.libraryDataPromise;
+      if (shouldWarmParentLibrary) {
+        var warmSourceMap = new Map((state.librarySources || []).map(function(source) { return [source.id, source]; }));
+        (sources || []).forEach(function(source) { warmSourceMap.set(source.id, source); });
+        state.librarySources = Array.from(warmSourceMap.values());
+        var warmPreviewMap = new Map((state.libraryPreviews || []).map(function(preview) { return [preview.id, preview]; }));
+        (previews || []).forEach(function(preview) { warmPreviewMap.set(preview.id, preview); });
+        state.libraryPreviews = Array.from(warmPreviewMap.values());
+      }
+      var bookmarkMemberPriority = new Set();
+      bookmarkTemplates.forEach(function(template) {
+        if (!template.metadataLoaded) return;
+        var bookmarkSource = (sources || []).find(function(source) { return source.id === template.id; });
+        if (!bookmarkSource) return;
+        var refs = Array.isArray(template.templateRefs) ? template.templateRefs : [];
+        refs.forEach(function(ref) {
+          var memberId = typeof ref === 'string' ? ref : ref?.templateId;
+          if (memberId) {
+            bookmarkMemberPriority.add(memberId);
+            if (shouldWarmParentLibrary) state.libraryBookmarkMemberIds.add(memberId);
+          }
+        });
+        if (shouldWarmParentLibrary) {
+          state.libraryBookmarkGroups = state.libraryBookmarkGroups.filter(function(group) {
+            return group.source.id !== template.id;
+          });
+          state.libraryBookmarkGroups.push({
+            source: bookmarkSource,
+            refs: refs,
+            coverTemplateId: template.coverTemplateId || ''
+          });
+        }
+      });
       sourceWindow.postMessage({ type: 'vf:templates-loaded', templates: templates }, location.origin);
       // 尺寸信息在列表出现后马上预取。悬停时只展示已到达的数据，不能再把网络请求
       // 放到 mouseenter 里，否则每次移入卡片都会出现可感知的等待。
@@ -7225,22 +7728,38 @@ function libraryTagsForForm(formData, kind) {
       })();
       // 把 previewMap 缓存下来供 on-demand JSON 下载使用
       _templatePreviewMap = previewMap;
+      // 模板组成员预览优先下载；用户随后打开组弹窗时直接复用这些 Blob，
+      // 不再先显示一轮空卡片再逐张请求。
+      var previewSources = (sources || []).slice().sort(function(a, b) {
+        return Number(bookmarkMemberPriority.has(b.id)) - Number(bookmarkMemberPriority.has(a.id));
+      });
       // 预览图并行批量下载（每批 6 个并发）
       var previewTasks = [];
-      for (var j = 0; j < (sources || []).length; j++) {
+      for (var j = 0; j < previewSources.length; j++) {
         (function(src) {
           var previewPath = previewMap[src.id];
           if (!previewPath) return;
           previewTasks.push((async function() {
             try {
-              var { data: pBlob } = await state.supabase.storage.from(LIBRARY_BUCKET).download(previewPath);
+              var pBlob = bookmarkMemberPriority.has(src.id) ? _templatePreviewBlobs[previewPath] : null;
+              if (!pBlob) {
+                var previewDownload = await state.supabase.storage.from(LIBRARY_BUCKET).download(previewPath);
+                pBlob = previewDownload.data;
+              }
               if (pBlob) {
+                if (bookmarkMemberPriority.has(src.id)) {
+                  _templatePreviewBlobs[previewPath] = pBlob;
+                  if (!_templatePreviewBlobUrls[previewPath]) {
+                    _templatePreviewBlobUrls[previewPath] = URL.createObjectURL(pBlob);
+                  }
+                  updateOpenBookmarkPreview(src.id, _templatePreviewBlobUrls[previewPath]);
+                }
                 // Blob 可被 structured clone 高效传给 iframe；不再转成体积增加约 1/3 的 Base64。
                 sourceWindow.postMessage({ type: 'vf:template-preview', id: src.id, previewBlob: pBlob }, location.origin);
               }
             } catch(e) {}
           })());
-        })(sources[j]);
+        })(previewSources[j]);
       }
       // 分批并发执行，避免同时 50+ 个请求打爆浏览器
       var BATCH = 6;
@@ -7512,8 +8031,13 @@ function libraryTagsForForm(formData, kind) {
     return { data: JSON.parse(jsonText) };
   };
   window.VF_LOAD_COLOR_PALETTES = async function () {
-    if (!state.supabase) return null;
-    const latest = await state.supabase.from('vf_source_files').select('source_path').contains('tags', [PALETTE_CONFIG_TAG]).order('updated_at', { ascending: false }).limit(1);
+    if (!state.supabase || !state.session?.user?.id) return null;
+    const userId = state.session.user.id;
+    const latest = await state.supabase.from('vf_source_files').select('source_path')
+      .eq('uploaded_by', userId)
+      .contains('tags', [PALETTE_CONFIG_TAG])
+      .order('updated_at', { ascending: false })
+      .limit(1);
     if (latest.error || !latest.data?.[0]?.source_path) return null;
     const file = await state.supabase.storage.from(LIBRARY_BUCKET).download(latest.data[0].source_path);
     if (file.error) throw file.error;
@@ -7554,8 +8078,6 @@ function libraryTagsForForm(formData, kind) {
     if (state.route === 'library') {
       try {
         await loadLibraryData();
-        refreshKindTabCounts();
-        renderLibraryGrid();
       } catch(e) { /* 静默 */ }
     }
   }

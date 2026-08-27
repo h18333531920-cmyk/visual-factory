@@ -1785,6 +1785,28 @@ html body {
   overflow-y: auto !important;
   overscroll-behavior: contain !important;
 }
+.right-pane #ai-skill-menu {
+  width: 280px !important;
+  min-width: 240px !important;
+  max-width: min(280px, calc(100vw - 32px)) !important;
+}
+.right-pane .ai-skill-menu-loading {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: 38px !important;
+  padding: 0 10px !important;
+  color: var(--ui-muted) !important;
+  font-size: 11px !important;
+  white-space: nowrap !important;
+}
+.right-pane .ai-skill-menu-loading .ai-spinner {
+  width: 14px !important;
+  height: 14px !important;
+  flex: 0 0 14px !important;
+  border-color: rgba(100, 116, 139, .2) !important;
+  border-top-color: var(--ui-ink) !important;
+}
 .right-pane .ai-control-icons .ai-dropdown.open {
   display: flex !important;
   flex-direction: column !important;

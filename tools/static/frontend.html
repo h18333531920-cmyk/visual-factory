@@ -67,6 +67,16 @@
         body.vf-native-capture-mode .ai-loading,
         body.vf-native-capture-mode .asset-library-drop-overlay,
         body.vf-native-capture-mode .linked-artboard-dock { display:none !important; }
+        body.vf-native-capture-mode .is-active-layer,
+        body.vf-native-capture-mode .is-new-layer {
+            outline:none !important;
+            box-shadow:none !important;
+            animation:none !important;
+            opacity:1 !important;
+        }
+        body.vf-native-capture-mode .is-new-layer::after,
+        body.vf-native-capture-mode .editor-group-selection-box,
+        body.vf-native-capture-mode .layer-replacement-loading { display:none !important; }
         /* 原生 PNG 只截取画板内容本身：编辑器为画板加的 1px 边框与阴影不能进入成品，
            否则会在缩放后变成边缘的白色细线。 */
         body.vf-native-capture-mode #canvas-wrapper { z-index:2147483000 !important; isolation:isolate; border:0 !important; box-shadow:none !important; }
@@ -2946,7 +2956,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260819-canvas-text-two-line-v429">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260827-fast-static-session-v481">
 </head>
 <body>
 
@@ -3181,7 +3191,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             <div class="empty-hint" id="empty-hint" style="display:none"></div>
             <div id="dynamic-layers"></div>
             <div class="safe-guide" id="safe-guide"></div>
-            <div id="canvas-font-loading-overlay">
+            <div id="canvas-font-loading-overlay" hidden>
                 <div class="canvas-font-loading-inner">
                     <span class="canvas-font-loading-spinner"></span>
                     <span class="canvas-font-loading-label">正在加载…</span>
@@ -3317,8 +3327,13 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
 </div>
 
 <!-- HT Heliopolis 的导出不能交给 Canvas 重新排版；此库只用于读取已上传字体的轮廓。 -->
-<script src="https://unpkg.com/@pdf-lib/fontkit/dist/fontkit.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
+<script>
+    // 轮廓字体引擎只在精确导出时使用。后台下载与解析，不再阻塞 DIY 首屏；
+    // 导出入口会显式等待该 Promise，所以不会退回不准确的普通字体。
+    window.__vfFontkitReady = new Promise(function(resolve) { window.__vfResolveFontkit = resolve; });
+</script>
+<script defer src="../vendor/fontkit-1.1.1.umd.min.js" onload="window.__vfResolveFontkit(true)" onerror="window.__vfResolveFontkit(false)"></script>
+<script defer src="../vendor/opentype-1.3.4.min.js"></script>
 <script>
     /* ================= UI localization =================
        This layer translates editor chrome only. Canvas content, asset names and
@@ -3450,6 +3465,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         '保存模板': 'Save Template',
         '修改尺寸': 'Resize',
         '一键延展': 'Extend Canvas',
+        '精确导出测试': 'Precise Export Test',
         '导出': 'Export',
         '更多': 'More',
         '尺寸': 'Size',
@@ -3599,6 +3615,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         '正在更新模板编组...': 'Updating template group…',
         '正在保存到素材库...': 'Saving to Asset Library…',
         '正在保存并同步全部预设…': 'Saving and syncing all presets…',
+        '正在加载…': 'Loading…',
+        '正在加载素材内容…': 'Loading asset…',
+        '正在下载并替换背景…': 'Downloading and replacing background…',
         '模型正在生成画面...': 'The model is generating an image…',
         '参考图读取失败': 'Failed to read reference image',
         'Logo 图片读取失败': 'Failed to read logo image',
@@ -3616,6 +3635,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         '请先选中一张图片图层': 'Select an image layer first',
         '请至少选择 1 个模板': 'Select at least one template',
         '文字最多两行，不可出现第三行': 'Text is limited to two lines',
+        '请先点击画板中的背景': 'Please select the background on the artboard first',
+        '请选择“当前标签页”完成高清导出': 'Select “This Tab” to complete the high-resolution export',
         'Logo 处理失败，请换一张图片重试': 'Logo processing failed. Try another image.',
         'Logo 矩阵最多只能添加 8 个 Logo': 'A logo grid supports up to 8 logos',
         '背景已去除': 'Background removed',
@@ -3627,10 +3648,21 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         '模板 Logo 组件不可删除': 'Template logo components cannot be deleted',
         '模板标签不可删除': 'Template tags cannot be deleted',
         '模板圆环不可删除': 'Template arcs cannot be deleted',
+        '模板背景不可删除': 'The template background cannot be deleted',
+        '模板内容不可删除': 'Template content cannot be deleted',
         '用户模式下不能移动模板圆弧': 'Template arcs cannot be moved in User Mode',
         '用户模式下不能移动模板标签': 'Template tags cannot be moved in User Mode',
         '用户模式下不能移动模板 Logo 组件': 'Template logo components cannot be moved in User Mode',
+        '用户模式下不能移动模板图片': 'Template images cannot be moved in User Mode',
         '用户模式下不能移动模板文字': 'Template text cannot be moved in User Mode'
+    });
+    const VF_PROTECTED_LAYER_TYPE_EN = Object.freeze({
+        '文字': 'text',
+        'Logo 组件': 'logo components',
+        '标签': 'tags',
+        '圆环': 'arcs',
+        '背景': 'background',
+        '内容': 'content'
     });
     const VF_UI_EN_PATTERNS = [
         [/^已选择\s*(\d+)\s*个图层$/, (_, count) => `${count} layer${count === '1' ? '' : 's'} selected`],
@@ -3639,7 +3671,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         [/^显示\s*(\d+)\s*个模板$/, (_, count) => `${count} template${count === '1' ? '' : 's'} shown`],
         [/^最多\s*(\d+)\s*张参考图$/, (_, count) => `Up to ${count} reference images`],
         [/^将当前画布保存为(.+?)？保存后可在资产库的模板中使用。$/, (_, type) => `Save the current canvas as ${translateVFUiString(type, 'en')}? It will be available under Templates in the Asset Library.`],
-        [/^模板(.+?)不可删除$/, (_, type) => `Template ${type} cannot be deleted`],
+        [/^模板(.+?)不可删除$/, (_, type) => {
+            const labels = type.split('、').map(label => VF_PROTECTED_LAYER_TYPE_EN[label] || label);
+            return `Template ${labels.join(', ')} cannot be deleted`;
+        }],
+        [/^❌ 为避免字体或 Logo 变形，已停止导出：(.+)$/, (_, reason) =>
+            `❌ Export stopped to prevent font or logo distortion: ${translateVFUiString(reason, 'en')}`],
         [/^同步到\s*(EN|AR)$/, (_, language) => `Sync to ${language}`],
         [/^已添加 Logo（(\d+) 个）$/, (_, count) => `${count} logo${count === '1' ? '' : 's'} added`],
         [/^Logo 矩阵最多 8 个，已添加前\s*(\d+)\s*个$/, (_, count) => `Logo grids support up to 8 logos; the first ${count} were added`],
@@ -3821,6 +3858,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             && layer?.type === 'arc'
             && layer?._templateLayer === true;
     }
+    function isUserProtectedTemplateImage(layer) {
+        return isUserInterfaceMode()
+            && layer?.type === 'image'
+            && layer?._templateLayer === true
+            && !isCanvasBackgroundImage(layer);
+    }
     const CANVAS_BACKGROUND_ROLE = 'canvas-background';
     function hasExplicitCanvasBackgroundIdentity(layer) {
         return !!layer
@@ -3899,8 +3942,19 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             || isUserProtectedTemplateTag(layer)
             || isUserProtectedTemplateArc(layer);
     }
+    function isUserProtectedCanvasBackground(layer) {
+        return isUserInterfaceMode()
+            && layer?.type === 'image'
+            && isCanvasBackgroundImage(layer, layers);
+    }
+    function isUserDeleteProtectedLayer(layer) {
+        return isUserProtectedTemplateContent(layer)
+            || isUserProtectedCanvasBackground(layer);
+    }
     function isUserMoveProtectedTemplateLayer(layer) {
-        return isUserProtectedTemplateContent(layer) || isUserProtectedTemplateArc(layer);
+        return isUserProtectedTemplateContent(layer)
+            || isUserProtectedTemplateArc(layer)
+            || isUserProtectedTemplateImage(layer);
     }
     function getProtectedTemplateDeleteMessage(protectedLayers) {
         const items = Array.isArray(protectedLayers) ? protectedLayers : [protectedLayers];
@@ -3908,16 +3962,19 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const hasLogo = items.some(isUserProtectedTemplateLogo);
         const hasTag = items.some(isUserProtectedTemplateTag);
         const hasArc = items.some(isUserProtectedTemplateArc);
+        const hasBackground = items.some(isUserProtectedCanvasBackground);
         const labels = [];
         if (hasText) labels.push('文字');
         if (hasLogo) labels.push('Logo 组件');
         if (hasTag) labels.push('标签');
         if (hasArc) labels.push('圆环');
+        if (hasBackground) labels.push('背景');
         return '模板' + (labels.join('、') || '内容') + '不可删除';
     }
     function getProtectedTemplateMoveMessage(layer) {
         if (isUserProtectedTemplateArc(layer)) return '用户模式下不能移动模板圆弧';
         if (isUserProtectedTemplateTag(layer)) return '用户模式下不能移动模板标签';
+        if (isUserProtectedTemplateImage(layer)) return '用户模式下不能移动模板图片';
         return isUserProtectedTemplateLogo(layer)
             ? '用户模式下不能移动模板 Logo 组件'
             : '用户模式下不能移动模板文字';
@@ -4023,6 +4080,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     let _aiBackgroundSourceLayerId = null;
     let customFonts = [];
     let layers = []; // 万物皆图层
+    // 模板冷加载期间保留上一帧 DOM，禁止任何旁路 renderCanvas
+    // 把新模板用 fallback 字体提前画出。字体就绪后由首绘任务解锁。
+    let templateCanvasRenderBlock = null;
+    let nativeCaptureDomFreezeDepth = 0;
     let showSafeGuide = false;
     let groupPresets = []; // 多图层组合
     let overviewMode = false;
@@ -4271,6 +4332,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     let cloudColorPaletteSnapshot = { loaded: false, tagColorPresets: [], arcColorPresets: [] };
     // 生图关键词和配色共用一份私有“全局预设”配置；仅用于设置面板，不渲染成素材库卡片。
     let cloudKeywordTagsLoaded = false;
+    let keywordTagsLoadSettled = false;
+    let colorPaletteLoadPromise = null;
     let keywordTags = [
         { id: 'kw_food', name: '美食商业', prompt: '商业美食摄影，食物主体清晰，诱人质感，高级广告光影' },
         { id: 'kw_clean', name: '干净背景', prompt: '干净背景，画面简洁，留出版式和文字空间' },
@@ -4347,6 +4410,9 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     let recycleBin = [];
     let _assetListScrollTop = 0; // 模块级滚动位置，跨 renderAssetLibrary 调用保持
     let _assetRenderGeneration = 0; // 素材流式到达时取消旧的分批渲染，避免重复建卡片
+    let templateCatalogReady = false;
+    let templateCatalogRequestAttempt = 0;
+    let templateCatalogRetryTimer = 0;
     let _assetSearchQuery = ''; // 资产库搜索关键词
     const RECYCLE_BIN_SESSION_KEY = 'vf-static-recycle-bin-v1';
 
@@ -4579,8 +4645,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             timeoutId = setTimeout(() => finish(reject, new Error('保存超时')), 15000);
         });
     }
-    async function loadColorPalettesFromLibrary() {
-        try {
+    function loadColorPalettesFromLibrary() {
+        if(colorPaletteLoadPromise) return colorPaletteLoadPromise;
+        colorPaletteLoadPromise = (async function() {
+          try {
             if(window.parent === window || typeof window.parent.VF_LOAD_COLOR_PALETTES !== 'function') return false;
             const loaded = await window.parent.VF_LOAD_COLOR_PALETTES();
             const data = loaded?.data;
@@ -4593,7 +4661,17 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             }
             setCloudColorPaletteSnapshot(data);
             return true;
-        } catch(error) { console.warn('素材库配色读取失败:', error); return false; }
+          } catch(error) {
+            console.warn('素材库配色读取失败:', error);
+            return false;
+          } finally {
+            // 私有云端请求完成前不暴露内置旧标签；成功或失败后
+            // 立即刷新菜单，不再等字体、参考素材等其他启动任务。
+            keywordTagsLoadSettled = true;
+            renderPromptTags();
+          }
+        })();
+        return colorPaletteLoadPromise;
     }
     async function loadSharedAssetsFromCloud() {
         const libraryColorLoaded = await loadColorPalettesFromLibrary();
@@ -4604,7 +4682,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             if(res.ok && payload.success !== false) {
                 if(payload.exists === false) {
                     if(!libraryColorLoaded) setCloudColorPaletteSnapshot({ tagColorPresets: [], arcColorPresets: [] });
-                    renderAssetLibrary();
+                    if (currentAssetTab !== 'layout') renderAssetLibrary();
                     if(hasLocalSharedAssets()) queueSharedAssetSave(300);
                     return false;
                 }
@@ -4623,7 +4701,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
 
                 renderSettings();
                 renderPromptTags();
-                renderAssetLibrary();
+                if (currentAssetTab !== 'layout') renderAssetLibrary();
                 renderProperties();
                 renderCanvas();
                 if(shouldBackfillCloud) queueSharedAssetSave(300);
@@ -4644,7 +4722,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             });
             if(!res.ok) {
                 if(!libraryColorLoaded) setCloudColorPaletteSnapshot({ tagColorPresets: [], arcColorPresets: [] });
-                renderAssetLibrary();
+                if (currentAssetTab !== 'layout') renderAssetLibrary();
                 if(hasLocalSharedAssets()) queueSharedAssetSave(300);
                 return false;
             }
@@ -4668,7 +4746,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
 
             renderSettings();
             renderPromptTags();
-            renderAssetLibrary();
+            if (currentAssetTab !== 'layout') renderAssetLibrary();
             renderProperties();
             renderCanvas();
             if(shouldBackfillCloud) queueSharedAssetSave(300);
@@ -4729,13 +4807,19 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     async function registerFontAsset(f) {
         if(!f || !f.data) return false;
         const normalized = normalizeCustomFontAsset(f);
+        const alreadyRegistered = customFonts.some(function(item) {
+            const font = normalizeCustomFontAsset(item);
+            return font.familyId === normalized.familyId
+                && Number(font.weight || 400) === Number(normalized.weight || 400);
+        });
+        // customFonts 只有在 FontFace.load() 完成后才会写入，因此命中后可直接复用，
+        // 不要在每次云端清单刷新或模板切换时重新执行 face.load()。
+        if (alreadyRegistered) return true;
         try {
             const loaded = await new FontFace(normalized.familyId, `url(${normalized.data})`, { weight: String(normalized.weight), style: 'normal' }).load();
             document.fonts.add(loaded);
             await document.fonts.ready;
-            if(!customFonts.some(item => item.name === normalized.name)) {
-                customFonts.push(normalized);
-            }
+            customFonts.push(normalized);
             return true;
         } catch(e) { return false; }
     }
@@ -4782,7 +4866,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             });
             if(items.length > 0) {
                 referenceElements = items;
-                renderAssetLibrary();
+                if (currentAssetTab !== 'layout') renderAssetLibrary();
             }
         } catch(e) {}
     }
@@ -5208,7 +5292,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         syncArtboardTabs();
         syncRatioNav();
         resizeCanvas();
-        renderCanvas();
+        if (!options.skipCanvasRender) renderCanvas();
         renderLayersList();
         renderProperties();
         syncCanvasLanguageControl();
@@ -7190,6 +7274,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
     function renderPromptTags() {
         const menu = document.getElementById('ai-skill-menu'); if(!menu) return;
+        if(!keywordTagsLoadSettled) {
+            menu.innerHTML = '<div class="ai-skill-menu-loading" role="status" aria-live="polite"><span class="ai-spinner" aria-hidden="true"></span><span>正在读取提示词标签…</span></div>';
+            updateSkillLabel();
+            return;
+        }
         selectedKeywordTagIds = selectedKeywordTagIds.filter(function(id) { return keywordTags.some(function(t) { return t.id === id; }); });
         const editor = document.getElementById('ai-prompt-input');
         if(editor) editor.querySelectorAll('.prompt-chip').forEach(function(chip) {
@@ -8305,9 +8394,13 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
 
     function renderCanvas() {
+        if (nativeCaptureDomFreezeDepth > 0) return;
+        if (templateCanvasRenderBlock && templateCanvasRenderBlock.layers === layers) return;
         const container = document.getElementById('dynamic-layers'); container.innerHTML = '';
         const hintEl = document.getElementById('empty-hint');
-        const visibleLayers = layers.filter(function(layer) { return isLayerVisibleInCanvasLanguage(layer); });
+        const visibleLayers = layers.filter(function(layer) {
+            return isLayerVisibleInCanvasLanguage(layer) && isLayerTemplateFontReady(layer);
+        });
         const activeGroup = getActiveEditorGroup();
         if (hintEl) hintEl.style.display = 'none'; // 不再显示空白提示
         visibleLayers.sort((a,b) => a.zIndex - b.zIndex).forEach(l => {
@@ -8600,7 +8693,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     function deleteLayer(id) {
         var target = layers.find(function(layer) { return layer.id === id; });
         const targets = getEditorGroupId(target) ? getEditorGroupMembers(getEditorGroupId(target)) : [target].filter(Boolean);
-        const protectedTarget = targets.find(isUserProtectedTemplateContent);
+        const protectedTarget = targets.find(isUserDeleteProtectedLayer);
         if (protectedTarget) {
             showToast(getProtectedTemplateDeleteMessage(protectedTarget), true);
             return;
@@ -8786,7 +8879,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     function deleteSelectedLayers() {
         const selectedIds = new Set(activeLayerIds);
         const protectedIds = new Set(layers.filter(function(layer) {
-            return selectedIds.has(layer.id) && isUserProtectedTemplateContent(layer);
+            return selectedIds.has(layer.id) && isUserDeleteProtectedLayer(layer);
         }).map(function(layer) { return layer.id; }));
         const deletableIds = new Set(activeLayerIds.filter(function(id) { return !protectedIds.has(id); }));
         if (protectedIds.size) {
@@ -8803,8 +8896,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
     async function clearCurrentArtboardLayers() {
         if(layers.length === 0) return showToast('当前画板没有可清空的图层', true);
-        const protectedLayers = layers.filter(isUserProtectedTemplateContent);
-        const deletableLayers = layers.filter(function(layer) { return !isUserProtectedTemplateContent(layer); });
+        const protectedLayers = layers.filter(isUserDeleteProtectedLayer);
+        const deletableLayers = layers.filter(function(layer) { return !isUserDeleteProtectedLayer(layer); });
         if (!deletableLayers.length && protectedLayers.length) return showToast(getProtectedTemplateDeleteMessage(protectedLayers), true);
         const protectedHint = protectedLayers.length ? `，${protectedLayers.length} 个受保护的模板内容将保留` : '';
         if(!await askConfirm(`清空当前画板的 ${deletableLayers.length} 个可删除图层${protectedHint}？可通过撤回恢复。`)) return;
@@ -10918,10 +11011,36 @@ return true;
         } catch(e) { /* 静默失败 */ }
     }
 
+    var hostVisibleLayoutGeneration = 0;
+    function recoverHostVisibleLayout() {
+        var generation = ++hostVisibleLayoutGeneration;
+        // 常驻 iframe 在后台预热时宽高为 0，需等父页面恢复可见后
+        // 的两轮布局再校正画板和素材列。
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+                if (generation !== hostVisibleLayoutGeneration) return;
+                resizeCanvas();
+                var list = document.getElementById('asset-list-ui');
+                if (!list || list.clientWidth <= 0 || (currentAssetTab !== 'layout' && currentAssetTab !== 'component')) return;
+                var columns = Array.from(list.children).filter(function(child) {
+                    return child.classList.contains('asset-masonry-column');
+                });
+                var itemCount = columns.reduce(function(total, column) {
+                    return total + column.childElementCount;
+                }, 0);
+                var hiddenRenderCollapsedColumns = columns.length !== 2
+                    || (itemCount > 1 && columns.some(function(column) { return column.childElementCount === 0; }));
+                if (hiddenRenderCollapsedColumns) renderAssetLibrary();
+            });
+        });
+    }
+
     // 监听父窗口的同步进度回复
     window.addEventListener('message', function(event) {
         if (!event.data || !event.data.type) return;
-        if (event.data.type === 'vf:sync-progress') {
+        if (event.data.type === 'vf:host-visible') {
+            if (event.source === window.parent) recoverHostVisibleLayout();
+        } else if (event.data.type === 'vf:sync-progress') {
             if (event.data.status === 'done' && event.data.sourceId) {
                 var tempId = event.data.tempId || '';
                 var finalName = event.data.finalName || '';
@@ -10941,6 +11060,15 @@ return true;
                 showToast('❌ 保存失败：' + (event.data.error || ''), true);
             }
         } else if (event.data.type === 'vf:templates-loaded') {
+            if (event.data.error) {
+                // 短暂网络错误不能把已经显示的资产清空；自动重试，用户无需再点刷新。
+                scheduleTemplateCatalogRetry();
+                return;
+            }
+            templateCatalogReady = true;
+            templateCatalogRequestAttempt = 0;
+            clearTimeout(templateCatalogRetryTimer);
+            templateCatalogRetryTimer = 0;
             // 从 Supabase 加载，但保留本地 _pending 未完成的保存
             // 同一会话刷新/切换模板时保留未变化资产的 Blob 预览，避免列表先退回
             // mini 占位图，再重新下载并闪回真实预览。
@@ -11043,14 +11171,22 @@ return true;
             logoAssets.push.apply(logoAssets, pendingLogos);
             fontAssets.push.apply(fontAssets, pendingFonts);
             groupPresets.push.apply(groupPresets, pendingGroups);
+            // 字体摘要列表已经到达。模板首帧可以立即按 familyId（或由名称
+            // 推导出的稳定 familyId）优先下载当前画板需要的字体，不必等待
+            // 全部云端字体后台预加载结束。
+            markFontAssetCatalogReady();
             // 三个 Keeta 预设先读取线上 Logo 组件，保证部署环境也能直接使用。
             ensureCloudKeetaLogosLoaded();
             var nextLibraryRenderKey = cloudLibraryRenderKey([presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets]);
             // 切换画板常会重复收到完全相同的模板摘要。此时保留现有 DOM，避免卡片
             // 被清空重建造成一帧闪白；首次加载或列表内容真的变化时才重绘。
             if (!assetListAlreadyRendered || previousLibraryRenderKey !== nextLibraryRenderKey) renderAssetLibrary();
-            // 收到云端字体清单后立即预加载，遮罩覆盖下载过程，完成后释放画板打开遮罩
-            preloadCloudFontsWithLock();
+            // 外层入口的加载层等到画板骨架和轻量目录都已就绪后再退场，
+            // 避免用户先看到空白外壳，又看到空白编辑器的两段跳变。
+            notifyParent({ type: 'vf:static-catalog-ready' });
+            // 云端清单可能在同一次加载期间重复送达。这里后台补载字体即可，不能每次
+            // 都重新叠加全画板锁定遮罩，否则清单已完整时仍会出现灰屏假死。
+            preloadCloudFontsInBackground();
         } else if (event.data.type === 'vf:template-preview') {
             // 优先接收 Blob：避免在素材列表中塞入几十个巨大 Base64 字符串。
             var pid = event.data.id;
@@ -11076,8 +11212,7 @@ return true;
                 });
                 // 关联模板预览到达后，按显式语言标签重新选择书签封面。
                 // 这一步也会把旧书签曾按名称选中的 coverTemplateId 迁移为标签判断结果。
-                const bookmarkCoverChanged = refreshTemplateBookmarkCoversForTemplate(pid, true);
-                if (bookmarkCoverChanged) renderAssetLibrary();
+                refreshTemplateBookmarkCoversForTemplate(pid, true);
                 // 精准更新对应卡片的预览图，避免全量 renderAssetLibrary 导致滚动重置和 hover 闪烁
                 var card = document.querySelector('.asset-item[data-asset-id="' + CSS.escape(pid) + '"]');
                 if (card) {
@@ -11155,7 +11290,13 @@ return true;
                 }
                 packItem._metadataLoaded = true;
                 packItem._metadataLoading = false;
-                if (bookmarkCoverChangedAfterMetadata) renderAssetLibrary();
+                if (packItem.kind === 'bookmark') {
+                    // 成员数、封面和预览内容只属于当前书签卡片，不改变卡片
+                    // 数量或排序。原位更新可避免每个书签摘要到达时都重建瀑布流。
+                    updateAssetCardPreviewInPlace(packItem);
+                } else if (bookmarkCoverChangedAfterMetadata) {
+                    updateAssetCardPreviewInPlace(packItem);
+                }
                 // 精准更新对应卡片，避免全量 renderAssetLibrary 导致 hover 闪烁和滚动重置
                 var card = document.querySelector('.asset-item[data-asset-id="' + CSS.escape(metaId) + '"]');
                 if (card) {
@@ -11189,15 +11330,19 @@ return true;
             var tid = event.data.id;
             var tdata = event.data.data || {};
             var loadedRequestedPresetId = '';
+            var loadedTemplateItem = null;
             [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
                 var item = arr.find(function(x) { return x.cloudId === tid; });
                 if (!item) return;
+                loadedTemplateItem = item;
                 item._lazy = false;
                 if (tdata.isImageTemplate) item.isImageTemplate = true;
                 if (tdata.elements) item.elements = tdata.elements;
                 if (tdata.artboards) item.artboards = tdata.artboards;
                 if (tdata.artboardPresets) item.artboardPresets = tdata.artboardPresets;
-                if (tdata.templateRefs) item.templateRefs = normalizeTemplateBookmarkRefs(tdata.templateRefs);
+                if (tdata.templateRefs) {
+                    item.templateRefs = normalizeTemplateBookmarkRefs(tdata.templateRefs);
+                }
                 if (tdata.coverTemplateId) item.coverTemplateId = tdata.coverTemplateId;
                 if (item.kind === 'bookmark' && item.templateRefs.length) updateTemplateBookmarkCoverFromTags(item, true);
                 if (tdata.linkedArtboardGroupId) item.linkedArtboardGroupId = tdata.linkedArtboardGroupId;
@@ -11226,7 +11371,8 @@ return true;
             // 三种内置 Keeta Logo 已经改为组件库资产。云端 Logo 到达后，自动
             // 修复旧版画板中保存的本地相对路径，无需用户重新添加组件。
             hydrateCloudKeetaLogoLayers();
-            renderAssetLibrary();
+            if (loadedTemplateItem) updateAssetCardPreviewInPlace(loadedTemplateItem);
+            refreshTemplateBookmarkCoversForTemplate(tid, false);
             if (loadedRequestedPresetId) {
                 var isGroup = pendingGroupPresetId === loadedRequestedPresetId;
                 var isTag = pendingTagPresetId === loadedRequestedPresetId;
@@ -11320,8 +11466,8 @@ return true;
                 // 与资产库直接打开模板保持一致：加载完成后不默认选中任何图层。
                 // 旧逻辑会选中全部非图片组件，导致从书签入口进入时满画布都是选择框。
                 activeLayerIds = [];
-                saveHistory(); renderCanvas(); renderLayersList(); renderProperties();
-                showToast('已应用版式：' + (d.name || ''));
+                saveHistory(); renderLayersList(); renderProperties();
+                renderTemplateCanvasAfterFonts(newEls, newEls);
             } else if (d.schema === 'vf-template-pack/v1' && d.artboards) {
                 saveCurrentArtboardState();
                 restorePackArtboardPresets(d);
@@ -11338,10 +11484,13 @@ return true;
                 linkedArtboardIds = (d.linkedArtboardIds || []).filter(function(id) { return !!artboards[id]; });
                 if (!linkedArtboardIds.length && linkedArtboardGroupId) linkedArtboardIds = Object.keys(artboards).filter(function(id) { return artboards[id].linkedGroupId === linkedArtboardGroupId; });
                 currentArtboardId = linkedArtboardIds[0] || getFixedArtboardPresets().find(function(preset) { return (artboards[preset.id]?.layers || []).length > 0; })?.id || 'head';
-                loadArtboard(currentArtboardId, false, { skipAssetLibrary:true });
+                loadArtboard(currentArtboardId, false, { skipAssetLibrary:true, skipCanvasRender:true });
                 activeLayerIds = [];
                 saveHistory(); renderAssetLibrary();
-                showToast('已应用套组：' + (d.name || ''));
+                var externalPackFontLayers = Object.keys(artboards).reduce(function(result, boardId) {
+                    return result.concat(artboards[boardId]?.layers || []);
+                }, []);
+                renderTemplateCanvasAfterFonts(externalPackFontLayers, layers);
             } else if (d.schema === 'vf-tag-combo/v1' && d.elements) {
                 var tagLayers = cloneLayersForInsert(d.elements, true, { seedInactivePlacementOnFirstSwitch: true });
                 layers.push.apply(layers, tagLayers);
@@ -11569,18 +11718,60 @@ return true;
         if (size.toLowerCase().indexOf(q) !== -1) return true;
         return false;
     }
+    function scheduleTemplateCatalogRetry() {
+        clearTimeout(templateCatalogRetryTimer);
+        if (templateCatalogReady || templateCatalogRequestAttempt >= 4) return;
+        var delay = Math.min(12000, 2800 * Math.max(1, templateCatalogRequestAttempt));
+        templateCatalogRetryTimer = setTimeout(function() {
+            if (!templateCatalogReady) requestTemplateCatalog(false);
+        }, delay);
+    }
+    function requestTemplateCatalog(manual) {
+        if (manual) {
+            templateCatalogReady = false;
+            templateCatalogRequestAttempt = 0;
+        }
+        templateCatalogRequestAttempt += 1;
+        notifyParent({ type: 'vf:request-templates' });
+        scheduleTemplateCatalogRetry();
+    }
     function refreshAssetLibrary() {
         var btn = document.getElementById('refresh-asset-btn');
         if (btn) { btn.style.transform = 'rotate(360deg)'; btn.style.transition = 'transform 0.6s ease'; setTimeout(function() { btn.style.transform = ''; btn.style.transition = ''; }, 600); }
-        notifyParent({ type: 'vf:request-templates' });
+        requestTemplateCatalog(true);
+    }
+    function updateAssetCardPreviewInPlace(asset) {
+        var assetId = asset?.cloudId || asset?.id || '';
+        if (!assetId) return false;
+        var cards = document.querySelectorAll('.asset-item[data-asset-id="' + CSS.escape(String(assetId)) + '"]');
+        if (!cards.length) return false;
+        cards.forEach(function(card) {
+            var thumb = card.querySelector('.asset-thumb');
+            if (!thumb) return;
+            var hoverInfo = thumb.querySelector('.asset-template-hover-info');
+            if (hoverInfo) hoverInfo.remove();
+            renderAssetPreview(thumb, {
+                type: card.dataset.assetType || (asset.kind === 'bookmark' ? 'bookmark' : (asset.kind === 'pack' ? 'pack' : 'layout')),
+                asset: asset,
+                img: asset.src || asset.previewUrl || ''
+            });
+            if (hoverInfo) thumb.appendChild(hoverInfo);
+            var count = card.querySelector('.asset-pack-count');
+            if (count && asset.kind === 'bookmark') {
+                var templateCount = getLiveTemplateBookmarkMembers(asset).length;
+                count.textContent = String(templateCount);
+                count.title = '关联 ' + templateCount + ' 个模板';
+            }
+        });
+        return true;
     }
     function renderAssetLibrary() {
         var renderGeneration = ++_assetRenderGeneration;
         var layoutCount = presetLibrary.length;
         var componentCount = tagPresetLibrary.length + logoAssets.length + groupPresets.length + referenceElements.length;
         var recycleCount = recycleBin.length;
-        var cl = document.getElementById('diy-count-layout'); if (cl) cl.textContent = layoutCount ? '· ' + layoutCount : '';
-        var cc = document.getElementById('diy-count-component'); if (cc) cc.textContent = componentCount ? '· ' + componentCount : '';
+        var cl = document.getElementById('diy-count-layout'); if (cl) cl.textContent = layoutCount ? '· ' + layoutCount : (!templateCatalogReady ? '· …' : '');
+        var cc = document.getElementById('diy-count-component'); if (cc) cc.textContent = componentCount ? '· ' + componentCount : (!templateCatalogReady ? '· …' : '');
         var cr = document.getElementById('diy-count-recycle'); if (cr) cr.textContent = recycleCount ? '· ' + recycleCount : '';
         renderDiySubtags();
         const list = document.getElementById('asset-list-ui'); if(!list) return;
@@ -11641,7 +11832,7 @@ return true;
                 return !templateBookmarkSelectMode || (p.kind !== 'pack' && !p._pending);
             }).filter(searchFilter);
             const items = filteredBookmarks.concat(filteredRegular);
-            if(items.length === 0) { list.innerHTML = '<div class="asset-empty">' + (_assetSearchQuery ? '未找到匹配的模板' : '暂无版式') + '</div>'; if (_assetListScrollTop) list.scrollTop = _assetListScrollTop; return; }
+            if(items.length === 0) { list.innerHTML = '<div class="asset-empty">' + (!templateCatalogReady ? '正在加载云端资产…' : (_assetSearchQuery ? '未找到匹配的模板' : '暂无版式')) + '</div>'; if (_assetListScrollTop) list.scrollTop = _assetListScrollTop; return; }
             items.forEach(p => {
                 const isPack = p.kind === 'pack';
                 const isBookmark = p.kind === 'bookmark';
@@ -11740,6 +11931,7 @@ return true;
         const isTemplateAsset = type === 'layout' || type === 'pack' || type === 'bookmark';
         const isComponentAsset = ['tag', 'logo', 'group', 'reference'].includes(type);
         const item = document.createElement('div'); item.className = `asset-item ${current ? 'current' : ''} ${type === 'font' ? 'font-asset-card' : ''} ${isTemplateAsset ? 'template-preview-card' : ''} ${isComponentAsset ? 'component-preview-card' : ''}`;
+        item.dataset.assetType = type;
         if (asset?.cloudId) item.dataset.assetId = asset.cloudId;
         else if (asset?.id) item.dataset.assetId = asset.id;
         if (assetMultiSelect && isMoveableComponent(asset)) {
@@ -12165,7 +12357,9 @@ return true;
         if (!coverIdChanged && !previewChanged) return false;
         bookmark.coverTemplateId = nextCoverId;
         if (cover.previewUrl) bookmark.previewUrl = cover.previewUrl;
-        if (persist && bookmark.cloudId && cover.previewUrl) {
+        // 只有封面成员本身改变时才同步云端。预览 Blob 每次进入页面都会重新生成，
+        // 不能因为 URL 改变就反复保存书签并触发整套列表消息。
+        if (persist && coverIdChanged && bookmark.cloudId && cover.previewUrl) {
             notifyParent({
                 type: 'vf:update-template-bookmark',
                 id: bookmark.cloudId,
@@ -12184,7 +12378,10 @@ return true;
             const containsTemplate = normalizeTemplateBookmarkRefs(bookmark.templateRefs).some(function(ref) {
                 return ref.templateId === templateId;
             });
-            if (containsTemplate && updateTemplateBookmarkCoverFromTags(bookmark, persist)) changed = true;
+            if (containsTemplate && updateTemplateBookmarkCoverFromTags(bookmark, persist)) {
+                changed = true;
+                updateAssetCardPreviewInPlace(bookmark);
+            }
         });
         return changed;
     }
@@ -13200,6 +13397,9 @@ return true;
     }
     function applyLayoutPreset(id) {
         const p = presetLibrary.find(x => x.id === id); if(!p) return;
+        // 点击新模板时立即使上一次字体等待失效；即使新模板仍在按需
+        // 请求数据，旧异步任务也不得在这个窗口期间又画回旧模板。
+        cancelPendingTemplateFontRender();
         console.log('[TEXT2LINE] applyLayoutPreset name="' + (p.name || '') + '" kind=' + (p.kind || 'layout') + ' isUser=' + isUserInterfaceMode());
         if (p._lazy) {
             pendingLayoutPresetId = id;
@@ -13245,13 +13445,8 @@ return true;
         markTemplateBackgroundLayer(newLayers, SIZES[currentRatio]);
         layers = newLayers;
         activeLayerIds = [];
-        saveHistory(true); renderCanvas(); renderLayersList(); renderProperties(); showToast('已切换到该模板');
-        showCanvasFontLoadingOverlay();
-        ensureTemplateFontsLoaded(newLayers).then(function() {
-            enforceTextTwoLineLimit(layers);
-            renderCanvas();
-            hideCanvasFontLoadingOverlay();
-        });
+        saveHistory(true); renderLayersList(); renderProperties(); showToast('已切换到该模板');
+        renderTemplateCanvasAfterFonts(newLayers, newLayers);
     }
     async function deleteLayoutPreset(id) {
         if(!await askConfirm('删除这个版式预设？')) return;
@@ -13408,17 +13603,15 @@ return true;
         linkedArtboardIds = (pack.linkedArtboardIds || []).filter(function(id) { return !!artboards[id]; });
         if (!linkedArtboardIds.length && linkedArtboardGroupId) linkedArtboardIds = Object.keys(artboards).filter(function(id) { return artboards[id].linkedGroupId === linkedArtboardGroupId; });
         currentArtboardId = linkedArtboardIds[0] || getFixedArtboardPresets().find(preset => (artboards[preset.id]?.layers || []).length > 0)?.id || 'head';
-        loadArtboard(currentArtboardId, false, { skipAssetLibrary:true });
+        loadArtboard(currentArtboardId, false, { skipAssetLibrary:true, skipCanvasRender:true });
         activeLayerIds = [];
         saveHistory(true);
         renderAssetLibrary();
         showToast('已应用三画板套组');
-        showCanvasFontLoadingOverlay();
-        ensureTemplateFontsLoaded(layers).then(function() {
-            enforceTextTwoLineLimit(layers);
-            renderCanvas();
-            hideCanvasFontLoadingOverlay();
-        });
+        const packFontLayers = Object.keys(artboards).reduce(function(result, boardId) {
+            return result.concat(artboards[boardId]?.layers || []);
+        }, []);
+        renderTemplateCanvasAfterFonts(packFontLayers, layers);
     }
     async function saveTagComboPreset() {
         const tags = getSelectedTagLayers();
@@ -13620,6 +13813,12 @@ return true;
         // 老数据没有 subTag，默认当作 logo（兼容旧行为）
         return 'logo';
     }
+    function isBackgroundLogoAsset(logo) {
+        if (!logo) return false;
+        const subTag = String(logo.subTag || logo._subTag || '').trim();
+        if (subTag === '背景') return true;
+        return Array.isArray(logo.tags) && logo.tags.includes('背景');
+    }
     function getSelectedReplaceableAssetLayer() {
         return layers.find(function(layer) {
             return activeLayerIds.includes(layer.id) && (layer.type === 'logo' || layer.type === 'image' || layer.type === 'solid');
@@ -13656,6 +13855,14 @@ return true;
         var selectedImg = pendingLogoReplacementTargetId
             ? layers.find(function(layer) { return layer.id === pendingLogoReplacementTargetId; })
             : getSelectedReplaceableAssetLayer();
+        if (isUserInterfaceMode()
+            && isBackgroundLogoAsset(logo)
+            && (!selectedImg || !isCanvasBackgroundImage(selectedImg, layers))) {
+            finishLogoAssetReplacement(true);
+            pendingLogoAssetId = '';
+            showToast('请先点击画板中的背景', true);
+            return;
+        }
         // 云端组件初始仅有缩略图，src 尚未下载。先取完整资源，不能把选中图层的
         // src 直接写成空字符串。
         if (logo._lazy || !logo.src) {
@@ -13713,69 +13920,257 @@ return true;
 
     // ===== 画板字体加载锁定（模板应用后等字体就绪再渲染，避免 fallback 字体竞态导致折行三行） =====
     let canvasFontLoadingDepth = 0;
-    let canvasFontLoadingShownAt = 0;
+    let canvasFontLoadingShowTimer = null;
+    let canvasFontLoadingFailsafeTimer = null;
+    const CANVAS_FONT_LOADING_SHOW_DELAY = 180;
+    const CANVAS_FONT_LOADING_FAILSAFE = 12000;
+    function setCanvasFontLoadingOverlayVisible(visible) {
+        const overlay = document.getElementById('canvas-font-loading-overlay');
+        if (overlay) overlay.hidden = !visible;
+    }
+    function clearCanvasFontLoadingTimers() {
+        if (canvasFontLoadingShowTimer) {
+            clearTimeout(canvasFontLoadingShowTimer);
+            canvasFontLoadingShowTimer = null;
+        }
+        if (canvasFontLoadingFailsafeTimer) {
+            clearTimeout(canvasFontLoadingFailsafeTimer);
+            canvasFontLoadingFailsafeTimer = null;
+        }
+    }
+    function forceHideCanvasFontLoadingOverlay() {
+        clearCanvasFontLoadingTimers();
+        canvasFontLoadingDepth = 0;
+        setCanvasFontLoadingOverlayVisible(false);
+    }
     function showCanvasFontLoadingOverlay() {
         canvasFontLoadingDepth++;
-        canvasFontLoadingShownAt = Date.now();
-        const overlay = document.getElementById('canvas-font-loading-overlay');
-        if (overlay) overlay.hidden = false;
+        if (canvasFontLoadingDepth !== 1) return;
+        clearCanvasFontLoadingTimers();
+        // 快速完成的字体/模板切换不显示遮罩，避免每次操作都闪一下灰屏。
+        canvasFontLoadingShowTimer = setTimeout(function() {
+            canvasFontLoadingShowTimer = null;
+            if (canvasFontLoadingDepth > 0) setCanvasFontLoadingOverlayVisible(true);
+        }, CANVAS_FONT_LOADING_SHOW_DELAY);
+        // 任意异常路径都必须自动解锁，不能让画板永久停在灰屏状态。
+        canvasFontLoadingFailsafeTimer = setTimeout(function() {
+            forceHideCanvasFontLoadingOverlay();
+        }, CANVAS_FONT_LOADING_FAILSAFE);
     }
     function hideCanvasFontLoadingOverlay() {
         canvasFontLoadingDepth = Math.max(0, canvasFontLoadingDepth - 1);
         if (canvasFontLoadingDepth !== 0) return;
-        // 至少展示 600ms，保证「置灰锁定」肉眼可见，不会因字体已加载/加载失败而一闪而过
-        const hold = Math.max(0, 600 - (Date.now() - canvasFontLoadingShownAt));
-        setTimeout(function() {
-            if (canvasFontLoadingDepth !== 0) return;
-            const overlay = document.getElementById('canvas-font-loading-overlay');
-            if (overlay) overlay.hidden = true;
-        }, hold);
+        clearCanvasFontLoadingTimers();
+        setCanvasFontLoadingOverlayVisible(false);
     }
-    // 云端字体清单到达并预加载完成后的信号（画板打开遮罩要等它，避免 fontAssets 未到时就误判「字体已就绪」）
+    // 云端字体清单的后台预加载完成信号；不再阻塞画板交互和加载遮罩。
     let _cloudFontsReadyResolve = null;
     const _cloudFontsReadyPromise = new Promise(function(r) { _cloudFontsReadyResolve = r; });
+    let _fontAssetCatalogReadyResolve = null;
+    const _fontAssetCatalogReadyPromise = new Promise(function(r) { _fontAssetCatalogReadyResolve = r; });
+    function markFontAssetCatalogReady() {
+        if (_fontAssetCatalogReadyResolve) {
+            _fontAssetCatalogReadyResolve();
+            _fontAssetCatalogReadyResolve = null;
+        }
+    }
     function markCloudFontsReady() {
         if (_cloudFontsReadyResolve) { _cloudFontsReadyResolve(); _cloudFontsReadyResolve = null; }
     }
-    function preloadCloudFontsWithLock() {
-        showCanvasFontLoadingOverlay();
-        preloadCloudFonts().then(function() {
-            renderCanvas();
-            markCloudFontsReady();
-            hideCanvasFontLoadingOverlay();
-        }).catch(function() {
-            markCloudFontsReady();
-            hideCanvasFontLoadingOverlay();
+    let cloudFontPreloadPromise = null;
+    let cloudFontPreloadKey = '';
+    const templateFontLoadPromises = new Map();
+    const fontAssetInstallPromises = new Map();
+    let templateFontRenderGeneration = 0;
+    function getFontAssetIdentity(asset) {
+        const familyName = asset?.fontFamilyName || getFontFamilyName(asset?.name || asset?.fontFileName || '自定义字体');
+        return {
+            familyId: asset?.fontFamilyId || makeFontFamilyId(familyName),
+            weight: Number(asset?.fontWeight) || getFontWeightInfo(asset?.name || asset?.fontFileName || '').weight || 400
+        };
+    }
+    function getCloudFontPreloadKey() {
+        return fontAssets.filter(function(font) { return !!font.cloudId; }).map(function(font) {
+            const identity = getFontAssetIdentity(font);
+            return [font.id, font.cloudId, identity.familyId, identity.weight].join(':');
+        }).sort().join('|');
+    }
+    function isRegisteredFontAsset(asset) {
+        if (!asset) return false;
+        const identity = getFontAssetIdentity(asset);
+        return customFonts.some(function(font) {
+            return font.familyId === identity.familyId
+                && Number(font.weight || 400) === identity.weight;
         });
     }
-    async function ensureTemplateFontsLoaded(targetLayers) {
-        const ids = new Set();
+    function isRegisteredFontRequirement(familyId, requestedWeights) {
+        const weights = requestedWeights && requestedWeights.size
+            ? Array.from(requestedWeights)
+            : [400];
+        return weights.every(function(weight) {
+            const exactRegistered = customFonts.some(function(font) {
+                return font.familyId === familyId
+                    && Number(font.weight || 400) === Number(weight || 400);
+            });
+            if (exactRegistered) return true;
+            // 旧模板可能保存浏览器合成字重（例如图层为 900，而该家族只有
+            // 一个 400 字体文件）。只有云端确实存在该精确字重时才继续等待；
+            // 否则任一已注册的真实家族文件即可让浏览器按原逻辑合成字重。
+            const hasExactCloudAsset = fontAssets.some(function(asset) {
+                const identity = getFontAssetIdentity(asset);
+                return identity.familyId === familyId && identity.weight === Number(weight || 400);
+            });
+            if (hasExactCloudAsset) return false;
+            return customFonts.some(function(font) { return font.familyId === familyId; });
+        });
+    }
+    function preloadCloudFontsInBackground() {
+        const nextKey = getCloudFontPreloadKey();
+        if (cloudFontPreloadPromise && cloudFontPreloadKey === nextKey) return cloudFontPreloadPromise;
+        cloudFontPreloadKey = nextKey;
+        cloudFontPreloadPromise = preloadCloudFonts().then(function(fontsChanged) {
+            if (fontsChanged) renderCanvas();
+            markCloudFontsReady();
+            // 首次请求可能遇到网络抖动。未安装完时不要把失败结果
+            // 永久缓存，让下一次云端清单消息可以自动补试。
+            if (fontAssets.some(function(font) {
+                return !!font.cloudId && !isRegisteredFontAsset(font);
+            })) cloudFontPreloadPromise = null;
+            return fontsChanged;
+        }).catch(function() {
+            markCloudFontsReady();
+            cloudFontPreloadPromise = null;
+            return false;
+        });
+        return cloudFontPreloadPromise;
+    }
+    async function loadTemplateFontFamily(familyId, requestedWeights) {
+        if (isRegisteredFontRequirement(familyId, requestedWeights)) return false;
+
+        // 模板摘要先到、字体二进制或元数据仍在后台补载时，复用同一个
+        // 预加载 Promise。这既避免重复请求，也防止模板因暂时匹配不到 asset
+        // 而立即用 fallback 字体画出首帧。
+        let assets = fontAssets.filter(function(asset) { return getFontAssetIdentity(asset).familyId === familyId; });
+        if (!assets.length) {
+            await Promise.race([
+                _fontAssetCatalogReadyPromise,
+                new Promise(function(resolve) { setTimeout(resolve, 10000); })
+            ]).catch(function() {});
+            assets = fontAssets.filter(function(asset) { return getFontAssetIdentity(asset).familyId === familyId; });
+        }
+        if (!assets.length) {
+            const preloadReady = cloudFontPreloadPromise || _cloudFontsReadyPromise;
+            await Promise.race([
+                preloadReady,
+                new Promise(function(resolve) { setTimeout(resolve, 10000); })
+            ]).catch(function() {});
+            if (isRegisteredFontRequirement(familyId, requestedWeights)) return true;
+            assets = fontAssets.filter(function(asset) { return getFontAssetIdentity(asset).familyId === familyId; });
+        }
+
+        const weights = requestedWeights && requestedWeights.size ? requestedWeights : new Set([400]);
+        let matchingAssets = assets.filter(function(asset) {
+            return weights.has(getFontAssetIdentity(asset).weight);
+        });
+        // 旧模板可能保存了合成字重（如 600），而字体家族只有 400。
+        // 此时仍必须先注册该家族的真实字体文件，再交给浏览器匹配字重。
+        if (!matchingAssets.length) matchingAssets = assets;
+        const missingAssets = matchingAssets.filter(function(asset) { return !isRegisteredFontAsset(asset); });
+        if (!missingAssets.length) return false;
+
+        const loadKey = familyId + ':' + Array.from(weights).sort().join(',');
+        if (templateFontLoadPromises.has(loadKey)) return templateFontLoadPromises.get(loadKey);
+        const promise = Promise.all(missingAssets.map(function(asset) {
+            return applyFontFromAsset(asset.id, true).catch(function() { return false; });
+        })).then(function() {
+            return matchingAssets.every(isRegisteredFontAsset);
+        }).finally(function() {
+            templateFontLoadPromises.delete(loadKey);
+        });
+        templateFontLoadPromises.set(loadKey, promise);
+        return promise;
+    }
+    function collectTemplateFontRequirements(targetLayers) {
+        const requirements = new Map();
         (targetLayers || []).forEach(function(l) {
             if (l.font && isCustomFont(l.font)) {
                 const m = String(l.font).match(/CF_[A-Za-z0-9_]+/);
-                if (m) ids.add(m[0]);
+                if (m) {
+                    if (!requirements.has(m[0])) requirements.set(m[0], new Set());
+                    requirements.get(m[0]).add(Number(l.fontWeight || l.weight || 400));
+                }
             }
         });
+        return requirements;
+    }
+    function areTemplateFontsLoaded(targetLayers) {
+        const requirements = collectTemplateFontRequirements(targetLayers);
+        for (const [familyId, weights] of requirements) {
+            if (!isRegisteredFontRequirement(familyId, weights)) return false;
+        }
+        return true;
+    }
+    function isLayerTemplateFontReady(layer) {
+        if (!layer?.font || !isCustomFont(layer.font)) return true;
+        const match = String(layer.font).match(/CF_[A-Za-z0-9_]+/);
+        if (!match) return true;
+        return isRegisteredFontRequirement(match[0], new Set([Number(layer.fontWeight || layer.weight || 400)]));
+    }
+    async function ensureTemplateFontsLoaded(targetLayers, options) {
+        const settings = options || {};
+        const requirements = collectTemplateFontRequirements(targetLayers);
         const tasks = [];
-        ids.forEach(function(familyId) {
-            let face = null;
-            document.fonts.forEach(function(f) {
-                if (String(f.family).replace(/"/g, '') === familyId) face = f;
-            });
-            if (face) {
-                tasks.push(face.load().catch(function(){}));
-                return;
-            }
-            // 未注册：从云端字体资产按 familyId 匹配并安装
-            const asset = fontAssets.find(function(f) { return f.fontFamilyId === familyId; });
-            if (asset) tasks.push(applyFontFromAsset(asset.id, true).catch(function(){}));
+        requirements.forEach(function(weights, familyId) {
+            tasks.push(loadTemplateFontFamily(familyId, weights));
         });
-        if (!tasks.length) return;
-        await Promise.race([
+        if (!tasks.length) return false;
+        const timeoutMarker = {};
+        const results = await Promise.race([
             Promise.all(tasks),
-            new Promise(function(resolve) { setTimeout(resolve, 8000); }) // 8s 兜底，防字体加载失败永久锁死
+            new Promise(function(resolve) {
+                setTimeout(function() { resolve(timeoutMarker); }, Math.max(1000, Number(settings.timeoutMs) || 30000));
+            })
         ]);
-        try { await document.fonts.ready; } catch(e) {}
+        if (results === timeoutMarker || !areTemplateFontsLoaded(targetLayers)) {
+            if (settings.strict) throw new Error('画板所需字体仍在下载，请稍后重试');
+            return false;
+        }
+        return Array.isArray(results) && results.some(Boolean);
+    }
+    function cancelPendingTemplateFontRender() {
+        templateFontRenderGeneration++;
+        templateCanvasRenderBlock = null;
+        clearTimeout(_autoTextContrastTimer);
+        _autoTextContrastRun++;
+        forceHideCanvasFontLoadingOverlay();
+    }
+    async function renderTemplateCanvasAfterFonts(fontLayers, renderTargetLayers) {
+        const generation = ++templateFontRenderGeneration;
+        const targetLayers = renderTargetLayers || layers;
+        const renderBlock = { generation: generation, layers: targetLayers };
+        templateCanvasRenderBlock = renderBlock;
+        // 上一帧安排的延迟自动对比度任务会在 120ms 后读取全局 layers。
+        // 如果不取消，它会在字体等待期间抢先重绘新模板。
+        clearTimeout(_autoTextContrastTimer);
+        _autoTextContrastRun++;
+        forceHideCanvasFontLoadingOverlay();
+        try {
+            await ensureTemplateFontsLoaded(fontLayers, { timeoutMs: 30000, strict: true });
+            if (generation !== templateFontRenderGeneration || layers !== targetLayers) return;
+            if (templateCanvasRenderBlock === renderBlock) templateCanvasRenderBlock = null;
+            enforceTextTwoLineLimit(targetLayers);
+            renderCanvas();
+        } catch (error) {
+            // 字体网络失败时释放其他图层，但缺少字体的文字/标签继续隐藏，
+            // 绝不能为了“有内容”而显示或导出 fallback 字体。
+            if (generation === templateFontRenderGeneration && layers === targetLayers) {
+                if (templateCanvasRenderBlock === renderBlock) templateCanvasRenderBlock = null;
+                renderCanvas();
+                showToast('字体仍在加载，文字将在就绪后显示', true);
+            }
+        } finally {
+            if (templateCanvasRenderBlock === renderBlock && layers !== targetLayers) templateCanvasRenderBlock = null;
+        }
     }
 
     // ===== 模板应用后强制两行（复用用户模式的两行上限） =====
@@ -13837,16 +14232,18 @@ return true;
 
     async function applyFontFromAsset(id, silent) {
         var fontAsset = fontAssets.find(function(f) { return f.id === id; });
-        if (!fontAsset) return;
+        if (!fontAsset) return false;
         // 检查是否已安装
-        if (fontAsset.fontFamilyId && customFonts.some(function(f) {
-            return f.familyId === fontAsset.fontFamilyId && f.weight === fontAsset.fontWeight;
-        })) {
+        if (isRegisteredFontAsset(fontAsset)) {
+            fontAsset._installed = true;
             if (!silent) showToast('该字体已安装，可直接使用');
-            return;
+            return true;
         }
+        // 后台全量预加载和模板首帧等待可能同时命中同一个资产。
+        // 统一复用安装 Promise，避免重复下载和重复 FontFace.load()。
+        if (fontAssetInstallPromises.has(id)) return fontAssetInstallPromises.get(id);
         if (!silent) showToast('正在下载字体...');
-        try {
+        const installPromise = (async function() {
             var fontDataUrl;
             if (fontAsset.fontData) {
                 fontDataUrl = fontAsset.fontData;
@@ -13864,14 +14261,31 @@ return true;
                 fileName: fontAsset.fontFileName || 'font.ttf',
                 _cloudId: fontAsset.cloudId
             });
+            // 云端列表摘要初始只有 name/id。安装后必须把完整字体身份
+            // 回填到 asset，否则后续每次切模板都会被误判为“未注册”。
+            fontAsset.fontFamilyName = fontObj.familyName;
+            fontAsset.fontFamilyId = fontObj.familyId;
+            fontAsset.fontWeight = fontObj.weight;
+            fontAsset.fontWeightLabel = fontObj.weightLabel;
+            fontAsset.fontFileName = fontObj.fileName;
             var registered = await registerFontAsset(fontObj);
             if (!registered) throw new Error('字体注册失败');
             fontAsset._installed = true;
+            fontAsset._lazy = false;
             if (fontAsset.fontFamilyName) fontAsset.name = fontAsset.fontFamilyName;
+            return true;
+        })();
+        fontAssetInstallPromises.set(id, installPromise);
+        try {
+            const installed = await installPromise;
             if (!silent) { renderAssetLibrary(); renderProperties(); renderCanvas(); }
             if (!silent) showToast('已安装字体：' + (fontAsset.fontFamilyName || fontAsset.name));
+            return installed;
         } catch (e) {
             if (!silent) showToast('字体安装失败：' + (e.message || '未知错误'));
+            return false;
+        } finally {
+            if (fontAssetInstallPromises.get(id) === installPromise) fontAssetInstallPromises.delete(id);
         }
     }
 
@@ -13923,25 +14337,27 @@ return true;
     }
 
     async function preloadCloudFonts() {
-        var anyInstalled = false;
-        for (var i = 0; i < fontAssets.length; i++) {
-            var f = fontAssets[i];
-            if (!f.cloudId) continue;
-            // 跳过已安装的
-            if (f.fontFamilyId && customFonts.some(function(cf) {
-                return cf.familyId === f.fontFamilyId && cf.weight === f.fontWeight;
-            })) {
-                f._installed = true;
-                continue;
+        const pending = fontAssets.filter(function(font) {
+            if (!font.cloudId) return false;
+            if (isRegisteredFontAsset(font)) {
+                font._installed = true;
+                return false;
             }
-            try {
-                await applyFontFromAsset(f.id, true); // 预加载模式，跳过单次 renderAssetLibrary
-                anyInstalled = true;
-            } catch(e) {
-                console.warn('字体预加载失败:', f.name, e);
-            }
+            return true;
+        });
+        if (!pending.length) return false;
+        await Promise.all(pending.map(function(font) {
+            return applyFontFromAsset(font.id, true).catch(function(error) {
+                console.warn('字体预加载失败:', font.name, error);
+                return null;
+            });
+        }));
+        const anyInstalled = pending.some(isRegisteredFontAsset);
+        if (anyInstalled) {
+            if (currentAssetTab !== 'layout') renderAssetLibrary();
+            renderProperties();
         }
-        if (anyInstalled) { renderAssetLibrary(); renderProperties(); renderCanvas(); }
+        return anyInstalled;
     }
 
     function getLayerBounds(l) {
@@ -15842,6 +16258,26 @@ return true;
     }
 
     const SAFE_CANVAS_PX = 67108864; // ~67M 像素，浏览器 canvas 安全上限（约 8192×8192）
+    let activeExportSession = null;
+    let exportSessionSequence = 0;
+    function createExportSession(format, scale) {
+        return {
+            id: 'export-' + Date.now().toString(36) + '-' + (++exportSessionSequence),
+            format: format,
+            scale: Number(scale) || 1,
+            language: currentCanvasLanguage,
+            startedAt: performance.now()
+        };
+    }
+    function traceExport(session, step, details) {
+        if (!session) return;
+        const elapsed = Math.round(performance.now() - session.startedAt);
+        console.info('[VF_EXPORT ' + session.id + '] ' + step + ' +' + elapsed + 'ms', details || '');
+    }
+    function finishExportSession(session, status, details) {
+        traceExport(session, status, details);
+        if (activeExportSession === session) activeExportSession = null;
+    }
     // ===== 修改画板尺寸 =====
     function toggleResizeMenu(e) {
         toggleCanvasToolbarMenu('resize', e);
@@ -15986,7 +16422,7 @@ return true;
         menu.innerHTML = html + '</div></div>';
     }
     window.setExportFormat = function(fmt) { exportFormat = fmt; };
-    function exportNativeCapturePNG(scale) {
+    async function exportNativeCapturePNG(scale, session) {
         scale = scale || 1;
         if (layers.length === 0) return showToast('画板为空，无法导出', true);
         const oldActive = [...activeLayerIds];
@@ -15994,24 +16430,30 @@ return true;
         const oldGuideDisplay = safeGuide ? safeGuide.style.display : '';
         const wasCaptureMode = document.body.classList.contains('vf-native-capture-mode');
         document.body.classList.add('vf-native-capture-mode');
-        // 所有界面状态都在调用 getDisplayMedia 之前同步清除；浏览器截到的是干净画板。
+        // 保留用户眼前已经完成字体排版和图片解码的 DOM。不再为清掉选择框
+        // 重建整个画板；编辑标记由 vf-native-capture-mode CSS 临时隐藏。
         activeLayerIds = [];
-        resizeCanvas(); renderCanvas(); renderLayersList(); renderProperties();
+        resizeCanvas();
         if (safeGuide) safeGuide.style.display = 'none';
-        // 不要在这里显示导出遮罩：遮罩本身会被当前标签页捕获进 PNG。
-        const capture = captureNativeArtboardBlob(scale);
-        Promise.resolve(capture).then(function(blob) {
-            downloadBlob(blob, `GCC_${getArtboardPreset(currentArtboardId).label}_${Date.now()}.png`);
+        // 提示位于画板外；真正取得共享流后 captureNativeArtboardBlob 会在采帧前清掉它。
+        // 这样权限窗口若被浏览器放到后台，用户也不会误以为按钮失效。
+        showToast('请选择“当前标签页”完成高清导出');
+        try {
+            const blob = await captureNativeArtboardBlob(scale, session);
+            const filename = `GCC_${getArtboardPreset(currentArtboardId).label}_${Date.now()}.png`;
+            downloadBlob(blob, filename);
+            traceExport(session, 'download-ready', { filename: filename, bytes: blob.size });
             showToast('✅ 原生 PNG 导出成功（保留浏览器文字排版）');
-        }).catch(function(error) {
-            console.error('原生 PNG 导出失败：', error);
-            showToast('❌ 原生 PNG 导出失败：' + (error?.message || '未知错误'), true);
-        }).finally(function() {
+        } catch (error) {
+            console.error('PNG 导出失败：', error);
+            traceExport(session, 'export-error', { name: error?.name || '', message: error?.message || String(error), stack: error?.stack || '' });
+            showToast('❌ 为避免字体或 Logo 变形，已停止导出：' + (error?.message || '未知错误'), true);
+        } finally {
             if (!wasCaptureMode) document.body.classList.remove('vf-native-capture-mode');
             if (safeGuide) safeGuide.style.display = oldGuideDisplay;
             activeLayerIds = oldActive;
             resizeCanvas(); renderCanvas(); renderLayersList(); renderProperties(); syncSafeGuide();
-        });
+        }
     }
     function getNativePrintStyles() {
         const inline = Array.from(document.querySelectorAll('style')).map(function(style) { return style.textContent || ''; }).join('\n');
@@ -16135,10 +16577,10 @@ return true;
         });
     }
     function hasTextOrTagLayer(sourceLayers = layers) {
-        // 普通文字与标签都依赖浏览器真实的 DOM/CSS 排版。即使没有 HT
-        // 字体，html2canvas 也可能改变标签内容的字距、投影和组合尺寸。
+        // 普通文字、标签和 Logo 组件都依赖浏览器真实的 DOM/CSS 排版。
+        // 尤其透明 Logo 在 Canvas 重绘时可能被错误拉伸，因此统一走原生捕获。
         return (sourceLayers || []).some(function(layer) {
-            return ['text', 'tag', 'discountTag', 'tagPill'].includes(layer?.type);
+            return ['text', 'tag', 'discountTag', 'tagPill', 'logo', 'logoLayout'].includes(layer?.type);
         });
     }
     function getCurrentExportSize(scale) {
@@ -16181,7 +16623,7 @@ return true;
             return { left, top, width, height, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
         }
     }
-    function getNativeCaptureDrawGeometry(rect, videoWidth, videoHeight, outWidth, outHeight) {
+    function getNativeCaptureDrawGeometry(rect, videoWidth, videoHeight, outWidth, outHeight, logicalWidth, logicalHeight, session) {
         const scaleX = videoWidth / Math.max(1, rect.viewportWidth);
         const scaleY = videoHeight / Math.max(1, rect.viewportHeight);
         const sourceLeft = rect.left * scaleX;
@@ -16191,64 +16633,185 @@ return true;
         if (sourceLeft < -1 || sourceTop < -1 || sourceRight > videoWidth + 1 || sourceBottom > videoHeight + 1) {
             throw new Error('共享画面与当前标签页不一致，请重新选择“当前标签页”');
         }
-        // 源区域向外取整，保留画板四边的所有像素；再通过负的目标偏移
-        // 把多取的页面背景推到输出画布之外。这样既不会向内丢一圈，也不会留白边。
-        const sx = Math.max(0, Math.floor(sourceLeft));
-        const sy = Math.max(0, Math.floor(sourceTop));
-        const ex = Math.min(videoWidth, Math.ceil(sourceRight));
-        const ey = Math.min(videoHeight, Math.ceil(sourceBottom));
-        const sw = Math.max(1, ex - sx);
-        const sh = Math.max(1, ey - sy);
-        const destinationScaleX = outWidth / Math.max(0.0001, sourceRight - sourceLeft);
-        const destinationScaleY = outHeight / Math.max(0.0001, sourceBottom - sourceTop);
-        return {
-            sx, sy, sw, sh,
-            dx: (sx - sourceLeft) * destinationScaleX,
-            dy: (sy - sourceTop) * destinationScaleY,
-            dw: sw * destinationScaleX,
-            dh: sh * destinationScaleY,
-            sourceLeft, sourceTop, sourceRight, sourceBottom
+        const sourceWidth = Math.max(0.0001, sourceRight - sourceLeft);
+        const sourceHeight = Math.max(0.0001, sourceBottom - sourceTop);
+        const expectedAspect = Math.max(0.0001, logicalWidth) / Math.max(0.0001, logicalHeight);
+        const sourceAspect = sourceWidth / sourceHeight;
+        const aspectError = Math.abs(sourceAspect / expectedAspect - 1);
+        const geometry = {
+            // Canvas drawImage 原生支持小数源坐标。直接把画板边界映射到完整输出，
+            // 不再“向外取整 + 负偏移 + 二次裁切”，避免内缩、白边和边缘丢失。
+            sx: sourceLeft,
+            sy: sourceTop,
+            sw: sourceWidth,
+            sh: sourceHeight,
+            dx: 0,
+            dy: 0,
+            dw: outWidth,
+            dh: outHeight,
+            sourceLeft, sourceTop, sourceRight, sourceBottom,
+            scaleX, scaleY, sourceAspect, expectedAspect, aspectError
         };
+        traceExport(session, 'geometry', {
+            logical: [logicalWidth, logicalHeight],
+            viewport: [rect.viewportWidth, rect.viewportHeight],
+            rect: [rect.left, rect.top, rect.width, rect.height],
+            video: [videoWidth, videoHeight],
+            source: [sourceLeft, sourceTop, sourceWidth, sourceHeight],
+            output: [outWidth, outHeight],
+            scale: [scaleX, scaleY],
+            aspectError
+        });
+        if (aspectError > 0.005) throw new Error('共享画面坐标比例异常，请重新选择“当前标签页”');
+        return geometry;
+    }
+    function waitForExportResource(promise, timeoutMs, message) {
+        let timer = 0;
+        const timeout = new Promise(function(_resolve, reject) {
+            timer = setTimeout(function() { reject(new Error(message)); }, timeoutMs);
+        });
+        return Promise.race([Promise.resolve(promise), timeout]).finally(function() {
+            if (timer) clearTimeout(timer);
+        });
+    }
+    async function waitForNativeCaptureResources(root, session) {
+        const startedAt = performance.now();
+        const fontsChanged = await waitForExportResource(
+            ensureTemplateFontsLoaded(layers, { timeoutMs: 30000, strict: true }),
+            32000,
+            '画板所需字体下载超时，请稍后重试'
+        );
+        if (!areTemplateFontsLoaded(layers)) {
+            throw new Error('画板所需字体尚未安装，已停止导出');
+        }
+        // 导出可能发生在模板首帧字体门禁仍持有旧 DOM 时。字体确认就绪后
+        // 立即释放同一画板的门禁并重绘，再克隆最终 DOM；禁止克隆 fallback 首帧。
+        if (templateCanvasRenderBlock && templateCanvasRenderBlock.layers === layers) {
+            templateCanvasRenderBlock = null;
+        }
+        if (fontsChanged || root === document.getElementById('canvas-wrapper')) {
+            renderCanvas();
+            await nextFrame();
+        }
+        if (document.fonts && document.fonts.ready) {
+            await waitForExportResource(document.fonts.ready, 8000, '字体加载超时，请稍后重试');
+            const fontNodes = Array.from((root || document).querySelectorAll('.layer-text-wrapper,.layer-tag-wrapper'));
+            await waitForExportResource(Promise.all(fontNodes.map(function(node) {
+                const style = getComputedStyle(node);
+                const sample = String(node.textContent || ' ').trim() || ' ';
+                const descriptor = style.font || [style.fontStyle, style.fontWeight, style.fontSize, style.fontFamily].join(' ');
+                return document.fonts.load(descriptor, sample);
+            })), 8000, '画板使用的字体加载超时，请稍后重试');
+            await waitForExportResource(document.fonts.ready, 8000, '字体排版稳定超时，请稍后重试');
+        }
+        const images = Array.from((root || document).querySelectorAll('img'));
+        await waitForExportResource(Promise.all(images.map(function(image, index) {
+            if (typeof image.decode === 'function') {
+                return image.decode().catch(function() {
+                    if (image.complete && image.naturalWidth > 0) return;
+                    throw new Error('第 ' + (index + 1) + ' 张图片未就绪');
+                });
+            }
+            if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+            return new Promise(function(resolve, reject) {
+                image.addEventListener('load', resolve, { once:true });
+                image.addEventListener('error', function() { reject(new Error('第 ' + (index + 1) + ' 张图片加载失败')); }, { once:true });
+            });
+        })), 10000, '画板图片加载超时，请检查网络后重试');
+        await nextFrame();
+        const logoMetrics = images.filter(function(image) {
+            return !!image.closest('.layer-image-wrapper,.layer-logo-layout-wrapper');
+        }).map(function(image) {
+            const rect = image.getBoundingClientRect();
+            const style = getComputedStyle(image);
+            return {
+                natural: [image.naturalWidth, image.naturalHeight],
+                rendered: [rect.width, rect.height],
+                objectFit: style.objectFit,
+                objectPosition: style.objectPosition
+            };
+        });
+        traceExport(session, 'resources-ready', {
+            fonts: document.fonts ? document.fonts.status : 'unsupported',
+            images: images.length,
+            logos: logoMetrics,
+            duration: Math.round(performance.now() - startedAt)
+        });
+    }
+    function waitForCapturedVideoFrame(video, timeoutMs) {
+        if (video && typeof video.requestVideoFrameCallback === 'function') {
+            return waitForExportResource(new Promise(function(resolve) {
+                video.requestVideoFrameCallback(function() { resolve(); });
+            }), timeoutMs || 2000, '共享画面帧超时');
+        }
+        return new Promise(function(resolve) { setTimeout(resolve, 80); });
     }
     // Canvas 的 fillText 会重新计算部分字体的 glyph advance；HT Heliopolis 恰好会在
     // 空格和问号处出现偏差。这个路径不再让 Canvas 排版文字，而是采集浏览器已经
     // 完成排版的标签页像素，再裁切画板并编码成 PNG。
-    async function captureNativeArtboardBlob(scale) {
+    async function captureNativeArtboardBlob(scale, session) {
+        const captureSession = session || createExportSession('native-capture', scale);
         if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
             throw new Error('当前浏览器不支持原生 PNG 捕获，请使用最新版 Chrome 或 Edge');
         }
         const target = getCurrentExportSize(scale);
         if ((target.outWidth * target.outHeight) > SAFE_CANVAS_PX) throw new Error('导出尺寸超出浏览器安全上限');
+        traceExport(captureSession, 'capture-start', { target, ratio: currentRatio, artboardId: currentArtboardId });
         // 当前标签页捕获会记录页面像素。除了 CSS 隐藏外，直接清空并停用
         // toast，杜绝上一轮提示或异步提示在采帧时进入模板预览图。
         const toast = document.getElementById('toast');
-        const oldToastState = toast ? {
-            display: toast.style.display,
-            opacity: toast.style.opacity,
-            transform: toast.style.transform
-        } : null;
-        if (toast) {
-            toast.dataset.captureSuppressed = '1';
-            toast.textContent = '';
-            toast.style.display = 'none';
-            toast.style.opacity = '0';
-            toast.style.transform = 'translate(-50%, -20px)';
-        }
+        let oldToastState = null;
+        let toastSuppressed = false;
         let stream;
         let video;
+        nativeCaptureDomFreezeDepth++;
         try {
             // 必须直接由导出按钮触发；浏览器会保留一次明确的用户授权，网页无法绕过。
-            stream = await navigator.mediaDevices.getDisplayMedia({
+            let capturePermissionTimedOut = false;
+            const displayMediaPromise = navigator.mediaDevices.getDisplayMedia({
                 video: { displaySurface: 'browser' },
                 audio: false,
                 preferCurrentTab: true,
                 selfBrowserSurface: 'include',
                 surfaceSwitching: 'exclude'
             });
+            // 某些 Chrome 配置会把共享选择器放到后台。给用户足够时间完成授权，
+            // 但超时后明确失败，绝不再悄悄回退到会改变字体/透明 Logo 的 Canvas 导出。
+            displayMediaPromise.then(function(lateStream) {
+                if (capturePermissionTimedOut && lateStream) {
+                    lateStream.getTracks().forEach(function(track) { track.stop(); });
+                }
+            }).catch(function() {});
+            stream = await Promise.race([
+                displayMediaPromise,
+                new Promise(function(_resolve, reject) {
+                    setTimeout(function() {
+                        capturePermissionTimedOut = true;
+                        const timeoutError = new Error('浏览器截图授权超时，请重新导出并选择“当前标签页”');
+                        timeoutError.name = 'NativeCaptureTimeoutError';
+                        reject(timeoutError);
+                    }, 45000);
+                })
+            ]);
+            // 已取得共享流，采帧前再隐藏页面提示，避免提示进入画板截图。
+            if (toast) {
+                oldToastState = {
+                    display: toast.style.display,
+                    opacity: toast.style.opacity,
+                    transform: toast.style.transform
+                };
+                toastSuppressed = true;
+                toast.dataset.captureSuppressed = '1';
+                toast.textContent = '';
+                toast.style.display = 'none';
+                toast.style.opacity = '0';
+                toast.style.transform = 'translate(-50%, -20px)';
+            }
             const track = stream.getVideoTracks()[0];
             if (!track) throw new Error('没有获取到可用的画面');
             const surface = track.getSettings ? track.getSettings().displaySurface : '';
             if (surface && surface !== 'browser') throw new Error('请在系统窗口中选择“当前标签页”，不要选择整个屏幕或窗口');
+            traceExport(captureSession, 'permission-granted', track.getSettings ? track.getSettings() : { displaySurface: surface });
             video = document.createElement('video');
             video.muted = true;
             video.playsInline = true;
@@ -16260,16 +16823,21 @@ return true;
                     video.onerror = function() { reject(new Error('无法读取共享画面')); };
                 });
             }
-            // 清掉选择框后再取帧，保证 PNG 里没有编辑状态的虚线框。
-            await nextFrame();
             const wrap = document.getElementById('canvas-wrapper');
+            if (!wrap) throw new Error('未找到可导出的画板');
+            // 授权弹窗可能停留数秒；在真正取帧前重新确认字体、透明图片
+            // 与布局都已稳定，再等待视频流产生包含该布局的新帧。
+            await waitForNativeCaptureResources(wrap, captureSession);
+            await waitForCapturedVideoFrame(video, 2500);
+            await waitForCapturedVideoFrame(video, 2500);
             const rect = wrap && getArtboardCaptureRect(wrap);
             if (!rect || rect.width < 2 || rect.height < 2) throw new Error('未找到可导出的画板');
-            const geometry = getNativeCaptureDrawGeometry(rect, video.videoWidth, video.videoHeight, target.outWidth, target.outHeight);
+            const geometry = getNativeCaptureDrawGeometry(rect, video.videoWidth, video.videoHeight, target.outWidth, target.outHeight, target.width, target.height, captureSession);
             const canvas = document.createElement('canvas');
             canvas.width = target.outWidth;
             canvas.height = target.outHeight;
             const ctx = canvas.getContext('2d', { alpha: false });
+            if (!ctx) throw new Error('无法创建导出画布，请关闭其他大型页面后重试');
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
             ctx.fillStyle = '#FFFFFF';
@@ -16283,17 +16851,24 @@ return true;
             const blob = await new Promise(function(resolve, reject) {
                 canvas.toBlob(function(result) { result ? resolve(result) : reject(new Error('无法生成文件')); }, 'image/png');
             });
+            traceExport(captureSession, 'capture-complete', {
+                canvas: [canvas.width, canvas.height],
+                blobBytes: blob.size,
+                outputScale: [canvas.width / target.width, canvas.height / target.height]
+            });
             return blob;
         } catch (error) {
+            traceExport(captureSession, 'capture-error', { name: error?.name || '', message: error?.message || String(error), stack: error?.stack || '' });
             if (error && error.name === 'NotAllowedError') throw new Error('未授予共享权限，已取消原生 PNG 导出');
             throw error;
         } finally {
+            nativeCaptureDomFreezeDepth = Math.max(0, nativeCaptureDomFreezeDepth - 1);
             if (video) {
                 video.pause();
                 video.srcObject = null;
             }
             if (stream) stream.getTracks().forEach(function(track) { track.stop(); });
-            if (toast) {
+            if (toast && toastSuppressed) {
                 delete toast.dataset.captureSuppressed;
                 toast.textContent = '';
                 toast.style.display = oldToastState.display;
@@ -16316,38 +16891,93 @@ return true;
         const cloneWrappers = Array.from(clone.querySelectorAll('.layer-text-wrapper'));
         sourceWrappers.forEach(function(wrapper, wrapperIndex) {
             const style = getComputedStyle(wrapper);
-            if (!getCustomFontAssetsForCss(style.fontFamily, style.fontWeight).length) return;
+            const fontAsset = getCustomFontAssetsForCss(style.fontFamily, style.fontWeight)[0];
+            const expectsCustomFont = /CF_[A-Za-z0-9_]+/.test(style.fontFamily || '');
+            if (expectsCustomFont && (!fontAsset || !fontAsset.data)) {
+                throw new Error('自定义字体原始文件缺失，已停止精确导出');
+            }
+            if (!fontAsset || !fontAsset.data) return;
+            const transform = style.transform && style.transform !== 'none' ? style.transform : '';
+            const matrixMatch = transform.match(/^matrix\(([^)]+)\)$/);
+            const matrixValues = matrixMatch ? matrixMatch[1].split(',').map(Number) : [];
+            const layerScale = matrixValues.length >= 4 ? Math.hypot(matrixValues[0], matrixValues[1]) : 1;
+            const layerRotation = matrixValues.length >= 4 ? Math.atan2(matrixValues[1], matrixValues[0]) * 180 / Math.PI : 0;
             const content = wrapper.querySelector('.layer-text-content');
             if (!content || !content.textContent) return;
+            if (document.fonts && typeof document.fonts.check === 'function') {
+                const descriptor = style.font || [style.fontStyle, style.fontWeight, style.fontSize, style.fontFamily].join(' ');
+                if (!document.fonts.check(descriptor, String(content.textContent || ' '))) {
+                    throw new Error('浏览器尚未使用目标自定义字体完成排版，已停止精确导出');
+                }
+            }
+            const appendJob = function(text, rect) {
+                if (!text || (!rect.width && !rect.height)) return;
+                jobs.push({
+                    text: text,
+                    wrapperIndex: wrapperIndex,
+                    x: (rect.left - rootRect.left) / Math.max(scaleX, 0.0001),
+                    y: (rect.top - rootRect.top) / Math.max(scaleY, 0.0001),
+                    width: rect.width / Math.max(scaleX, 0.0001),
+                    height: rect.height / Math.max(scaleY, 0.0001),
+                    fontFamily: style.fontFamily,
+                    fontWeight: style.fontWeight,
+                    fontStyle: style.fontStyle,
+                    fontAssetId: fontAsset.id || '',
+                    fontAssetFamilyId: fontAsset.familyId,
+                    fontAssetName: fontAsset.name,
+                    fontAssetWeight: Number(fontAsset.weight) || 400,
+                    fontAssetData: fontAsset.data,
+                    fontAssetKey: [fontAsset.familyId, Number(fontAsset.weight) || 400, fontAsset.id || fontAsset.name, String(fontAsset.data).length].join('|'),
+                    direction: style.direction,
+                    // Range 坐标包含 canvas-wrapper 的预览 transform，所以 x/y/width/height
+                    // 必须除以 scaleX/scaleY。getComputedStyle() 返回的字号、字距和描边
+                    // 则始终是未受祖先 transform 影响的 CSS 逻辑值，只应用文字图层自身
+                    // 的 scale；若再除以预览缩放，校准率会错误地等于窗口中的画板缩放，
+                    // 导致窄窗口或线上布局误触发“尺度差异过大”的安全拦截。
+                    fontSize: (parseFloat(style.fontSize) || 16) * layerScale,
+                    lineBoxHeight: rect.height / Math.max(scaleY, 0.0001),
+                    rotation: layerRotation,
+                    color: style.color,
+                    opacity: Number.isFinite(parseFloat(style.opacity)) ? parseFloat(style.opacity) : 1,
+                    letterSpacing: (parseFloat(style.letterSpacing) || 0) * layerScale,
+                    strokeWidth: (parseFloat(style.webkitTextStrokeWidth) || 0) * layerScale,
+                    strokeColor: style.webkitTextStrokeColor || 'transparent'
+                });
+            };
             const nodes = [];
             const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
             while (walker.nextNode()) nodes.push(walker.currentNode);
             nodes.forEach(function(node) {
                 const value = node.nodeValue || '';
                 // 保留完整词形（维护字距/kerning），但让空格与问号完全服从 DOM 给出的坐标。
-                const matcher = /[^\s?\uFF1F\u061F]+|[?\uFF1F\u061F]/g;
+                // 字体可能不包含标点、货币符号等字符，浏览器会逐字符使用
+                // sans-serif fallback。字母/数字/组合附加符保持整段 shaping；其余
+                // Unicode 标点和符号全部拆成单字符任务，避免一处缺字拖累整段。
+                const matcher = /[\p{L}\p{M}\p{N}]+|[^\s]/gu;
                 let match;
                 while ((match = matcher.exec(value)) !== null) {
                     const range = document.createRange();
                     range.setStart(node, match.index);
                     range.setEnd(node, match.index + match[0].length);
                     const rect = range.getBoundingClientRect();
-                    if (!rect.width && !rect.height) continue;
-                    jobs.push({
-                        text: match[0],
-                        wrapperIndex: wrapperIndex,
-                        x: (rect.left - rootRect.left) / Math.max(scaleX, 0.0001),
-                        y: (rect.top - rootRect.top) / Math.max(scaleY, 0.0001),
-                        height: rect.height / Math.max(scaleY, 0.0001),
-                        fontFamily: style.fontFamily,
-                        fontWeight: style.fontWeight,
-                        fontStyle: style.fontStyle,
-                        direction: style.direction,
-                        // getBoundingClientRect() 的坐标已由画板缩放换算回逻辑像素，
-                        // 字号也必须做同样换算；否则路径字形会以屏幕缩放后的半号绘制。
-                        fontSize: (parseFloat(style.fontSize) || 16) / Math.max(scaleX, 0.0001),
-                        color: style.color,
-                        letterSpacing: parseFloat(style.letterSpacing) || 0
+                    const lineTops = Array.from(range.getClientRects()).map(function(part) { return Math.round(part.top * 2) / 2; });
+                    if (new Set(lineTops).size <= 1) {
+                        appendJob(match[0], rect);
+                        continue;
+                    }
+                    // overflow-wrap:anywhere 可能把一个超长单词拆到两行。此时总 Range
+                    // 是跨行包围盒，不能作为一个 glyph run；仅对该词按 grapheme 拆分，
+                    // 普通单行词仍保持整词 shaping 和 kerning。
+                    const segments = typeof Intl.Segmenter === 'function'
+                        ? Array.from(new Intl.Segmenter(undefined, { granularity:'grapheme' }).segment(match[0]), function(item) { return item.segment; })
+                        : Array.from(match[0]);
+                    let segmentOffset = match.index;
+                    segments.forEach(function(segment) {
+                        const segmentRange = document.createRange();
+                        segmentRange.setStart(node, segmentOffset);
+                        segmentOffset += segment.length;
+                        segmentRange.setEnd(node, segmentOffset);
+                        appendJob(segment, segmentRange.getBoundingClientRect());
                     });
                 }
             });
@@ -16356,78 +16986,540 @@ return true;
         });
         return jobs;
     }
-    const outlineFontCache = new Map();
-    async function getOutlineFontForJob(job) {
-        const candidates = getCustomFontAssetsForCss(job.fontFamily, job.fontWeight);
-        const asset = candidates[0];
-        if (!asset) throw new Error('未找到当前 HT 字重的原始字体文件');
-        const key = asset.name + '|' + asset.weight + '|' + String(asset.data).length;
-        if (outlineFontCache.has(key)) return outlineFontCache.get(key);
-        const buffer = await fetch(asset.data).then(function(response) {
-            if (!response.ok) throw new Error('字体文件读取失败');
-            return response.arrayBuffer();
-        });
-        // fontkit 支持 CFF OpenType、复杂 GPOS/GSUB 布局及字形路径；HT 的 OTF
-        // 由它优先解析。它不依赖浏览器对字体文本的 Canvas 排版。
-        try {
-            if (window.fontkit && typeof window.fontkit.create === 'function') {
-                let fontkitFont = window.fontkit.create(buffer);
-                if (fontkitFont && Array.isArray(fontkitFont.fonts)) fontkitFont = fontkitFont.fonts[0];
-                if (fontkitFont && typeof fontkitFont.layout === 'function') {
-                    const result = { engine: 'fontkit', font: fontkitFont };
-                    outlineFontCache.set(key, result);
-                    return result;
+    function collectTagTextPaintJobs(sourceRoot, clone, logicalWidth, logicalHeight) {
+        if (!sourceRoot || !clone) return [];
+        const rootRect = sourceRoot.getBoundingClientRect();
+        const scaleX = rootRect.width / Math.max(1, Number(logicalWidth) || rootRect.width);
+        const scaleY = rootRect.height / Math.max(1, Number(logicalHeight) || rootRect.height);
+        const sourceWrappers = Array.from(sourceRoot.querySelectorAll('.layer-tag-wrapper'));
+        const cloneWrappers = Array.from(clone.querySelectorAll('.layer-tag-wrapper'));
+        if (sourceWrappers.length !== cloneWrappers.length) {
+            throw new Error('标签文字副本与画板标签数量不一致');
+        }
+        const jobs = [];
+        sourceWrappers.forEach(function(wrapper, wrapperIndex) {
+            const cloneWrapper = cloneWrappers[wrapperIndex];
+            const wrapperStyle = getComputedStyle(wrapper);
+            if (wrapperStyle.display === 'none' || wrapperStyle.visibility === 'hidden') return;
+            const matrixMatch = String(wrapperStyle.transform || '').match(/^matrix\(([^)]+)\)$/);
+            const matrixValues = matrixMatch ? matrixMatch[1].split(',').map(Number) : [];
+            const layerScale = matrixValues.length >= 4 ? Math.hypot(matrixValues[0], matrixValues[1]) : 1;
+            const layerRotation = matrixValues.length >= 4 ? Math.atan2(matrixValues[1], matrixValues[0]) * 180 / Math.PI : 0;
+            const centerX = Number(wrapper.offsetLeft) || parseFloat(wrapperStyle.left) || 0;
+            const centerY = Number(wrapper.offsetTop) || parseFloat(wrapperStyle.top) || 0;
+            const originX = (Number(wrapper.offsetWidth) || 0) / 2;
+            const originY = (Number(wrapper.offsetHeight) || 0) / 2;
+            const sourceNodes = [];
+            const cloneNodes = [];
+            const sourceWalker = document.createTreeWalker(wrapper, NodeFilter.SHOW_TEXT);
+            const cloneWalker = document.createTreeWalker(cloneWrapper, NodeFilter.SHOW_TEXT);
+            while (sourceWalker.nextNode()) sourceNodes.push(sourceWalker.currentNode);
+            while (cloneWalker.nextNode()) cloneNodes.push(cloneWalker.currentNode);
+            if (sourceNodes.length !== cloneNodes.length) throw new Error('标签文字节点副本不一致');
+
+            // 标签的胶囊宽高本来由 inline-flex 文字内容撑开。即使文字只设为
+            // visibility:hidden，html2canvas 的内部文档仍可能用替代字体重新布局，
+            // 令粉色/黑色胶囊缩短。把当前浏览器已经算好的 border box 固定到
+            // 导出副本，后续隐藏文字也不会改变组件外形。
+            const sourceBoxNodes = [wrapper].concat(Array.from(wrapper.querySelectorAll(':scope > div,.tag-pill,.discount-pill')));
+            const cloneBoxNodes = [cloneWrapper].concat(Array.from(cloneWrapper.querySelectorAll(':scope > div,.tag-pill,.discount-pill')));
+            if (sourceBoxNodes.length !== cloneBoxNodes.length) throw new Error('标签容器副本结构不一致');
+            sourceBoxNodes.forEach(function(sourceBox, boxIndex) {
+                const cloneBox = cloneBoxNodes[boxIndex];
+                const boxWidth = Number(sourceBox.offsetWidth) || 0;
+                const boxHeight = Number(sourceBox.offsetHeight) || 0;
+                if (!boxWidth || !boxHeight) return;
+                cloneBox.style.setProperty('box-sizing', 'border-box', 'important');
+                cloneBox.style.setProperty('width', boxWidth + 'px', 'important');
+                cloneBox.style.setProperty('height', boxHeight + 'px', 'important');
+                cloneBox.style.setProperty('min-width', boxWidth + 'px', 'important');
+                cloneBox.style.setProperty('min-height', boxHeight + 'px', 'important');
+                cloneBox.style.setProperty('max-width', boxWidth + 'px', 'important');
+                cloneBox.style.setProperty('max-height', boxHeight + 'px', 'important');
+            });
+
+            // 在只供导出的副本里暂时取消标签外层 transform，取得字体的本地排版盒；
+            // 最终绘制时再一次性应用标签的中心、缩放和旋转，避免 html2canvas
+            // 分别重算数字、小字和副标签后破坏组件比例。
+            const originalTransform = cloneWrapper.style.getPropertyValue('transform');
+            const originalPriority = cloneWrapper.style.getPropertyPriority('transform');
+            cloneWrapper.style.setProperty('transform', 'none', 'important');
+            const neutralWrapperRect = cloneWrapper.getBoundingClientRect();
+            sourceNodes.forEach(function(sourceNode, nodeIndex) {
+                const textValue = sourceNode.nodeValue || '';
+                if (!textValue.trim()) return;
+                const sourceParent = sourceNode.parentElement;
+                const cloneNode = cloneNodes[nodeIndex];
+                const cloneParent = cloneNode && cloneNode.parentElement;
+                if (!sourceParent || !cloneParent) return;
+                const textStyle = getComputedStyle(sourceParent);
+                // 阴影胶囊内部有一份 color:transparent 的占位文字；它只负责撑开
+                // 与前景完全相同的盒子，不应被重复绘制。
+                if (textStyle.visibility === 'hidden' || textStyle.display === 'none' || /rgba\([^)]*,\s*0(?:\.0+)?\s*\)/i.test(textStyle.color) || textStyle.color === 'transparent') return;
+                const fontAsset = getCustomFontAssetsForCss(textStyle.fontFamily, textStyle.fontWeight)[0];
+                const expectsCustomFont = /CF_[A-Za-z0-9_]+/.test(textStyle.fontFamily || '');
+                if (expectsCustomFont && (!fontAsset || !fontAsset.data)) {
+                    throw new Error('标签使用的自定义字体原始文件缺失，已停止精确导出');
                 }
-            }
-        } catch (fontkitError) {
-            console.warn('fontkit 解析失败，尝试 OpenType 备用解析：', fontkitError);
-        }
+                if (!fontAsset || !fontAsset.data) return;
+                if (document.fonts && typeof document.fonts.check === 'function') {
+                    const descriptor = textStyle.font || [textStyle.fontStyle, textStyle.fontWeight, textStyle.fontSize, textStyle.fontFamily].join(' ');
+                    if (!document.fonts.check(descriptor, textValue)) throw new Error('标签字体尚未完成排版，已停止精确导出');
+                }
+                const matcher = /[\p{L}\p{M}\p{N}]+|[^\s]/gu;
+                let match;
+                while ((match = matcher.exec(textValue)) !== null) {
+                    const sourceRange = document.createRange();
+                    sourceRange.setStart(sourceNode, match.index);
+                    sourceRange.setEnd(sourceNode, match.index + match[0].length);
+                    const sourceRect = sourceRange.getBoundingClientRect();
+                    const cloneRange = document.createRange();
+                    cloneRange.setStart(cloneNode, match.index);
+                    cloneRange.setEnd(cloneNode, match.index + match[0].length);
+                    const localRect = cloneRange.getBoundingClientRect();
+                    if (!localRect.width && !localRect.height) continue;
+                    jobs.push({
+                        text: match[0],
+                        wrapperIndex: wrapperIndex,
+                        tagNodeIndex: nodeIndex,
+                        x: localRect.left - neutralWrapperRect.left,
+                        y: localRect.top - neutralWrapperRect.top,
+                        width: localRect.width,
+                        height: localRect.height,
+                        captureX: (sourceRect.left - rootRect.left) / Math.max(scaleX, 0.0001),
+                        captureY: (sourceRect.top - rootRect.top) / Math.max(scaleY, 0.0001),
+                        captureWidth: sourceRect.width / Math.max(scaleX, 0.0001),
+                        captureHeight: sourceRect.height / Math.max(scaleY, 0.0001),
+                        localTransform: {
+                            centerX: centerX,
+                            centerY: centerY,
+                            originX: originX,
+                            originY: originY,
+                            scale: layerScale,
+                            rotation: layerRotation
+                        },
+                        fontFamily: textStyle.fontFamily,
+                        fontWeight: textStyle.fontWeight,
+                        fontStyle: textStyle.fontStyle,
+                        fontAssetId: fontAsset.id || '',
+                        fontAssetFamilyId: fontAsset.familyId,
+                        fontAssetName: fontAsset.name,
+                        fontAssetWeight: Number(fontAsset.weight) || 400,
+                        fontAssetData: fontAsset.data,
+                        fontAssetKey: [fontAsset.familyId, Number(fontAsset.weight) || 400, fontAsset.id || fontAsset.name, String(fontAsset.data).length].join('|'),
+                        direction: textStyle.direction,
+                        fontSize: parseFloat(textStyle.fontSize) || 16,
+                        lineBoxHeight: localRect.height,
+                        rotation: 0,
+                        color: textStyle.color,
+                        opacity: (Number.isFinite(parseFloat(wrapperStyle.opacity)) ? parseFloat(wrapperStyle.opacity) : 1)
+                            * (Number.isFinite(parseFloat(textStyle.opacity)) ? parseFloat(textStyle.opacity) : 1),
+                        letterSpacing: parseFloat(textStyle.letterSpacing) || 0,
+                        strokeWidth: parseFloat(textStyle.webkitTextStrokeWidth) || 0,
+                        strokeColor: textStyle.webkitTextStrokeColor || 'transparent'
+                    });
+                }
+                // visibility:hidden 保留浏览器已经算好的宽高、padding 和圆角盒，
+                // 只阻止 html2canvas 再次用 fillText 重排这一段文字。
+                cloneParent.style.setProperty('visibility', 'hidden', 'important');
+            });
+            if (originalTransform) cloneWrapper.style.setProperty('transform', originalTransform, originalPriority);
+            else cloneWrapper.style.removeProperty('transform');
+        });
+        return jobs;
+    }
+    function parseOutlineTransformMatrix(value) {
+        const match = String(value || '').match(/^matrix\(([^)]+)\)$/);
+        return match ? match[1].split(',').map(Number) : [];
+    }
+    function parseOutlineRadius(value, width, height) {
+        const first = parseFloat(String(value || '').split(/[\s/]+/)[0]) || 0;
+        return Math.max(0, Math.min(first, width / 2, height / 2));
+    }
+    function parseOutlineClipInsetLeft(value) {
+        const match = String(value || '').match(/^inset\(([^)]+)\)$/i);
+        if (!match) return 0;
+        const parts = match[1].trim().split(/\s+/);
+        const left = parts.length === 1 ? parts[0] : parts.length === 2 ? parts[1] : parts.length === 3 ? parts[1] : parts[3];
+        return Math.max(0, parseFloat(left) || 0);
+    }
+    function collectOutlineTagPaintJobs(sourceRoot, clone) {
+        const sourceWrappers = Array.from(sourceRoot.querySelectorAll('.layer-tag-wrapper'));
+        const cloneWrappers = Array.from(clone.querySelectorAll('.layer-tag-wrapper'));
+        if (sourceWrappers.length !== cloneWrappers.length) throw new Error('标签图形副本与画板数量不一致');
+        const jobs = [];
+        sourceWrappers.forEach(function(wrapper, wrapperIndex) {
+            const wrapperStyle = getComputedStyle(wrapper);
+            if (wrapperStyle.display === 'none' || wrapperStyle.visibility === 'hidden') return;
+            const foreground = Array.from(wrapper.querySelectorAll('.tag-pill,.discount-pill')).find(function(node) {
+                return getComputedStyle(node).position !== 'absolute';
+            });
+            const shadow = Array.from(wrapper.querySelectorAll('.tag-pill,.discount-pill')).find(function(node) {
+                return getComputedStyle(node).position === 'absolute';
+            });
+            if (!foreground) return;
+            const foregroundStyle = getComputedStyle(foreground);
+            const shadowStyle = shadow ? getComputedStyle(shadow) : null;
+            const wrapperMatrix = parseOutlineTransformMatrix(wrapperStyle.transform);
+            const layerScale = wrapperMatrix.length >= 4 ? Math.hypot(wrapperMatrix[0], wrapperMatrix[1]) : 1;
+            const layerRotation = wrapperMatrix.length >= 4 ? Math.atan2(wrapperMatrix[1], wrapperMatrix[0]) * 180 / Math.PI : 0;
+            const shadowMatrix = shadowStyle ? parseOutlineTransformMatrix(shadowStyle.transform) : [];
+            const shadowRotation = shadowMatrix.length >= 4 ? Math.atan2(shadowMatrix[1], shadowMatrix[0]) * 180 / Math.PI : 0;
+            const shadowOrigin = shadowStyle ? String(shadowStyle.transformOrigin || '0 0').split(/\s+/).map(parseFloat) : [0, 0];
+            const width = Math.max(0.0001, Number(foreground.offsetWidth) || 0);
+            const height = Math.max(0.0001, Number(foreground.offsetHeight) || 0);
+            const cloneWrapper = cloneWrappers[wrapperIndex];
+            // 图形由最终 Canvas 直接绘制；副本只保留布局盒和可能存在的
+            // 非自定义字体副标题，不能再让 html2canvas 画一遍胶囊。
+            cloneWrapper.querySelectorAll('.tag-pill,.discount-pill').forEach(function(node) {
+                node.style.setProperty('background', 'transparent', 'important');
+                node.style.setProperty('background-color', 'transparent', 'important');
+                node.style.setProperty('box-shadow', 'none', 'important');
+            });
+            jobs.push({
+                layerId: wrapper.dataset.id || '',
+                centerX: Number(wrapper.offsetLeft) || parseFloat(wrapperStyle.left) || 0,
+                centerY: Number(wrapper.offsetTop) || parseFloat(wrapperStyle.top) || 0,
+                originX: (Number(wrapper.offsetWidth) || width) / 2,
+                originY: (Number(wrapper.offsetHeight) || height) / 2,
+                scale: layerScale,
+                rotation: layerRotation,
+                opacity: Number.isFinite(parseFloat(wrapperStyle.opacity)) ? parseFloat(wrapperStyle.opacity) : 1,
+                zIndex: Number(wrapperStyle.zIndex) || 0,
+                width: width,
+                height: height,
+                radius: parseOutlineRadius(foregroundStyle.borderRadius, width, height),
+                background: foregroundStyle.backgroundColor,
+                shadow: shadow ? {
+                    width: Math.max(0.0001, Number(shadow.offsetWidth) || width),
+                    height: Math.max(0.0001, Number(shadow.offsetHeight) || height),
+                    radius: parseOutlineRadius(shadowStyle.borderRadius, Number(shadow.offsetWidth) || width, Number(shadow.offsetHeight) || height),
+                    background: shadowStyle.backgroundColor,
+                    rotation: shadowRotation,
+                    originX: Number(shadowOrigin[0]) || 0,
+                    originY: Number(shadowOrigin[1]) || height / 2,
+                    clipLeft: parseOutlineClipInsetLeft(shadowStyle.clipPath)
+                } : null
+            });
+        });
+        return jobs.sort(function(a, b) { return a.zIndex - b.zIndex; });
+    }
+    function paintOutlineTagJobs(canvas, jobs, density, session) {
+        if (!jobs.length) return;
+        const context = canvas.getContext('2d');
+        context.save();
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.scale(density, density);
         try {
-            if (!window.opentype || typeof window.opentype.parse !== 'function') throw new Error('字体轮廓库未加载');
-            const result = { engine: 'opentype', font: window.opentype.parse(buffer) };
-            outlineFontCache.set(key, result);
-            return result;
-        } catch (_error) {
-            throw new Error('该 HT 字体无法读取轮廓');
+            jobs.forEach(function(job) {
+                context.save();
+                context.globalAlpha = Math.max(0, Math.min(1, Number(job.opacity) || 0));
+                context.translate(Number(job.centerX) || 0, Number(job.centerY) || 0);
+                context.rotate((Number(job.rotation) || 0) * Math.PI / 180);
+                const layerScale = Math.max(0.0001, Number(job.scale) || 1);
+                context.scale(layerScale, layerScale);
+                context.translate(-(Number(job.originX) || 0), -(Number(job.originY) || 0));
+                if (job.shadow) {
+                    const shadow = job.shadow;
+                    context.save();
+                    context.translate(Number(shadow.originX) || 0, Number(shadow.originY) || 0);
+                    context.rotate((Number(shadow.rotation) || 0) * Math.PI / 180);
+                    context.translate(-(Number(shadow.originX) || 0), -(Number(shadow.originY) || 0));
+                    if (Number(shadow.clipLeft) > 0) {
+                        context.beginPath();
+                        context.rect(Number(shadow.clipLeft), -512, Math.max(0.0001, Number(shadow.width) + 1024), Number(shadow.height) + 1024);
+                        context.clip();
+                    }
+                    context.beginPath();
+                    addOutlineRoundedRectPath(context, 0, 0, Number(shadow.width), Number(shadow.height), Number(shadow.radius));
+                    context.fillStyle = shadow.background;
+                    context.fill();
+                    context.restore();
+                }
+                context.beginPath();
+                addOutlineRoundedRectPath(context, 0, 0, Number(job.width), Number(job.height), Number(job.radius));
+                context.fillStyle = job.background;
+                context.fill();
+                context.restore();
+            });
+        } finally {
+            context.restore();
         }
+        traceExport(session, 'outline-tags-painted-directly', {
+            tags: jobs.map(function(job) {
+                return { layerId: job.layerId, size: [job.width, job.height], center: [job.centerX, job.centerY], scale: job.scale, rotation: job.rotation };
+            })
+        });
+    }
+    const outlineFontCache = new Map();
+    const outlineFontLoadPromises = new Map();
+    async function digestOutlineFontBuffer(buffer) {
+        if (window.crypto?.subtle?.digest) {
+            const digest = await window.crypto.subtle.digest('SHA-256', buffer.slice(0));
+            return Array.from(new Uint8Array(digest), function(byte) { return byte.toString(16).padStart(2, '0'); }).join('');
+        }
+        // 非安全上下文没有 SubtleCrypto 时仍提供内容相关签名；正式线上 HTTPS
+        // 会始终走上面的 SHA-256。
+        const bytes = new Uint8Array(buffer);
+        let hash = 2166136261;
+        for (let index = 0; index < bytes.length; index++) {
+            hash ^= bytes[index];
+            hash = Math.imul(hash, 16777619);
+        }
+        return 'fnv1a-' + (hash >>> 0).toString(16).padStart(8, '0') + '-' + bytes.length;
+    }
+    async function getOutlineFontForJob(job) {
+        if (!job.fontAssetData || !job.fontAssetKey) throw new Error('文字任务缺少锁定的原始字体文件');
+        if (!window.fontkit && window.__vfFontkitReady) {
+            const fontEngineReady = await Promise.race([
+                window.__vfFontkitReady,
+                new Promise(function(resolve) { setTimeout(function() { resolve(false); }, 12000); })
+            ]);
+            if (!fontEngineReady || !window.fontkit) throw new Error('精确字体引擎加载失败，请检查网络后重试');
+        }
+        const loadKey = job.fontAssetKey;
+        if (outlineFontLoadPromises.has(loadKey)) return outlineFontLoadPromises.get(loadKey);
+        const loadPromise = (async function() {
+            const buffer = await fetch(job.fontAssetData).then(function(response) {
+                if (!response.ok) throw new Error('字体文件读取失败');
+                return response.arrayBuffer();
+            });
+            const digest = await digestOutlineFontBuffer(buffer);
+            const cacheKey = job.fontAssetFamilyId + '|' + job.fontAssetWeight + '|' + digest;
+            if (outlineFontCache.has(cacheKey)) return outlineFontCache.get(cacheKey);
+            // fontkit 支持 CFF OpenType、复杂 GPOS/GSUB 布局及字形路径；HT 的 OTF
+            // 由它优先解析。它不依赖浏览器对字体文本的 Canvas 排版。
+            try {
+                if (!window.fontkit || typeof window.fontkit.create !== 'function') throw new Error('fontkit 精确字体引擎未加载');
+                // @pdf-lib/fontkit 的浏览器 API 要求 Uint8Array；直接传 ArrayBuffer
+                // 会让部分 CFF OTF 字体解析成空路径或直接抛错。
+                let fontkitFont = window.fontkit.create(new Uint8Array(buffer));
+                if (fontkitFont && Array.isArray(fontkitFont.fonts)) fontkitFont = fontkitFont.fonts[0];
+                if (!fontkitFont || typeof fontkitFont.layout !== 'function') throw new Error('字体不支持精确 shaping');
+                const result = { engine: 'fontkit', font: fontkitFont, digest: digest, assetKey: loadKey };
+                outlineFontCache.set(cacheKey, result);
+                return result;
+            } catch (error) {
+                throw new Error('字体“' + (job.fontAssetName || job.fontAssetFamilyId || '未知') + '”无法进行精确轮廓排版：' + (error?.message || '解析失败'));
+            }
+        })().finally(function() {
+            outlineFontLoadPromises.delete(loadKey);
+        });
+        outlineFontLoadPromises.set(loadKey, loadPromise);
+        return loadPromise;
+    }
+    function paintBrowserFallbackGlyphJob(context, job) {
+        const sourceFontSize = Math.max(1, Number(job.fontSize) || 16);
+        const metricCalibration = Number.isFinite(Number(job.fontMetricCalibration)) ? Number(job.fontMetricCalibration) : 1;
+        const fontSize = sourceFontSize * metricCalibration;
+        const lineBoxHeight = Math.max(1, Number(job.lineBoxHeight) || sourceFontSize);
+        context.save();
+        context.font = [job.fontStyle || 'normal', job.fontWeight || 400, fontSize + 'px', job.fontFamily || 'sans-serif'].join(' ');
+        context.fontKerning = 'normal';
+        context.textAlign = 'left';
+        context.textBaseline = 'alphabetic';
+        context.direction = job.direction === 'rtl' ? 'rtl' : 'ltr';
+        const metrics = context.measureText(job.text);
+        const measuredWidth = Math.max(0.0001, Number(metrics.width) || fontSize * 0.5);
+        const desiredWidth = Math.max(0.0001, Number(job.width) || measuredWidth);
+        const widthCalibration = desiredWidth / measuredWidth;
+        if (!Number.isFinite(widthCalibration) || widthCalibration < 0.35 || widthCalibration > 2.5) {
+            context.restore();
+            throw new Error('缺失字符的浏览器后备字体尺度异常，已停止精确导出');
+        }
+        const ascent = Number(metrics.actualBoundingBoxAscent) || fontSize * 0.8;
+        const descent = Number(metrics.actualBoundingBoxDescent) || fontSize * 0.2;
+        const baseline = Number(job.y) + Math.max(0, (lineBoxHeight - ascent - descent) / 2) + ascent;
+        context.translate(Number(job.x) || 0, baseline);
+        context.scale(widthCalibration, 1);
+        if (job.strokeWidth > 0) {
+            context.lineWidth = job.strokeWidth / Math.max(widthCalibration, 0.0001);
+            context.strokeStyle = job.strokeColor || 'transparent';
+            context.lineJoin = 'round';
+            context.strokeText(job.text, 0, 0);
+        }
+        context.fillStyle = job.color;
+        context.fillText(job.text, 0, 0);
+        context.restore();
+        job.outlineCalibration = metricCalibration;
+        job.fallbackWidthCalibration = widthCalibration;
+        job.outlineEngine = 'browser-glyph-fallback';
+        job.usedBrowserGlyphFallback = true;
+    }
+    function paintBrowserNativeArabicJob(context, job) {
+        const fontSize = Math.max(1, Number(job.fontSize) || 16);
+        const lineBoxHeight = Math.max(1, Number(job.lineBoxHeight) || fontSize);
+        context.save();
+        context.font = [job.fontStyle || 'normal', job.fontWeight || 400, fontSize + 'px', job.fontFamily || 'sans-serif'].join(' ');
+        context.fontKerning = 'normal';
+        if ('letterSpacing' in context) context.letterSpacing = (Number(job.letterSpacing) || 0) + 'px';
+        context.textAlign = 'left';
+        context.textBaseline = 'alphabetic';
+        context.direction = 'rtl';
+        const metrics = context.measureText(job.text);
+        const measuredWidth = Math.max(0.0001, Number(metrics.width) || fontSize * 0.5);
+        const desiredWidth = Math.max(0.0001, Number(job.width) || measuredWidth);
+        const widthCalibration = desiredWidth / measuredWidth;
+        if (!Number.isFinite(widthCalibration) || widthCalibration < 0.35 || widthCalibration > 2.5) {
+            context.restore();
+            throw new Error('阿拉伯语原生 shaping 尺度异常，已停止导出');
+        }
+        // fontBoundingBox 与 DOM line box 使用同一浏览器字体度量；若当前浏览器
+        // 没有暴露该字段，再退到实际墨迹范围。
+        const ascent = Number(metrics.fontBoundingBoxAscent || metrics.actualBoundingBoxAscent) || fontSize * 0.8;
+        const descent = Number(metrics.fontBoundingBoxDescent || metrics.actualBoundingBoxDescent) || fontSize * 0.2;
+        const baseline = Number(job.y) + (lineBoxHeight - ascent - descent) / 2 + ascent;
+        context.translate(Number(job.x) || 0, baseline);
+        context.scale(widthCalibration, 1);
+        if (job.strokeWidth > 0) {
+            context.lineWidth = job.strokeWidth / Math.max(widthCalibration, 0.0001);
+            context.strokeStyle = job.strokeColor || 'transparent';
+            context.lineJoin = 'round';
+            context.strokeText(job.text, 0, 0);
+        }
+        context.fillStyle = job.color;
+        context.fillText(job.text, 0, 0);
+        context.restore();
+        job.outlineCalibration = widthCalibration;
+        job.outlineEngine = 'browser-native-arabic-shaping';
+        job.usedBrowserGlyphFallback = false;
+    }
+    function assertOutlineCalibration(job, calibration, desiredAdvance, rawAdvance) {
+        if (Number.isFinite(calibration) && calibration >= 0.35 && calibration <= 2.5) return;
+        console.error('[精确导出] 字体尺度校验失败', {
+            family: job.fontAssetFamilyId || job.fontFamily || '',
+            weight: job.fontAssetWeight || job.fontWeight || '',
+            glyphCount: Array.from(job.text || '').length,
+            scope: job.localTransform ? 'tag' : 'text',
+            desiredAdvance: desiredAdvance,
+            rawAdvance: rawAdvance,
+            calibration: calibration,
+            previewScale: currentScale
+        });
+        throw new Error('字体轮廓与浏览器排版尺度差异过大，已停止精确导出');
     }
     async function paintHTTextJobs(canvas, jobs, density) {
         const context = canvas.getContext('2d');
         context.save();
+        // html2canvas 返回的 2D context 可能仍保留内部缩放矩阵。轮廓坐标已经是
+        // 画板逻辑坐标，必须先回到单位矩阵再应用一次 density；否则 2 倍导出会
+        // 实际叠加成 4 倍坐标，文字整体跑到画板之外。
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.globalCompositeOperation = 'source-over';
+        context.globalAlpha = 1;
+        context.beginPath();
         context.scale(density, density);
         try {
             for (const job of jobs) {
+                context.save();
+                try {
+                if (job.localTransform) {
+                    context.translate(Number(job.localTransform.centerX) || 0, Number(job.localTransform.centerY) || 0);
+                    context.rotate((Number(job.localTransform.rotation) || 0) * Math.PI / 180);
+                    const localScale = Math.max(0.0001, Number(job.localTransform.scale) || 1);
+                    context.scale(localScale, localScale);
+                    context.translate(-(Number(job.localTransform.originX) || 0), -(Number(job.localTransform.originY) || 0));
+                }
                 const outline = await getOutlineFontForJob(job);
+                job.outlineDigest = outline.digest || '';
+                job.outlineEngine = outline.engine;
                 const font = outline.font;
                 const units = Math.max(1, Number(font.unitsPerEm || 1000));
                 const unitScale = job.fontSize / units;
                 const ascent = Number(font.ascent ?? font.ascender ?? Math.round(units * 0.8));
-                const baseline = job.y + ascent * unitScale;
+                const descent = Math.abs(Number(font.descent ?? font.descender ?? Math.round(units * -0.2)));
+                const lineBoxHeight = Number(job.lineBoxHeight) || job.fontSize;
                 context.fillStyle = job.color;
+                context.strokeStyle = job.strokeColor || 'transparent';
+                context.globalAlpha = Math.max(0, Math.min(1, Number(job.opacity) || 0));
+                // 只对带局部矩阵的阿拉伯语标签使用浏览器原生 shaping。
+                // 普通正文的 fontSize 已包含画板缩放，若也改走 Canvas 原生测量，
+                // 会与其现有尺度校准叠加，使大标题明显变粗、变大。
+                if (job.localTransform && /\p{Script=Arabic}/u.test(job.text || '')) {
+                    paintBrowserNativeArabicJob(context, job);
+                    continue;
+                }
                 if (outline.engine === 'fontkit') {
                     // layout() 先应用字距、连字及 OpenType 定位，再依次绘制实际 glyph path。
                     const run = font.layout(job.text);
+                    const glyphs = run.glyphs || [];
+                    const positions = run.positions || [];
+                    if (!glyphs.length || glyphs.some(function(glyph) { return Number(glyph?.id) === 0; })) {
+                        // 浏览器本身会对缺失字符逐字回退；这里只处理已经拆开的单个
+                        // 标点/符号，因此不会让 Canvas 再次决定整句的字距和换行。
+                        paintBrowserFallbackGlyphJob(context, job);
+                        continue;
+                    }
+                    const rawAdvance = positions.reduce(function(total, pos) {
+                        return total + (Number(pos?.xAdvance) || 0) * unitScale;
+                    }, 0) + Math.max(0, glyphs.length - 1) * (Number(job.letterSpacing) || 0);
+                    const desiredAdvance = Math.max(0.0001, Number(job.width) || rawAdvance);
+                    const calibration = desiredAdvance / Math.max(0.0001, rawAdvance);
+                    assertOutlineCalibration(job, calibration, desiredAdvance, rawAdvance);
+                    job.outlineCalibration = calibration;
+                    const calibratedUnitScale = unitScale * calibration;
+                    const calibratedFontSize = job.fontSize * calibration;
+                    // 标签内部常用 line-height:0.82/0.86。Dela 等字体的真实
+                    // ascender + descender 又明显大于 1em；按 font-size 居中会把
+                    // 大号数字的基线推低。标签任务改用字体文件自己的垂直度量，
+                    // 普通正文继续保持已经验证过的旧算法。
+                    // 标签的 calibration 只用来校正横向 advance；CSS 字号并没有
+                    // 因此变高。纵向继续使用原 font-size，避免大号数字被同步拉高。
+                    const verticalUnitScale = job.localTransform ? unitScale : calibratedUnitScale;
+                    const metricHeight = (ascent + descent) * verticalUnitScale;
+                    const baseline = job.localTransform
+                        ? job.y + (lineBoxHeight - metricHeight) / 2 + ascent * verticalUnitScale
+                        : job.y + (lineBoxHeight - calibratedFontSize) / 2 + ascent * calibratedUnitScale;
                     let penX = job.x;
-                    (run.glyphs || []).forEach(function(glyph, index) {
-                        const pos = (run.positions || [])[index] || {};
+                    glyphs.forEach(function(glyph, index) {
+                        const pos = positions[index] || {};
                         const drawPath = glyph?.path?.toFunction?.();
                         if (!drawPath) return;
                         context.save();
-                        context.translate(penX + (Number(pos.xOffset) || 0) * unitScale, baseline - (Number(pos.yOffset) || 0) * unitScale);
-                        context.scale(unitScale, -unitScale);
+                        // 横向 advance 可以按浏览器 Range 做 X 校准，但阿拉伯语
+                        // 组合附加符的 GPOS yOffset 必须服从真实字号的 Y 比例。
+                        // 若继续套用横向 calibration，主体字形不变，点和变音符会漂移。
+                        context.translate(
+                            penX + (Number(pos.xOffset) || 0) * calibratedUnitScale,
+                            baseline - (Number(pos.yOffset) || 0) * verticalUnitScale
+                        );
+                        context.scale(calibratedUnitScale, -verticalUnitScale);
                         // html2canvas 刚完成背景/图片绘制，Canvas 的当前 path 可能仍保留
                         // 一个画板级矩形。必须清空它，否则 glyph.fill() 会把整张画布覆盖。
                         context.beginPath();
                         drawPath(context);
+                        if (job.strokeWidth > 0) {
+                            context.lineWidth = job.strokeWidth / Math.max(Math.min(calibratedUnitScale, verticalUnitScale), 0.0001);
+                            context.lineJoin = 'round';
+                            context.stroke();
+                        }
                         context.fill();
                         context.restore();
-                        penX += (Number(pos.xAdvance) || 0) * unitScale;
+                        penX += (Number(pos.xAdvance) || 0) * calibratedUnitScale;
+                        if (index < glyphs.length - 1) penX += (Number(job.letterSpacing) || 0) * calibration;
                     });
                 } else {
-                    const path = font.getPath(job.text, job.x, baseline, job.fontSize, { kerning: true });
+                    const rawAdvance = typeof font.getAdvanceWidth === 'function'
+                        ? font.getAdvanceWidth(job.text, job.fontSize, { kerning: true })
+                        : Number(job.width) || job.fontSize;
+                    const desiredAdvance = Math.max(0.0001, Number(job.width) || rawAdvance);
+                    const calibration = desiredAdvance / Math.max(0.0001, rawAdvance);
+                    assertOutlineCalibration(job, calibration, desiredAdvance, rawAdvance);
+                    job.outlineCalibration = calibration;
+                    const calibratedFontSize = job.fontSize * calibration;
+                    const calibratedUnitScale = calibratedFontSize / units;
+                    const metricHeight = (ascent + descent) * calibratedUnitScale;
+                    const baseline = job.localTransform
+                        ? job.y + (lineBoxHeight - metricHeight) / 2 + ascent * calibratedUnitScale
+                        : job.y + (lineBoxHeight - calibratedFontSize) / 2 + ascent * calibratedUnitScale;
+                    const path = font.getPath(job.text, job.x, baseline, calibratedFontSize, { kerning: true });
                     path.fill = job.color;
-                    path.stroke = null;
+                    path.stroke = job.strokeWidth > 0 ? job.strokeColor : null;
+                    path.strokeWidth = job.strokeWidth > 0 ? job.strokeWidth : 1;
                     path.draw(context);
+                }
+                } finally {
+                    context.restore();
                 }
             }
         } finally {
@@ -16440,16 +17532,497 @@ return true;
         probe.width = Math.max(1, Math.ceil(width * density));
         probe.height = Math.max(1, Math.ceil(height * density));
         await paintHTTextJobs(probe, jobs, density);
-        // 逐行稀疏采样足以确认路径是否真的落下像素；文字路径不会填满整张画板。
+        // 检查每个 alpha 像素，避免细笔画刚好落在稀疏采样间隙而被误判为空白。
         const pixels = probe.getContext('2d').getImageData(0, 0, probe.width, probe.height).data;
-        for (let i = 3; i < pixels.length; i += 16) if (pixels[i] !== 0) return true;
+        for (let i = 3; i < pixels.length; i += 4) if (pixels[i] !== 0) return true;
         return false;
     }
     function hideCloneTextJobs(clone, jobs) {
         const cloneWrappers = Array.from(clone.querySelectorAll('.layer-text-wrapper'));
         jobs.forEach(function(job) {
+            // 标签文字已在 collectTagTextPaintJobs 中只隐藏对应的叶子节点；
+            // 它的 wrapperIndex 属于另一组列表，不能拿来索引普通文字图层。
+            if (job.localTransform) return;
             if (cloneWrappers[job.wrapperIndex]) cloneWrappers[job.wrapperIndex].style.visibility = 'hidden';
         });
+    }
+    function captureGlyphPaintRegions(canvas, jobs, density) {
+        const context = canvas.getContext('2d');
+        return jobs.map(function(job) {
+            const padding = Math.max(4, Number(job.fontSize) * 0.25);
+            const regionX = Number.isFinite(Number(job.captureX)) ? Number(job.captureX) : Number(job.x);
+            const regionY = Number.isFinite(Number(job.captureY)) ? Number(job.captureY) : Number(job.y);
+            const regionWidth = Number.isFinite(Number(job.captureWidth)) ? Number(job.captureWidth) : Number(job.width || job.fontSize);
+            const regionHeight = Number.isFinite(Number(job.captureHeight)) ? Number(job.captureHeight) : Number(job.lineBoxHeight || job.height || job.fontSize);
+            const left = Math.max(0, Math.floor((regionX - padding) * density));
+            const top = Math.max(0, Math.floor((regionY - padding) * density));
+            const right = Math.min(canvas.width, Math.ceil((regionX + regionWidth + padding) * density));
+            const bottom = Math.min(canvas.height, Math.ceil((regionY + regionHeight + padding) * density));
+            const width = Math.max(0, right - left);
+            const height = Math.max(0, bottom - top);
+            return {
+                fontAssetKey: job.fontAssetKey,
+                left: left,
+                top: top,
+                width: width,
+                height: height,
+                pixels: width && height ? context.getImageData(left, top, width, height).data : null
+            };
+        });
+    }
+    function getChangedGlyphPaintGroupKeys(canvas, regions) {
+        const context = canvas.getContext('2d');
+        const changed = new Set();
+        regions.forEach(function(region) {
+            if (!region.pixels || !region.width || !region.height) return;
+            const current = context.getImageData(region.left, region.top, region.width, region.height).data;
+            for (let index = 0; index < current.length; index++) {
+                if (current[index] !== region.pixels[index]) {
+                    changed.add(region.fontAssetKey);
+                    return;
+                }
+            }
+        });
+        return changed;
+    }
+    function resolveObjectPositionOffset(value, freeSpace, axis) {
+        const token = String(value || '').trim().toLowerCase();
+        if (token === 'left' || token === 'top') return 0;
+        if (token === 'right' || token === 'bottom') return freeSpace;
+        if (token === 'center') return freeSpace / 2;
+        if (/%$/.test(token)) {
+            const percentage = parseFloat(token);
+            if (Number.isFinite(percentage)) return freeSpace * percentage / 100;
+        }
+        const pixels = parseFloat(token);
+        if (Number.isFinite(pixels)) return pixels;
+        return axis === 'x' || axis === 'y' ? freeSpace / 2 : 0;
+    }
+    async function normalizeOutlineCloneImages(sourceRoot, clone, density, session) {
+        const selector = '.layer-image-wrapper > img.layer-image-img,.layer-logo-layout-wrapper img';
+        const sourceImages = Array.from(sourceRoot.querySelectorAll(selector));
+        const cloneImages = Array.from(clone.querySelectorAll(selector));
+        if (sourceImages.length !== cloneImages.length) {
+            throw new Error('Logo 导出副本与画板图片数量不一致，已停止测试导出');
+        }
+        const safeDensity = Math.max(1, Math.min(3, Number(density) || 1));
+        const normalized = [];
+        for (let index = 0; index < sourceImages.length; index++) {
+            const sourceImage = sourceImages[index];
+            const cloneImage = cloneImages[index];
+            if (!sourceImage.complete || !sourceImage.naturalWidth || !sourceImage.naturalHeight) {
+                throw new Error('第 ' + (index + 1) + ' 张 Logo 原图尚未就绪');
+            }
+            const style = getComputedStyle(sourceImage);
+            const paddingLeft = parseFloat(style.paddingLeft) || 0;
+            const paddingRight = parseFloat(style.paddingRight) || 0;
+            const paddingTop = parseFloat(style.paddingTop) || 0;
+            const paddingBottom = parseFloat(style.paddingBottom) || 0;
+            const borderLeft = parseFloat(style.borderLeftWidth) || 0;
+            const borderRight = parseFloat(style.borderRightWidth) || 0;
+            const borderTop = parseFloat(style.borderTopWidth) || 0;
+            const borderBottom = parseFloat(style.borderBottomWidth) || 0;
+            const outerWidth = Math.max(1, Number(sourceImage.offsetWidth) || Number(sourceImage.clientWidth) || 1);
+            const outerHeight = Math.max(1, Number(sourceImage.offsetHeight) || Number(sourceImage.clientHeight) || 1);
+            const contentWidth = Math.max(1, outerWidth - paddingLeft - paddingRight - borderLeft - borderRight);
+            const contentHeight = Math.max(1, outerHeight - paddingTop - paddingBottom - borderTop - borderBottom);
+            const raster = document.createElement('canvas');
+            // canvas 本身包含原 img 的完整 border box；图片只画到内部
+            // content box。这样替换 DOM 节点后不会丢失原来的内边距。
+            raster.width = Math.max(1, Math.ceil(outerWidth * safeDensity));
+            raster.height = Math.max(1, Math.ceil(outerHeight * safeDensity));
+            const context = raster.getContext('2d');
+            if (!context) throw new Error('无法创建 Logo 透明像素画布');
+            context.setTransform(safeDensity, 0, 0, safeDensity, 0, 0);
+            context.imageSmoothingEnabled = true;
+            context.imageSmoothingQuality = 'high';
+            const naturalWidth = sourceImage.naturalWidth;
+            const naturalHeight = sourceImage.naturalHeight;
+            const naturalRatio = naturalWidth / Math.max(1, naturalHeight);
+            const boxRatio = contentWidth / Math.max(1, contentHeight);
+            const fit = String(style.objectFit || 'fill').toLowerCase();
+            let drawWidth = contentWidth;
+            let drawHeight = contentHeight;
+            if (fit === 'contain' || fit === 'scale-down') {
+                const containScale = Math.min(contentWidth / naturalWidth, contentHeight / naturalHeight);
+                const scale = fit === 'scale-down' ? Math.min(1, containScale) : containScale;
+                drawWidth = naturalWidth * scale;
+                drawHeight = naturalHeight * scale;
+            } else if (fit === 'cover') {
+                const coverScale = Math.max(contentWidth / naturalWidth, contentHeight / naturalHeight);
+                drawWidth = naturalWidth * coverScale;
+                drawHeight = naturalHeight * coverScale;
+            } else if (fit === 'none') {
+                drawWidth = naturalWidth;
+                drawHeight = naturalHeight;
+            }
+            const positionParts = String(style.objectPosition || '50% 50%').trim().split(/\s+/);
+            const positionX = positionParts[0] || '50%';
+            const positionY = positionParts[1] || positionParts[0] || '50%';
+            const contentX = borderLeft + paddingLeft;
+            const contentY = borderTop + paddingTop;
+            const drawX = contentX + resolveObjectPositionOffset(positionX, contentWidth - drawWidth, 'x');
+            const drawY = contentY + resolveObjectPositionOffset(positionY, contentHeight - drawHeight, 'y');
+            try {
+                context.drawImage(sourceImage, drawX, drawY, drawWidth, drawHeight);
+                // toDataURL 同时证明 canvas 没有被跨域污染。
+                const rasterData = raster.toDataURL('image/png');
+                // img 和 canvas 在 html2canvas 1.4.1 中最终都会进入
+                // renderReplacedElement，仍可能按固有像素尺寸裁切。改用
+                // 普通 div 的 CSS background 分支，并把背景尺寸锁定为容器全尺寸。
+                const replacement = document.createElement('div');
+                replacement.className = cloneImage.className;
+                replacement.style.cssText = cloneImage.style.cssText;
+                replacement.style.setProperty('box-sizing', 'border-box', 'important');
+                replacement.style.setProperty('display', style.display === 'none' ? 'none' : 'block', 'important');
+                replacement.style.setProperty('width', outerWidth + 'px', 'important');
+                replacement.style.setProperty('height', outerHeight + 'px', 'important');
+                replacement.style.setProperty('min-width', outerWidth + 'px', 'important');
+                replacement.style.setProperty('min-height', outerHeight + 'px', 'important');
+                replacement.style.setProperty('padding', '0', 'important');
+                replacement.style.setProperty('border', '0', 'important');
+                replacement.style.setProperty('border-radius', style.borderRadius || '0', 'important');
+                replacement.style.setProperty('background-color', 'transparent', 'important');
+                replacement.style.setProperty('background-image', 'url("' + rasterData + '")', 'important');
+                replacement.style.setProperty('background-size', '100% 100%', 'important');
+                replacement.style.setProperty('background-position', '0 0', 'important');
+                replacement.style.setProperty('background-repeat', 'no-repeat', 'important');
+                replacement.style.setProperty('background-origin', 'border-box', 'important');
+                replacement.style.setProperty('background-clip', 'border-box', 'important');
+                replacement.style.setProperty('pointer-events', 'none', 'important');
+                if (cloneImage.hasAttribute('data-keeta-logo-main')) replacement.setAttribute('data-keeta-logo-main', '');
+                cloneImage.replaceWith(replacement);
+            } catch (error) {
+                throw new Error('Logo 原图无法转换为可靠的透明像素：' + (error?.message || '跨域限制'));
+            }
+            normalized.push({
+                natural: [naturalWidth, naturalHeight],
+                outer: [outerWidth, outerHeight],
+                content: [contentWidth, contentHeight],
+                fit: fit,
+                ratio: [naturalRatio, boxRatio],
+                renderer: 'background-div'
+            });
+        }
+        traceExport(session, 'outline-images-normalized', { images: normalized });
+        return normalized.length;
+    }
+    function collectOutlineLogoPaintJobs(sourceRoot, clone, logicalWidth, logicalHeight) {
+        const selector = '.layer-image-wrapper > img.layer-image-img,.layer-logo-layout-wrapper img';
+        const sourceImages = Array.from(sourceRoot.querySelectorAll(selector));
+        const cloneImages = Array.from(clone.querySelectorAll(selector));
+        if (sourceImages.length !== cloneImages.length) {
+            throw new Error('Logo 直接绘制副本与画板图片数量不一致');
+        }
+        const rootRect = sourceRoot.getBoundingClientRect();
+        const scaleX = rootRect.width / Math.max(1, Number(logicalWidth) || rootRect.width);
+        const scaleY = rootRect.height / Math.max(1, Number(logicalHeight) || rootRect.height);
+        const jobs = [];
+        sourceImages.forEach(function(image, index) {
+            const wrapper = image.closest('.layer-image-wrapper,.layer-logo-layout-wrapper');
+            if (!wrapper) return;
+            const layer = layers.find(function(item) { return item.id === wrapper.dataset.id; });
+            const isLogoLayer = wrapper.classList.contains('layer-logo-layout-wrapper') || layer?.type === 'logo';
+            if (!isLogoLayer) return;
+            if (!image.complete || !image.naturalWidth || !image.naturalHeight) {
+                throw new Error('Logo 原图未就绪，已停止精确导出');
+            }
+            const wrapperStyle = getComputedStyle(wrapper);
+            const matrixMatch = String(wrapperStyle.transform || '').match(/^matrix\(([^)]+)\)$/);
+            const matrix = matrixMatch ? matrixMatch[1].split(',').map(Number) : [];
+            const rotation = matrix.length >= 4 ? Math.atan2(matrix[1], matrix[0]) * 180 / Math.PI : 0;
+            if (Math.abs(rotation) > 0.05) {
+                throw new Error('精确导出测试暂不支持旋转 Logo，已停止下载错误图片');
+            }
+            const style = getComputedStyle(image);
+            const rect = image.getBoundingClientRect();
+            let clipNode = image.parentElement;
+            while (clipNode && clipNode !== sourceRoot) {
+                const overflow = getComputedStyle(clipNode).overflow;
+                if (overflow === 'hidden' || overflow === 'clip') break;
+                if (clipNode === wrapper) { clipNode = null; break; }
+                clipNode = clipNode.parentElement;
+            }
+            const clipStyle = clipNode ? getComputedStyle(clipNode) : null;
+            const clipRect = clipNode ? clipNode.getBoundingClientRect() : rect;
+            const clipScale = clipNode ? clipRect.width / Math.max(1, clipNode.offsetWidth || clipRect.width) : 1;
+            const cloneImage = cloneImages[index];
+            const slot = image.closest('.logo-layout-slot');
+            const cloneSlot = cloneImage.closest('.logo-layout-slot');
+            const slotStyle = slot ? getComputedStyle(slot) : null;
+            // Logo 组合槽位的背景与内部图片必须使用同一套坐标绘制；
+            // 否则 html2canvas 的 button padding 盒模型会让白底比直接绘制的 Logo 更小。
+            if (slot && cloneSlot) cloneSlot.style.setProperty('visibility', 'hidden', 'important');
+            else cloneImage.style.setProperty('visibility', 'hidden', 'important');
+            jobs.push({
+                image: image,
+                layerId: wrapper.dataset.id || '',
+                x: (rect.left - rootRect.left) / Math.max(scaleX, 0.0001),
+                y: (rect.top - rootRect.top) / Math.max(scaleY, 0.0001),
+                width: rect.width / Math.max(scaleX, 0.0001),
+                height: rect.height / Math.max(scaleY, 0.0001),
+                naturalWidth: image.naturalWidth,
+                naturalHeight: image.naturalHeight,
+                fit: String(style.objectFit || 'fill').toLowerCase(),
+                position: String(style.objectPosition || '50% 50%'),
+                opacity: Math.max(0, Math.min(1, Number(wrapperStyle.opacity) || 0)),
+                flipX: !!layer?.flipX,
+                zIndex: Number(wrapperStyle.zIndex) || Number(layer?.zIndex) || 0,
+                clipX: (clipRect.left - rootRect.left) / Math.max(scaleX, 0.0001),
+                clipY: (clipRect.top - rootRect.top) / Math.max(scaleY, 0.0001),
+                clipWidth: clipRect.width / Math.max(scaleX, 0.0001),
+                clipHeight: clipRect.height / Math.max(scaleY, 0.0001),
+                clipRadius: clipStyle ? (parseFloat(clipStyle.borderTopLeftRadius) || 0) * clipScale / Math.max(scaleX, 0.0001) : 0,
+                paintSlotBackground: !!slot,
+                slotBackground: slotStyle?.backgroundColor || 'rgba(0,0,0,0)'
+            });
+        });
+        return jobs.sort(function(a, b) { return a.zIndex - b.zIndex; });
+    }
+    function addOutlineRoundedRectPath(context, x, y, width, height, radius) {
+        const safeRadius = Math.max(0, Math.min(Number(radius) || 0, width / 2, height / 2));
+        if (typeof context.roundRect === 'function') {
+            context.roundRect(x, y, width, height, safeRadius);
+            return;
+        }
+        context.moveTo(x + safeRadius, y);
+        context.lineTo(x + width - safeRadius, y);
+        context.arcTo(x + width, y, x + width, y + safeRadius, safeRadius);
+        context.lineTo(x + width, y + height - safeRadius);
+        context.arcTo(x + width, y + height, x + width - safeRadius, y + height, safeRadius);
+        context.lineTo(x + safeRadius, y + height);
+        context.arcTo(x, y + height, x, y + height - safeRadius, safeRadius);
+        context.lineTo(x, y + safeRadius);
+        context.arcTo(x, y, x + safeRadius, y, safeRadius);
+        context.closePath();
+    }
+    function paintOutlineLogoJobs(canvas, jobs, density, session) {
+        if (!jobs.length) return;
+        const context = canvas.getContext('2d');
+        context.save();
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.scale(density, density);
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        try {
+            jobs.forEach(function(job) {
+                const boxWidth = Math.max(0.0001, Number(job.width));
+                const boxHeight = Math.max(0.0001, Number(job.height));
+                const naturalWidth = Math.max(1, Number(job.naturalWidth));
+                const naturalHeight = Math.max(1, Number(job.naturalHeight));
+                let drawWidth = boxWidth;
+                let drawHeight = boxHeight;
+                if (job.fit === 'contain' || job.fit === 'scale-down') {
+                    const containScale = Math.min(boxWidth / naturalWidth, boxHeight / naturalHeight);
+                    const scale = job.fit === 'scale-down' ? Math.min(1, containScale) : containScale;
+                    drawWidth = naturalWidth * scale;
+                    drawHeight = naturalHeight * scale;
+                } else if (job.fit === 'cover') {
+                    const coverScale = Math.max(boxWidth / naturalWidth, boxHeight / naturalHeight);
+                    drawWidth = naturalWidth * coverScale;
+                    drawHeight = naturalHeight * coverScale;
+                } else if (job.fit === 'none') {
+                    drawWidth = naturalWidth;
+                    drawHeight = naturalHeight;
+                }
+                const positionParts = String(job.position || '50% 50%').trim().split(/\s+/);
+                const drawX = Number(job.x) + resolveObjectPositionOffset(positionParts[0] || '50%', boxWidth - drawWidth, 'x');
+                const drawY = Number(job.y) + resolveObjectPositionOffset(positionParts[1] || positionParts[0] || '50%', boxHeight - drawHeight, 'y');
+                context.save();
+                context.globalAlpha = job.opacity;
+                if (job.paintSlotBackground) {
+                    context.beginPath();
+                    addOutlineRoundedRectPath(
+                        context,
+                        Number(job.clipX),
+                        Number(job.clipY),
+                        Math.max(0.0001, Number(job.clipWidth)),
+                        Math.max(0.0001, Number(job.clipHeight)),
+                        Number(job.clipRadius)
+                    );
+                    context.fillStyle = job.slotBackground;
+                    context.fill();
+                }
+                context.beginPath();
+                // 父容器的外沿已由 html2canvas 按 CSS border-radius 绘制。
+                // Logo 像素稍微内收，避免两套抗锯齿边界在外缘叠加成凸角。
+                const clipInset = Number(job.clipRadius) > 0 ? 0.75 : 0;
+                const clipX = Number(job.clipX) + clipInset;
+                const clipY = Number(job.clipY) + clipInset;
+                const clipWidth = Math.max(0.0001, Number(job.clipWidth) - clipInset * 2);
+                const clipHeight = Math.max(0.0001, Number(job.clipHeight) - clipInset * 2);
+                const clipRadius = Math.max(0, Number(job.clipRadius) - clipInset);
+                addOutlineRoundedRectPath(
+                    context,
+                    clipX,
+                    clipY,
+                    clipWidth,
+                    clipHeight,
+                    clipRadius
+                );
+                context.clip();
+                if (job.flipX) {
+                    context.translate(drawX + drawWidth, drawY);
+                    context.scale(-1, 1);
+                    context.drawImage(job.image, 0, 0, drawWidth, drawHeight);
+                } else {
+                    context.drawImage(job.image, drawX, drawY, drawWidth, drawHeight);
+                }
+                context.restore();
+            });
+        } finally {
+            context.restore();
+        }
+        traceExport(session, 'outline-logos-painted-directly', {
+            logos: jobs.map(function(job) {
+                return {
+                    layerId: job.layerId,
+                    rect: [job.x, job.y, job.width, job.height],
+                    natural: [job.naturalWidth, job.naturalHeight],
+                    fit: job.fit,
+                    slot: job.paintSlotBackground ? {
+                        rect: [job.clipX, job.clipY, job.clipWidth, job.clipHeight],
+                        background: job.slotBackground
+                    } : null
+                };
+            })
+        });
+    }
+    async function renderPreciseExportBlob(scale, session) {
+        const wrap = document.getElementById('canvas-wrapper');
+        if (!wrap) throw new Error('未找到可导出的画板');
+        // 必须先完成云端字体安装并重绘真实画板，再创建导出副本。若先 clone，
+        // 首次进站时副本会永久保留 fallback 字体，即使等待期间 FontFace 已就绪。
+        await waitForNativeCaptureResources(wrap, session);
+        const target = getCurrentExportSize(scale || 2);
+        const safeScale = Math.min(Number(scale) || 2, Math.sqrt(SAFE_CANVAS_PX / (target.width * target.height)));
+        if (!Number.isFinite(safeScale) || safeScale <= 0) throw new Error('导出尺寸无效');
+        const clone = wrap.cloneNode(true);
+        clone.id = 'vf-outline-export-clone';
+        clone.classList.remove('is-active-layer');
+        clone.querySelectorAll('.is-active-layer,.is-new-layer,.layer-text-editing').forEach(function(node) {
+            node.classList.remove('is-active-layer', 'is-new-layer', 'layer-text-editing');
+        });
+        clone.querySelectorAll('#safe-guide,.editor-group-selection-box,.layer-replacement-loading').forEach(function(node) { node.remove(); });
+        clone.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + target.width + 'px;height:' + target.height + 'px;transform:none;z-index:-1;overflow:hidden;background:#fff;pointer-events:none;';
+        clone.style.setProperty('border', '0', 'important');
+        clone.style.setProperty('border-radius', '0', 'important');
+        clone.style.setProperty('box-shadow', 'none', 'important');
+        document.body.appendChild(clone);
+        try {
+            const logoJobs = collectOutlineLogoPaintJobs(wrap, clone, target.width, target.height);
+            const jobs = collectHTTextPaintJobs(wrap, clone, target.width, target.height)
+                .concat(collectTagTextPaintJobs(wrap, clone, target.width, target.height));
+            const tagJobs = collectOutlineTagPaintJobs(wrap, clone);
+            const rotated = jobs.find(function(job) { return !job.localTransform && Math.abs(Number(job.rotation) || 0) > 0.05; });
+            if (rotated) throw new Error('精确导出暂不支持旋转文字，请先使用未旋转的文字图层');
+            const groups = new Map();
+            jobs.forEach(function(job) {
+                const key = job.fontAssetKey;
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key).push(job);
+            });
+            const probeDensity = Math.min(1, 2048 / Math.max(target.width, target.height));
+            for (const groupJobs of groups.values()) {
+                if (!await canPaintHTTextJobs(groupJobs, target.width, target.height, probeDensity)) {
+                    throw new Error('字体轮廓没有产生有效像素，已停止导出');
+                }
+                // 缺字符号由浏览器 fallback 补齐，但它们必须继承同一字体
+                // 正常词形已校验的统一缩放率。否则仅按 DOM 宽度压缩会使
+                // 问号、感叹号等保持原高度却变得过窄。
+                const metricSources = groupJobs.filter(function(job) {
+                    return !job.usedBrowserGlyphFallback
+                        && Number.isFinite(Number(job.outlineCalibration))
+                        && Array.from(job.text || '').length >= 2;
+                });
+                const fallbackMetricSources = metricSources.length ? metricSources : groupJobs.filter(function(job) {
+                    return !job.usedBrowserGlyphFallback && Number.isFinite(Number(job.outlineCalibration));
+                });
+                const fallbackJobs = groupJobs.filter(function(job) { return job.usedBrowserGlyphFallback; });
+                if (fallbackJobs.length && !fallbackMetricSources.length) {
+                    throw new Error('缺失字符无法继承目标字体的尺度校准，已停止测试导出');
+                }
+                if (fallbackJobs.length) {
+                    const sortedCalibrations = fallbackMetricSources.map(function(job) {
+                        return Number(job.outlineCalibration);
+                    }).sort(function(a, b) { return a - b; });
+                    const midpoint = Math.floor(sortedCalibrations.length / 2);
+                    const metricCalibration = sortedCalibrations.length % 2
+                        ? sortedCalibrations[midpoint]
+                        : (sortedCalibrations[midpoint - 1] + sortedCalibrations[midpoint]) / 2;
+                    fallbackJobs.forEach(function(job) { job.fontMetricCalibration = metricCalibration; });
+                }
+                ['text', 'tag'].forEach(function(scope) {
+                    const comparable = groupJobs.filter(function(job) {
+                        return (job.localTransform ? 'tag' : 'text') === scope
+                            && !job.usedBrowserGlyphFallback
+                            && Array.from(job.text || '').length >= 2;
+                    });
+                    if (comparable.length < 2) return;
+                    const calibrations = comparable.map(function(job) { return Number(job.outlineCalibration) || 1; });
+                    const minCalibration = Math.min.apply(null, calibrations);
+                    const maxCalibration = Math.max.apply(null, calibrations);
+                    if (maxCalibration / Math.max(0.0001, minCalibration) > 1.35) {
+                        throw new Error('同一字体在' + (scope === 'tag' ? '标签' : '正文') + '中的轮廓校准结果不一致，可能使用了替代字体，已停止测试导出');
+                    }
+                });
+            }
+            hideCloneTextJobs(clone, jobs);
+            await waitForImagesIn(clone);
+            await nextFrame();
+            const canvas = await html2canvas(clone, {
+                scale: safeScale,
+                width: target.width,
+                height: target.height,
+                windowWidth: target.width,
+                windowHeight: target.height,
+                useCORS: true,
+                allowTaint: false,
+                backgroundColor: '#FFFFFF',
+                logging: false,
+                imageTimeout: 0
+            });
+            paintOutlineLogoJobs(canvas, logoJobs, safeScale, session);
+            paintOutlineTagJobs(canvas, tagJobs, safeScale, session);
+            const beforeGlyphPaint = captureGlyphPaintRegions(canvas, jobs, safeScale);
+            await paintHTTextJobs(canvas, jobs, safeScale);
+            const changedFontGroups = getChangedGlyphPaintGroupKeys(canvas, beforeGlyphPaint);
+            const missingFontGroups = Array.from(groups.keys()).filter(function(key) { return !changedFontGroups.has(key); });
+            if (missingFontGroups.length) {
+                throw new Error('有 ' + missingFontGroups.length + ' 个字体或字重未落入最终画板，已停止下载错误图片');
+            }
+            const blob = await new Promise(function(resolve, reject) {
+                canvas.toBlob(function(result) { result ? resolve(result) : reject(new Error('无法生成导出图片')); }, 'image/png');
+            });
+            traceExport(session, 'precise-render-complete', {
+                logical: [target.width, target.height],
+                output: [canvas.width, canvas.height],
+                jobs: jobs.length,
+                fontGroups: groups.size,
+                fonts: Array.from(groups.values(), function(groupJobs) {
+                    const sample = groupJobs[0];
+                    return {
+                        family: sample.fontAssetFamilyId,
+                        weight: sample.fontAssetWeight,
+                        digest: sample.outlineDigest,
+                        engines: Array.from(new Set(groupJobs.map(function(job) { return job.outlineEngine; }))),
+                        fallbackGlyphJobs: groupJobs.filter(function(job) { return job.usedBrowserGlyphFallback; }).length,
+                        fallbackMetricCalibration: groupJobs.find(function(job) { return job.usedBrowserGlyphFallback; })?.fontMetricCalibration || null,
+                        fallbackWidthCalibration: groupJobs.filter(function(job) {
+                            return job.usedBrowserGlyphFallback && Number.isFinite(Number(job.fallbackWidthCalibration));
+                        }).map(function(job) { return Number(job.fallbackWidthCalibration); })
+                    };
+                }),
+                calibration: jobs.length ? [
+                    Math.min.apply(null, jobs.map(function(job) { return Number(job.outlineCalibration) || 1; })),
+                    Math.max.apply(null, jobs.map(function(job) { return Number(job.outlineCalibration) || 1; }))
+                ] : [],
+                bytes: blob.size
+            });
+            return blob;
+        } finally {
+            clone.remove();
+        }
     }
     function svgNumber(value) {
         const number = Number(value);
@@ -16703,24 +18276,109 @@ return true;
         if(!blob) throw new Error('empty blob');
         const link = document.createElement('a');
         link.download = filename;
-        link.href = URL.createObjectURL(blob);
+        const objectUrl = URL.createObjectURL(blob);
+        link.href = objectUrl;
         document.body.appendChild(link);
         link.click();
-        link.remove();
-        URL.revokeObjectURL(link.href);
+        // Chrome 在部分用户配置或无痕模式下会阻止异步触发的 blob 下载。
+        // 自动下载仍先尝试，同时保留一个真正由用户点击的保存入口；该点击拥有
+        // 新的 user activation，因此不依赖当前 Chrome 账号的自动下载策略。
+        showManualDownloadFallback(objectUrl, filename);
+        setTimeout(function() {
+            link.remove();
+        }, 1000);
+    }
+    function showManualDownloadFallback(objectUrl, filename) {
+        const previous = document.getElementById('manual-download-fallback');
+        if (previous && typeof previous._vfCleanup === 'function') previous._vfCleanup();
+
+        const panel = document.createElement('div');
+        panel.id = 'manual-download-fallback';
+        panel.style.cssText = 'position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:10020;display:flex;align-items:center;gap:10px;padding:9px 10px 9px 14px;border-radius:14px;background:#111827;color:#fff;box-shadow:0 12px 32px rgba(15,23,42,.24);font-size:13px;font-weight:700;';
+
+        const message = document.createElement('span');
+        message.textContent = '若浏览器未自动下载，请点击右侧保存';
+
+        const saveLink = document.createElement('a');
+        saveLink.href = objectUrl;
+        saveLink.download = filename;
+        saveLink.textContent = '保存图片';
+        saveLink.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:0 14px;border-radius:9px;background:#fff;color:#111827;text-decoration:none;white-space:nowrap;';
+
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.setAttribute('aria-label', '关闭');
+        closeButton.textContent = '×';
+        closeButton.style.cssText = 'width:28px;height:28px;border:0;border-radius:8px;background:rgba(255,255,255,.12);color:#fff;font-size:18px;line-height:1;cursor:pointer;';
+
+        let cleaned = false;
+        let cleanupTimer = 0;
+        const cleanup = function() {
+            if (cleaned) return;
+            cleaned = true;
+            if (cleanupTimer) clearTimeout(cleanupTimer);
+            panel.remove();
+            URL.revokeObjectURL(objectUrl);
+        };
+        panel._vfCleanup = cleanup;
+        saveLink.addEventListener('click', function() {
+            setTimeout(cleanup, 1500);
+        });
+        closeButton.addEventListener('click', cleanup);
+        // 给手动保存留出足够点击时间，但不让提示像常驻工具条一样停留。
+        cleanupTimer = setTimeout(cleanup, 12000);
+
+        panel.appendChild(message);
+        panel.appendChild(saveLink);
+        panel.appendChild(closeButton);
+        document.body.appendChild(panel);
     }
     window.doExport = function(scale) {
-        if (exportFormat === 'jpg') { exportJPG(scale); } else { exportPNG(scale); }
+        if (activeExportSession) {
+            showToast('上一个导出仍在进行，请完成或取消后再试', true);
+            traceExport(activeExportSession, 'duplicate-click-blocked', { requestedFormat: exportFormat, requestedScale: scale });
+            return activeExportSession.promise || Promise.resolve(false);
+        }
+        if (layers.length === 0) {
+            showToast('画板为空，无法导出', true);
+            return Promise.resolve(false);
+        }
+        const safeFormat = exportFormat === 'jpg' ? 'jpg' : 'png';
+        const safeScale = Number(scale) || 1;
+        const session = createExportSession('precise-' + safeFormat, safeScale);
+        activeExportSession = session;
+        traceExport(session, 'export-start', { format: safeFormat, renderer: 'precise-hybrid', scale: safeScale, ratio: currentRatio, artboardId: currentArtboardId });
+        const button = document.querySelector('.canvas-export-action');
+        if (button) button.disabled = true;
+        showToast('正在生成' + safeScale + '倍 ' + safeFormat.toUpperCase() + '…');
+        const task = renderPreciseExportBlob(safeScale, session).then(async function(pngBlob) {
+            const outputBlob = safeFormat === 'jpg' ? await convertBlobToJPG(pngBlob, 0.92) : pngBlob;
+            const filename = 'GCC_' + getArtboardPreset(currentArtboardId).label + '_' + Date.now() + '.' + safeFormat;
+            downloadBlob(outputBlob, filename);
+            traceExport(session, 'download-ready', { filename: filename, format: safeFormat, bytes: outputBlob.size });
+            showToast('✅ ' + safeScale + '倍 ' + safeFormat.toUpperCase() + ' 导出成功');
+            return true;
+        }).catch(function(error) {
+            console.error('精确导出失败：', error);
+            traceExport(session, 'export-error', { name: error?.name || '', message: error?.message || String(error), stack: error?.stack || '' });
+            showToast('❌ 导出失败：' + (error?.message || '未知错误'), true);
+            return false;
+        });
+        session.promise = Promise.resolve(task).finally(function() {
+            if (button) button.disabled = false;
+            finishExportSession(session, 'export-finished');
+        });
+        return session.promise;
     };
-    async function exportPNG(scale) {
+    // v451 以前的截图/旧 Canvas 导出仅作为隔离备份保留，不再连接正式按钮。
+    async function legacyExportPNG(scale, session) {
         scale = scale || 3;
         if(layers.length === 0) return showToast('画板为空，无法导出', true);
         const requiresNativeCapture = hasTextOrTagLayer();
         // 只要画板包含普通文字或标签组件，就保留浏览器的真实 DOM/CSS
         // 排版并改用当前标签页截取；纯图片/图形画板仍使用常规高清导出。
         if (requiresNativeCapture) {
-            exportNativeCapturePNG(scale);
-            return;
+            return exportNativeCapturePNG(scale, session);
         }
         const oldActive = [...activeLayerIds];
         const overlay = document.getElementById('export-overlay');
@@ -16745,10 +18403,12 @@ return true;
                 blob = await renderCurrentArtboardBlob(scale);
             }
             downloadBlob(blob, `GCC_${getArtboardPreset(currentArtboardId).label}_${Date.now()}.png`);
+            traceExport(session, 'download-ready', { format: 'png', bytes: blob.size });
             const htModeLabel = { outline: '字体轮廓', 'native-image': '原生文字图片', 'legacy-fallback': '旧文字回退' };
             showToast('✅ ' + scale + '倍 PNG 导出成功' + (requiresNativeCapture ? '（HT：' + (htModeLabel[blob.vfHTExportMode] || '未识别') + '）' : ''));
         } catch (e) {
             console.error('PNG 导出失败:', e);
+            traceExport(session, 'export-error', { name: e?.name || '', message: e?.message || String(e), stack: e?.stack || '' });
             showToast('❌ 导出失败：' + (e?.message || '未知错误'), true);
         } finally {
             overlay.style.display = 'none';
@@ -16758,7 +18418,7 @@ return true;
             renderCanvas(); renderLayersList(); renderProperties();
         }
     }
-    async function exportJPG(scale) {
+    async function legacyExportJPG(scale, session) {
         scale = scale || 3;
         if (layers.length === 0) return showToast('画板为空，无法导出', true);
         const requiresNativeCapture = hasTextOrTagLayer();
@@ -16770,16 +18430,21 @@ return true;
             const wasCaptureMode2 = document.body.classList.contains('vf-native-capture-mode');
             document.body.classList.add('vf-native-capture-mode');
             activeLayerIds = [];
-            resizeCanvas(); renderCanvas(); renderLayersList(); renderProperties();
+            // 与 PNG 一致：捕获现有稳定 DOM，不在授权前重建文字和 Logo。
+            resizeCanvas();
             if (safeGuide2) safeGuide2.style.display = 'none';
             try {
-                var pngBlob = await captureNativeArtboardBlob(scale);
+                showToast('请选择“当前标签页”完成高清导出');
+                var pngBlob = await captureNativeArtboardBlob(scale, session);
                 var jpgBlob = await convertBlobToJPG(pngBlob, 0.92);
-                downloadBlob(jpgBlob, 'GCC_' + getArtboardPreset(currentArtboardId).label + '_' + Date.now() + '.jpg');
+                var nativeJpgFilename = 'GCC_' + getArtboardPreset(currentArtboardId).label + '_' + Date.now() + '.jpg';
+                downloadBlob(jpgBlob, nativeJpgFilename);
+                traceExport(session, 'download-ready', { filename: nativeJpgFilename, bytes: jpgBlob.size });
                 showToast('✅ ' + scale + '倍 JPG 导出成功');
             } catch (e) {
                 console.error('JPG 导出失败:', e);
-                showToast('❌ 导出失败：' + (e?.message || '未知错误'), true);
+                traceExport(session, 'export-error', { name: e?.name || '', message: e?.message || String(e), stack: e?.stack || '' });
+                showToast('❌ 为避免字体或 Logo 变形，已停止导出：' + (e?.message || '未知错误'), true);
             } finally {
                 if (!wasCaptureMode2) document.body.classList.remove('vf-native-capture-mode');
                 if (safeGuide2) safeGuide2.style.display = oldGuideDisplay2;
@@ -16800,9 +18465,11 @@ return true;
         try {
             var blob = await renderCurrentArtboardBlob(scale, 'image/jpeg', 0.92);
             downloadBlob(blob, 'GCC_' + getArtboardPreset(currentArtboardId).label + '_' + Date.now() + '.jpg');
+            traceExport(session, 'download-ready', { format: 'jpg', bytes: blob.size });
             showToast('✅ ' + scale + '倍 JPG 导出成功');
         } catch (e) {
             console.error('JPG 导出失败:', e);
+            traceExport(session, 'export-error', { name: e?.name || '', message: e?.message || String(e), stack: e?.stack || '' });
             showToast('❌ 导出失败：' + (e?.message || '未知错误'), true);
         } finally {
             overlay.style.display = 'none';
@@ -16862,12 +18529,8 @@ return true;
     }
 
     async function bootApp() {
-        await loadGlobalData();
-        await loadFontsFromDB();
-        await loadReferenceElementsFromDB();
-        await loadSharedAssetsFromCloud();
-        // 刷新后先清理上一会话移入回收站的云端资产；收到完成消息后再加载清单。
-        if (!purgeRecycleBinAfterReload()) notifyParent({ type: 'vf:request-templates' });
+        // 编辑器骨架和本地画板必须先出现，不能被 IndexedDB、共享资产接口或字体
+        // 网络请求阻塞。远端内容随后到达时再增量重绘。
         loadJimengSessionId();
         requestJimengSessionId(true);
         setInterval(function() { requestJimengSessionId(true); }, 30 * 60 * 1000);
@@ -16882,26 +18545,46 @@ return true;
         renderCanvas();
         renderLayersList();
         renderProperties();
-        renderAssetLibrary();
+        if (currentAssetTab !== 'layout' || !templateCatalogReady) renderAssetLibrary();
+        renderPromptTags();
+        refreshAIConsole();
+        notifyParent({ type: 'vf:static-ready' });
+        // 刷新后先清理上一会话移入回收站的云端资产；否则立即请求资产清单。
+        if (!purgeRecycleBinAfterReload()) requestTemplateCatalog(false);
+
+        var startupLoaders = [
+            ['全局数据', loadGlobalData],
+            ['云端提示词', loadColorPalettesFromLibrary],
+            ['本地字体', loadFontsFromDB],
+            ['参考元素', loadReferenceElementsFromDB],
+            ['共享资产', loadSharedAssetsFromCloud]
+        ];
+        for (var startupIndex = 0; startupIndex < startupLoaders.length; startupIndex++) {
+            try {
+                await startupLoaders[startupIndex][1]();
+            } catch (startupError) {
+                console.warn(startupLoaders[startupIndex][0] + '加载失败，编辑器继续启动:', startupError);
+            }
+        }
+        // 云端与本地缓存合并完成后做一次最终一致性重绘。
+        renderSettings();
+        renderCustomArtboardControls();
+        syncRatioNav();
+        resizeCanvas();
+        renderCanvas();
+        renderLayersList();
+        renderProperties();
+        if (currentAssetTab !== 'layout' || !templateCatalogReady) renderAssetLibrary();
         renderPromptTags();
         refreshAIConsole();
         saveHistory();
         unlockCanvasAfterFontsReady();
     }
-    async function unlockCanvasAfterFontsReady() {
-        showCanvasFontLoadingOverlay();
-        try {
-            await Promise.race([
-                (async function() {
-                    await document.fonts.ready;
-                    await _cloudFontsReadyPromise;
-                    await document.fonts.ready;
-                })(),
-                new Promise(function(resolve) { setTimeout(resolve, 10000); })
-            ]);
-        } catch (e) {}
-        renderCanvas();
-        hideCanvasFontLoadingOverlay();
+    function unlockCanvasAfterFontsReady() {
+        // 首次进站也必须走与模板切换相同的云端字体门禁。renderCanvas 会先
+        // 显示背景、图片和 Logo，并暂时省略尚未安装字体的文字/标签；目标字体
+        // 注册完成后再一次性重绘正确字形，不再闪现或导出 fallback 首帧。
+        renderTemplateCanvasAfterFonts(layers, layers);
     }
     function setupLayerListResize() {
         const list = document.getElementById('layer-list-ui');
