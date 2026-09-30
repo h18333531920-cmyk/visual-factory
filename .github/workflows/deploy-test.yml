@@ -1,8 +1,8 @@
-name: Deploy v868 to test branch
+name: Deploy v869 to test branch
 
 on:
   push:
-    branches: [tmp-deploy-v868]
+    branches: [tmp-deploy-v869]
 
 jobs:
   deploy:

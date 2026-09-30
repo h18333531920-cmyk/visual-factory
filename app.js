@@ -785,7 +785,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260924-search-v868';
+const TOOL_UI_VERSION = '20260924-case-complete-v869';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -7247,8 +7247,10 @@ return;
 
   let caseProjectKeyHandler = null;
   function openCaseProjectModal(sourceId, focusType) {
-    const source = state.librarySources.find(s => s.id === sourceId);
-    if (!source) return;
+    const requestedSource = state.librarySources.find(s => s.id === sourceId);
+    if (!requestedSource) return;
+    const source = canonicalCaseProjectSource(requestedSource);
+    sourceId = source.id;
     closeCaseProjectModal();
     const materials = caseMaterialsOf(source);
     if (!materials.length) return;
@@ -11310,6 +11312,40 @@ return;
     return state.libraryPreviews
       .filter(preview => preview.source_file_id === source.id)
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  }
+
+  // 历史导入可能留下同名的小项目副本。若它的全部文件名都包含在另一个
+  // 同名大项目中，保留数据库旧记录，但弹窗转到完整项目，避免把旧副本
+  // 的 18 张误当成完整项目的 83 张再次被截断。
+  function caseProjectIdentity(value) {
+    return String(value || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  }
+
+  function caseMaterialIdentity(preview) {
+    return caseProjectIdentity(String(preview && preview.preview_filename || '').replace(/\.[^.]+$/, ''));
+  }
+
+  function canonicalCaseProjectSource(source) {
+    if (!source || !isCaseProject(source)) return source;
+    const titleKey = caseProjectIdentity(source.title);
+    const sourceMaterials = caseMaterialsOf(source);
+    if (!titleKey || !sourceMaterials.length) return source;
+    const sourceNames = new Set(sourceMaterials.map(caseMaterialIdentity).filter(Boolean));
+    if (!sourceNames.size) return source;
+    let best = source;
+    let bestCount = sourceMaterials.length;
+    state.librarySources.forEach(function(candidate) {
+      if (!candidate || candidate.id === source.id || !isCaseProject(candidate)) return;
+      if (caseProjectIdentity(candidate.title) !== titleKey) return;
+      const candidateMaterials = caseMaterialsOf(candidate);
+      if (candidateMaterials.length <= bestCount) return;
+      const candidateNames = new Set(candidateMaterials.map(caseMaterialIdentity).filter(Boolean));
+      if (Array.from(sourceNames).every(function(name) { return candidateNames.has(name); })) {
+        best = candidate;
+        bestCount = candidateMaterials.length;
+      }
+    });
+    return best;
   }
 
   // v858 素材缩略图聚拢排序：同尺寸聚在一起；同尺寸里「名字贴近」的——去掉扩展名、尾部序号、
