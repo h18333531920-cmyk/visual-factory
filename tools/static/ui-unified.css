@@ -516,8 +516,8 @@ html body {
   border-radius: 0 !important;
   color: var(--ui-text) !important;
   background: #fff !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
 }
 .export-dropdown-menu button.export-format-option + button.export-format-option {
   border-left: 1px solid #d0d5dd !important;
@@ -532,6 +532,44 @@ html body {
   background: var(--ui-ink) !important;
 }
 
+/* Export scale rows need more vertical room than generic popover actions. */
+.export-dropdown-menu button.export-scale-option {
+  min-height: 82px !important;
+  padding: 14px 16px !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+}
+.export-dropdown-menu .export-scale-meta {
+  gap: 12px !important;
+  line-height: 1.25 !important;
+}
+.export-dropdown-menu .export-scale-value {
+  color: #111827 !important;
+  font-size: 17px !important;
+  font-weight: 820 !important;
+}
+.export-dropdown-menu .export-scale-note,
+.export-dropdown-menu .export-dim {
+  color: #8a919c !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+.export-dropdown-menu .export-estimate {
+  color: #374151 !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+.export-dropdown-menu .export-estimate.is-actual { color: #111827 !important; }
+.export-dropdown-menu button.export-scale-option:hover:not(:disabled) {
+  color: #111827 !important;
+  background: #edf1f5 !important;
+  box-shadow: inset 0 0 0 1px #b8c1ce !important;
+  transform: translateY(-1px) !important;
+}
+.export-dropdown-menu button.export-scale-option:focus-visible {
+  background: #edf1f5 !important;
+  box-shadow: inset 0 0 0 2px #64748b !important;
+}
 .modal-overlay { background: rgba(15, 23, 42, 0.26) !important; backdrop-filter: blur(4px) !important; -webkit-backdrop-filter: blur(4px) !important; }
 .modal-content,
 .color-preset-dialog-card,

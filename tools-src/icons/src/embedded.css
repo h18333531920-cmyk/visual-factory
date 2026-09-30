@@ -1,0 +1,32 @@
+/* Host-only appearance. Keep all layout, controls, selection states and Canvas
+   geometry in styles.css; the standalone studio remains unchanged. */
+body.embedded {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f5f6f8;
+  color: #0f172a;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --radius: 12px;
+  --shadow: none;
+}
+body.embedded .input-panel,
+body.embedded .result-panel,
+body.embedded .batch-panel,
+body.embedded .batch-background-panel {
+  background: #fff;
+  border-color: var(--border);
+  box-shadow: none;
+}
+body.embedded .mode-tabs {
+  background: #f1f5f9;
+  border-color: #eef2f7;
+}
+body.embedded .mode-tabs button.active {
+  color: #111827;
+}
+
+/* Mode is supplied by the existing host bridge. Unknown/default mode is user. */
+html:not([data-vf-mode="developer"]) .more-settings-button[data-developer-only] {
+  display: none !important;
+}

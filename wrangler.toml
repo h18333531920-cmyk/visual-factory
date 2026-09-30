@@ -10,3 +10,32 @@ id = "5fae7742d41b4a3a85b807466af9b447"
 [vars]
 SUPABASE_URL = "https://juuqvjmhzdgfggzrivbb.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_PIa3V0LGlOn1K6G1nBUeqw_kiFB6fjt"
+
+# Separate account permissions and maintenance sessions for the test deployment.
+[[env.preview.d1_databases]]
+binding = "VF_ACCESS_DB"
+database_name = "vf-account-access-test"
+database_id = "489691f3-00f0-426a-b0f4-e22f977ae448"
+
+[[env.preview.kv_namespaces]]
+binding = "VF_KV"
+id = "5fae7742d41b4a3a85b807466af9b447"
+
+[env.preview.vars]
+SUPABASE_URL = "https://juuqvjmhzdgfggzrivbb.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_PIa3V0LGlOn1K6G1nBUeqw_kiFB6fjt"
+
+# Production account permissions (independent D1; secret VF_ACCOUNT_VAULT_KEY set via wrangler).
+[[env.production.d1_databases]]
+binding = "VF_ACCESS_DB"
+database_name = "vf-account-access-prod"
+database_id = "e5f88917-f646-464f-9d74-216aeafb9ab1"
+
+[[env.production.kv_namespaces]]
+binding = "VF_KV"
+id = "5fae7742d41b4a3a85b807466af9b447"
+
+[env.production.vars]
+SUPABASE_URL = "https://juuqvjmhzdgfggzrivbb.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_PIa3V0LGlOn1K6G1nBUeqw_kiFB6fjt"
+VF_ACCESS_PRODUCTION = "1"

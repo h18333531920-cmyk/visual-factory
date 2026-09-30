@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GCC Design - Static DIY</title>
     <script src="../../config.js?v=20260805-unified-v76"></script>
-    <script src="../../tool-auth-guard.js?v=20260805-unified-v76"></script>
+    <script src="../../tool-auth-guard.js?v=20260915-account-access-v541"></script>
     <script src="../vendor/html2canvas.min.js"></script>
+    <script src="./local-png-compressor.js?v=20260828-gradient-safe-png-v519"></script>
     
     <style>
         :root { --primary: #2563EB; --primary-hover: #1D4ED8; --bg-canvas: #F7F8FB; --panel-bg: #FFFFFF; --card-bg: #F8FAFC; --border: #E4E7EC; --text-main: #101828; --text-sub: #667085; --danger: #D92D20; --shadow: 0 16px 34px rgba(16,24,40,0.08); }
@@ -548,8 +549,11 @@
         .ai-submit-btn:active { transform: translateY(0); box-shadow: 0 1px 4px rgba(16,17,20,0.2); }
         .ai-submit-btn:disabled { opacity: 0.42; cursor: progress; transform: none; box-shadow: none; }
         .ai-mini-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-        .keyword-setting-row { display: grid; grid-template-columns: 92px 1fr auto; gap: 8px; align-items: center; background: var(--card-bg); padding: 10px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 10px; }
-        .keyword-setting-row textarea { margin: 0; min-height: 54px; }
+        .keyword-setting-row { display:flex; flex-direction:column; align-items:stretch; gap:8px; background:var(--card-bg); padding:10px; border-radius:10px; border:1px solid var(--border); margin-bottom:10px; }
+        .keyword-setting-head { display:flex; align-items:center; gap:8px; }
+        .keyword-setting-head .setting-input { flex:1 1 auto; width:auto !important; margin:0 !important; text-align:left; }
+        .keyword-setting-head .l-btn { flex:0 0 auto; }
+        .keyword-setting-row textarea { display:block; width:100%; min-width:100%; max-width:100%; min-height:92px; margin:0; box-sizing:border-box; resize:vertical !important; overflow:auto; line-height:1.55; }
         .add-menu-wrap { position: relative; }
         .add-menu { display: none; position: absolute; right: 0; top: 32px; width: 150px; background: #FFFFFF; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,0.08); padding: 6px; z-index: 30; }
         .add-menu.open { display: block; }
@@ -557,11 +561,9 @@
         .add-menu button:hover { background: #F3F5F7; }
         .ai-loading { display: none; position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); width: min(440px, calc(100% - 48px)); background: rgba(17,24,39,0.92); color: #FFFFFF; border-radius: 14px; padding: 14px 16px; z-index: 80; box-shadow: 0 16px 40px rgba(0,0,0,0.16); }
         .ai-loading.show { display: block; }
-        .ai-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .ai-row { display: flex; align-items: center; gap: 10px; margin-bottom: 0; }
         .ai-spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.9s linear infinite; flex-shrink: 0; }
         .ai-title { font-size: 13px; font-weight: 800; }
-        .ai-progress { height: 6px; background: rgba(255,255,255,0.16); border-radius: 99px; overflow: hidden; }
-        .ai-progress-bar { width: 0%; height: 100%; background: var(--primary); border-radius: 99px; transition: width 0.35s ease; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
         .setting-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; background: var(--card-bg); padding: 12px; border-radius: 10px; border: 1px solid var(--border);}
@@ -824,10 +826,9 @@
             accent-color: var(--text-main);
         }
 
-        .ai-spinner,
-        .ai-progress-bar {
+        .ai-spinner {
             border-top-color: var(--accent-lime);
-            background: var(--accent-lime);
+            background: transparent;
         }
 
         .modal-content {
@@ -1365,10 +1366,6 @@
             border-top-color: var(--accent-lime);
         }
 
-        .ai-progress-bar {
-            background: var(--accent-lime);
-        }
-
         @media (max-width: 1180px) {
             body {
                 overflow: auto;
@@ -1633,6 +1630,9 @@
         html[data-vf-mode="user"] .left-pane .canvas-language-switch { grid-template-columns: repeat(2, 48px); }
         html[data-vf-mode="user"] #asset-multi-select-btn,
         html[data-vf-mode="user"] .asset-tab[data-asset-tab="recycle"] { display: none !important; }
+        html[data-vf-mode="user"] .asset-actions,
+        html[data-vf-mode="user"] #asset-context-menu,
+        html[data-vf-mode="user"] .bookmark-member-context-menu { display: none !important; }
         html[data-vf-mode="user"] .asset-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
         html[data-vf-mode="user"] .workspace-tabs { display: none !important; }
         html[data-vf-mode="user"] .editor-layout { height: 100vh !important; }
@@ -1874,20 +1874,20 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         .export-menu-head strong { color:#202226; font-size:18px; font-weight:820; }
         .export-menu-close { width:29px !important; height:29px; min-height:0 !important; padding:0 !important; border:0 !important; border-radius:8px !important; background:transparent !important; color:#858b94 !important; font-size:27px !important; font-weight:300 !important; line-height:1 !important; }
         .export-menu-close:hover { background:#f1f2f4 !important; color:#26292e !important; }
-        .export-menu-body { padding:8px 12px 14px; }
+        .export-menu-body { padding:14px 14px 16px; }
         .export-menu-label { display:block; margin:0 0 9px; color:#25282d; font-size:14px; font-weight:800; }
         .export-menu-fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
         .export-menu-field { display:flex; align-items:center; justify-content:space-between; min-height:48px; padding:0 14px; border:1px solid #d7dbe0; border-radius:12px; background:#fff; color:#2c3036; font-size:16px; font-weight:700; }
         .export-menu-field .export-chevron { color:#9aa1aa; font-size:20px; font-weight:400; line-height:1; }
         .export-menu-field.current { border-color:#4e5661; }
-        .export-scale-list { overflow:hidden; border:0 !important; border-radius:0; background:transparent; box-shadow:none; }
+        .export-scale-list { display:flex; flex-direction:column; gap:9px; overflow:hidden; border:0 !important; border-radius:0; background:transparent; box-shadow:none; }
         .export-scale-list-head { display:flex; align-items:center; padding:12px 12px 10px; color:#262a30; font-size:16px; font-weight:830; }
         .export-dropdown-menu button.export-scale-option {
             display: flex;
             width: 100%;
-            min-height:49px;
+            min-height:82px;
             margin: 0;
-            padding: 0 12px;
+            padding: 14px 16px;
             border: none !important;
             outline: none !important;
             box-shadow: none !important;
@@ -1902,8 +1902,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             gap:12px;
             appearance: none;
             -webkit-appearance: none;
+            transition:background-color .14s ease, box-shadow .14s ease, transform .14s ease;
         }
-        .export-dropdown-menu button.export-scale-option:hover { background:#f2f3f5; }
+        .export-dropdown-menu button.export-scale-option:hover:not(:disabled) { background:#edf1f5; box-shadow:inset 0 0 0 1px #b8c1ce !important; transform:translateY(-1px); }
+        .export-dropdown-menu button.export-scale-option:focus-visible { background:#edf1f5; box-shadow:inset 0 0 0 2px #64748b !important; }
         .export-dropdown-menu button.export-scale-option.is-default { font-weight:820; }
         .export-dropdown-menu button.export-scale-option:disabled { opacity: .35; cursor: not-allowed; }
         .export-dropdown-menu button.export-scale-option:disabled:hover { background:#fff; }
@@ -1913,12 +1915,35 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             font-weight:650;
             white-space:nowrap;
         }
+        .export-scale-copy { display:flex; align-items:baseline; gap:7px; min-width:0; }
+        .export-scale-value { color:#111827; font-size:17px; font-weight:820; white-space:nowrap; }
+        .export-scale-note { color:#8a919c; font-size:12px; font-weight:620; white-space:nowrap; }
+        .export-scale-meta { display:flex; flex-direction:column; align-items:flex-end; gap:12px; margin-left:auto; line-height:1.2; text-align:right; }
+        .export-dropdown-menu .export-estimate { color:#374151; font-size:15px; font-weight:800; white-space:nowrap; }
+        .export-dropdown-menu .export-estimate.is-actual { color:#111827; }
         .export-dropdown-menu .export-warn {
             margin-left:7px;
             font-size: 11px;
             color: #ef4444;
             font-weight: 700;
         }
+        .tinify-key-list { display:flex; flex-direction:column; gap:7px; margin-top:10px; }
+        .tinify-key-item { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:42px; padding:7px 9px 7px 12px; border:1px solid #e2e5e9; border-radius:9px; background:#fafbfc; }
+        .tinify-key-id { color:#34383e; font:700 12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
+        .tinify-key-state { margin-left:8px; color:#15803d; font-size:11px; font-weight:800; }
+        .settings-secret-stack { display:flex; flex-direction:column; align-items:stretch; gap:8px; }
+        .settings-secret-stack > input { width:100%; box-sizing:border-box; }
+        .settings-secret-actions { display:flex; align-items:center; gap:7px; }
+        .settings-secret-actions > button { flex:1 1 0; }
+        .export-processing-card { width:min(430px,calc(100vw - 40px)) !important; padding:28px 30px 26px !important; text-align:center; }
+        .export-processing-track { position:relative; width:100%; height:9px; margin-top:20px; overflow:hidden; border-radius:999px; background:#e6e9ee; }
+        .export-processing-fill { position:absolute; inset:0 auto 0 0; width:0; border-radius:inherit; background:linear-gradient(90deg,#111827,#40516d,#111827); background-size:200% 100%; transition:width .28s ease; animation:export-processing-shimmer 1.25s linear infinite; }
+        .export-processing-meta { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; color:#737c8b; font-size:12px; font-weight:650; }
+        .export-cancel-button { width:100%; min-height:40px; margin-top:18px; border:1px solid #cfd6e1; border-radius:10px; background:#fff; color:#263247; font-size:14px; font-weight:750; cursor:pointer; transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease; }
+        .export-cancel-button:hover { border-color:#8d99aa; background:#f3f6fa; color:#111827; transform:translateY(-1px); }
+        .export-cancel-button:disabled { cursor:wait; opacity:.62; transform:none; }
+        @keyframes export-processing-shimmer { to { background-position:-200% 0; } }
+        @media (prefers-reduced-motion:reduce) { .export-processing-fill { animation:none; transition:none; } }
 
         /* 修改尺寸下拉菜单 */
         .resize-menu-wrap { position: relative; }
@@ -2288,6 +2313,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         }
         #asset-list-ui:not(:has(.reference-filter)) .asset-masonry-column {
             display: flex;
+            width: 100%;
+            max-width: 100%;
             min-width: 0;
             flex-direction: column;
             gap: 10px;
@@ -2368,6 +2395,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); pointer-events:none;
         }
         .asset-pane.asset-file-drag-over .asset-library-drop-overlay { display:flex; }
+        html[data-vf-mode="user"] .asset-library-drop-overlay { display:none !important; }
         .asset-library-drop-content { display:flex; flex-direction:column; align-items:center; gap:12px; font-size:16px; font-weight:780; letter-spacing:.01em; text-shadow:0 2px 12px rgba(0,0,0,.26); }
         .asset-library-drop-icon { width:50px; height:50px; display:grid; place-items:center; border:1px solid rgba(255,255,255,.72); border-radius:16px; background:rgba(255,255,255,.16); box-shadow:0 10px 26px rgba(0,0,0,.18); }
         .asset-library-drop-icon svg { width:25px; height:25px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
@@ -2956,7 +2984,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             .right-pane { width: 326px !important; flex-basis: 326px !important; }
         }
     </style>
-    <link rel="stylesheet" href="./ui-unified.css?v=20260827-fast-static-session-v481">
+    <link rel="stylesheet" href="./ui-unified.css?v=20260828-gradient-safe-png-v519">
+<style>
+#template-load-status{position:absolute;top:76px;left:50%;transform:translateX(-50%);z-index:1000;max-width:calc(100% - 40px);padding:9px 14px;border:1px solid #dce3ed;border-radius:10px;background:rgba(255,255,255,.96);box-shadow:0 3px 14px rgba(16,24,40,.10);color:#52627c;font:600 13px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;pointer-events:none;white-space:normal}
+#template-load-status[hidden]{display:none}#template-load-status[data-state="error"],#template-load-status[data-state="font-error"]{color:#a65a31;border-color:#f0d6c3}
+</style>
 </head>
 <body>
 
@@ -3008,9 +3040,14 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
 </div>
 
 <div class="modal-overlay" id="export-overlay" style="z-index: 10000; flex-direction: column;">
-    <div class="modal-content" style="width: auto; text-align: center;">
+    <div class="modal-content export-processing-card">
         <h2 style="margin: 0 0 10px 0; color: var(--text-main);">正在导出高清海报</h2>
-        <p style="margin: 0; color: var(--text-sub); font-size: 14px;">渲染引擎正在剥离涂层并切片，请勿关闭...</p>
+        <p id="export-progress-text" style="margin: 0; color: var(--text-sub); font-size: 14px;">正在准备画板资源…</p>
+        <div class="export-processing-track" role="progressbar" aria-label="导出进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="export-processing-fill" id="export-progress-fill"></div>
+        </div>
+        <div class="export-processing-meta"><span id="export-progress-stage">请勿关闭或刷新页面</span><strong id="export-progress-percent">0%</strong></div>
+        <button class="export-cancel-button" id="export-cancel-button" type="button" onclick="cancelActiveExport()">取消导出</button>
     </div>
 </div>
 
@@ -3027,13 +3064,24 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 <span class="jimeng-api-dot" id="jimeng-api-dot" style="width:7px;height:7px;border-radius:50%;background:#aab3bf;flex:0 0 auto;"></span>
                 <span class="jimeng-api-status" id="jimeng-api-status">即梦 API 未检测</span>
             </div>
-            <div style="display:flex;gap:6px;align-items:center;">
+            <div class="settings-secret-stack">
                 <input class="jimeng-session-input" id="jimeng-session-input" type="password" placeholder="粘贴即梦 sessionid…" autocomplete="off" style="flex:1;border:1px solid #d0d5dd;border-radius:6px;padding:6px 8px;font-size:12px;font-family:monospace;">
-                <button class="btn btn-outline" type="button" onclick="saveJimengSessionId()" style="white-space:nowrap;">保存</button>
-                <button class="btn btn-outline" type="button" onclick="requestJimengSessionId()" title="从云端获取管理员同步的即梦 Session ID" style="white-space:nowrap;">一键获取</button>
-                <button class="btn btn-dark" type="button" onclick="checkJimengApiHealth()" style="white-space:nowrap;">检测</button>
+                <div class="settings-secret-actions">
+                    <button class="btn btn-outline" type="button" onclick="saveJimengSessionId()" style="white-space:nowrap;">保存</button>
+                    <button class="btn btn-outline" type="button" onclick="requestJimengSessionId()" title="从云端获取管理员同步的即梦 Session ID" style="white-space:nowrap;">一键获取</button>
+                    <button class="btn btn-dark" type="button" onclick="checkJimengApiHealth()" style="white-space:nowrap;">检测</button>
+                </div>
             </div>
             <div style="font-size:12px;color:var(--text-sub);line-height:1.6;margin-top:8px;">粘贴即梦网站的 sessionid Cookie，或点击"一键获取"从云端拉取管理员同步的凭证。</div>
+        </div>
+        <div id="tinify-key-panel" style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);">
+            <div class="card-title"><div class="card-title-wrap">图片压缩密钥池</div></div>
+            <div class="settings-secret-stack">
+                <input class="jimeng-session-input" id="tinify-key-input" type="password" placeholder="粘贴 TinyPNG API Key…" autocomplete="new-password" style="flex:1;border:1px solid #d0d5dd;border-radius:6px;padding:8px 10px;font-size:12px;font-family:monospace;">
+                <button class="btn btn-dark" type="button" onclick="addTinifyApiKey()" style="white-space:nowrap;">添加密钥</button>
+            </div>
+            <div id="tinify-key-list" class="tinify-key-list"><div style="font-size:12px;color:var(--text-sub);">正在读取密钥池…</div></div>
+            <div style="font-size:12px;color:var(--text-sub);line-height:1.6;margin-top:9px;">密钥仅在服务端加密保存并脱敏显示；当前密钥额度用尽或失效时会自动切换下一枚。</div>
         </div>
         <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
             <div class="card-title"><div class="card-title-wrap">字体上传</div></div>
@@ -3113,6 +3161,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 <button type="button" class="btn-icon" id="asset-multi-select-btn" onclick="toggleAssetMultiSelect()" title="多选" style="padding:2px 8px;font-size:12px;">多选</button>
                 <button type="button" class="btn-icon asset-refresh-capsule" id="refresh-asset-btn" onclick="refreshAssetLibrary()" title="刷新资产库" aria-label="刷新资产库">刷新</button>
             </div>
+            <div id="template-cache-status" role="status" hidden style="font-size:11px;color:#64748b;margin:0 0 8px;line-height:1.5;"></div>
             <div class="asset-tabs">
                 <button class="asset-tab active" data-asset-tab="layout" onclick="switchAssetTab('layout')" style="white-space:nowrap;">模板 <small id="diy-count-layout">· 0</small></button>
                 <button class="asset-tab" data-asset-tab="component" onclick="switchAssetTab('component')" style="white-space:nowrap;">组件 <small id="diy-count-component">· 0</small></button>
@@ -3198,6 +3247,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 </div>
             </div>
         </div>
+        <div id="template-load-status" role="status" aria-live="polite" hidden></div>
         <div class="layer-context-menu" id="canvas-context-menu">
             <button type="button" id="canvas-group-selection-btn" onclick="groupSelectedLayers(); closeCanvasContextMenu();">编组</button>
             <button type="button" id="canvas-ungroup-selection-btn" onclick="ungroupSelectedLayers(); closeCanvasContextMenu();" hidden>取消编组</button>
@@ -3233,7 +3283,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 <div class="ai-spinner"></div>
                 <div class="ai-title" id="ai-loading-text">AI 正在处理...</div>
             </div>
-            <div class="ai-progress"><div class="ai-progress-bar" id="ai-progress-bar"></div></div>
         </div>
     </div>
 
@@ -3297,7 +3346,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                             <div class="ai-dropdown" id="ai-skill-menu"></div>
                         </div>
                         <div class="ai-menu-wrap">
-                            <button class="ai-menu-btn ai-menu-icon-btn" type="button" onclick="toggleAIMenu('size', event)" data-tooltip="生成尺寸 · 1:1" aria-label="生成尺寸 1:1"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M8 9h8M8 15h8"></path></svg><strong id="ai-size-label">1:1</strong></button>
+                            <button class="ai-menu-btn ai-menu-icon-btn" type="button" onclick="toggleAIMenu('size', event)" data-tooltip="生成尺寸 · 自动（跟画板）" aria-label="生成尺寸 自动（跟画板）"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M8 9h8M8 15h8"></path></svg><strong id="ai-size-label">自动</strong></button>
                             <div class="ai-dropdown ai-size-dropdown" id="ai-size-menu">
                                 <button type="button" data-ai-size="auto" onclick="selectAISize('auto')">自动（跟画板）</button>
                                 <button type="button" data-ai-size="1:1" onclick="selectAISize('1:1')">1:1</button>
@@ -3380,6 +3429,35 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         '保存组合': 'Save Group',
         '编辑画板尺寸': 'Edit Artboard Size',
         '导出格式': 'Export Format',
+        '1倍（推荐）': '1× (Recommended)',
+        '0.75倍（轻量）': '0.75× (Lightweight)',
+        '0.5倍（兼容小图）': '0.5× (Small Image)',
+        '推荐': 'Recommended',
+        '轻量': 'Lightweight',
+        '兼容小图': 'Small Image',
+        'JPG 自动控制在约 1 MB；PNG 保留无损与透明，文件大小不固定。': 'JPG is automatically kept around 1 MB. PNG remains lossless with transparency, so its file size varies.',
+        'JPG 自动控制在约 1 MB。': 'JPG is automatically kept around 1 MB.',
+        'PNG 保留无损与透明，文件大小不固定。': 'PNG remains lossless with transparency, so its file size varies.',
+        'PNG 保持所选倍数的像素尺寸与透明；文件大小为估算值。': 'PNG preserves the pixel dimensions of the selected scale and transparency. File sizes are estimates.',
+        '超过 1 MB 自动压缩': 'Auto-compress over 1 MB',
+        '默认关闭·保持像素尺寸': 'Off by default · keeps pixel dimensions',
+        '正在使用 TinyPNG 压缩…': 'Compressing with TinyPNG…',
+        '正在本地压缩 PNG…': 'Compressing PNG locally…',
+        '智能颜色压缩': 'Smart color compression',
+        '分析颜色': 'Analyzing colors',
+        '云端压缩': 'Cloud compression',
+        '压缩服务暂不可用，已导出原图': 'Compression is unavailable. The original image was exported.',
+        '图片压缩密钥池': 'Image Compression Key Pool',
+        '粘贴 TinyPNG API Key…': 'Paste a TinyPNG API key…',
+        '添加密钥': 'Add Key',
+        '正在读取密钥池…': 'Loading the key pool…',
+        '密钥仅在服务端加密保存并脱敏显示；当前密钥额度用尽或失效时会自动切换下一枚。': 'Keys are encrypted on the server and shown only in masked form. The next key is selected automatically when the current key is exhausted or invalid.',
+        '尚未添加 TinyPNG 密钥': 'No TinyPNG API keys have been added.',
+        '当前使用': 'Active',
+        '请粘贴 TinyPNG API Key': 'Paste a TinyPNG API key.',
+        '✅ TinyPNG 密钥已安全添加': '✅ TinyPNG API key added securely.',
+        '确定删除这枚 TinyPNG 密钥？': 'Delete this TinyPNG API key?',
+        'TinyPNG 密钥已删除': 'TinyPNG API key deleted.',
         '版本': 'Version',
         '布局': 'Layout',
         '参考图': 'Reference Image',
@@ -3404,6 +3482,40 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         '选择 Logo': 'Choose Logo',
         '继续添加参考图': 'Add More Reference Images',
         '正在导出高清海报': 'Exporting High-Resolution Poster',
+        '正在准备画板资源…': 'Preparing artboard resources…',
+        '请勿关闭或刷新页面': 'Do not close or refresh this page',
+        '正在启动高清导出…': 'Starting high-resolution export…',
+        '准备导出': 'Preparing export',
+        '正在准备字体和画板资源…': 'Preparing fonts and artboard resources…',
+        '资源准备': 'Preparing resources',
+        '字体和画板资源已就绪': 'Fonts and artboard resources are ready',
+        '分析画板': 'Analyzing artboard',
+        '正在分析文字、标签和图片…': 'Analyzing text, tags and images…',
+        '正在校验字体轮廓…': 'Validating font outlines…',
+        '字体校验': 'Validating fonts',
+        '正在读取画板图片…': 'Loading artboard images…',
+        '正在优化画板图片…': 'Optimizing artboard images…',
+        '图片预处理': 'Preparing images',
+        '图片解码': 'Decoding images',
+        '正在渲染高清画板…': 'Rendering the high-resolution artboard…',
+        '像素渲染': 'Rendering pixels',
+        '正在复用已渲染画板…': 'Reusing the rendered artboard…',
+        '像素复用': 'Reusing pixels',
+        '高清画板渲染完成': 'High-resolution artboard rendered',
+        '合成图层': 'Compositing layers',
+        '正在写入文字并检查结果…': 'Painting text and validating the result…',
+        '结果校验': 'Validating result',
+        '正在生成图片文件…': 'Generating the image file…',
+        '文件编码': 'Encoding file',
+        '正在转换 JPG 文件…': 'Converting the JPG file…',
+        '正在压缩至约 1 MB…': 'Compressing to around 1 MB…',
+        '正在准备 PNG（保持原尺寸）…': 'Preparing PNG at the selected dimensions…',
+        '正在准备下载…': 'Preparing download…',
+        '文件输出': 'Writing file',
+        '导出完成，图片已准备下载': 'Export complete. The image is ready to download.',
+        '取消导出': 'Cancel Export',
+        '正在取消导出…': 'Cancelling export…',
+        '导出已取消': 'Export cancelled',
         '渲染引擎正在剥离涂层并切片，请勿关闭...': 'The render engine is preparing and slicing the artwork. Please keep this page open…',
         '品牌资产与全局设置': 'Brand Assets & Global Settings',
         '即梦 API 连接': 'Jimeng API Connection',
@@ -3618,18 +3730,81 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         '正在加载…': 'Loading…',
         '正在加载素材内容…': 'Loading asset…',
         '正在下载并替换背景…': 'Downloading and replacing background…',
+        '已替换，原图将在后台更新': 'Replaced. The original image will update in the background.',
+        '背景素材加载失败，请重试': 'Background asset failed to load. Please try again.',
+        '背景素材加载超时，请重试': 'Background asset loading timed out. Please try again.',
+        '素材读取失败，未替换当前图层': 'The asset could not be loaded. The current layer was not replaced.',
+        '正在读取提示词标签…': 'Loading prompt tags…',
+        '正在加载云端资产…': 'Loading cloud assets…',
+        '未找到匹配的模板': 'No matching templates',
+        '暂无版式': 'No layouts yet',
         '模型正在生成画面...': 'The model is generating an image…',
+        '正在提交生成请求...': 'Submitting the generation request…',
+        '任务已提交，正在等待结果...': 'Request submitted. Waiting for the result…',
+        '正在应用到画布...': 'Applying the result to the artboard…',
+        '正在通过即梦 API 生成图片…': 'Generating an image with the Jimeng API…',
+        '正在提交生成请求到即梦…': 'Submitting the generation request to Jimeng…',
+        '本机中转暂时不可用，正在切换备用服务…': 'The local relay is unavailable. Switching to the backup service…',
+        '任务已提交，即梦正在生成图片…': 'Request submitted. Jimeng is generating the image…',
+        '正在导入生成结果…': 'Importing the generated result…',
+        '即梦正在生成图片，请耐心等待…': 'Jimeng is generating the image. Please wait…',
         '参考图读取失败': 'Failed to read reference image',
         'Logo 图片读取失败': 'Failed to read logo image',
         '图片读取失败': 'Failed to read image',
         '图片加载失败': 'Failed to load image',
         '原图读取失败': 'Failed to read original image',
         '未知错误': 'Unknown error',
+        '未知': 'Unknown',
+        '解析失败': 'Parsing failed',
+        '跨域限制': 'Cross-origin restriction',
         '请稍后重试': 'Please try again shortly',
         '操作失败': 'Operation failed',
         '无法连接服务器': 'Unable to connect to the server',
         '无法生成文件': 'Unable to generate the file',
         '画板为空，无法导出': 'The artboard is empty and cannot be exported',
+        '上一个导出仍在进行，请完成或取消后再试': 'Another export is still in progress. Complete or cancel it before trying again.',
+        '若浏览器未自动下载，请点击右侧保存': 'If the download does not start automatically, select Save on the right.',
+        '保存图片': 'Save Image',
+        '画板所需字体仍在下载，请稍后重试': 'The fonts required by the artboard are still downloading. Please try again shortly.',
+        '字体仍在加载，文字将在就绪后显示': 'Fonts are still loading. Text will appear when they are ready.',
+        '画板所需字体下载超时，请稍后重试': 'The fonts required by the artboard timed out while downloading. Please try again shortly.',
+        '画板所需字体尚未安装，已停止导出': 'Export stopped because the fonts required by the artboard are not installed yet.',
+        '字体加载超时，请稍后重试': 'Font loading timed out. Please try again shortly.',
+        '画板使用的字体加载超时，请稍后重试': 'The fonts used by the artboard timed out while loading. Please try again shortly.',
+        '字体排版稳定超时，请稍后重试': 'Font layout did not stabilize in time. Please try again shortly.',
+        '画板图片加载超时，请检查网络后重试': 'Artboard images timed out while loading. Check your connection and try again.',
+        '共享画面帧超时': 'The shared screen frame timed out.',
+        '共享画面坐标比例异常，请重新选择“当前标签页”': 'The shared screen coordinates are invalid. Select “This Tab” again.',
+        '浏览器截图授权超时，请重新导出并选择“当前标签页”': 'Browser capture permission timed out. Export again and select “This Tab”.',
+        '未找到可导出的画板': 'No exportable artboard was found.',
+        '无法创建导出画布，请关闭其他大型页面后重试': 'Unable to create the export canvas. Close other large pages and try again.',
+        '自定义字体原始文件缺失，已停止精确导出': 'Precise export stopped because the original custom font file is missing.',
+        '浏览器尚未使用目标自定义字体完成排版，已停止精确导出': 'Precise export stopped because the browser has not finished laying out the target custom font.',
+        '标签文字副本与画板标签数量不一致': 'The copied tag text count does not match the artboard.',
+        '标签文字节点副本不一致': 'The copied tag text nodes do not match.',
+        '标签容器副本结构不一致': 'The copied tag container structure does not match.',
+        '标签使用的自定义字体原始文件缺失，已停止精确导出': 'Precise export stopped because the original custom font file used by a tag is missing.',
+        '标签字体尚未完成排版，已停止精确导出': 'Precise export stopped because a tag font has not finished layout.',
+        '标签图形副本与画板数量不一致': 'The copied tag graphics do not match the artboard.',
+        '文字任务缺少锁定的原始字体文件': 'The text task is missing its locked original font file.',
+        '精确字体引擎加载失败，请检查网络后重试': 'The precise font engine failed to load. Check your connection and try again.',
+        '字体文件读取失败': 'Failed to read the font file.',
+        'fontkit 精确字体引擎未加载': 'The fontkit precise font engine is not loaded.',
+        '字体不支持精确 shaping': 'The font does not support precise shaping.',
+        '缺失字符的浏览器后备字体尺度异常，已停止精确导出': 'Precise export stopped because the browser fallback font has invalid metrics for missing characters.',
+        '阿拉伯语原生 shaping 尺度异常，已停止导出': 'Export stopped because native Arabic shaping has invalid metrics.',
+        '字体轮廓与浏览器排版尺度差异过大，已停止精确导出': 'Precise export stopped because the font outline differs too much from the browser layout.',
+        '字体轮廓没有产生有效像素，已停止导出': 'Export stopped because the font outline produced no valid pixels.',
+        '缺失字符无法继承目标字体的尺度校准，已停止测试导出': 'Test export stopped because missing characters could not inherit the target font metrics.',
+        '无法生成导出图片': 'Unable to generate the exported image.',
+        'Logo 导出副本与画板图片数量不一致，已停止测试导出': 'Test export stopped because the copied logo count does not match the artboard images.',
+        'Logo 原图未就绪，已停止精确导出': 'Precise export stopped because the original logo image is not ready.',
+        '无法创建 Logo 透明像素画布': 'Unable to create the transparent logo canvas.',
+        'Logo 直接绘制副本与画板图片数量不一致': 'The directly rendered logo copies do not match the artboard images.',
+        '精确导出测试暂不支持旋转 Logo，已停止下载错误图片': 'Rotated logos are not supported by precise export yet. The incorrect download was stopped.',
+        '精确导出暂不支持旋转文字，请先使用未旋转的文字图层': 'Rotated text is not supported by precise export yet. Use an unrotated text layer.',
+        '导出尺寸无效': 'The export dimensions are invalid.',
+        '已切换到该模板': 'Switched to this template',
         '请输入 64 到 6000 px 的宽度和高度': 'Enter a width and height between 64 and 6000 px',
         '请拖入 PNG/JPG/WebP 图片': 'Drop a PNG, JPG or WebP image',
         '请先选中一张图片图层': 'Select an image layer first',
@@ -3682,10 +3857,31 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         [/^Logo 矩阵最多 8 个，已添加前\s*(\d+)\s*个$/, (_, count) => `Logo grids support up to 8 logos; the first ${count} were added`],
         [/^(全部|标签|背景|品牌圆弧|字体|组合|其他素材)\s*·\s*(\d+)$/, (_, label, count) => `${translateVFUiString(label, 'en')} · ${count}`],
         [/^1倍（原图）$/, () => '1× (Original)'],
-        [/^(0\.5|1|1\.5|2|3)倍$/, (_, scale) => `${scale}×`],
+        [/^(0\.5|0\.75|1|1\.5|2|3)倍$/, (_, scale) => `${scale}×`],
         [/^已切换到\s*(EN|AR)\s*版本$/, (_, language) => `Switched to the ${language} version`],
         [/^已切换为(横版|方形)布局$/, (_, shape) => `Switched to ${translateVFUiString(shape, 'en')} layout`],
         [/^已切换至\s*(.+)$/, (_, preset) => `Switched to ${translateVFUiString(preset, 'en')}`],
+        [/^关联\s*(\d+)\s*个模板$/, (_, count) => `Linked to ${count} template${count === '1' ? '' : 's'}`],
+        [/^(.+?)\s+正在生成新图片\.\.\.$/, (_, provider) => `${translateVFUiString(provider, 'en')} is generating a new image…`],
+        [/^正在生成(\d+(?:\.\d+)?)倍\s+(PNG|JPG)…$/, (_, scale, format) => `Generating ${scale}× ${format}…`],
+        [/^约\s+([\d.]+)\s+(KB|MB)$/, (_, size, unit) => `Approx. ${size} ${unit}`],
+        [/^实际\s+([\d.]+)\s+(KB|MB)$/, (_, size, unit) => `Actual ${size} ${unit}`],
+        [/^✅\s*(\d+(?:\.\d+)?)倍\s+(PNG|JPG)\s+导出成功$/, (_, scale, format) => `✅ ${scale}× ${format} exported successfully`],
+        [/^✅\s*(\d+(?:\.\d+)?)倍\s+(PNG|JPG)\s+导出成功（([\d.]+) MB）$/, (_, scale, format, size) => `✅ ${scale}× ${format} exported successfully (${size} MB)`],
+        [/^✅ TinyPNG 压缩完成：([\d.]+\s+(?:KB|MB)) → ([\d.]+\s+(?:KB|MB))$/, (_, before, after) => `✅ TinyPNG compression complete: ${before} → ${after}`],
+        [/^✅ 本地 PNG 压缩完成：([\d.]+\s+(?:KB|MB)) → ([\d.]+\s+(?:KB|MB))$/, (_, before, after) => `✅ Local PNG compression complete: ${before} → ${after}`],
+        [/^✅ 本地 \+ TinyPNG 压缩完成：([\d.]+\s+(?:KB|MB)) → ([\d.]+\s+(?:KB|MB))$/, (_, before, after) => `✅ Local + TinyPNG compression complete: ${before} → ${after}`],
+        [/^(\d+) 色压缩$/, (_, colors) => `Compressing to ${colors} colors`],
+        [/^⚠️ TinyPNG 压缩失败，已导出原图：(.*)$/, (_, detail) => `⚠️ TinyPNG compression failed; the original image was exported: ${detail}`],
+        [/^⚠️ TinyPNG 返回的文件没有更小，已保留原图$/, () => '⚠️ TinyPNG did not return a smaller file; the original image was kept'],
+        [/^⚠️ TinyPNG 未产生更小文件，已导出原图$/, () => '⚠️ TinyPNG did not produce a smaller file; the original image was exported'],
+        [/^第\s*(\d+)\s*张图片未就绪$/, (_, index) => `Image ${index} is not ready`],
+        [/^第\s*(\d+)\s*张图片加载失败$/, (_, index) => `Image ${index} failed to load`],
+        [/^第\s*(\d+)\s*张 Logo 原图尚未就绪$/, (_, index) => `Original logo image ${index} is not ready`],
+        [/^字体“(.+)”无法进行精确轮廓排版：(.+)$/, (_, font, detail) => `Font “${translateVFUiString(font, 'en')}” cannot be shaped with precise outlines: ${translateVFUiString(detail, 'en')}`],
+        [/^Logo 原图无法转换为可靠的透明像素：(.+)$/, (_, detail) => `The original logo image could not be converted to reliable transparent pixels: ${translateVFUiString(detail, 'en')}`],
+        [/^有\s*(\d+)\s*个字体或字重未落入最终画板，已停止下载错误图片$/, (_, count) => `The incorrect download was stopped because ${count} font${count === '1' ? '' : 's'} or weight${count === '1' ? '' : 's'} did not render on the final artboard`],
+        [/^同一字体在(标签|正文)中的轮廓校准结果不一致，可能使用了替代字体，已停止测试导出$/, (_, scope) => `Test export stopped because outline calibration for the same font was inconsistent in ${scope === '标签' ? 'tags' : 'body text'}, possibly due to a substituted font`],
         [/^正在去除背景\.\.\.$/, () => 'Removing background…'],
         [/^确定删除模板「(.+)」？模板会先进入回收站，刷新网页后才会彻底删除。$/, (_, name) => `Delete “${name}”? The template will move to the Recycle Bin and be permanently removed after the page is refreshed.`],
         [/^确定删除模板「(.+)」？此操作不可恢复，删除后所有引用它的书签都会移除该成员。$/, (_, name) => `Permanently delete “${name}”? This cannot be undone, and the template will be removed from every bookmark that references it.`]
@@ -3827,6 +4023,11 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         if (document.body) document.body.dataset.vfMode = nextMode;
         if (rerender) {
             if (nextMode === 'user') {
+                if (typeof closeAssetContextMenu === 'function') closeAssetContextMenu();
+                if (typeof closeBookmarkMemberContextMenu === 'function') closeBookmarkMemberContextMenu();
+                document.getElementById('asset-pane')?.classList.remove('asset-file-drag-over');
+                document.getElementById('asset-library-drop-overlay')?.setAttribute('aria-hidden', 'true');
+                if (typeof closeComponentUploadModal === 'function') closeComponentUploadModal();
                 if (typeof currentAssetTab !== 'undefined' && currentAssetTab === 'recycle' && typeof switchAssetTab === 'function') switchAssetTab('layout');
                 if (typeof assetMultiSelect !== 'undefined' && assetMultiSelect && typeof exitAssetMultiSelect === 'function') exitAssetMultiSelect();
                 if (typeof templateBookmarkSelectMode !== 'undefined' && templateBookmarkSelectMode && typeof exitTemplateBookmarkMultiSelect === 'function') exitTemplateBookmarkMultiSelect(false);
@@ -4350,8 +4551,53 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     // 生图模型白名单：菜单只暴露 5.0 两个模型，其余模型隐藏但仍保留标签映射（历史兼容）
     const JIMENG_ENABLED_MODELS = ['jimeng-image-5.0-pro', 'jimeng-image-5.0-lite'];
     let aiFeatureMode = 'generate';
-    let aiGenerationSize = '1:1';
+    // 每次打开 DIY 都从“自动（跟画板）”开始，避免上次手动比例误带入新模板。
+    let aiGenerationSize = 'auto';
     let aiProvider = 'jimeng';
+    // Shared site login stays unchanged. Provider credentials never reach this page.
+    const VF_MANAGED_JIMENG = location.protocol === 'https:' && ['gccdesign.app', 'visual-factory.pages.dev', 'asset-gallery-test.visual-factory.pages.dev'].includes(location.hostname);
+    let managedJimengClientPromise;
+    function managedJimengClient() {
+        if(!managedJimengClientPromise) managedJimengClientPromise = import('/secure-image-client.mjs?v=20260914-secure-image-v1').then(function(module) {
+            return module.createSecureImageClient({baseUrl:'https://jimeng.gccdesign.app/api/image-service/v1/',token:function(){return (window.VF_GET_ACCESS_TOKEN ? window.VF_GET_ACCESS_TOKEN() : localStorage.getItem('vf_access_token')) || '';}});
+        });
+        return managedJimengClientPromise;
+    }
+    function managedJimengError(error) {
+        var messages = {signInRequired:'请重新登录主站后生图',cutoutAuthRequiresMainLogin:'请使用主站账号重新登录后生图',siteSessionMissing:'服务器生图配置尚未就绪',siteSessionExpired:'即梦登录态已过期，请联系维护者更新',siteRelayUnavailable:'暂时无法连接生图服务',siteQuotaExceeded:'即梦额度不足或请求过多，请稍后重试',siteInvalidParameter:'即梦不支持当前参数',siteGenerationFailed:'即梦生成失败',siteTaskExpired:'原任务已过期，请先核对结果再重新生成',generationBusy:'生图任务较多，请稍后重试',unknownError:'提交结果待核实，未自动重复生图',managedImageConnectionLost:'连接中断，原任务编号已保留，请先恢复查询'};
+        return messages[error && error.code] || '生图服务暂时异常，请稍后重试';
+    }
+    async function checkManagedJimeng(silent) {
+        if(!silent) updateJimengApiUI({label:'正在检查生图服务…'});
+        try {
+            var config=await (await managedJimengClient()).config();
+            updateJimengApiUI({ready:config.configured,label:config.configured?'✅ 受保护生图服务已连接':'生图服务尚未配置'});
+            if(!silent) showToast(config.configured?'✅ 生图服务连接正常':'生图服务尚未配置',!config.configured);
+            return config;
+        } catch(error) {updateJimengApiUI({ready:false,label:managedJimengError(error)});if(!silent)showToast(managedJimengError(error),true);return null;}
+    }
+    async function runManagedJimeng(body, session) {
+        const client=await managedJimengClient();
+        const id=session.managedJimengId || crypto.randomUUID();session.managedJimengId=id;
+        const images=[];
+        for(const source of body.images || []) images.push(source.startsWith('data:image/')?source:(await compactAIReferenceSource(source)).src);
+        // Store only correlation IDs. No provider credentials or reference data.
+        try {localStorage.setItem('vf_last_managed_jimeng_task',JSON.stringify({id,createdAt:Date.now()}));}catch(_){}
+        let result;
+        try {result=await client.submit(id,{kind:'diy',input:{...body,images}});}catch(error){throw new Error(managedJimengError(error));}
+        const deadline=Date.now()+20*60*1000;
+        while(result.status==='generating') {
+            if(Date.now()>deadline) throw new Error('生图仍在处理，原任务编号已保留，请稍后恢复查询');
+            await waitForAIGeneration(session,2000);
+            updateAIProgress('即梦正在生成图片，请耐心等待…',60);
+            try {result=await client.get(id);}catch(error){
+                if(error.code==='managedImageConnectionLost'){updateAIProgress('连接暂时中断，正在查询原任务…',60);continue;}
+                throw new Error(managedJimengError(error));
+            }
+        }
+        if(result.status!=='ready'||!result.source) throw new Error(managedJimengError({code:result.error}));
+        return [{managedSource:result.source}];
+    }
     let JIMENG_API_URL = 'https://jimeng.gccdesign.app'; // 固定服务器入口；优先从 KV（jimeng-session）动态读取
     const JIMENG_CLOUD_FALLBACK_URL = 'https://gccdesign.app/api/jimeng';
     let jimengApiReady = false;
@@ -4424,6 +4670,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         } catch (_error) {}
     }
     function moveAssetToRecycle(type, asset) {
+        if (isUserInterfaceMode()) return;
         if (!asset) return;
         recycleBin.push({ id: genId('recycle'), type: type, asset: asset, deletedAt: Date.now() });
         if (type === 'layout') presetLibrary = presetLibrary.filter(function(item) { return item.id !== asset.id; });
@@ -4432,6 +4679,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         else if (type === 'font') fontAssets = fontAssets.filter(function(item) { return item.id !== asset.id; });
         else if (type === 'group') groupPresets = groupPresets.filter(function(item) { return item.id !== asset.id; });
         saveRecycleBinSession();
+        var recycledSourceId = asset.cloudId || asset.sourceId || '';
+        if (recycledSourceId) notifyParent({ type: 'vf:template-recycle-state', sourceId: recycledSourceId, hidden: true });
         renderAssetLibrary();
         showToast('已移入回收站；刷新网页后将自动彻底删除');
     }
@@ -4445,6 +4694,8 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         else if (entry.type === 'group') groupPresets.push(entry.asset);
         recycleBin = recycleBin.filter(function(item) { return item.id !== recycleId; });
         saveRecycleBinSession();
+        var restoredSourceId = entry.asset?.cloudId || entry.asset?.sourceId || '';
+        if (restoredSourceId) notifyParent({ type: 'vf:template-recycle-state', sourceId: restoredSourceId, hidden: false });
         renderAssetLibrary();
         showToast('已还原');
     }
@@ -4479,7 +4730,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     let currentAssetTab = 'layout';
     let draggingLayerId = null;
     let layerDropIndex = null;
-    let aiProgressTimer = null;
+    let activeAIProgressId = '';
+    let activeAIProgressCancellable = false;
+    let activeAIGenerationSession = null;
+    let aiGenerationSequence = 0;
     let newlyAddedLayerIds = new Set();
     let newlyAddedLayerTimer = null;
     let historyStack = []; let historyIdx = -1; let isRestoring = false;
@@ -4489,7 +4743,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     const SHARED_SOLID_PROPS = ['color'];
 
     /* ================= 数据持久化 ================= */
-    const DB_NAME = 'SuperFactoryDB';
+    const DB_NAME = 'SuperFactoryDB' + (window.VF_ISOLATED_ACCOUNT_ID ? '-account-' + window.VF_ISOLATED_ACCOUNT_ID : '');
     const GLOBAL_STATE_KEY = 'global';
     const SHARED_ASSETS_API = '/api/static-assets';
     let sharedAssetSaveTimer = null;
@@ -4576,7 +4830,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
 
     function getAuthHeaders() {
-        const token = localStorage.getItem('vf_access_token') || '';
+        const token = (window.VF_GET_ACCESS_TOKEN ? window.VF_GET_ACCESS_TOKEN() : localStorage.getItem('vf_access_token')) || '';
         return token ? { Authorization: `Bearer ${token}` } : {};
     }
     async function buildSharedAssetPayload() {
@@ -5956,16 +6210,20 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const frame = getImageFrameForMode(img.naturalWidth || img.width, img.naturalHeight || img.height, 'contain');
         addLayer('image', { src, ...frame, originalW: img.naturalWidth || img.width, originalH: img.naturalHeight || img.height });
     }
-    async function addAIImageLayer(src) {
+    async function addAIImageLayer(src, generationSession) {
         // AI 生图统一入口：按图片短边适配画布（短边撑满，长边溢出可拖动查看）
         try {
             const img = await loadImageElement(src);
+            if(generationSession) assertAIGenerationActive(generationSession);
             const frame = getImageFrameForMode(img.naturalWidth || img.width, img.naturalHeight || img.height, 'shortSide');
             const sourceBackground = layers.find(function(layer) {
                 return layer.id === _aiBackgroundSourceLayerId && isCanvasBackgroundImage(layer, layers);
             });
             if (sourceBackground) {
                 markCanvasBackgroundLayer(sourceBackground);
+                // 生图已以当前预览图为输入；旧素材原图即使稍后到达，
+                // 也不得再改写这个画板背景。
+                cancelProvisionalBackgroundUpgrade(sourceBackground);
                 // addLayer 会在当前选中层的正上方腾出一层；以旧背景作锚点即可
                 // 保证新背景只高于旧背景，不遮住文字、Logo 和标签。
                 activeLayerIds = [sourceBackground.id];
@@ -5983,11 +6241,13 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 addLayer('image', { src, ...frame, originalW: img.naturalWidth || img.width, originalH: img.naturalHeight || img.height });
             }
         } catch(e) {
+            if(generationSession && isAIGenerationCancellation(e, generationSession)) throw e;
             // 尺寸读取失败时使用铺满模式
             const sourceBackground = layers.find(function(layer) {
                 return layer.id === _aiBackgroundSourceLayerId && isCanvasBackgroundImage(layer, layers);
             });
             if (sourceBackground) {
+                cancelProvisionalBackgroundUpgrade(sourceBackground);
                 activeLayerIds = [sourceBackground.id];
                 const generated = addLayer('image', {
                     src, fitMode: 'cover', role: CANVAS_BACKGROUND_ROLE,
@@ -6180,6 +6440,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         const label = document.getElementById('jimeng-api-status');
         const input = document.getElementById('jimeng-session-input');
         if(!row || !label) return;
+        if(VF_MANAGED_JIMENG) document.querySelectorAll('[id="jimeng-session-input"], [onclick*="saveJimengSessionId"]').forEach(function(element){element.hidden=true;element.style.display='none';if(element.tagName==='INPUT')element.value='';});
         var settingsRow = document.getElementById('jimeng-settings-row');
         if(settingsRow) settingsRow.hidden = aiProvider !== 'jimeng';
         jimengApiReady = Boolean(status.ready);
@@ -6190,11 +6451,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             row.style.color = '#667085';
             if(dot) { dot.style.background = '#aab3bf'; dot.style.boxShadow = ''; }
         }
-        label.textContent = status.label || (jimengSessionId ? '即梦 API（已保存凭证）' : '即梦 API（请设置 Session ID）');
+        label.textContent = status.label || (VF_MANAGED_JIMENG ? '即梦生图由服务器统一管理' : jimengSessionId ? '即梦 API（已保存凭证）' : '即梦 API（请设置 Session ID）');
         if(input && !jimengSessionId) input.value = '';
         if(input && jimengSessionId) input.value = jimengSessionId;
     }
     function saveJimengSessionId() {
+        if(VF_MANAGED_JIMENG) return showToast('即梦凭证由服务器维护，网页不保存登录态');
         const input = document.getElementById('jimeng-session-input');
         const value = (input?.value || '').trim();
         if(!value) return showToast('请粘贴即梦 sessionid', true);
@@ -6204,6 +6466,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         showToast('✅ 即梦 Session ID 已保存');
     }
     async function checkJimengApiHealth() {
+        if(VF_MANAGED_JIMENG) return checkManagedJimeng(false);
         if(!jimengSessionId) return showToast('请先获取或保存即梦 Session ID', true);
         updateJimengApiUI({ label: '正在检测即梦 API…' });
         try {
@@ -6218,7 +6481,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         }
     }
     function loadJimengSessionId() {
-        try { jimengSessionId = localStorage.getItem('jimeng_sessionid') || ''; } catch(_) { jimengSessionId = ''; }
+        try { if(VF_MANAGED_JIMENG){localStorage.removeItem('jimeng_sessionid');jimengSessionId='';jimengCookies={};}else jimengSessionId = localStorage.getItem('jimeng_sessionid') || ''; } catch(_) { jimengSessionId = ''; }
         if(jimengSessionId) {
             const input = document.getElementById('jimeng-session-input');
             if(input) input.value = jimengSessionId;
@@ -6227,12 +6490,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             var _savedModel = localStorage.getItem('jimeng_model');
             jimengModel = JIMENG_ENABLED_MODELS.indexOf(_savedModel) !== -1 ? _savedModel : 'jimeng-image-5.0-lite';
         } catch(_) { jimengModel = 'jimeng-image-5.0-lite'; }
-        try {
-            var savedRatio = localStorage.getItem('jimeng_ratio');
-            if(savedRatio === 'auto' || savedRatio === '') aiGenerationSize = 'auto';
-            else if(JIMENG_RATIOS.includes(savedRatio)) aiGenerationSize = savedRatio;
-        } catch(_) {}
-        jimengRatio = aiGenerationSize === 'auto' ? '' : aiGenerationSize;
+        // 尺寸是单次生图选项，刷新后始终回到跟随画板。
+        aiGenerationSize = 'auto';
+        jimengRatio = '';
+        try { localStorage.removeItem('jimeng_ratio'); } catch(_) {}
     }
     function describeJimengSessionId(value) {
         value = value || '';
@@ -6262,6 +6523,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         'https://visual-factory.pages.dev/api/jimeng-session'
     ];
     function requestJimengSessionId(silent) {
+        if(VF_MANAGED_JIMENG) return checkManagedJimeng(silent);
         if(!silent) updateJimengApiUI({ label: '正在从云端获取即梦 Session ID…' });
         fetchJimengSessionFromEndpoints(0, silent);
     }
@@ -6270,6 +6532,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         requestJimengSessionId(false);
     }
     function fetchJimengSessionFromEndpoints(index, silent) {
+        if(VF_MANAGED_JIMENG) return checkManagedJimeng(silent);
         if(index >= JIMENG_SESSION_ENDPOINTS.length) {
             if(!silent) {
                 updateJimengApiUI({ label: '云端不可达，尝试从扩展获取…' });
@@ -6303,15 +6566,19 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             });
     }
     function postJimengApiMessage(message) {
+        if(VF_MANAGED_JIMENG) return;
         var target = window.parent && window.parent !== window ? window.parent : window;
         target.postMessage(message, location.origin);
     }
-    async function refreshJimengTunnelUrl() {
+    async function refreshJimengTunnelUrl(generationSession) {
+        if(VF_MANAGED_JIMENG) return;
         // 生图前先拿一次最新隧道地址，避免隧道换地址后仍用旧地址（原本最长 30 分钟才刷新一次）。
         // 换服务器后这里拿到的就是服务器地址，前端逻辑无需改动。
         for (let i = 0; i < JIMENG_SESSION_ENDPOINTS.length; i++) {
             try {
-                const r = await fetch(JIMENG_SESSION_ENDPOINTS[i], { cache: 'no-store' });
+                const r = generationSession
+                    ? await fetchForAIGeneration(generationSession, JIMENG_SESSION_ENDPOINTS[i], { cache: 'no-store' })
+                    : await fetch(JIMENG_SESSION_ENDPOINTS[i], { cache: 'no-store' });
                 const data = await r.json();
                 if (data && data.tunnelUrl) { JIMENG_API_URL = data.tunnelUrl; return; }
             } catch(_) {}
@@ -6320,7 +6587,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     window.addEventListener('message', function(event) {
         if(event.origin !== location.origin) return;
         var data = event.data || {};
-        if(data.source !== 'vf-jimeng-extension') return;
+        if(data.source !== 'vf-jimeng-extension'||VF_MANAGED_JIMENG) return;
         if(data.type === 'vf:jimeng-sessionid') {
             if(data.sessionId) {
                 jimengSessionId = data.sessionId;
@@ -6384,7 +6651,6 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     function selectAISize(value) {
         aiGenerationSize = value === 'auto' ? 'auto' : (JIMENG_RATIOS.includes(value) ? value : '1:1');
         jimengRatio = aiGenerationSize === 'auto' ? '' : aiGenerationSize;
-        try { localStorage.setItem('jimeng_ratio', aiGenerationSize); } catch(_) {}
         closeAIMenus();
         refreshAIConsole();
     }
@@ -6630,6 +6896,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         showToast(`已保存 ${loaded.length} 个${REFERENCE_ELEMENT_CATEGORIES[referenceElementCategory]}参考元素`);
     }
     function deleteReferenceElement(id) {
+        if (isUserInterfaceMode()) return;
         referenceElements = referenceElements.filter(item => item.id !== id);
         deleteReferenceElementFromDB(id);
         saveGlobalData();
@@ -6654,6 +6921,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         var preloaded;
         try { preloaded = await loadImageElement(ref.src); } catch(e) { /* 加载失败仍尝试替换 */ }
         saveHistory();
+        cancelProvisionalBackgroundUpgrade(target);
         target.src = ref.src;
         if (preloaded) {
             target.originalW = preloaded.naturalWidth || preloaded.width;
@@ -6753,6 +7021,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
                 src[i + 2] = Math.min(255, src[i + 2] * 1.04);
             }
             ctx.putImageData(data, 0, 0);
+            cancelProvisionalBackgroundUpgrade(targetLayer);
             targetLayer.src = canvas.toDataURL('image/png');
             targetLayer.originalW = maxW;
             targetLayer.originalH = maxH;
@@ -6944,15 +7213,156 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             img.src = src;
         });
     }
-    function waitForImagesIn(root) {
+    function waitForImagesIn(root, timeoutMs) {
         const imgs = [...root.querySelectorAll('img')];
         return Promise.all(imgs.map(img => {
             if(img.complete && img.naturalWidth > 0) return Promise.resolve();
             return new Promise(resolve => {
-                img.onload = resolve;
-                img.onerror = resolve;
+                let settled = false;
+                const finish = function() {
+                    if(settled) return;
+                    settled = true;
+                    if(timer) clearTimeout(timer);
+                    img.removeEventListener('load', finish);
+                    img.removeEventListener('error', finish);
+                    resolve();
+                };
+                const timer = Number(timeoutMs) > 0 ? setTimeout(finish, Number(timeoutMs)) : 0;
+                img.addEventListener('load', finish, { once:true });
+                img.addEventListener('error', finish, { once:true });
             });
         }));
+    }
+    function waitForPreparedExportImage(image, timeoutMs, session) {
+        if(image.complete && image.naturalWidth > 0) return Promise.resolve(true);
+        return new Promise(function(resolve) {
+            let settled = false;
+            const finish = function(ok) {
+                if(settled) return;
+                settled = true;
+                if(timer) clearTimeout(timer);
+                image.removeEventListener('load', onLoad);
+                image.removeEventListener('error', onError);
+                session?.cancelCallbacks?.delete(onCancel);
+                resolve(ok);
+            };
+            const onLoad = function() { finish(true); };
+            const onError = function() { finish(false); };
+            const onCancel = function() { finish(false); };
+            const timer = setTimeout(function() { finish(false); }, Math.max(1000, Number(timeoutMs) || 8000));
+            image.addEventListener('load', onLoad, { once:true });
+            image.addEventListener('error', onError, { once:true });
+            session?.cancelCallbacks?.add(onCancel);
+            if(session?.cancelled) onCancel();
+        });
+    }
+    async function fetchExportImageBlob(url, timeoutMs, session) {
+        if(!url || /^(data:|blob:)/i.test(url)) return null;
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        if(controller) registerExportAbortController(session, controller);
+        const timer = setTimeout(function() { controller?.abort(); }, Math.max(1000, Number(timeoutMs) || 8000));
+        try {
+            throwIfExportCancelled(session);
+            const response = await fetch(url, { cache:'force-cache', credentials:'omit', signal:controller?.signal });
+            throwIfExportCancelled(session);
+            if(!response.ok) return null;
+            const blob = await response.blob();
+            throwIfExportCancelled(session);
+            return blob && blob.size ? blob : null;
+        } catch(error) {
+            if(isExportCancellation(error) || session?.cancelled) throw createExportCancellationError();
+            return null;
+        } finally {
+            clearTimeout(timer);
+            if(controller) releaseExportAbortController(session, controller);
+        }
+    }
+    async function prepareOneXExportCloneImages(sourceRoot, clone, target, session) {
+        const selector = '.layer-image-wrapper > img.layer-image-img';
+        const sourceImages = Array.from(sourceRoot.querySelectorAll(selector));
+        const cloneImages = Array.from(clone.querySelectorAll(selector));
+        const objectUrls = [];
+        if (sourceImages.length !== cloneImages.length) return objectUrls;
+        for (let index = 0; index < sourceImages.length; index++) {
+            throwIfExportCancelled(session);
+            const sourceImage = sourceImages[index];
+            const cloneImage = cloneImages[index];
+            const wrapper = sourceImage.closest('.layer-image-wrapper');
+            const layer = layers.find(function(item) { return item.id === wrapper?.dataset.id; });
+            // Logo 由后续精确绘制路径处理；这里只缩小普通图片层的超大原图。
+            if (!layer || layer.type !== 'image' || !sourceImage.complete || !sourceImage.naturalWidth || !sourceImage.naturalHeight) continue;
+            const layerScale = Math.max(0.01, Math.abs(Number(layer.scale) || 1));
+            const neededWidth = Math.min(Number(target?.outWidth) || Infinity, Math.max(1, sourceImage.offsetWidth * layerScale));
+            const neededHeight = Math.min(Number(target?.outHeight) || Infinity, Math.max(1, sourceImage.offsetHeight * layerScale));
+            const resizeRatio = Math.min(1, Math.max(neededWidth / sourceImage.naturalWidth, neededHeight / sourceImage.naturalHeight));
+            const sourceUrl = sourceImage.currentSrc || sourceImage.src || '';
+            // 一倍导出不需要把 2x 甚至更大的原图再交给 html2canvas。
+            // 保留约 8% 像素余量，避免边缘缩放导致清晰度损失。
+            const outputRatio = Math.min(1, resizeRatio * 1.08);
+            const shouldResize = outputRatio < 0.98;
+            try {
+                let blob = null;
+                let outputWidth = sourceImage.naturalWidth;
+                let outputHeight = sourceImage.naturalHeight;
+                let mode = 'localized';
+                if (shouldResize) {
+                    outputWidth = Math.max(1, Math.round(sourceImage.naturalWidth * outputRatio));
+                    outputHeight = Math.max(1, Math.round(sourceImage.naturalHeight * outputRatio));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = outputWidth;
+                    canvas.height = outputHeight;
+                    const context = canvas.getContext('2d');
+                    if (!context) continue;
+                    context.imageSmoothingEnabled = true;
+                    context.imageSmoothingQuality = 'high';
+                    let bitmap = null;
+                    if (typeof createImageBitmap === 'function') {
+                        try {
+                            bitmap = await createImageBitmap(sourceImage, {
+                                resizeWidth: outputWidth,
+                                resizeHeight: outputHeight,
+                                resizeQuality: 'high'
+                            });
+                            throwIfExportCancelled(session);
+                        } catch (bitmapError) {
+                            if(session?.cancelled) {
+                                if (bitmap && typeof bitmap.close === 'function') bitmap.close();
+                                throw createExportCancellationError();
+                            }
+                        }
+                    }
+                    context.drawImage(bitmap || sourceImage, 0, 0, outputWidth, outputHeight);
+                    if (bitmap && typeof bitmap.close === 'function') bitmap.close();
+                    blob = await new Promise(function(resolve) { canvas.toBlob(resolve, 'image/png'); });
+                    throwIfExportCancelled(session);
+                    mode = 'downsampled';
+                } else {
+                    blob = await fetchExportImageBlob(sourceUrl, 8000, session);
+                }
+                if (!blob) continue;
+                const objectUrl = URL.createObjectURL(blob);
+                cloneImage.src = objectUrl;
+                cloneImage.removeAttribute('srcset');
+                if(!await waitForPreparedExportImage(cloneImage, 8000, session)) {
+                    URL.revokeObjectURL(objectUrl);
+                    cloneImage.src = sourceUrl;
+                    continue;
+                }
+                throwIfExportCancelled(session);
+                objectUrls.push(objectUrl);
+                traceExport(session, 'one-x-image-prepared', {
+                    layerId: layer.id,
+                    mode: mode,
+                    natural: [sourceImage.naturalWidth, sourceImage.naturalHeight],
+                    output: [outputWidth, outputHeight]
+                });
+            } catch (error) {
+                if(isExportCancellation(error) || session?.cancelled) throw createExportCancellationError();
+                // 跨域或浏览器限制时保留原图继续导出，不能因性能优化中止任务。
+                console.warn('一倍导出图片预缩放已跳过:', error);
+            }
+        }
+        return objectUrls;
     }
     function loadImageElement(src) {
         return new Promise((resolve, reject) => {
@@ -7123,6 +7533,7 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     async function applyLocalExtendedBackground(targetId, sourceLayer, targetLayer) {
         const preset = getArtboardPreset(targetId);
         const targetSize = SIZES[preset.ratio];
+        cancelProvisionalBackgroundUpgrade(targetLayer);
         targetLayer.src = await buildLocalExtendedBackground(targetId, sourceLayer);
         targetLayer.x = targetSize.w / 2;
         targetLayer.y = targetSize.h / 2;
@@ -7170,32 +7581,48 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             frame
         };
     }
-    function startAIProgress(text) {
+    function startAIProgress(text, options = {}) {
         const box = document.getElementById('ai-loading');
         const label = document.getElementById('ai-loading-text');
-        const bar = document.getElementById('ai-progress-bar');
         if(label) label.innerText = text;
-        if(bar) bar.style.width = '8%';
-        box?.classList.add('show');
-        clearInterval(aiProgressTimer);
-        let val = 8;
-        aiProgressTimer = setInterval(() => {
-            val = Math.min(88, val + Math.random() * 7);
-            if(bar) bar.style.width = val + '%';
-        }, 700);
+        // 嵌入主站时由父页面展示全站浮层，避免切换路由后 iframe 内提示消失。
+        box?.classList.toggle('show', window.parent === window);
+        activeAIProgressId = options.taskId || ('ai-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8));
+        activeAIProgressCancellable = options.cancellable === true;
+        notifyParent({
+            type: 'vf:ai-task-status',
+            status: 'running',
+            taskId: activeAIProgressId,
+            cancellable: activeAIProgressCancellable,
+            message: translateVFUiString(String(text || 'AI 正在处理...'))
+        });
     }
-    function updateAIProgress(text, pct) {
+    function updateAIProgress(text) {
         const label = document.getElementById('ai-loading-text');
-        const bar = document.getElementById('ai-progress-bar');
         if(label) label.innerText = text;
-        if(bar && pct !== undefined) bar.style.width = pct + '%';
+        if(activeAIProgressId) {
+            notifyParent({
+                type: 'vf:ai-task-status',
+                status: 'running',
+                taskId: activeAIProgressId,
+                cancellable: activeAIProgressCancellable,
+                message: translateVFUiString(String(text || 'AI 正在处理...'))
+            });
+        }
     }
-    function stopAIProgress() {
+    function stopAIProgress(result) {
         const box = document.getElementById('ai-loading');
-        const bar = document.getElementById('ai-progress-bar');
-        clearInterval(aiProgressTimer);
-        if(bar) bar.style.width = '100%';
-        setTimeout(() => box?.classList.remove('show'), 350);
+        box?.classList.remove('show');
+        if(activeAIProgressId) {
+            notifyParent({
+                type: 'vf:ai-task-status',
+                status: result?.status === 'success' || result?.status === 'error' ? result.status : 'idle',
+                taskId: activeAIProgressId,
+                message: result?.message ? String(result.message) : ''
+            });
+        }
+        activeAIProgressId = '';
+        activeAIProgressCancellable = false;
     }
 
     function syncRatioNav() {
@@ -7379,13 +7806,13 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     function resetCanvasZoom() { setCanvasZoom(1); }
     window.addEventListener('resize', resizeCanvas);
 
-    function openSettingsModal() { renderSettings(); document.getElementById('settings-modal').style.display = 'flex'; }
+    function openSettingsModal() { renderSettings(); loadTinifyKeyPool(); document.getElementById('settings-modal').style.display = 'flex'; }
     function renderSettings() {
         const keywordList = document.getElementById('settings-keyword-tag-list');
         if(keywordList) {
             keywordList.innerHTML = '';
             keywordTags.forEach((tag, index) => {
-                keywordList.innerHTML += `<div class="keyword-setting-row"><input type="text" class="setting-input" style="width:100%; margin:0;" value="${escapeHtml(tag.name)}" onchange="updateKeywordTag(${index}, 'name', this.value)"><textarea class="textarea" rows="2" placeholder="输入这个标签代表的完整关键词" onchange="updateKeywordTag(${index}, 'prompt', this.value)">${escapeHtml(tag.prompt)}</textarea><button class="l-btn" style="color:var(--danger);" onclick="deleteKeywordTag(${index})">✖</button></div>`;
+                keywordList.innerHTML += `<div class="keyword-setting-row"><div class="keyword-setting-head"><input type="text" class="setting-input" value="${escapeHtml(tag.name)}" onchange="updateKeywordTag(${index}, 'name', this.value)"><button class="l-btn" style="color:var(--danger);" onclick="deleteKeywordTag(${index})">✖</button></div><textarea class="textarea" rows="3" placeholder="输入这个标签代表的完整关键词" onchange="updateKeywordTag(${index}, 'prompt', this.value)">${escapeHtml(tag.prompt)}</textarea></div>`;
             });
         }
         const list = document.getElementById('settings-preset-list'); list.innerHTML = '';
@@ -7404,6 +7831,69 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
     function updateArcPreset(i, k, v) { arcColorPresets[i][k] = v; arcColorPresets[i]._cloudSaved = true; saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); renderProperties(); renderCanvas(); }
     function addArcPreset() { arcColorPresets.push({ id: genId('ac'), name: '新圆弧', cIn: '#FFCC00', cOut: '#00D06C', _cloudSaved: true }); saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); }
     function deleteArcPreset(i) { arcColorPresets.splice(i, 1); saveGlobalData(); queueColorPaletteCloudSave(); renderSettings(); }
+
+    function renderTinifyKeyPool(keys, message) {
+        const list = document.getElementById('tinify-key-list');
+        if(!list) return;
+        if(message) {
+            list.innerHTML = '<div style="font-size:12px;color:var(--danger);">' + escapeHtml(message) + '</div>';
+            return;
+        }
+        if(!Array.isArray(keys) || !keys.length) {
+            list.innerHTML = '<div style="font-size:12px;color:var(--text-sub);">尚未添加 TinyPNG 密钥</div>';
+            return;
+        }
+        list.innerHTML = keys.map(function(item) {
+            return '<div class="tinify-key-item"><span><span class="tinify-key-id">' + escapeHtml(item.hint || '') + '</span>'
+                + (item.active ? '<span class="tinify-key-state">当前使用</span>' : '')
+                + '</span><button class="btn btn-outline" type="button" data-tinify-key-id="' + escapeHtml(item.id || '') + '" onclick="removeTinifyApiKey(this.dataset.tinifyKeyId)" style="min-height:28px;padding:0 10px;color:var(--danger);">删除</button></div>';
+        }).join('');
+    }
+    async function loadTinifyKeyPool() {
+        try {
+            const response = await fetch('/api/admin/tinify-keys', { headers:getAuthHeaders(), cache:'no-store' });
+            const data = await response.json().catch(function() { return {}; });
+            if(!response.ok) throw new Error(data.message || ('HTTP ' + response.status));
+            renderTinifyKeyPool(data.keys || []);
+        } catch(error) {
+            renderTinifyKeyPool([], error?.message || '读取 TinyPNG 密钥失败');
+        }
+    }
+    async function addTinifyApiKey() {
+        const input = document.getElementById('tinify-key-input');
+        const key = String(input?.value || '').trim();
+        if(!key) return showToast('请粘贴 TinyPNG API Key', true);
+        try {
+            const response = await fetch('/api/admin/tinify-keys', {
+                method:'POST',
+                headers:Object.assign({ 'Content-Type':'application/json' }, getAuthHeaders()),
+                body:JSON.stringify({ key:key })
+            });
+            const data = await response.json().catch(function() { return {}; });
+            if(!response.ok) throw new Error(data.message || ('HTTP ' + response.status));
+            if(input) input.value = '';
+            renderTinifyKeyPool(data.keys || []);
+            showToast('✅ TinyPNG 密钥已安全添加');
+        } catch(error) {
+            showToast('TinyPNG 密钥添加失败：' + (error?.message || '未知错误'), true);
+        }
+    }
+    async function removeTinifyApiKey(id) {
+        if(!id || !confirm('确定删除这枚 TinyPNG 密钥？')) return;
+        try {
+            const response = await fetch('/api/admin/tinify-keys', {
+                method:'DELETE',
+                headers:Object.assign({ 'Content-Type':'application/json' }, getAuthHeaders()),
+                body:JSON.stringify({ id:id })
+            });
+            const data = await response.json().catch(function() { return {}; });
+            if(!response.ok) throw new Error(data.message || ('HTTP ' + response.status));
+            renderTinifyKeyPool(data.keys || []);
+            showToast('TinyPNG 密钥已删除');
+        } catch(error) {
+            showToast('TinyPNG 密钥删除失败：' + (error?.message || '未知错误'), true);
+        }
+    }
 
     function normalizePresetHex(value, fallback) {
         const color = String(value || '').trim();
@@ -8393,9 +8883,10 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
         }, 120);
     }
 
-    function renderCanvas() {
+    function renderCanvas(options = {}) {
+        const partialTemplate = options && options.allowPendingTemplate === true;
         if (nativeCaptureDomFreezeDepth > 0) return;
-        if (templateCanvasRenderBlock && templateCanvasRenderBlock.layers === layers) return;
+        if (templateCanvasRenderBlock && templateCanvasRenderBlock.layers === layers && !partialTemplate) return;
         const container = document.getElementById('dynamic-layers'); container.innerHTML = '';
         const hintEl = document.getElementById('empty-hint');
         const visibleLayers = layers.filter(function(layer) {
@@ -8407,8 +8898,12 @@ box-shadow: 0 1px 3px rgba(0,0,0,.25);
             container.appendChild(createLayerElement(l, { active: !activeGroup && activeLayerIds.includes(l.id), interactive: true }));
         });
         if (activeGroup) syncEditorGroupSelectionBox(container);
-        renderArtboardPreviews();
-        if (isUserInterfaceMode()) scheduleAutomaticTextContrast();
+        if (!partialTemplate) {
+            const canvas = document.getElementById('canvas-wrapper');
+            if (canvas?.dataset.templateState === 'font-error' && areTemplateFontsLoaded(layers)) setTemplateImportStatus('ready', '');
+            renderArtboardPreviews();
+            if (isUserInterfaceMode()) scheduleAutomaticTextContrast();
+        }
     }
     function renderArtboardPreviews() {
         saveCurrentArtboardState();
@@ -10834,8 +11329,8 @@ return true;
             : '未生成' + subject + '，已取消保存；请重新保存并选择当前标签页';
     }
     async function capturePreviewForSync(options = {}) {
-        // 保存模板的预览图与 PNG 导出统一走原生标签页捕获，避免 html2canvas 重新
-        // 排版任意字体（尤其是 HT 的空格和问号）。
+        // 组件预览仍保留只截取选中区域的原生捕获；完整模板则改用
+        // 与正式导出相同的精确渲染器，避免把编辑器 DOM 当成屏幕截图保存。
         if (options.nativeCapture) {
             try {
                 const result = await (options.capturePromise || captureNativePreviewDataUrl());
@@ -10848,7 +11343,15 @@ return true;
                 return null;
             }
         }
-        // 直接使用 DIY 自带的截图函数，和顶部"保存到模版库"用的是同一个
+        if (typeof window.VF_RENDER_TEMPLATE_PREVIEW_DATA_URL === 'function') {
+            try {
+                return await window.VF_RENDER_TEMPLATE_PREVIEW_DATA_URL();
+            } catch(e) {
+                console.warn('精确模板预览生成失败：', e);
+                return null;
+            }
+        }
+        // 兼容尚未提供精确预览接口的旧工具页。
         if (typeof window.VF_EXPORT_TEMPLATE_ASSET === 'function') {
             try {
                 var result = await window.VF_EXPORT_TEMPLATE_ASSET({ title: 'preview' });
@@ -11012,7 +11515,7 @@ return true;
     }
 
     var hostVisibleLayoutGeneration = 0;
-    function recoverHostVisibleLayout() {
+    function recoverHostVisibleLayout(visibleGeneration) {
         var generation = ++hostVisibleLayoutGeneration;
         // 常驻 iframe 在后台预热时宽高为 0，需等父页面恢复可见后
         // 的两轮布局再校正画板和素材列。
@@ -11021,16 +11524,20 @@ return true;
                 if (generation !== hostVisibleLayoutGeneration) return;
                 resizeCanvas();
                 var list = document.getElementById('asset-list-ui');
-                if (!list || list.clientWidth <= 0 || (currentAssetTab !== 'layout' && currentAssetTab !== 'component')) return;
-                var columns = Array.from(list.children).filter(function(child) {
-                    return child.classList.contains('asset-masonry-column');
-                });
-                var itemCount = columns.reduce(function(total, column) {
-                    return total + column.childElementCount;
-                }, 0);
-                var hiddenRenderCollapsedColumns = columns.length !== 2
-                    || (itemCount > 1 && columns.some(function(column) { return column.childElementCount === 0; }));
-                if (hiddenRenderCollapsedColumns) renderAssetLibrary();
+                if (list && list.clientWidth > 0 && (currentAssetTab === 'layout' || currentAssetTab === 'component')) {
+                    var columns = Array.from(list.children).filter(function(child) {
+                        return child.classList.contains('asset-masonry-column');
+                    });
+                    var itemCount = columns.reduce(function(total, column) {
+                        return total + column.childElementCount;
+                    }, 0);
+                    var hiddenRenderCollapsedColumns = columns.length !== 2
+                        || (itemCount > 1 && columns.some(function(column) { return column.childElementCount === 0; }))
+                        || (columns.length === 2 && Math.abs(columns[0].childElementCount - columns[1].childElementCount) > 1);
+                    if (hiddenRenderCollapsedColumns) renderAssetLibrary();
+                }
+                // 父页面只有收到本次进入 DIY 对应的代次，才撤掉全页加载遮罩。
+                notifyParent({ type: 'vf:static-visible-ready', generation: Number(visibleGeneration || 0) });
             });
         });
     }
@@ -11038,8 +11545,18 @@ return true;
     // 监听父窗口的同步进度回复
     window.addEventListener('message', function(event) {
         if (!event.data || !event.data.type) return;
+        if (event.data.type === 'vf:template-cache-progress' && event.source === window.parent) {
+            const hint = document.getElementById('template-cache-status');
+            if (hint) {
+                const { ready, total, failed, persistent } = event.data;
+                hint.hidden = !total;
+                hint.textContent = ready === total ? '模板已缓存 · ' + total + ' 个' : '完整模板预加载 · ' + ready + ' / ' + total + (failed ? ' · ' + failed + ' 个待重试' : '');
+                hint.dataset.ready = ready; hint.dataset.total = total;
+                hint.title = persistent ? '已缓存的模板切换和刷新时直接读取；模板更新后自动重新下载。' : '浏览器本地存储不可用，部分模板切换时可能需要重新下载。';
+            }
+        }
         if (event.data.type === 'vf:host-visible') {
-            if (event.source === window.parent) recoverHostVisibleLayout();
+            if (event.source === window.parent) recoverHostVisibleLayout(event.data.generation);
         } else if (event.data.type === 'vf:sync-progress') {
             if (event.data.status === 'done' && event.data.sourceId) {
                 var tempId = event.data.tempId || '';
@@ -11325,18 +11842,79 @@ return true;
                     }, 700 * failedPack._metadataRetries);
                 }
             }
+        } else if (event.data.type === 'vf:template-data-error') {
+            var failedTemplateId = event.data.id;
+            const failedLayout = presetLibrary.find(function(item) { return item.cloudId === failedTemplateId || item.id === failedTemplateId; });
+            if (failedLayout && pendingLayoutPresetId === failedLayout.id) {
+                pendingLayoutPresetId = '';
+                setTemplateImportStatus('error', event.data.error || '模板加载失败，请重试');
+                showToast(event.data.error || '模板加载失败，请重试', true);
+            }
+            var failedLogoAsset = logoAssets.find(function(item) {
+                return item.cloudId === failedTemplateId || item.id === failedTemplateId;
+            });
+            // 预览图已经完成了背景替换时，原图请求失败不应回滚画板或
+            // 打断用户；仅记为可重试，下次使用该素材时会再获取原图。
+            if (failedLogoAsset && failedLogoAsset._provisionalSource) {
+                failedLogoAsset._lazy = true;
+            }
+            if (failedLogoAsset && pendingLogoAssetId === failedLogoAsset.id) {
+                failedLogoAsset._lazy = true;
+                failedLogoAsset.src = '';
+                pendingLogoAssetId = '';
+                finishLogoAssetReplacement(true);
+                showToast('背景素材加载失败，请重试', true);
+            }
         } else if (event.data.type === 'vf:template-data') {
             // 后台到达的完整 JSON 数据，更新对应模板
             var tid = event.data.id;
             var tdata = event.data.data || {};
+            // 顶部开发者“保存模板”历史上保存的是完整项目快照。
+            // DIY 卡片按需读取时将它转成可直接套用的单版式或多画板套组。
+            if (tdata.schema === 'vf-project-snapshot/v1' && tdata.editorState) {
+                var projectEditor = tdata.editorState || {};
+                var projectArtboards = projectEditor.artboards || {};
+                var populatedProjectIds = Object.keys(projectArtboards).filter(function(boardId) {
+                    return Array.isArray(projectArtboards[boardId]?.layers) && projectArtboards[boardId].layers.length > 0;
+                });
+                if (populatedProjectIds.length > 1) {
+                    var populatedProjectArtboards = {};
+                    populatedProjectIds.forEach(function(boardId) { populatedProjectArtboards[boardId] = projectArtboards[boardId]; });
+                    tdata = {
+                        schema: 'vf-template-pack/v1',
+                        name: tdata.title || '',
+                        artboards: populatedProjectArtboards,
+                        artboardPresets: projectEditor.artboardPresets || [],
+                        linkedArtboardGroupId: projectEditor.linkedArtboardGroupId || '',
+                        linkedArtboardIds: Array.isArray(projectEditor.linkedArtboardIds) ? projectEditor.linkedArtboardIds : [],
+                        linked: !!projectEditor.linkedArtboardGroupId
+                    };
+                } else {
+                    var projectBoardId = populatedProjectIds[0] || projectEditor.currentArtboardId || '';
+                    var projectBoard = projectArtboards[projectBoardId] || {};
+                    tdata = {
+                        schema: 'vf-layout-preset/v1',
+                        name: tdata.title || '',
+                        size: projectBoard.ratio || projectEditor.currentRatio || '',
+                        canvasW: Number(projectBoard.w) || 0,
+                        canvasH: Number(projectBoard.h) || 0,
+                        canvasLanguage: projectBoard.languageMode || 'en',
+                        canvasLanguagesInitialized: projectBoard.languagesInitialized || {},
+                        elements: projectBoard.layers || projectEditor.layers || []
+                    };
+                }
+            }
             var loadedRequestedPresetId = '';
             var loadedTemplateItem = null;
             [presetLibrary, tagPresetLibrary, logoAssets, fontAssets, groupPresets].forEach(function(arr) {
                 var item = arr.find(function(x) { return x.cloudId === tid; });
                 if (!item) return;
                 loadedTemplateItem = item;
+                // 图片素材没有 src 时不能解除 lazy，否则会在空 src 上反复请求直到超时。
+                if (tdata.isImageTemplate && !tdata.src) return;
                 item._lazy = false;
                 if (tdata.isImageTemplate) item.isImageTemplate = true;
+                if (tdata.schema === 'vf-template-pack/v1') item.kind = 'pack';
                 if (tdata.elements) item.elements = tdata.elements;
                 if (tdata.artboards) item.artboards = tdata.artboards;
                 if (tdata.artboardPresets) item.artboardPresets = tdata.artboardPresets;
@@ -11353,7 +11931,10 @@ return true;
                 if (tdata.canvasH) item.canvasH = tdata.canvasH;
                 if (tdata.canvasLanguage) item.canvasLanguage = normalizeCanvasLanguage(tdata.canvasLanguage);
                 if (tdata.canvasLanguagesInitialized) item.canvasLanguagesInitialized = normalizeCanvasLanguagesInitialized(tdata.canvasLanguagesInitialized, tdata.canvasLanguage || item.canvasLanguage);
-                if (tdata.src) item.src = tdata.src;
+                if (tdata.src) {
+                    if (item._provisionalSource) item._pendingFullSourceUrl = tdata.src;
+                    else item.src = tdata.src;
+                }
                 if (tdata.schema === 'vf-font-asset/v1') {
                     item.fontFamilyName = tdata.familyName;
                     item.fontFamilyId = tdata.familyId;
@@ -11371,6 +11952,7 @@ return true;
             // 三种内置 Keeta Logo 已经改为组件库资产。云端 Logo 到达后，自动
             // 修复旧版画板中保存的本地相对路径，无需用户重新添加组件。
             hydrateCloudKeetaLogoLayers();
+            if (tdata.isImageTemplate && tdata.src) void upgradeProvisionalBackgroundLayers(tid, tdata.src);
             if (loadedTemplateItem) updateAssetCardPreviewInPlace(loadedTemplateItem);
             refreshTemplateBookmarkCoversForTemplate(tid, false);
             if (loadedRequestedPresetId) {
@@ -11760,7 +12342,7 @@ return true;
             if (count && asset.kind === 'bookmark') {
                 var templateCount = getLiveTemplateBookmarkMembers(asset).length;
                 count.textContent = String(templateCount);
-                count.title = '关联 ' + templateCount + ' 个模板';
+                count.title = translateVFUiString('关联 ' + templateCount + ' 个模板');
             }
         });
         return true;
@@ -11787,9 +12369,11 @@ return true;
         function appendAssetItem(item) {
             if (!masonryColumns.length) { list.appendChild(item); return; }
             item.dataset.masonryOrder = String(masonryOrder++);
-            var target = masonryColumns[0].scrollHeight <= masonryColumns[1].scrollHeight ? masonryColumns[0] : masonryColumns[1];
+            // iframe 在后台预热或刚恢复可见时，scrollHeight 可能暂时全为 0。
+            // 按序号稳定交替分列，保证任何时候都是两列，不再依赖未完成的布局测量。
+            var target = masonryColumns[(masonryOrder - 1) % masonryColumns.length];
             target.appendChild(item);
-            // 缩略图已通过 aspect-ratio 固定高度，不需要图片加载后再重排（避免重排导致 hover 闪烁）
+            // 缩略图已通过 aspect-ratio 固定高度，图片加载后不再重排。
         }
         function rebalanceMasonry() {
             if (masonryFrame || !masonryColumns.length) return;
@@ -11801,7 +12385,8 @@ return true;
                 masonryColumns[0].replaceChildren();
                 masonryColumns[1].replaceChildren();
                 allItems.forEach(function(item) {
-                    var target = masonryColumns[0].scrollHeight <= masonryColumns[1].scrollHeight ? masonryColumns[0] : masonryColumns[1];
+                    var order = Number(item.dataset.masonryOrder) || 0;
+                    var target = masonryColumns[order % masonryColumns.length];
                     target.appendChild(item);
                 });
                 if (savedScroll > 0) { list.scrollTop = savedScroll; _assetListScrollTop = savedScroll; }
@@ -11832,7 +12417,12 @@ return true;
                 return !templateBookmarkSelectMode || (p.kind !== 'pack' && !p._pending);
             }).filter(searchFilter);
             const items = filteredBookmarks.concat(filteredRegular);
-            if(items.length === 0) { list.innerHTML = '<div class="asset-empty">' + (!templateCatalogReady ? '正在加载云端资产…' : (_assetSearchQuery ? '未找到匹配的模板' : '暂无版式')) + '</div>'; if (_assetListScrollTop) list.scrollTop = _assetListScrollTop; return; }
+            if(items.length === 0) {
+                var emptyLayoutMessage = !templateCatalogReady ? '正在加载云端资产…' : (_assetSearchQuery ? '未找到匹配的模板' : '暂无版式');
+                list.innerHTML = '<div class="asset-empty">' + translateVFUiString(emptyLayoutMessage) + '</div>';
+                if (_assetListScrollTop) list.scrollTop = _assetListScrollTop;
+                return;
+            }
             items.forEach(p => {
                 const isPack = p.kind === 'pack';
                 const isBookmark = p.kind === 'bookmark';
@@ -12031,7 +12621,7 @@ return true;
             item.oncontextmenu = function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                if (isUserInterfaceMode() && isTemplateAsset) {
+                if (isUserInterfaceMode()) {
                     closeAssetContextMenu();
                     return;
                 }
@@ -12040,7 +12630,7 @@ return true;
         }
         const actions = document.createElement('div');
         actions.className = 'asset-actions';
-        if(onDelete) {
+        if(onDelete && !isUserInterfaceMode()) {
             actions.innerHTML = `<button class="asset-action" title="删除">✖</button>`;
             actions.querySelector('.asset-action').onclick = e => { e.stopPropagation(); onDelete(); };
         }
@@ -12080,13 +12670,13 @@ return true;
             count.className = 'asset-pack-count';
             const templateCount = getLiveTemplateBookmarkMembers(asset).length;
             count.textContent = String(templateCount);
-            count.title = '关联 ' + templateCount + ' 个模板';
+            count.title = translateVFUiString('关联 ' + templateCount + ' 个模板');
             summary.append(badge, count);
             item.appendChild(summary);
         }
         if (packHover) item.appendChild(packHover);
         item.appendChild(info);
-        if(onDelete) {
+        if(onDelete && !isUserInterfaceMode()) {
             if (type === 'font') {
                 actions.style.cssText = 'position:absolute;top:6px;right:6px;bottom:auto;left:auto;z-index:5;';
                 actions.querySelector('.asset-action').style.cssText = 'width:24px;height:24px;border:none;border-radius:999px;background:#e5e7eb;color:#6b7280;font-size:14px;font-weight:700;cursor:pointer;';
@@ -12115,6 +12705,10 @@ return true;
         };
     }
     function openAssetContextMenu(event, target) {
+        if (isUserInterfaceMode()) {
+            closeAssetContextMenu();
+            return;
+        }
         assetContextTarget = target;
         const menu = document.getElementById('asset-context-menu');
         if(!menu) return;
@@ -12127,7 +12721,7 @@ return true;
         if(bookmarkButton) bookmarkButton.hidden = !(target?.type === 'layout' || target?.type === 'bookmark');
         if(renameButton) renameButton.hidden = !target?.renameable;
         if(deleteButton) {
-            deleteButton.hidden = !target?.onDelete;
+            deleteButton.hidden = isUserInterfaceMode() || !target?.onDelete;
             // 书签是“引用”而非“包含”：右键“删除”会让人误以为会删掉关联模板，改成“释放编组”。
             deleteButton.textContent = target?.type === 'bookmark' ? '释放编组' : '删除';
         }
@@ -12152,6 +12746,10 @@ return true;
         if(assetContextTarget?.renameable) beginAssetRename(assetContextTarget.item, assetContextTarget.asset);
     }
     function deleteAssetContextItem() {
+        if (isUserInterfaceMode()) {
+            closeAssetContextMenu();
+            return;
+        }
         assetContextTarget?.onDelete?.();
     }
     function openAssetContextTemplateBookmarkEditor() {
@@ -12882,6 +13480,7 @@ return true;
         openTemplateBookmarkPicker(bookmark.id);
     }
     function deleteBookmarkMemberTemplate(bookmark, member, template) {
+        if (isUserInterfaceMode()) return;
         const name = template.name || member.ref.name || '该模板';
         if (!confirm('确定删除模板「' + name + '」？此操作不可恢复，删除后所有引用它的书签都会移除该成员。')) return;
         moveAssetToRecycle('layout', template);
@@ -12921,6 +13520,7 @@ return true;
             return;
         }
         if (message.action !== 'delete') return;
+        if (isUserInterfaceMode()) return;
 
         const name = template.name || ref.name || '该模板';
         if (!confirm('确定删除模板「' + name + '」？模板会先进入回收站，刷新网页后才会彻底删除。')) return;
@@ -12950,6 +13550,7 @@ return true;
         openTemplateBookmarkPicker(bookmark.id);
     }
     function dissolveTemplateBookmark(bookmark) {
+        if (isUserInterfaceMode()) return;
         if (!bookmark) return;
         const count = getLiveTemplateBookmarkMembers(bookmark).length;
         if (!confirm('解散后「' + (bookmark.name || '') + '」会被删除，' + count + ' 个关联模板将恢复显示在资产库和素材库。确定解散？')) return;
@@ -13403,6 +14004,7 @@ return true;
         console.log('[TEXT2LINE] applyLayoutPreset name="' + (p.name || '') + '" kind=' + (p.kind || 'layout') + ' isUser=' + isUserInterfaceMode());
         if (p._lazy) {
             pendingLayoutPresetId = id;
+            window.VF_TEMPLATE_IMPORT_STATUS('loading', '正在读取模板…');
             showToast('正在加载模板内容，请稍候…');
             // 按需请求该模板的数据（不再预加载所有）
             notifyParent({ type: 'vf:request-template-data', id: p.cloudId || p.id });
@@ -13449,6 +14051,7 @@ return true;
         renderTemplateCanvasAfterFonts(newLayers, newLayers);
     }
     async function deleteLayoutPreset(id) {
+        if (isUserInterfaceMode()) return;
         if(!await askConfirm('删除这个版式预设？')) return;
         var preset = presetLibrary.find(function(p) { return p.id === id; });
         moveAssetToRecycle('layout', preset);
@@ -13458,7 +14061,7 @@ return true;
             return saveLinkedArtboardSet();
         }
         if(layers.length === 0) return showToast('画板为空', true);
-        const requiresNativePreview = hasTextOrTagLayer(layers);
+        const requiresNativePreview = false;
         const saveRequest = await askSaveConfirmationForPreview(`版式 ${formatPresetTime()}`, '', requiresNativePreview); if(!saveRequest) return;
         const name = saveRequest.name;
         captureCanvasLanguageState(layers, currentCanvasLanguage);
@@ -13468,7 +14071,7 @@ return true;
         presetLibrary.push(preset);
         renderAssetLibrary();
         showToast('正在保存到素材库...');
-        // 截取预览图，上传到 Supabase
+        // 用导出同源的精确渲染器生成小预览图，上传到 Supabase。
         var previewDataUrl = await capturePreviewForSync({ nativeCapture: requiresNativePreview, capturePromise: saveRequest.capturePromise });
         if (!isUsablePreviewDataUrl(previewDataUrl)) {
             if (requiresNativePreview) {
@@ -13503,7 +14106,7 @@ return true;
         const primaryId = boardIds[0];
         // 套组的封面始终来自第一张画板，确保素材库预览有稳定的主视觉。
         if (primaryId !== currentArtboardId) loadArtboard(primaryId, false);
-        const requiresNativePreview = boardIds.some(function(id) { return hasTextOrTagLayer(artboards[id]?.layers); });
+        const requiresNativePreview = false;
         const saveRequest = await askSaveConfirmationForPreview(`关联模板 ${formatPresetTime()}`, '', requiresNativePreview);
         if (!saveRequest) {
             if (originalId !== currentArtboardId) loadArtboard(originalId, false);
@@ -13551,9 +14154,7 @@ return true;
         saveCurrentArtboardState();
         const hasAnyLayer = getFixedArtboardPresets().some(preset => (artboards[preset.id]?.layers || []).length > 0);
         if(!hasAnyLayer) return showToast('三块画板都是空的，无法保存套组', true);
-        const requiresNativePreview = getFixedArtboardPresets().some(function(preset) {
-            return hasTextOrTagLayer(artboards[preset.id]?.layers);
-        });
+        const requiresNativePreview = false;
         const saveRequest = await askSaveConfirmationForPreview(`套组 ${formatPresetTime()}`, '', requiresNativePreview); if(!saveRequest) return;
         const name = saveRequest.name;
         const packArtboards = {};
@@ -13675,6 +14276,7 @@ return true;
         saveHistory(); renderCanvas(); renderLayersList(); renderProperties(); showToast(selectedAny.length > 0 ? '已替换' : '组件已应用');
     }
     async function deleteTagComboPreset(id) {
+        if (isUserInterfaceMode()) return;
         if(!await askConfirm('删除这个标签组合？')) return;
         var preset = tagPresetLibrary.find(function(p) { return p.id === id; });
         moveAssetToRecycle('tag', preset);
@@ -13791,6 +14393,7 @@ return true;
         showToast(selectedAny.length > 0 ? '已替换为组合：' + p.name : '已应用组合：' + p.name);
     }
     async function deleteGroupCombo(id) {
+        if (isUserInterfaceMode()) return;
         if (!await askConfirm('删除这个组合？')) return;
         var preset = groupPresets.find(function(p) { return p.id === id; });
         moveAssetToRecycle('group', preset);
@@ -13850,6 +14453,82 @@ return true;
         pendingLogoReplacementPreviewSrc = '';
         if (shouldRender) renderCanvas();
     }
+    async function persistentBackgroundSource(src, timeoutMs) {
+        const value = String(src || '');
+        if (!value || value.startsWith('data:')) return value;
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = setTimeout(function() {
+            try { controller?.abort(); } catch (error) {}
+        }, Math.max(1000, Number(timeoutMs) || 45000));
+        try {
+            const response = await fetch(value, controller ? { signal: controller.signal, cache: 'force-cache' } : { cache: 'force-cache' });
+            if (!response.ok) throw new Error('Background source HTTP ' + response.status);
+            return await blobToDataUrl(await response.blob());
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+    function cancelProvisionalBackgroundUpgrade(layer) {
+        if (!layer || !layer._pendingFullAssetCloudId) return false;
+        const layerId = layer.id || '';
+        function clearPendingUpgrade(candidate) {
+            if (!candidate || (layerId && candidate.id !== layerId)) return;
+            delete candidate._pendingFullAssetCloudId;
+            delete candidate._provisionalAssetSrc;
+        }
+        clearPendingUpgrade(layer);
+        // 当前画板和已缓存的画板快照可能持有同一背景的副本；
+        // 一并取消才能防止切换画板后又被旧原图覆盖。
+        Object.keys(artboards || {}).forEach(function(boardId) {
+            (artboards[boardId]?.layers || []).forEach(clearPendingUpgrade);
+        });
+        return true;
+    }
+    async function upgradeProvisionalBackgroundLayers(cloudId, fullSrc) {
+        if (!cloudId || !fullSrc) return;
+        let persistentSrc;
+        let sourceImage;
+        try {
+            persistentSrc = await persistentBackgroundSource(fullSrc, 45000);
+            sourceImage = await loadImageElement(persistentSrc);
+        } catch (error) {
+            const asset = logoAssets.find(function(item) { return item.cloudId === cloudId || item.id === cloudId; });
+            if (asset) asset._lazy = true;
+            return;
+        }
+        const asset = logoAssets.find(function(item) { return item.cloudId === cloudId || item.id === cloudId; });
+        if (asset) {
+            asset.src = persistentSrc;
+            asset._lazy = false;
+            asset._provisionalSource = false;
+            asset._provisionalPreviewSrc = '';
+            asset._pendingFullSourceUrl = '';
+        }
+        const upgraded = new Set();
+        let currentChanged = false;
+        function upgradeLayer(layer, isCurrent) {
+            if (!layer || layer._pendingFullAssetCloudId !== cloudId || upgraded.has(layer)) return;
+            upgraded.add(layer);
+            // 画板快照不能保存一小时后会失效的签名 URL，后台下载完成后
+            // 换成可持久化的 data URL，保证之后保存模板和导出仍然有原图。
+            layer.src = persistentSrc;
+            layer.originalW = sourceImage.naturalWidth || sourceImage.width;
+            layer.originalH = sourceImage.naturalHeight || sourceImage.height;
+            delete layer._pendingFullAssetCloudId;
+            delete layer._provisionalAssetSrc;
+            if (isCurrent) currentChanged = true;
+        }
+        layers.forEach(function(layer) { upgradeLayer(layer, true); });
+        Object.keys(artboards || {}).forEach(function(boardId) {
+            (artboards[boardId]?.layers || []).forEach(function(layer) { upgradeLayer(layer, false); });
+        });
+        if (currentChanged) {
+            saveCurrentArtboardState();
+            renderCanvas();
+            renderLayersList();
+            renderProperties();
+        }
+    }
     async function addLogoFromAsset(id) {
         const logo = logoAssets.find(l => l.id === id); if(!logo) return;
         var selectedImg = pendingLogoReplacementTargetId
@@ -13863,21 +14542,78 @@ return true;
             showToast('请先点击画板中的背景', true);
             return;
         }
-        // 云端组件初始仅有缩略图，src 尚未下载。先取完整资源，不能把选中图层的
-        // src 直接写成空字符串。
-        if (logo._lazy || !logo.src) {
+        var assetType = getLogoAssetType(logo);
+        // 背景卡片的预览图已经在界面中解码，可以先用它立即完成替换；
+        // 原图在后台到达后只更换 src 和原始尺寸，不再阻塞交互或回滚预览结果。
+        if (logo._lazy || !logo.src || logo._provisionalSource) {
             beginLogoAssetReplacement(selectedImg, logo.previewUrl || '');
             pendingLogoAssetId = id;
+            if (selectedImg && isBackgroundLogoAsset(logo) && logo.previewUrl) {
+                let previewImage = null;
+                let provisionalSrc = logo.previewUrl;
+                try {
+                    const preparedPreview = await Promise.race([
+                        (async function() {
+                            const nextSrc = String(logo.previewUrl).startsWith('blob:')
+                                ? await persistentBackgroundSource(logo.previewUrl, 2200)
+                                : logo.previewUrl;
+                            return { src: nextSrc, image: await loadImageElement(nextSrc) };
+                        })(),
+                        new Promise(function(_resolve, reject) {
+                            setTimeout(function() { reject(new Error('Background preview timed out')); }, 2500);
+                        })
+                    ]);
+                    provisionalSrc = preparedPreview.src;
+                    previewImage = preparedPreview.image;
+                } catch (error) {}
+                // 用户可能在预览解码期间又点了另一张背景，慢结果不能覆盖新选择。
+                if (previewImage
+                    && pendingLogoAssetId === id
+                    && pendingLogoReplacementTargetId === selectedImg.id
+                    && layers.includes(selectedImg)) {
+                    const replacingCanvasBackground = selectedImg.type === 'image' && isCanvasBackgroundImage(selectedImg, layers);
+                    saveHistory();
+                    selectedImg.src = provisionalSrc;
+                    selectedImg.type = assetType;
+                    selectedImg.originalW = previewImage.naturalWidth || previewImage.width;
+                    selectedImg.originalH = previewImage.naturalHeight || previewImage.height;
+                    selectedImg.fitMode = assetType === 'logo' ? 'contain' : 'cover';
+                    delete selectedImg.color;
+                    if (replacingCanvasBackground && assetType === 'image') fitCanvasBackgroundAfterReplacement(selectedImg);
+                    else delete selectedImg.role;
+                    selectedImg._pendingFullAssetCloudId = logo.cloudId || logo.id;
+                    selectedImg._provisionalAssetSrc = provisionalSrc;
+                    commitLinkedReplacement(selectedImg, [selectedImg]);
+                    logo.src = provisionalSrc;
+                    logo._lazy = false;
+                    logo._provisionalSource = true;
+                    logo._provisionalPreviewSrc = provisionalSrc;
+                    pendingLogoAssetId = '';
+                    finishLogoAssetReplacement(false);
+                    saveHistory();
+                    renderCanvas();
+                    renderLayersList();
+                    renderProperties();
+                    showToast('已替换，原图将在后台更新');
+                    notifyParent({ type: 'vf:request-template-data', id: logo.cloudId || logo.id });
+                    return;
+                }
+            }
             showToast(selectedImg ? '正在下载并替换背景…' : '正在加载素材内容…');
             notifyParent({ type: 'vf:request-template-data', id: logo.cloudId || logo.id });
             return;
         }
         if (selectedImg && !replacingImageLayerIds.has(selectedImg.id)) beginLogoAssetReplacement(selectedImg, logo.previewUrl || '');
-        var assetType = getLogoAssetType(logo);
         let sourceImage;
         try {
             sourceImage = await loadImageElement(logo.src);
         } catch (error) {
+            // 签名地址可能过期或网络短暂失败；清掉它后下次点击会重新签名，
+            // 不会让该背景素材在当前页面中永久失效。
+            if (/^https?:/i.test(String(logo.src || ''))) {
+                logo._lazy = true;
+                logo.src = '';
+            }
             finishLogoAssetReplacement(true);
             showToast('素材读取失败，未替换当前图层', true);
             return;
@@ -13889,6 +14625,7 @@ return true;
         if (selectedImg) {
             const replacingCanvasBackground = selectedImg.type === 'image' && isCanvasBackgroundImage(selectedImg, layers);
             saveHistory();
+            cancelProvisionalBackgroundUpgrade(selectedImg);
             selectedImg.src = logo.src;
             selectedImg.type = assetType;
             selectedImg.originalW = sourceImage.naturalWidth || sourceImage.width;
@@ -13911,6 +14648,7 @@ return true;
         addLayer(assetType, { src: logo.src, baseW: targetW, baseH: targetH, fitMode: assetType === 'logo' ? 'contain' : 'cover' });
     }
     function deleteLogoAsset(id) {
+        if (isUserInterfaceMode()) return;
         askConfirm('删除这个 Logo 素材？').then(ok => {
             if(!ok) return;
             var logo = logoAssets.find(function(l) { return l.id === id; });
@@ -14137,6 +14875,28 @@ return true;
         }
         return Array.isArray(results) && results.some(Boolean);
     }
+    let templateImportStatusEpoch = 0;
+    let templateImportStatusTimer = null;
+    function setTemplateImportStatus(phase, message, epoch = templateImportStatusEpoch) {
+        if (epoch !== templateImportStatusEpoch) return;
+        clearTimeout(templateImportStatusTimer);
+        const status = document.getElementById('template-load-status');
+        const canvas = document.getElementById('canvas-wrapper');
+        if (canvas) canvas.dataset.templateState = phase;
+        if (!status) return;
+        status.dataset.state = phase;
+        status.textContent = message || '';
+        status.hidden = phase === 'ready' || !message;
+        if (phase === 'loading') {
+            templateImportStatusTimer = setTimeout(function() {
+                if (epoch === templateImportStatusEpoch && canvas?.dataset.templateState === 'loading') status.textContent = '首次下载较慢，正在继续读取；完成后会缓存到本机…';
+            }, 45000);
+        }
+    }
+    window.VF_TEMPLATE_IMPORT_STATUS = function(phase, message) {
+        if (phase === 'loading') templateImportStatusEpoch++;
+        setTemplateImportStatus(phase, message);
+    };
     function cancelPendingTemplateFontRender() {
         templateFontRenderGeneration++;
         templateCanvasRenderBlock = null;
@@ -14149,25 +14909,31 @@ return true;
         const targetLayers = renderTargetLayers || layers;
         const renderBlock = { generation: generation, layers: targetLayers };
         templateCanvasRenderBlock = renderBlock;
-        // 上一帧安排的延迟自动对比度任务会在 120ms 后读取全局 layers。
-        // 如果不取消，它会在字体等待期间抢先重绘新模板。
+        const hasContent = targetLayers.length > 0;
+        const statusEpoch = hasContent ? ++templateImportStatusEpoch : templateImportStatusEpoch;
         clearTimeout(_autoTextContrastTimer);
         _autoTextContrastRun++;
         forceHideCanvasFontLoadingOverlay();
+        // First paint uses only real, ready assets. renderCanvas still excludes
+        // every text/tag layer whose actual font is not registered.
+        renderCanvas({ allowPendingTemplate: true });
+        if (hasContent && !areTemplateFontsLoaded(fontLayers)) setTemplateImportStatus('fonts', '正在加载模板字体…', statusEpoch);
         try {
             await ensureTemplateFontsLoaded(fontLayers, { timeoutMs: 30000, strict: true });
-            if (generation !== templateFontRenderGeneration || layers !== targetLayers) return;
+            if (generation !== templateFontRenderGeneration || layers !== targetLayers) return false;
             if (templateCanvasRenderBlock === renderBlock) templateCanvasRenderBlock = null;
             enforceTextTwoLineLimit(targetLayers);
             renderCanvas();
+            if (hasContent) setTemplateImportStatus('ready', '', statusEpoch);
+            return true;
         } catch (error) {
-            // 字体网络失败时释放其他图层，但缺少字体的文字/标签继续隐藏，
-            // 绝不能为了“有内容”而显示或导出 fallback 字体。
             if (generation === templateFontRenderGeneration && layers === targetLayers) {
                 if (templateCanvasRenderBlock === renderBlock) templateCanvasRenderBlock = null;
                 renderCanvas();
+                if (hasContent) setTemplateImportStatus('font-error', '模板图片已显示，字体尚未就绪，请稍后重试', statusEpoch);
                 showToast('字体仍在加载，文字将在就绪后显示', true);
             }
+            return false;
         } finally {
             if (templateCanvasRenderBlock === renderBlock && layers !== targetLayers) templateCanvasRenderBlock = null;
         }
@@ -14318,6 +15084,7 @@ return true;
     }
 
     function deleteFontAsset(id) {
+        if (isUserInterfaceMode()) return;
         askConfirm('删除这个字体素材？').then(function(ok) {
             if (!ok) return;
             var fontAsset = fontAssets.find(function(f) { return f.id === id; });
@@ -14327,6 +15094,7 @@ return true;
     }
 
     function deleteFontFamilyAssets(assets, familyName) {
+        if (isUserInterfaceMode()) return;
         askConfirm('删除字体「' + familyName + '」及其所有字重？').then(function(ok) {
             if (!ok) return;
             var ids = new Set((assets || []).map(function(asset) { return asset.id; }));
@@ -14702,6 +15470,7 @@ return true;
             });
             const data = await res.json().catch(() => ({}));
             if(!res.ok || !data.success) throw new Error(data.message || `HTTP ${res.status}`);
+            cancelProvisionalBackgroundUpgrade(targetLayer);
             targetLayer.src = `data:image/png;base64,${data.imageBase64}`;
             targetLayer.x = targetSize.w / 2;
             targetLayer.y = targetSize.h / 2;
@@ -15617,6 +16386,7 @@ return true;
             });
             const image = await loadImageElement(src);
             // 只更新图像内容和原图信息，当前位置、显示尺寸、缩放、旋转、层级均不改变。
+            cancelProvisionalBackgroundUpgrade(target);
             target.src = src;
             target.originalW = image.naturalWidth || image.width || target.originalW;
             target.originalH = image.naturalHeight || image.height || target.originalH;
@@ -15660,6 +16430,10 @@ return true;
         compUploadFiles = [];
     };
     window.confirmComponentUpload = function() {
+        if (isUserInterfaceMode()) {
+            closeComponentUploadModal();
+            return;
+        }
         if (compUploadFiles.length === 0) return;
         var msgEl = document.getElementById('comp-upload-msg');
         msgEl.textContent = '上传中...';
@@ -15684,6 +16458,11 @@ return true;
         });
     };
     document.getElementById('component-upload').addEventListener('change', function(e) {
+        if (isUserInterfaceMode()) {
+            e.target.value = '';
+            closeComponentUploadModal();
+            return;
+        }
         compUploadFiles = [...e.target.files];
         if (compUploadFiles.length === 0) return;
         document.getElementById('comp-upload-files-info').textContent = '已选择 ' + compUploadFiles.length + ' 个文件';
@@ -15698,6 +16477,7 @@ return true;
         if (!pane) return;
         var dragDepth = 0;
         function setDropState(active) {
+            if (isUserInterfaceMode()) active = false;
             pane.classList.toggle('asset-file-drag-over', active);
             document.getElementById('asset-library-drop-overlay')?.setAttribute('aria-hidden', active ? 'false' : 'true');
         }
@@ -15705,6 +16485,12 @@ return true;
             pane.addEventListener(evType, function(e) {
                 if (!isFileDragEvent(e)) return;
                 e.preventDefault(); e.stopPropagation();
+                if (isUserInterfaceMode()) {
+                    dragDepth = 0;
+                    e.dataTransfer.dropEffect = 'none';
+                    setDropState(false);
+                    return;
+                }
                 if (evType === 'dragenter') dragDepth++;
                 e.dataTransfer.dropEffect = 'copy';
                 setDropState(true);
@@ -15721,6 +16507,7 @@ return true;
             e.preventDefault(); e.stopPropagation();
             dragDepth = 0;
             setDropState(false);
+            if (isUserInterfaceMode()) return;
             var fontFiles = [...e.dataTransfer.files].filter(function(f) { return /\.(ttf|otf|woff2?)$/i.test(f.name || ''); });
             if (fontFiles.length) {
                 if (currentAssetTab === 'component' && diySelectedSubtag === '字体') {
@@ -15983,13 +16770,98 @@ return true;
         }
     }
 
-    async function pollAIImageTask(taskId, provider) {
+    function createAIGenerationCancellationError() {
+        const error = new Error('AI_GENERATION_CANCELLED');
+        error.name = 'AIGenerationCancelledError';
+        return error;
+    }
+    function isAIGenerationCancellation(error, session) {
+        return Boolean(session?.cancelled || error?.name === 'AIGenerationCancelledError' || error?.name === 'AbortError');
+    }
+    function assertAIGenerationActive(session) {
+        if(!session || session.cancelled || activeAIGenerationSession !== session) throw createAIGenerationCancellationError();
+    }
+    function setAIGenerationLocked(locked) {
+        const button = document.getElementById('ai-submit-btn');
+        if(button) button.disabled = Boolean(locked);
+    }
+    function beginAIGenerationSession() {
+        if(activeAIGenerationSession && !activeAIGenerationSession.finished) return null;
+        const session = {
+            id: 'ai-generation-' + Date.now().toString(36) + '-' + (++aiGenerationSequence).toString(36),
+            cancelled: false,
+            finished: false,
+            controllers: new Set(),
+            waits: new Set()
+        };
+        activeAIGenerationSession = session;
+        setAIGenerationLocked(true);
+        return session;
+    }
+    function finishAIGenerationSession(session) {
+        if(!session || session.finished) return;
+        session.finished = true;
+        session.controllers.forEach(controller => controller.abort());
+        session.controllers.clear();
+        session.waits.forEach(cancelWait => cancelWait());
+        session.waits.clear();
+        if(activeAIGenerationSession === session) {
+            activeAIGenerationSession = null;
+            setAIGenerationLocked(false);
+        }
+    }
+    function cancelActiveAIGeneration(taskId) {
+        const session = activeAIGenerationSession;
+        if(!session || session.finished || (taskId && taskId !== session.id)) return;
+        session.cancelled = true;
+        session.controllers.forEach(controller => controller.abort());
+        session.controllers.clear();
+        session.waits.forEach(cancelWait => cancelWait());
+        session.waits.clear();
+        stopAIProgress();
+        showToast(VF_UI_LANGUAGE === 'en' ? 'Image generation cancelled' : '已取消生图');
+    }
+    async function fetchForAIGeneration(session, input, init = {}) {
+        assertAIGenerationActive(session);
+        const controller = new AbortController();
+        session.controllers.add(controller);
+        try {
+            const response = await fetch(input, { ...init, signal: controller.signal });
+            assertAIGenerationActive(session);
+            return response;
+        } finally {
+            session.controllers.delete(controller);
+        }
+    }
+    function waitForAIGeneration(session, delay) {
+        assertAIGenerationActive(session);
+        return new Promise((resolve, reject) => {
+            let timer = 0;
+            const cancelWait = () => {
+                clearTimeout(timer);
+                session.waits.delete(cancelWait);
+                reject(createAIGenerationCancellationError());
+            };
+            timer = setTimeout(() => {
+                session.waits.delete(cancelWait);
+                try { assertAIGenerationActive(session); resolve(); } catch(error) { reject(error); }
+            }, delay);
+            session.waits.add(cancelWait);
+        });
+    }
+    window.addEventListener('message', function(event) {
+        if(event.origin !== location.origin || event.source !== window.parent) return;
+        const data = event.data || {};
+        if(data.type === 'vf:cancel-ai-task') cancelActiveAIGeneration(String(data.taskId || ''));
+    });
+
+    async function pollAIImageTask(taskId, provider, session) {
         if(!taskId) throw new Error('缺少生图任务编号');
         const maxAttempts = 90;
         for(let i = 0; i < maxAttempts; i += 1) {
-            await new Promise(resolve => setTimeout(resolve, i < 3 ? 1800 : 3000));
+            await waitForAIGeneration(session, i < 3 ? 1800 : 3000);
             updateAIProgress('模型正在生成画面...', Math.min(88, 48 + Math.round((i / maxAttempts) * 40)));
-            const res = await fetch(`/api/generate-image-status?task_id=${encodeURIComponent(taskId)}`);
+            const res = await fetchForAIGeneration(session, `/api/generate-image-status?task_id=${encodeURIComponent(taskId)}`);
             const data = await readAIResponse(res, '生图结果查询');
             if(!res.ok || !data.success) throw new Error(data.message || `查询失败（HTTP ${res.status}）`);
             if(!data.pending && data.imageBase64) {
@@ -16001,11 +16873,20 @@ return true;
 
     async function generateAIBG() {
         const p = getPromptText(); if(!p) return showToast('请输入描述词或选择关键词标签', true);
-        if(aiProvider === 'jimeng') return generateWithJimeng(p);
+        const session = beginAIGenerationSession();
+        if(!session) return showToast(VF_UI_LANGUAGE === 'en' ? 'Image generation is already in progress' : '生图正在进行中，请先等待完成或取消', true);
+        if(aiProvider === 'jimeng') {
+            try { return await generateWithJimeng(p, session); }
+            finally { finishAIGenerationSession(session); }
+        }
         const btn = document.getElementById('ai-submit-btn') || window.event?.target || document.activeElement;
         const ogText = btn?.innerText || '↑';
         if(btn) { btn.innerText = '…'; btn.disabled = true; }
-        startAIProgress(`${AI_PROVIDER_LABELS[aiProvider] || 'AI'} 正在生成新图片...`);
+        startAIProgress(`${AI_PROVIDER_LABELS[aiProvider] || 'AI'} 正在生成新图片...`, { taskId: session.id, cancellable: true });
+        let completion = {
+            status: 'error',
+            message: VF_UI_LANGUAGE === 'en' ? 'Image generation failed. Return to Static DIY for details.' : '生图失败，请返回 DIY 查看详情'
+        };
         try {
             requireAIBackendRuntime();
             updateAIProgress('正在提交生成请求...', 22);
@@ -16026,24 +16907,41 @@ return true;
                     mimeType: item.mimeType || 'image/png'
                 }));
             }
-            const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const res = await fetchForAIGeneration(session, '/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             const data = await readAIResponse(res, '生图');
+            assertAIGenerationActive(session);
             if(data.success && data.pending && data.taskId) {
                 updateAIProgress('任务已提交，正在等待结果...', 46);
-                const result = await pollAIImageTask(data.taskId, data.provider || aiProvider);
-                addAIImageLayer(`data:image/png;base64,${result.imageBase64}`);
+                const result = await pollAIImageTask(data.taskId, data.provider || aiProvider, session);
+                await addAIImageLayer(`data:image/png;base64,${result.imageBase64}`, session);
                 showToast(`✅ ${result.provider || data.provider || 'AI'} 已生成新图片`);
+                completion = {
+                    status: 'success',
+                    message: VF_UI_LANGUAGE === 'en' ? 'Image generated and returned to the Static DIY artboard.' : '生图完成，图片已返回 DIY 画板'
+                };
             } else if(data.success) {
                 updateAIProgress('模型正在生成画面...', 70);
-                addAIImageLayer(`data:image/png;base64,${data.imageBase64}`);
+                await addAIImageLayer(`data:image/png;base64,${data.imageBase64}`, session);
                 showToast(data.warning || `✅ ${data.provider || 'AI'} 已生成新图片`);
-            } else { showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true); }
-        } catch(e) { showToast('❌ ' + (e.message || '无法连接服务器'), true); } finally { updateAIProgress('正在应用到画布...', 96); stopAIProgress(); if(btn) { btn.innerText = ogText; btn.disabled = false; } }
+                completion = {
+                    status: 'success',
+                    message: VF_UI_LANGUAGE === 'en' ? 'Image generated and returned to the Static DIY artboard.' : '生图完成，图片已返回 DIY 画板'
+                };
+            } else {
+                showToast('❌ ' + (data.message || `生成失败（HTTP ${res.status}）`), true);
+            }
+        } catch(e) {
+            if(!isAIGenerationCancellation(e, session)) showToast('❌ ' + (e.message || '无法连接服务器'), true);
+        } finally {
+            if(!session.cancelled) stopAIProgress(completion);
+            if(btn) { btn.innerText = ogText; btn.disabled = false; }
+            finishAIGenerationSession(session);
+        }
     }
-    async function downloadJimengImageAsDataUrl(url) {
+    async function downloadJimengImageAsDataUrl(url, session) {
         // 1) 优先 fetch 下载（即梦图片 CDN 通常允许跨域）
         try {
-            var r = await fetch(url);
+            var r = await fetchForAIGeneration(session, url);
             if(r.ok) {
                 var blob = await r.blob();
                 return await new Promise(function(resolve, reject) {
@@ -16053,7 +16951,7 @@ return true;
                     reader.readAsDataURL(blob);
                 });
             }
-        } catch(_) {}
+        } catch(error) { if(isAIGenerationCancellation(error, session)) throw error; }
         // 2) 兜底：<img> + canvas 读像素转 dataURL（绕过 fetch 的 CORS 限制）
         try {
             var img = new Image();
@@ -16061,24 +16959,32 @@ return true;
             await new Promise(function(resolve, reject) {
                 img.onload = resolve; img.onerror = reject; img.src = url;
             });
+            assertAIGenerationActive(session);
             var canvas = document.createElement('canvas');
             canvas.width = img.naturalWidth || img.width;
             canvas.height = img.naturalHeight || img.height;
             var ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0);
             return canvas.toDataURL('image/png');
-        } catch(_) {}
+        } catch(error) { if(isAIGenerationCancellation(error, session)) throw error; }
         // 3) 最终兜底：直接用原始 URL（图层将以 <img src> 显示）
         return url;
     }
-    async function generateWithJimeng(prompt) {
-        if(!jimengSessionId) return showToast('请先获取即梦 Session ID（点生图面板的「一键获取」）', true);
-        await refreshJimengTunnelUrl();
+    async function generateWithJimeng(prompt, session) {
+        if(!VF_MANAGED_JIMENG&&!jimengSessionId) return showToast('请先获取即梦 Session ID（点生图面板的「一键获取」）', true);
+        assertAIGenerationActive(session);
         const button = document.getElementById('ai-submit-btn');
         const original = button?.textContent || '↑';
         if(button) { button.textContent = '…'; button.disabled = true; }
-        startAIProgress('正在通过即梦 API 生成图片…');
+        startAIProgress('正在通过即梦 API 生成图片…', { taskId: session.id, cancellable: true });
+        let completion = {
+            status: 'error',
+            message: VF_UI_LANGUAGE === 'en' ? 'Image generation failed. Return to Static DIY for details.' : '生图失败，请返回 DIY 查看详情'
+        };
         try {
+            updateAIProgress('正在连接即梦生图服务…');
+            await refreshJimengTunnelUrl(session);
+            assertAIGenerationActive(session);
             var ratio = jimengRatio;
             if(!ratio && aiReferenceImages.length) {
                 var dims = await getRefImageDimensions(aiReferenceImages[0].src);
@@ -16098,6 +17004,8 @@ return true;
                 body.images = aiReferenceImages.map(function(item) { return item.src; });
             }
             updateAIProgress('正在提交生成请求到即梦…', 30);
+            var items,submitPayload={};
+            if(VF_MANAGED_JIMENG){items=await runManagedJimeng(body,session);}else{
             // 优先经由用户本机中转；本机隧道断开时，自动降级到线上 Pages Function。
             // 这样保留原有架构，也避免电脑待机或 trycloudflare 故障导致线上完全不可用。
             let submitApi = JIMENG_API_URL;
@@ -16105,7 +17013,7 @@ return true;
             const submitViaCloudFallback = function() {
                 submitApi = JIMENG_CLOUD_FALLBACK_URL;
                 const fallbackBody = Object.assign({}, body, { cookies: jimengCookies || {} });
-                return fetch(submitApi, {
+                return fetchForAIGeneration(session, submitApi, {
                     method: 'POST',
                     headers: {
                         'Authorization': 'Bearer ' + jimengSessionId,
@@ -16116,7 +17024,7 @@ return true;
                 });
             };
             try {
-                submitRes = await fetch(submitApi + '/v1/images/generations/async', {
+                submitRes = await fetchForAIGeneration(session, submitApi + '/v1/images/generations/async', {
                     method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + jimengSessionId, 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
@@ -16136,28 +17044,45 @@ return true;
                 try { var se = await submitRes.json(); subErr = se.message || se.errmsg || ''; } catch(_) {}
                 throw new Error('即梦提交失败 HTTP ' + submitRes.status + (subErr ? '：' + subErr : ''));
             }
-            const submitPayload = await submitRes.json();
+            submitPayload = await submitRes.json();
             const taskId = submitPayload && (submitPayload.task_id || submitPayload.taskId);
             if(!taskId) throw new Error('即梦未返回任务编号');
             updateAIProgress('任务已提交，即梦正在生成图片…', 45);
-            var items = await pollJimengAsyncTask(taskId, submitApi);
+            items = await pollJimengAsyncTask(taskId, submitApi, session);
+            }
             var images = [];
             for(var j = 0; j < items.length; j++) {
                 var item = items[j];
-                if(item.b64_json) {
+                if(item.managedSource) {images.push(item.managedSource);}
+                else if(item.b64_json) {
                     images.push('data:image/png;base64,' + item.b64_json);
                 } else if(item.url) {
-                    images.push(await downloadJimengImageAsDataUrl(item.url));
+                    images.push(await downloadJimengImageAsDataUrl(item.url, session));
                 }
             }
             if(images.length) {
                 updateAIProgress('正在导入生成结果…', 85);
-                for(var i = 0; i < images.length; i++) { addAIImageLayer(images[i]); }
+                for(var i = 0; i < images.length; i++) {
+                    assertAIGenerationActive(session);
+                    await addAIImageLayer(images[i], session);
+                }
                 showToast('✅ 即梦已生成 ' + images.length + ' 张图片');
+                // 旧通道（非受保护网关）不写服务器收据，这里主动补记一次统计；同任务重复不会重复计数
+                if(!VF_MANAGED_JIMENG) {
+                    reportLegacyGeneration(taskId, body.model, images.length);
+                    setTimeout(function() { showToast('ℹ️ 本次走的是备用通道，已补记到生图统计'); }, 1200);
+                }
+                completion = {
+                    status: 'success',
+                    message: VF_UI_LANGUAGE === 'en'
+                        ? `${images.length} image${images.length === 1 ? '' : 's'} generated and returned to the Static DIY artboard.`
+                        : `生图完成，${images.length} 张图片已返回 DIY 画板`
+                };
             } else {
                 showToast('❌ ' + (submitPayload.message || '即梦未返回图片'), true);
             }
         } catch(e) {
+            if(isAIGenerationCancellation(e, session)) return;
             var jmErr = e && e.message ? e.message : '';
             if(jmErr.includes('Failed to fetch') || jmErr.includes('NetworkError') || jmErr.includes('aborted') || jmErr.includes('AbortError')) {
                 showToast('❌ 无法连接即梦中转服务（网络中断或超时），请稍后重试', true);
@@ -16165,24 +17090,38 @@ return true;
                 showToast('❌ ' + (jmErr || '即梦 API 调用失败'), true);
             }
         } finally {
-            stopAIProgress();
+            if(!session.cancelled) stopAIProgress(completion);
             if(button) { button.textContent = original; button.disabled = false; }
         }
     }
     
-    async function pollJimengAsyncTask(taskId, taskApi) {
+    // 备用通道补记：只发最小信息（任务号/型号/张数），账号由服务端用登录态确定
+    function reportLegacyGeneration(taskId, model, count) {
+        try {
+            var token = (window.VF_GET_ACCESS_TOKEN ? window.VF_GET_ACCESS_TOKEN() : localStorage.getItem('vf_access_token')) || '';
+            if(!token || !taskId) return;
+            fetch('/api/report-generation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ taskId: taskId, model: model || '', kind: 'diy', count: count || 1, origin: location.origin }),
+                keepalive: true
+            }).catch(function() {});
+        } catch(_e) {}
+    }
+
+    async function pollJimengAsyncTask(taskId, taskApi, session) {
         if(!taskId) throw new Error('缺少即梦任务编号');
         const useCloudFallback = taskApi === JIMENG_CLOUD_FALLBACK_URL;
         const maxAttempts = 90; // 每 3s 一次，约 4.5 分钟
         for(let i = 0; i < maxAttempts; i += 1) {
-            await new Promise(resolve => setTimeout(resolve, i < 3 ? 2000 : 3000));
+            await waitForAIGeneration(session, i < 3 ? 2000 : 3000);
             updateAIProgress('即梦正在生成图片，请耐心等待…', Math.min(88, 50 + Math.round((i / maxAttempts) * 36)));
             const pollUrl = useCloudFallback
                 ? taskApi + '?task_id=' + encodeURIComponent(taskId)
                 : taskApi + '/v1/images/generations/async?task_id=' + encodeURIComponent(taskId);
             const pollHeaders = { 'Authorization': 'Bearer ' + jimengSessionId };
             if(useCloudFallback) pollHeaders['X-Jimeng-Cookies'] = JSON.stringify(jimengCookies || {});
-            const res = await fetch(pollUrl, {
+            const res = await fetchForAIGeneration(session, pollUrl, {
                 headers: pollHeaders
             });
             if(!res.ok) {
@@ -16240,6 +17179,7 @@ return true;
             const data = await readAIResponse(res, '扩图');
             
             if(data.success) { 
+                cancelProvisionalBackgroundUpgrade(targetLayer);
                 targetLayer.src = `data:image/jpeg;base64,${data.imageBase64}`; targetLayer.scale = 1; targetLayer.rotation = 0; targetLayer.x = w/2; targetLayer.y = h/2; targetLayer.baseW = w; targetLayer.baseH = h;
                 renderCanvas(); saveHistory(); showToast('✅ 扩图成功，主体已完美保留！'); 
             } else {
@@ -16247,6 +17187,7 @@ return true;
             }
         } catch(e) {
             try {
+                cancelProvisionalBackgroundUpgrade(targetLayer);
                 await applyLocalExtendedBackground(currentArtboardId, targetLayer, targetLayer);
                 renderCanvas();
                 saveHistory();
@@ -16266,8 +17207,30 @@ return true;
             format: format,
             scale: Number(scale) || 1,
             language: currentCanvasLanguage,
-            startedAt: performance.now()
+            startedAt: performance.now(),
+            cancelled: false,
+            abortControllers: new Set(),
+            cancelCallbacks: new Set()
         };
+    }
+    function createExportCancellationError() {
+        const error = new Error('导出已取消');
+        error.name = 'ExportCancelledError';
+        return error;
+    }
+    function isExportCancellation(error) {
+        return error?.name === 'ExportCancelledError';
+    }
+    function throwIfExportCancelled(session) {
+        if(session?.cancelled) throw createExportCancellationError();
+    }
+    function registerExportAbortController(session, controller) {
+        if(!session || !controller) return;
+        session.abortControllers?.add(controller);
+        if(session.cancelled) controller.abort();
+    }
+    function releaseExportAbortController(session, controller) {
+        session?.abortControllers?.delete(controller);
     }
     function traceExport(session, step, details) {
         if (!session) return;
@@ -16275,8 +17238,51 @@ return true;
         console.info('[VF_EXPORT ' + session.id + '] ' + step + ' +' + elapsed + 'ms', details || '');
     }
     function finishExportSession(session, status, details) {
+        session?.abortControllers?.forEach(function(controller) { controller.abort(); });
+        session?.abortControllers?.clear();
+        session?.cancelCallbacks?.clear();
         traceExport(session, status, details);
         if (activeExportSession === session) activeExportSession = null;
+    }
+    function updateExportProgress(session, progress, message, stage) {
+        if (!session || activeExportSession !== session || session.cancelled) return;
+        const overlay = document.getElementById('export-overlay');
+        const fill = document.getElementById('export-progress-fill');
+        const text = document.getElementById('export-progress-text');
+        const stageText = document.getElementById('export-progress-stage');
+        const percent = document.getElementById('export-progress-percent');
+        const track = overlay?.querySelector('[role="progressbar"]');
+        const value = Math.max(0, Math.min(100, Math.round(Number(progress) || 0)));
+        if (overlay) {
+            overlay.dataset.exportSession = session.id;
+            overlay.style.display = 'flex';
+        }
+        if (fill) fill.style.width = value + '%';
+        if (text && message) text.textContent = VF_UI_LANGUAGE === 'en' ? translateVFUiString(message, 'en') : message;
+        if (stageText && stage) stageText.textContent = VF_UI_LANGUAGE === 'en' ? translateVFUiString(stage, 'en') : stage;
+        if (percent) percent.textContent = value + '%';
+        if (track) track.setAttribute('aria-valuenow', String(value));
+    }
+    window.cancelActiveExport = function() {
+        const session = activeExportSession;
+        if(!session || session.cancelled) return;
+        session.cancelled = true;
+        traceExport(session, 'cancel-requested');
+        session.abortControllers?.forEach(function(controller) { controller.abort(); });
+        session.cancelCallbacks?.forEach(function(callback) { callback(); });
+        const cancelButton = document.getElementById('export-cancel-button');
+        if(cancelButton) {
+            cancelButton.disabled = true;
+            cancelButton.textContent = VF_UI_LANGUAGE === 'en' ? translateVFUiString('正在取消导出…', 'en') : '正在取消导出…';
+        }
+        hideExportProgress(session);
+        showToast('导出已取消');
+    };
+    function hideExportProgress(session) {
+        const overlay = document.getElementById('export-overlay');
+        if (!overlay || (session && overlay.dataset.exportSession !== session.id)) return;
+        overlay.style.display = 'none';
+        delete overlay.dataset.exportSession;
     }
     // ===== 修改画板尺寸 =====
     function toggleResizeMenu(e) {
@@ -16391,6 +17397,101 @@ return true;
     function closeExportMenu() {
         document.getElementById('export-dropdown-menu')?.classList.remove('open');
     }
+    const exportActualSizeCache = new Map();
+    const preciseExportBlobCache = new Map();
+    function rememberPreciseExportBlob(key, blob) {
+        if(!key || !blob) return;
+        if(preciseExportBlobCache.has(key)) preciseExportBlobCache.delete(key);
+        preciseExportBlobCache.set(key, blob);
+        while(preciseExportBlobCache.size > 3) preciseExportBlobCache.delete(preciseExportBlobCache.keys().next().value);
+    }
+    function getExportContentFingerprint() {
+        let hash = 2166136261;
+        const mix = function(value) {
+            const text = String(value == null ? '' : value);
+            for(let i = 0; i < text.length; i++) {
+                hash ^= text.charCodeAt(i);
+                hash = Math.imul(hash, 16777619);
+            }
+        };
+        mix(currentArtboardId);
+        mix(currentRatio);
+        mix(currentCanvasLanguage);
+        mix(layers.length);
+        layers.forEach(function(layer) {
+            Object.keys(layer || {}).sort().forEach(function(key) {
+                if(key.startsWith('_')) return;
+                let value = layer[key];
+                if(typeof value === 'string' && value.length > 160) {
+                    value = value.length + ':' + value.slice(0, 48) + ':' + value.slice(-48);
+                } else if(value && typeof value === 'object') {
+                    try {
+                        value = JSON.stringify(value, function(nestedKey, nestedValue) {
+                            if(typeof nestedValue === 'string' && nestedValue.length > 160) {
+                                return nestedValue.length + ':' + nestedValue.slice(0, 32) + ':' + nestedValue.slice(-32);
+                            }
+                            return nestedValue;
+                        });
+                    } catch(error) {
+                        value = String(value);
+                    }
+                }
+                mix(key);
+                mix(value);
+            });
+        });
+        return (hash >>> 0).toString(36);
+    }
+    function getExportSizeCacheKey(format, scale, fingerprint) {
+        return [currentArtboardId, currentRatio, format, Number(scale) || 1, fingerprint || getExportContentFingerprint()].join('|');
+    }
+    function formatExportByteSize(bytes) {
+        const safeBytes = Math.max(0, Number(bytes) || 0);
+        if(safeBytes >= 1024 * 1024) return (safeBytes / (1024 * 1024)).toFixed(safeBytes >= 10 * 1024 * 1024 ? 1 : 2) + ' MB';
+        return Math.max(1, Math.round(safeBytes / 1024)) + ' KB';
+    }
+    function estimateExportByteSize(format, scale, width, height, fingerprint) {
+        const exactKey = getExportSizeCacheKey(format, scale, fingerprint);
+        const exactBytes = exportActualSizeCache.get(exactKey);
+        if(Number.isFinite(exactBytes)) return { bytes: exactBytes, exact: true };
+
+        const knownScales = [1, 0.75, 0.5];
+        for(const knownScale of knownScales) {
+            const knownBytes = exportActualSizeCache.get(getExportSizeCacheKey(format, knownScale, fingerprint));
+            if(!Number.isFinite(knownBytes)) continue;
+            const scaleRatio = (Number(scale) || 1) / knownScale;
+            return { bytes: Math.max(8 * 1024, knownBytes * Math.pow(scaleRatio, 1.82)), exact: false };
+        }
+
+        const pixels = Math.max(1, Number(width) * Number(height));
+        const logicalPixels = pixels / Math.pow(Math.max(0.01, Number(scale) || 1), 2);
+        let imageCount = 0;
+        let imageCoverage = 0;
+        layers.forEach(function(layer) {
+            if(!layer || layer.visible === false || !isLayerVisibleInCanvasLanguage(layer)) return;
+            const type = String(layer?.type || '').toLowerCase();
+            const imageLike = !!(layer?.src || layer?.image || layer?.imageUrl || layer?.previewUrl)
+                || ['image', 'logo', 'background', 'matrix'].includes(type);
+            if(!imageLike) return;
+            imageCount += 1;
+            // DIY 图片图层使用 baseW/baseH + scale，而不是 w/height。旧估算读不到
+            // 背景覆盖面积，会把整版高清照片误判成小图，导致体积明显偏低。
+            const bounds = typeof getLayerBounds === 'function' ? getLayerBounds(layer) : null;
+            const layerWidth = Math.max(0, Number(bounds?.w) || Number(layer?.w ?? layer?.width) || 0);
+            const layerHeight = Math.max(0, Number(bounds?.h) || Number(layer?.h ?? layer?.height) || 0);
+            const coverage = layerWidth && layerHeight ? Math.min(1, (layerWidth * layerHeight) / logicalPixels) : 0;
+            imageCoverage += isCanvasBackgroundImage(layer, layers, SIZES[currentRatio]) ? Math.max(1, coverage) : coverage;
+        });
+        imageCoverage = Math.min(1.5, imageCoverage);
+        if(format === 'jpg') {
+            const jpgBytes = Math.min(1024 * 1024, Math.max(55 * 1024, pixels * (imageCount ? 0.48 : 0.2)));
+            return { bytes: jpgBytes, exact: false };
+        }
+        // 按最终画板像素的经验压缩率估算。覆盖面积已修正后，照片型海报通常约
+        // 0.5–0.8 byte/px；继续保留上限，避免多张叠图把估算无限累加。
+        const pngBytesPerPixel = Math.min(1.8, 0.16 + imageCoverage * 0.28 + Math.min(0.28, imageCount * 0.04));
+        return { bytes: Math.max(45 * 1024, pixels * pngBytesPerPixel), exact: false };
+    }
     function buildExportMenu() {
         var menu = document.getElementById('export-dropdown-menu');
         if (!menu) return;
@@ -16398,9 +17499,16 @@ return true;
         var currentSize = SIZES[currentRatio] || preset;
         var w = Number(currentSize.w) || Number(preset.w) || 1080;
         var h = Number(currentSize.h) || Number(preset.h) || 1080;
-        var scales = [0.5, 1, 1.5, 2, 3];
-        var labels = { '0.5': '0.5倍', '1': '1倍（原图）', '1.5': '1.5倍', '2': '2倍', '3': '3倍' };
+        // 当前交付优先控制文件体积：界面只提供原尺寸与向下兼容尺寸。
+        // doExport 仍接受任意正数，旧模板或内部调用的高倍能力不会被破坏。
+        var scales = [1, 0.75, 0.5];
+        var labels = {
+            '1': { value:'1倍', note:'推荐' },
+            '0.75': { value:'0.75倍', note:'轻量' },
+            '0.5': { value:'0.5倍', note:'兼容小图' }
+        };
         var ext = exportFormat === 'jpg' ? 'jpg' : 'png';
+        var fingerprint = getExportContentFingerprint();
         var html = '<div class="export-menu-body">'
             + '<div class="export-format-switcher" role="group" aria-label="导出格式">'
             + '<button type="button" class="export-format-option' + (exportFormat === 'png' ? ' is-active' : '') + '" aria-pressed="' + (exportFormat === 'png') + '" onclick="event.stopPropagation();setExportFormat(\'png\');buildExportMenu();">PNG</button>'
@@ -16412,16 +17520,169 @@ return true;
             var outH = Math.round(h * s);
             var totalPx = outW * outH;
             var overLimit = totalPx > SAFE_CANVAS_PX;
-            html += '<button class="export-scale-option' + (s === 1 ? ' is-default' : '') + '" onclick="doExport(' + s + '); closeExportMenu();"'
+            var sizeInfo = estimateExportByteSize(exportFormat, s, outW, outH, fingerprint);
+            var label = labels[s] || { value:s + 'x', note:'' };
+            html += '<button class="export-scale-option' + (s === 1 ? ' is-default' : '') + '" style="min-height:82px!important;padding:14px 16px!important;box-sizing:border-box!important;" onclick="doExport(' + s + '); closeExportMenu();"'
                 + (overLimit ? ' disabled' : '')
-                + '>' + (labels[s] || s + 'x')
-                + '<span class="export-dim">' + outW + ' × ' + outH + 'px .' + ext + '</span>'
+                + '><span class="export-scale-copy"><span class="export-scale-value" style="font-size:17px!important;font-weight:820!important;color:#111827!important;">' + label.value + '</span>'
+                + (label.note ? '<span class="export-scale-note" style="font-size:12px!important;font-weight:620!important;color:#8a919c!important;">' + label.note + '</span>' : '')
                 + (overLimit ? '<span class="export-warn">超限</span>' : '')
+                + '</span><span class="export-scale-meta" style="display:flex!important;flex-direction:column!important;align-items:flex-end!important;justify-content:center!important;gap:12px!important;line-height:1.2!important;"><span class="export-dim" style="font-size:12px!important;font-weight:600!important;color:#8a919c!important;">' + outW + ' × ' + outH + ' px · ' + ext.toUpperCase() + '</span>'
+                + '<span class="export-estimate' + (sizeInfo.exact ? ' is-actual' : '') + '" style="font-size:15px!important;font-weight:800!important;color:' + (sizeInfo.exact ? '#111827' : '#374151') + '!important;">' + (sizeInfo.exact ? '实际 ' : '约 ') + formatExportByteSize(sizeInfo.bytes) + '</span></span>'
                 + '</button>';
         });
         menu.innerHTML = html + '</div></div>';
     }
     window.setExportFormat = function(fmt) { exportFormat = fmt; };
+
+    async function compressWithTinyPngBackup(blob, session) {
+        throwIfExportCancelled(session);
+        updateExportProgress(session, 99, '正在使用 TinyPNG 压缩…', '云端压缩');
+        traceExport(session, 'tinypng-start', { bytes: blob.size, type: blob.type });
+        try {
+            const controller = new AbortController();
+            registerExportAbortController(session, controller);
+            const timeout = setTimeout(function() { controller.abort(); }, 45000);
+            let response;
+            try {
+                response = await fetch('/api/compress-image', {
+                    method: 'POST',
+                    headers: Object.assign({ 'Content-Type': blob.type || 'image/png' }, getAuthHeaders()),
+                    body: blob,
+                    signal: controller.signal
+                });
+                throwIfExportCancelled(session);
+            } finally {
+                clearTimeout(timeout);
+                releaseExportAbortController(session, controller);
+            }
+            if(!response.ok) {
+                const detail = await response.json().catch(function() { return {}; });
+                throw new Error(detail.message || ('HTTP ' + response.status));
+            }
+            const compressedBlob = await response.blob();
+            throwIfExportCancelled(session);
+            if(!compressedBlob.size || compressedBlob.size >= blob.size) {
+                traceExport(session, 'tinypng-skipped-result', { originalBytes: blob.size, compressedBytes: compressedBlob.size });
+                return {
+                    blob: blob,
+                    compressed: false,
+                    fallback: false,
+                    attempted: true,
+                    originalBytes: blob.size,
+                    compressedBytes: compressedBlob.size,
+                    message: 'TinyPNG 返回的文件没有更小，已保留原图'
+                };
+            }
+            traceExport(session, 'tinypng-complete', { originalBytes: blob.size, compressedBytes: compressedBlob.size });
+            return {
+                blob: compressedBlob,
+                compressed: true,
+                fallback: false,
+                attempted: true,
+                originalBytes: blob.size,
+                compressedBytes: compressedBlob.size
+            };
+        } catch(error) {
+            if(isExportCancellation(error) || session?.cancelled) throw createExportCancellationError();
+            console.warn('TinyPNG 压缩失败，已回退原图：', error);
+            traceExport(session, 'tinypng-fallback', { name: error?.name || '', message: error?.message || String(error) });
+            return {
+                blob: blob,
+                compressed: false,
+                fallback: true,
+                attempted: true,
+                originalBytes: blob.size,
+                errorMessage: error?.message || '未知错误'
+            };
+        }
+    }
+    async function compressExportBlobIfNeeded(blob, session) {
+        throwIfExportCancelled(session);
+        const threshold = 1024 * 1024;
+        if(!blob || blob.size <= threshold) {
+            return { blob:blob, compressed:false, fallback:false, attempted:false, originalBytes:blob?.size || 0 };
+        }
+        const originalBlob = blob;
+        let bestBlob = blob;
+        let localResult = null;
+        let localError = null;
+        if(blob.type === 'image/png' && window.VFLocalPngCompressor?.compress) {
+            updateExportProgress(session, 98, '正在本地压缩 PNG…', '智能颜色压缩');
+            traceExport(session, 'local-png-start', { bytes:blob.size });
+            const controller = new AbortController();
+            registerExportAbortController(session, controller);
+            try {
+                localResult = await window.VFLocalPngCompressor.compress(blob, {
+                    targetBytes:threshold,
+                    signal:controller.signal,
+                    onProgress:function(_progress, stage) {
+                        updateExportProgress(session, 98, '正在本地压缩 PNG…', stage || '智能颜色压缩');
+                    }
+                });
+                throwIfExportCancelled(session);
+                if(localResult?.blob?.size && localResult.blob.size < bestBlob.size && localResult.blob.size <= threshold) {
+                    bestBlob = localResult.blob;
+                }
+                traceExport(session, 'local-png-complete', {
+                    originalBytes:blob.size,
+                    candidateBytes:localResult?.blob?.size || 0,
+                    accepted:bestBlob !== blob,
+                    colors:localResult?.colors || 0
+                });
+                if(bestBlob.size <= threshold) {
+                    return {
+                        blob:bestBlob,
+                        compressed:true,
+                        fallback:false,
+                        attempted:true,
+                        method:'local',
+                        colors:localResult?.colors || 0,
+                        originalBytes:originalBlob.size,
+                        compressedBytes:bestBlob.size
+                    };
+                }
+            } catch(error) {
+                if(session?.cancelled || error?.name === 'AbortError') throw createExportCancellationError();
+                localError = error?.message || '本地 PNG 压缩失败';
+                traceExport(session, 'local-png-fallback', { message:localError });
+                console.warn('本地 PNG 压缩失败，正在尝试 TinyPNG：', error);
+            } finally {
+                releaseExportAbortController(session, controller);
+            }
+        }
+
+        const cloudResult = await compressWithTinyPngBackup(bestBlob, session);
+        throwIfExportCancelled(session);
+        if(cloudResult.compressed) {
+            return {
+                ...cloudResult,
+                method:bestBlob !== originalBlob ? 'local+tinypng' : 'tinypng',
+                originalBytes:originalBlob.size,
+                compressedBytes:cloudResult.blob.size,
+                localBytes:bestBlob !== originalBlob ? bestBlob.size : 0,
+                localError:localError
+            };
+        }
+        if(bestBlob !== originalBlob) {
+            return {
+                blob:bestBlob,
+                compressed:true,
+                fallback:Boolean(cloudResult.fallback),
+                attempted:true,
+                method:'local',
+                colors:localResult?.colors || 0,
+                originalBytes:originalBlob.size,
+                compressedBytes:bestBlob.size,
+                errorMessage:cloudResult.errorMessage || cloudResult.message || ''
+            };
+        }
+        return {
+            ...cloudResult,
+            originalBytes:originalBlob.size,
+            localError:localError
+        };
+    }
     async function exportNativeCapturePNG(scale, session) {
         scale = scale || 1;
         if (layers.length === 0) return showToast('画板为空，无法导出', true);
@@ -17889,11 +19150,26 @@ return true;
         });
     }
     async function renderPreciseExportBlob(scale, session) {
+        throwIfExportCancelled(session);
         const wrap = document.getElementById('canvas-wrapper');
         if (!wrap) throw new Error('未找到可导出的画板');
+        const requestedScale = Number(scale) || 1;
+        const renderFingerprint = session?.exportEstimateFingerprint || getExportContentFingerprint();
+        const renderCacheKey = ['precise-png', currentArtboardId, currentRatio, requestedScale, renderFingerprint].join('|');
+        const cachedBlob = preciseExportBlobCache.get(renderCacheKey);
+        if(cachedBlob) {
+            preciseExportBlobCache.delete(renderCacheKey);
+            preciseExportBlobCache.set(renderCacheKey, cachedBlob);
+            updateExportProgress(session, 96, '正在复用已渲染画板…', '像素复用');
+            traceExport(session, 'precise-render-cache-hit', { bytes:cachedBlob.size, scale:requestedScale });
+            return cachedBlob;
+        }
         // 必须先完成云端字体安装并重绘真实画板，再创建导出副本。若先 clone，
         // 首次进站时副本会永久保留 fallback 字体，即使等待期间 FontFace 已就绪。
+        updateExportProgress(session, 10, '正在准备字体和画板资源…', '资源准备');
         await waitForNativeCaptureResources(wrap, session);
+        throwIfExportCancelled(session);
+        updateExportProgress(session, 24, '字体和画板资源已就绪', '分析画板');
         const target = getCurrentExportSize(scale || 2);
         const safeScale = Math.min(Number(scale) || 2, Math.sqrt(SAFE_CANVAS_PX / (target.width * target.height)));
         if (!Number.isFinite(safeScale) || safeScale <= 0) throw new Error('导出尺寸无效');
@@ -17909,11 +19185,20 @@ return true;
         clone.style.setProperty('border-radius', '0', 'important');
         clone.style.setProperty('box-shadow', 'none', 'important');
         document.body.appendChild(clone);
+        let preparedImageUrls = [];
         try {
             const logoJobs = collectOutlineLogoPaintJobs(wrap, clone, target.width, target.height);
+            // Logo 稍后直接从已解码的原图绘制；副本中已隐藏的 Logo
+            // 替换为透明像素，避免 html2canvas 再次请求大图。
+            clone.querySelectorAll('.layer-image-wrapper > img.layer-image-img,.layer-logo-layout-wrapper img').forEach(function(image) {
+                if(image.style.getPropertyValue('visibility') !== 'hidden') return;
+                image.removeAttribute('srcset');
+                image.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+            });
             const jobs = collectHTTextPaintJobs(wrap, clone, target.width, target.height)
                 .concat(collectTagTextPaintJobs(wrap, clone, target.width, target.height));
             const tagJobs = collectOutlineTagPaintJobs(wrap, clone);
+            updateExportProgress(session, 34, '正在分析文字、标签和图片…', '分析画板');
             const rotated = jobs.find(function(job) { return !job.localTransform && Math.abs(Number(job.rotation) || 0) > 0.05; });
             if (rotated) throw new Error('精确导出暂不支持旋转文字，请先使用未旋转的文字图层');
             const groups = new Map();
@@ -17923,10 +19208,15 @@ return true;
                 groups.get(key).push(job);
             });
             const probeDensity = Math.min(1, 2048 / Math.max(target.width, target.height));
-            for (const groupJobs of groups.values()) {
+            const fontGroups = Array.from(groups.values());
+            for (let fontGroupIndex = 0; fontGroupIndex < fontGroups.length; fontGroupIndex++) {
+                throwIfExportCancelled(session);
+                const groupJobs = fontGroups[fontGroupIndex];
+                updateExportProgress(session, 36 + Math.round(((fontGroupIndex + 1) / Math.max(1, fontGroups.length)) * 14), '正在校验字体轮廓…', '字体校验');
                 if (!await canPaintHTTextJobs(groupJobs, target.width, target.height, probeDensity)) {
                     throw new Error('字体轮廓没有产生有效像素，已停止导出');
                 }
+                throwIfExportCancelled(session);
                 // 缺字符号由浏览器 fallback 补齐，但它们必须继承同一字体
                 // 正常词形已校验的统一缩放率。否则仅按 DOM 宽度压缩会使
                 // 问号、感叹号等保持原高度却变得过窄。
@@ -17968,8 +19258,21 @@ return true;
                 });
             }
             hideCloneTextJobs(clone, jobs);
-            await waitForImagesIn(clone);
+            if (safeScale <= 1.01) {
+                updateExportProgress(session, 53, '正在优化画板图片…', '图片预处理');
+                preparedImageUrls = await prepareOneXExportCloneImages(wrap, clone, target, session);
+                throwIfExportCancelled(session);
+            }
+            updateExportProgress(session, 60, '正在读取画板图片…', '图片解码');
+            await waitForImagesIn(clone, 12000);
+            throwIfExportCancelled(session);
             await nextFrame();
+            throwIfExportCancelled(session);
+            updateExportProgress(session, 68, '正在渲染高清画板…', '像素渲染');
+            await nextFrame();
+            throwIfExportCancelled(session);
+            const rasterStartedAt = performance.now();
+            traceExport(session, 'html2canvas-start', { scale:safeScale, size:[target.width, target.height] });
             const canvas = await html2canvas(clone, {
                 scale: safeScale,
                 width: target.width,
@@ -17980,20 +19283,28 @@ return true;
                 allowTaint: false,
                 backgroundColor: '#FFFFFF',
                 logging: false,
-                imageTimeout: 0
+                imageTimeout: 12000
             });
+            throwIfExportCancelled(session);
+            traceExport(session, 'html2canvas-complete', { duration:Math.round(performance.now() - rasterStartedAt), output:[canvas.width, canvas.height] });
+            updateExportProgress(session, 82, '高清画板渲染完成', '合成图层');
             paintOutlineLogoJobs(canvas, logoJobs, safeScale, session);
             paintOutlineTagJobs(canvas, tagJobs, safeScale, session);
             const beforeGlyphPaint = captureGlyphPaintRegions(canvas, jobs, safeScale);
             await paintHTTextJobs(canvas, jobs, safeScale);
+            throwIfExportCancelled(session);
+            updateExportProgress(session, 94, '正在写入文字并检查结果…', '结果校验');
             const changedFontGroups = getChangedGlyphPaintGroupKeys(canvas, beforeGlyphPaint);
             const missingFontGroups = Array.from(groups.keys()).filter(function(key) { return !changedFontGroups.has(key); });
             if (missingFontGroups.length) {
                 throw new Error('有 ' + missingFontGroups.length + ' 个字体或字重未落入最终画板，已停止下载错误图片');
             }
             const blob = await new Promise(function(resolve, reject) {
+                updateExportProgress(session, 97, '正在生成图片文件…', '文件编码');
                 canvas.toBlob(function(result) { result ? resolve(result) : reject(new Error('无法生成导出图片')); }, 'image/png');
             });
+            throwIfExportCancelled(session);
+            rememberPreciseExportBlob(renderCacheKey, blob);
             traceExport(session, 'precise-render-complete', {
                 logical: [target.width, target.height],
                 output: [canvas.width, canvas.height],
@@ -18021,9 +19332,31 @@ return true;
             });
             return blob;
         } finally {
+            preparedImageUrls.forEach(function(url) { URL.revokeObjectURL(url); });
             clone.remove();
         }
     }
+    async function renderTemplatePreviewDataUrl() {
+        const scale = getTemplatePreviewCaptureScale();
+        const session = createExportSession('template-preview', scale);
+        session.exportEstimateFingerprint = getExportContentFingerprint();
+        traceExport(session, 'template-preview-start', {
+            renderer: 'precise-hybrid',
+            scale: scale,
+            maxEdge: 480,
+            ratio: currentRatio,
+            artboardId: currentArtboardId
+        });
+        try {
+            const blob = await renderPreciseExportBlob(scale, session);
+            const dataUrl = await blobToDataUrl(blob);
+            traceExport(session, 'template-preview-ready', { bytes: blob.size });
+            return dataUrl;
+        } finally {
+            finishExportSession(session, 'template-preview-finished');
+        }
+    }
+    window.VF_RENDER_TEMPLATE_PREVIEW_DATA_URL = renderTemplatePreviewDataUrl;
     function svgNumber(value) {
         const number = Number(value);
         return Number.isFinite(number) ? String(Math.round(number * 1000) / 1000) : '0';
@@ -18346,19 +19679,65 @@ return true;
         const safeFormat = exportFormat === 'jpg' ? 'jpg' : 'png';
         const safeScale = Number(scale) || 1;
         const session = createExportSession('precise-' + safeFormat, safeScale);
+        session.exportEstimateFingerprint = getExportContentFingerprint();
+        session.exportEstimateCacheKey = getExportSizeCacheKey(safeFormat, safeScale, session.exportEstimateFingerprint);
         activeExportSession = session;
         traceExport(session, 'export-start', { format: safeFormat, renderer: 'precise-hybrid', scale: safeScale, ratio: currentRatio, artboardId: currentArtboardId });
         const button = document.querySelector('.canvas-export-action');
         if (button) button.disabled = true;
+        const cancelButton = document.getElementById('export-cancel-button');
+        if(cancelButton) {
+            cancelButton.disabled = false;
+            cancelButton.textContent = VF_UI_LANGUAGE === 'en' ? translateVFUiString('取消导出', 'en') : '取消导出';
+        }
         showToast('正在生成' + safeScale + '倍 ' + safeFormat.toUpperCase() + '…');
-        const task = renderPreciseExportBlob(safeScale, session).then(async function(pngBlob) {
-            const outputBlob = safeFormat === 'jpg' ? await convertBlobToJPG(pngBlob, 0.92) : pngBlob;
+        updateExportProgress(session, 4, '正在启动高清导出…', '准备导出');
+        const task = (async function() {
+            // 先让进度层完成一帧绘制，再开始字体解析和高清 Canvas 工作。
+            await nextFrame();
+            throwIfExportCancelled(session);
+            return renderPreciseExportBlob(safeScale, session);
+        })().then(async function(pngBlob) {
+            throwIfExportCancelled(session);
+            updateExportProgress(session, 98, safeFormat === 'jpg' ? '正在压缩至约 1 MB…' : '正在准备 PNG（保持原尺寸）…', '文件输出');
+            const uncompressedOutputBlob = safeFormat === 'jpg'
+                ? await convertBlobToTargetJPG(pngBlob, 1024 * 1024)
+                : pngBlob;
+            throwIfExportCancelled(session);
+            const compressionResult = await compressExportBlobIfNeeded(uncompressedOutputBlob, session);
+            throwIfExportCancelled(session);
+            const outputBlob = compressionResult.blob;
+            exportActualSizeCache.set(
+                session.exportEstimateCacheKey,
+                outputBlob.size
+            );
             const filename = 'GCC_' + getArtboardPreset(currentArtboardId).label + '_' + Date.now() + '.' + safeFormat;
+            throwIfExportCancelled(session);
             downloadBlob(outputBlob, filename);
+            updateExportProgress(session, 100, '导出完成，图片已准备下载', '完成');
             traceExport(session, 'download-ready', { filename: filename, format: safeFormat, bytes: outputBlob.size });
-            showToast('✅ ' + safeScale + '倍 ' + safeFormat.toUpperCase() + ' 导出成功');
+            const sizeNote = '（' + (outputBlob.size / (1024 * 1024)).toFixed(2) + ' MB）';
+            if(compressionResult.compressed) {
+                const compressionName = compressionResult.method === 'local'
+                    ? '本地 PNG 压缩'
+                    : compressionResult.method === 'local+tinypng' ? '本地 + TinyPNG 压缩' : 'TinyPNG 压缩';
+                showToast('✅ ' + compressionName + '完成：'
+                    + formatExportByteSize(compressionResult.originalBytes)
+                    + ' → '
+                    + formatExportByteSize(outputBlob.size));
+            } else if(compressionResult.fallback) {
+                showToast('⚠️ TinyPNG 压缩失败，已导出原图：' + compressionResult.errorMessage, true);
+            } else if(compressionResult.attempted) {
+                showToast('⚠️ ' + (compressionResult.message || 'TinyPNG 未产生更小文件，已导出原图'), true);
+            } else {
+                showToast('✅ ' + safeScale + '倍 ' + safeFormat.toUpperCase() + ' 导出成功' + sizeNote);
+            }
             return true;
         }).catch(function(error) {
+            if(isExportCancellation(error) || session.cancelled) {
+                traceExport(session, 'export-cancelled');
+                return false;
+            }
             console.error('精确导出失败：', error);
             traceExport(session, 'export-error', { name: error?.name || '', message: error?.message || String(error), stack: error?.stack || '' });
             showToast('❌ 导出失败：' + (error?.message || '未知错误'), true);
@@ -18366,7 +19745,8 @@ return true;
         });
         session.promise = Promise.resolve(task).finally(function() {
             if (button) button.disabled = false;
-            finishExportSession(session, 'export-finished');
+            finishExportSession(session, session.cancelled ? 'export-cancelled-finished' : 'export-finished');
+            setTimeout(function() { hideExportProgress(session); }, 450);
         });
         return session.promise;
     };
@@ -18496,6 +19876,62 @@ return true;
             img.onerror = function() { URL.revokeObjectURL(url); reject(new Error('图片加载失败')); };
             img.src = url;
         });
+    }
+    async function convertBlobToTargetJPG(pngBlob, targetBytes) {
+        const target = Math.max(128 * 1024, Number(targetBytes) || 1024 * 1024);
+        const url = URL.createObjectURL(pngBlob);
+        const image = new Image();
+        try {
+            await new Promise(function(resolve, reject) {
+                image.onload = resolve;
+                image.onerror = function() { reject(new Error('图片加载失败')); };
+                image.src = url;
+            });
+        } finally {
+            URL.revokeObjectURL(url);
+        }
+        const sourceWidth = Math.max(1, image.naturalWidth || image.width);
+        const sourceHeight = Math.max(1, image.naturalHeight || image.height);
+        let dimensionScale = 1;
+        let smallestBlob = null;
+        const encode = function(canvas, quality) {
+            return new Promise(function(resolve, reject) {
+                canvas.toBlob(function(blob) { blob ? resolve(blob) : reject(new Error('JPG 转换失败')); }, 'image/jpeg', quality);
+            });
+        };
+        for (let resizeRound = 0; resizeRound < 5; resizeRound++) {
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(sourceWidth * dimensionScale));
+            canvas.height = Math.max(1, Math.round(sourceHeight * dimensionScale));
+            const context = canvas.getContext('2d');
+            if (!context) throw new Error('JPG 转换失败');
+            context.fillStyle = '#FFFFFF';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.imageSmoothingEnabled = true;
+            context.imageSmoothingQuality = 'high';
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+            let low = 0.62;
+            let high = 0.9;
+            let candidate = null;
+            for (let qualityRound = 0; qualityRound < 7; qualityRound++) {
+                const quality = qualityRound === 0 ? high : (low + high) / 2;
+                const blob = await encode(canvas, quality);
+                if (!smallestBlob || blob.size < smallestBlob.size) smallestBlob = blob;
+                if (blob.size <= target) {
+                    candidate = blob;
+                    low = quality;
+                } else {
+                    high = quality;
+                }
+            }
+            if (candidate) return candidate;
+            const ratio = Math.sqrt(target / Math.max(1, smallestBlob?.size || target));
+            dimensionScale *= Math.max(0.72, Math.min(0.92, ratio * 0.96));
+            if (Math.min(sourceWidth * dimensionScale, sourceHeight * dimensionScale) < 480) break;
+        }
+        if (smallestBlob) return smallestBlob;
+        throw new Error('JPG 转换失败');
     }
     async function exportAllArtboards(scale) {
         scale = scale || 2;
@@ -18633,6 +20069,6 @@ return true;
     bootApp();
 
 </script>
-<script src="../../tool-bridge.js?v=20260806-recycle-bin-v174"></script>
+<script src="../../tool-bridge.js?v=20260915-static-template-v551"></script>
 </body>
 </html>

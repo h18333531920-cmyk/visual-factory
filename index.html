@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GCC Design</title>
   <script src="./tools/vendor/supabase-js.js?v=20260805-unified-v76" defer></script>
-  <link rel="stylesheet" href="./styles.css?v=20260827-fast-static-session-v481">
+  <link rel="stylesheet" href="./styles.css?v=20260924-search-v868">
   <style>
     .library-control-strip {
       margin-left: 0 !important;
@@ -38,9 +38,6 @@
       min-height: calc(100vh - 120px) !important;
       align-content: start !important;
       gap: 0px !important;
-    }
-    #library-status {
-      display: none !important;
     }
     .filter-dropdown-wrap {
       position: relative;
@@ -296,6 +293,13 @@
       flex: none !important;
       overflow: visible !important;
       min-height: 0 !important;
+    }
+    /* 选中的标签气泡过多时只有气泡区内部滚动，避免把底部按钮顶出弹窗 */
+    #library-upload-modal .case-tag-bubbles {
+      max-height: 96px !important;
+      overflow-y: auto !important;
+      overscroll-behavior: contain;
+      padding-right: 2px;
     }
     .library-upload-scroll {
       display: flex !important;
@@ -885,7 +889,10 @@
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="./config.js?v=20260805-unified-v76"></script>
-    <script src="./app.js?v=20260827-fast-static-session-v481" defer></script>
+    <link rel="stylesheet" href="./account-access.css?v=20260924-search-v868">
+    <script src="./account-access.js?v=20260924-search-v868" defer></script>
+    <script src="./template-source-cache.js?v=20260924-search-v868" defer></script>
+    <script src="./app.js?v=20260924-search-v868" defer></script>
 </head>
 <body>
   <button id="global-interface-mode-toggle" class="global-interface-mode-toggle" type="button" data-mode="user" data-tooltip-side="left" aria-pressed="false" aria-label="切换到开发者模式" hidden>
@@ -896,8 +903,8 @@
   <main id="login-view" class="login-view is-session-checking">
     <div class="login-session-check" role="status" aria-live="polite">
       <span class="tool-entry-spinner" aria-hidden="true"></span>
-      <strong>正在验证登录状态</strong>
-      <span>验证完成后将自动进入工作台…</span>
+      <strong data-i18n="checkingSession">正在验证登录状态</strong>
+      <span data-i18n="checkingSessionHint">验证完成后将自动进入工作台…</span>
     </div>
     <section class="login-panel">
       <div class="brand-mark">G</div>
@@ -926,6 +933,12 @@
 
   <div id="sync-progress-bar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:10000;height:3px;background:transparent;"><div id="sync-progress-fill" style="height:100%;width:0%;background:#0d9488;transition:width 0.3s;"></div></div>
   <div id="sync-progress-toast" style="display:none;position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:10001;background:#0f172a;color:#fff;padding:6px 16px;border-radius:8px;font-size:12px;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
+  <div id="global-ai-task-status" class="global-ai-task-status" role="status" aria-live="polite" hidden>
+    <span class="global-ai-task-indicator" aria-hidden="true"><span class="global-ai-task-spinner"></span></span>
+    <span id="global-ai-task-copy" class="global-ai-task-copy"></span>
+    <button id="global-ai-task-cancel" class="global-ai-task-cancel" type="button" data-i18n="cancelGeneration" hidden>取消生图</button>
+    <button id="global-ai-task-close" class="global-ai-task-close" type="button" data-i18n-aria="close" aria-label="关闭" hidden>×</button>
+  </div>
   <main id="app-shell" class="app-shell" hidden>
     <aside class="sidebar">
       <div class="sidebar-brand">

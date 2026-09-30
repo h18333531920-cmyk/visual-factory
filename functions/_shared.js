@@ -1,4 +1,5 @@
 import { verifyEmergencyToken } from './_emergency-auth.js';
+import { accessContext, requireMaintenance, TEST_HOST } from './_account-access.js';
 
 const DEFAULT_SUPABASE_URL = 'https://juuqvjmhzdgfggzrivbb.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_PIa3V0LGlOn1K6G1nBUeqw_kiFB6fjt';
@@ -88,6 +89,11 @@ export async function getUserFromToken(env, token) {
 }
 
 export async function requireAdmin(request, env) {
+  if (new URL(request.url).hostname === TEST_HOST || env.VF_ACCESS_PRODUCTION === '1') {
+    const context = await accessContext(request, env);
+    requireMaintenance(context);
+    return context.user;
+  }
   requireCloudflareEnv(env);
   const token = getBearerToken(request);
   const user = await getUserFromToken(env, token);

@@ -31,7 +31,10 @@
         const editorState = {
           currentRatio: typeof currentRatio !== 'undefined' ? currentRatio : null,
           currentArtboardId: artboardSnapshot?.currentArtboardId || null,
+          artboardPresets: artboardSnapshot?.artboardPresets || [],
           artboards: artboardSnapshot?.artboards || null,
+          linkedArtboardGroupId: artboardSnapshot?.linkedArtboardGroupId || '',
+          linkedArtboardIds: artboardSnapshot?.linkedArtboardIds || [],
           activeLayerIds: typeof activeLayerIds !== 'undefined' ? safeClone(activeLayerIds) : [],
           layers: typeof layers !== 'undefined' ? safeClone(layers) : [],
           globals: typeof getGlobalSnapshot === 'function' ? safeClone(getGlobalSnapshot()) : null
@@ -220,6 +223,15 @@
   }
 
   async function captureStaticPreviewDataUrl() {
+    // 新版静态编辑器使用与正式导出相同的精确图片渲染器，
+    // 并在编辑器内把最长边限制为 480px。旧的 DOM 截图仅用于兼容旧工具。
+    if (typeof window.VF_RENDER_TEMPLATE_PREVIEW_DATA_URL === 'function') {
+      const precisePreview = await window.VF_RENDER_TEMPLATE_PREVIEW_DATA_URL();
+      if (!/^data:image\//i.test(String(precisePreview || ''))) {
+        throw new Error('Precise template preview was not generated.');
+      }
+      return precisePreview;
+    }
     await waitFor(() => typeof html2canvas === 'function' && !!document.getElementById('canvas-wrapper'), 8000);
     if (document.fonts?.ready) {
       try {
@@ -453,7 +465,8 @@
     activeLayerIds = Array.isArray(editorState.activeLayerIds) ? safeClone(editorState.activeLayerIds) : [];
     if (typeof syncRatioNav === 'function') syncRatioNav();
     resizeCanvas();
-    renderCanvas();
+    if (typeof renderTemplateCanvasAfterFonts === 'function') await renderTemplateCanvasAfterFonts(layers, layers);
+    else renderCanvas();
     if (typeof renderPromptTags === 'function') renderPromptTags();
     renderLayersList();
     if (typeof renderProperties === 'function') renderProperties();

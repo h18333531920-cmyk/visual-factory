@@ -1030,3 +1030,414 @@ export async function outpaintWithOpenAI(env, prompt, baseImage, ratio, mimeType
   }
   return parseImageBase64(data);
 }
+
+/* ── 元素识别（智谱 GLM-4V-Flash，免费视觉通道）──
+   用途：案例库上传时看懂封面，产出可直接当搜索词的「元素」建议。
+   约束：只认画面里的实体（物体/食物/动物/角色/场景道具），不读图里的文字；
+   词条 1-5 字、去重、最多 12 条，并尽量归一到现有元素词表，
+   保证「汉堡/汉堡包」不会分裂成两个搜索词。写入由前端在用户点采纳后进行。 */
+const GLM_VISION_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+const GLM_TEXT_MODEL = 'glm-4-flash';
+const QUERY_EXPANSION_MAX = 8;
+
+// v829 搜索词扩展：把用户的搜索词翻译成站内标签 + 相关联想词（纯文本，不走识图通道）
+// v856：从 AI 原始输出里同时解析 terms（中文联想词）与 terms_en（逐词对应的英文说法，可能缺省）
+function parseQueryExpansionRaw(text) {
+  const raw = String(text || '');
+  let list = [];
+  let listEn = [];
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(parsed?.terms)) {
+        list = parsed.terms;
+        if (Array.isArray(parsed?.terms_en)) listEn = parsed.terms_en;
+      } else if (Array.isArray(parsed)) list = parsed;
+    } catch { /* 落到按行兜底 */ }
+  }
+  if (!list.length) {
+    const bracket = raw.match(/\[[\s\S]*\]/);
+    if (bracket) {
+      try { const parsed = JSON.parse(bracket[0]); if (Array.isArray(parsed)) list = parsed; } catch { /* 继续 */ }
+    }
+  }
+  if (!list.length) {
+    list = raw.split(/[\n,，、;；\s]+/).map(line => line.replace(/^[\s\-*"“”[]+|[\s"“”[]+$/g, '')).filter(Boolean);
+  }
+  return { list: list, listEn: listEn };
+}
+
+export function parseQueryExpansion(text, vocabulary = [], query = '') {
+  const list = parseQueryExpansionRaw(text).list;
+  const queryKey = String(query || '').replace(/\s+/g, '').toLowerCase();
+  const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean);
+  const seen = new Set();
+  const out = [];
+  const push = (value) => {
+    const key = String(value).replace(/\s+/g, '').toLowerCase();
+    if (!key || key === queryKey || seen.has(key)) return false;
+    seen.add(key);
+    out.push(value);
+    return true;
+  };
+  // v831：复合词桥接词表。AI 常返回「汉堡店/汉堡王」这类复合词，而库里标签是「汉堡」；
+  // 复合词包含词表短词时，把词表词也补进扩展集，保证能命中真实标签。
+  const bridgeFromVocabulary = (word) => {
+    const key = word.replace(/\s+/g, '').toLowerCase();
+    for (const candidate of words) {
+      if (out.length >= QUERY_EXPANSION_MAX) return;
+      const candidateKey = candidate.replace(/\s+/g, '').toLowerCase();
+      if (candidateKey.length < 2 || candidateKey === queryKey) continue;
+      if (key.includes(candidateKey)) push(candidate);
+    }
+  };
+  // v839：语素兜底桥接。AI 会返回「红包礼券/现金券」这种语义对但库里不存在的词，
+  // 而库里真实标签是「优惠券」（同属“券”族）。当复合词没有包含任何词表词时，
+  // 用尾部同字（券/票/卡这类真正成族的类别语素）在词表里找同族词兜底。
+  // 不用任意单字：避免「世界杯」→「咖啡杯」这种并列事物噪音。
+  const SUFFIX_BRIDGE_CHARS = ['券', '票', '卡'];
+  const bridgeBySuffix = (word) => {
+    const key = word.replace(/\s+/g, '').toLowerCase();
+    const last = key.charAt(key.length - 1);
+    if (!last || SUFFIX_BRIDGE_CHARS.indexOf(last) < 0) return;
+    for (const candidate of words) {
+      if (out.length >= QUERY_EXPANSION_MAX) return;
+      const candidateKey = candidate.replace(/\s+/g, '').toLowerCase();
+      if (candidateKey.length < 2 || candidateKey === queryKey) continue;
+      if (candidateKey.charAt(candidateKey.length - 1) === last) push(candidate);
+    }
+  };
+  // v845：中东业务同义桥。本站业务偏中东（沙特/阿联酋等海湾国家），牲畜词和伊斯兰节日
+  // 是强关联（宰牲节献羊是核心意象）：搜「小羊/羊/羔羊」应能出宰牲节/开斋节物料。
+  // 候选词只在词表里收（保证能命中真实标签），不引入词表外自由词；双向互补，
+  // 搜节日也能补回牲畜词（如果词表里有的话）。对搜索词本身和 AI 返回的每个词都触发，
+  // 就算 AI 返回空列表，搜索词也能走这条确定性兑底。
+  const REGION_BRIDGE_RULES = [
+    { trigger: /羊|羔|lamb|sheep/i, candidates: ['宰牲节', '开斋节'] },
+    { trigger: /骆驼|camel/i, candidates: ['宰牲节'] },
+    { trigger: /开斋|斋月|ramadan/i, candidates: ['宰牲节'] },
+    { trigger: /宰牲|古尔邦|献祭|牺牲/i, candidates: ['开斋节'] },
+  ];
+  const bridgeRegion = (text) => {
+    const probe = String(text || '');
+    if (!probe) return;
+    for (const rule of REGION_BRIDGE_RULES) {
+      if (!rule.trigger.test(probe)) continue;
+      for (const candidate of rule.candidates) {
+        if (out.length >= QUERY_EXPANSION_MAX) return;
+        const candidateKey = candidate.replace(/\s+/g, '').toLowerCase();
+        if (candidateKey === queryKey || seen.has(candidateKey)) continue;
+        const known = words.find(w => w.replace(/\s+/g, '').toLowerCase() === candidateKey);
+        if (known) push(known);
+      }
+    }
+  };
+  for (const item of list) {
+    let word = String(item == null ? '' : item).trim().replace(/[「」"'（）()]/g, '');
+    if (!word || word.length > 8) continue;
+    const key = word.replace(/\s+/g, '').toLowerCase();
+    if (!key || key === queryKey) continue;       // 不回显搜索词本身
+    if (seen.has(key)) continue;
+    // 词表里的写法优先原样返回（保证能命中真实标签），自由词在后
+    const known = words.find(w => w.replace(/\s+/g, '').toLowerCase() === key);
+    const value = known || word;
+    push(value);
+    if (!known) {
+      bridgeFromVocabulary(word);
+      bridgeBySuffix(word);
+    }
+    bridgeRegion(word);
+    if (out.length >= QUERY_EXPANSION_MAX) break;
+  }
+  bridgeRegion(query);
+  return out.slice(0, QUERY_EXPANSION_MAX);
+}
+
+// v856 英文模式：联想词中文原词用于匹配库内标签（匹配链路不变），展示层需要英文说法。
+// 把 AI 返回的 terms / terms_en 逐词配对成 中文词→英文 映射；配不上的词由前端词表兑底。
+export function parseQueryExpansionI18n(text, vocabulary = [], query = '') {
+  const raw = parseQueryExpansionRaw(text);
+  const norm = (value) => String(value == null ? '' : value).trim().replace(/[「」"'（）()]/g, '').replace(/\s+/g, '').toLowerCase();
+  const translations = {};
+  for (let i = 0; i < raw.list.length; i++) {
+    const zhKey = norm(raw.list[i]);
+    const en = String(raw.listEn[i] == null ? '' : raw.listEn[i]).trim();
+    if (zhKey && en && norm(en) !== zhKey) translations[zhKey] = en;
+  }
+  return { terms: parseQueryExpansion(text, vocabulary, query), translations: translations };
+}
+
+export async function expandQueryWithGlm(env, query, vocabulary = []) {
+  const key = elementTagApiKey(env);
+  if (!key) throw new Error('搜索扩展未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY。');
+  const q = String(query || '').trim().slice(0, 40);
+  if (!q) return [];
+  const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean).slice(0, 120);
+  const lines = [
+    '你在帮一个设计素材库做搜索词扩展。用户输入了一个搜索词，库里的物料已经打好了受控标签。',
+    words.length ? `本站的标签词表：${words.join('、')}。` : '',
+    `用户搜索词：「${q}」。请返回和它语义相关的词，规则：`,
+    '1. 联想词必须优先从词表里选：只要词表里有和搜索词语义相关的词，必须原样返回词表词（这些能直接命中物料）。例：词表里有「优惠券」「折扣」时，搜「红包」应优先返回「优惠券」「折扣」，而不是词表外的「红包礼券」；',
+    '2. 词表确实没有相关词时再自由联想，只返回搜索词指代事物的同义说法、画面主体或必要组成部分（例：搜「骑手」→ 摩托、头盔；搜「世界杯」→ 足球、球场；搜「汉堡包」→ 汉堡）；',
+    '3. 搜索词是英文、拼音或其他外语时，先返回它的中文说法（优先用词表里的词），再按中文含义联想（例：搜「coupon」→ 优惠券、折扣；搜「burger」→ 汉堡）；',
+    '4. 本站是中东业务（沙特、阿联酋等海湾国家）的设计素材库：搜索词涉及牲畜时，除了相关说法外必须同时返回词表里的伊斯兰节日（例：搜「小羊」「羊」「羔羊」→ 羊肉串、烤羊肉这类相关词可以保留，但「宰牲节」「开斋节」也必须在结果里；搜「骆驼」→ 宰牲节；搜「斋月」→ 开斋节、宰牲节）；',
+    '5. 不要返回同类并列的其他事物（例：搜「汉堡包」不要返回薯条、炸鸡、可乐，它们和汉堡是并列关系不是主体）；',
+    '6. 每个词 ≤8 个字，中英文都可以，最多 8 个，不要解释，不要返回与搜索词相同或无关的词；',
+    '7. 只输出 JSON，不要代码块：{"terms":["摩托","头盔","餐箱"],"terms_en":["Motorcycle","Helmet","Delivery box"]}，terms_en 和 terms 逐词一一对应（每个中文词的英文说法），数量、顺序完全一致；',
+  ].filter(Boolean);
+  const data = await postJson(GLM_VISION_URL, {
+    model: GLM_TEXT_MODEL,
+    temperature: 0.3,
+    messages: [{ role: 'user', content: lines.join('\n') }]
+  }, { Authorization: `Bearer ${key}` });
+  const content = data?.choices?.[0]?.message?.content;
+  const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map(part => part?.text || '').join('') : '';
+  const parsed = parseQueryExpansionI18n(text, words, q);
+  return { terms: parsed.terms, translations: parsed.translations };
+}
+const GLM_VISION_MODEL = 'glm-4v-flash';
+export const ELEMENT_TAG_MAX_CHARS = 5;
+export const ELEMENT_TAG_MAX_COUNT = 12;
+const KIKI_ELEMENT_ALIASES = new Set(['卡通老虎', '老虎吉祥物', '黄色老虎']);
+
+export function elementTagApiKey(env) {
+  return env.GLM_API_KEY || env.ZHIPU_API_KEY || '';
+}
+
+// 模型输出容忍度：可能有代码块、前后解释、数组而不是对象、甚至纯文本列表
+export function parseElementSuggestions(text, vocabulary = []) {
+  const raw = String(text || '');
+  let list = [];
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(parsed?.elements)) list = parsed.elements;
+    } catch { /* 落到按行兜底 */ }
+  }
+  if (!list.length) {
+    const bracket = raw.match(/\[[\s\S]*\]/);
+    if (bracket) {
+      try {
+        const parsed = JSON.parse(bracket[0]);
+        if (Array.isArray(parsed)) list = parsed;
+      } catch { /* 继续兜底 */ }
+    }
+  }
+  if (!list.length) {
+    list = raw
+      .split(/[\n,，、;；]+/)
+      .map(line => line.replace(/^[\s\-*"“”[\]]+|[\s"“”[\]]+$/g, ''))
+      .filter(Boolean);
+  }
+  const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean);
+  const seen = new Set();
+  const out = [];
+  for (const item of list) {
+    let word = String(item == null ? '' : item).trim();
+    if (!word || word === 'elements') continue;
+    word = word.replace(/[（(].*?[)）]/g, '').trim();          // 「汉堡（食物）」→「汉堡」
+    // Keeta 案例库里的品牌老虎统一为现有标准词 kiki，避免搜索被「卡通老虎」分裂。
+    if (words.includes('kiki') && KIKI_ELEMENT_ALIASES.has(word)) word = 'kiki';
+    if (!word || word.length > ELEMENT_TAG_MAX_CHARS) continue; // 词条上限 5 字
+    const exact = words.find(w => w === word);
+    const contained = exact || words.find(w => w.length > 1 && word.includes(w));
+    const finalWord = contained || word;
+    if (seen.has(finalWord)) continue;
+    seen.add(finalWord);
+    out.push(finalWord);
+    if (out.length >= ELEMENT_TAG_MAX_COUNT) break;
+  }
+  return out;
+}
+
+export function parseCaseTagSuggestions(text, elementVocabulary = [], activityVocabulary = []) {
+  const elements = parseElementSuggestions(text, elementVocabulary);
+  // v828 主题不限词表：AI 自由识别一个短主题词，前端作为建议 chip 展示（点采纳才写入）
+  let activity = '';
+  const objectMatch = String(text || '').match(/\{[\s\S]*\}/);
+  if (objectMatch) {
+    try {
+      const parsed = JSON.parse(objectMatch[0]);
+      activity = String(parsed?.activity || '').replace(/[「」"'。\s]/g, '').slice(0, 8);
+    } catch { /* 活动无效就保持未选择 */ }
+  }
+  return { elements: activity ? elements.filter(word => word !== activity) : elements, activity };
+}
+
+export async function analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, activityVocabulary = []) {
+  const key = elementTagApiKey(env);
+  if (!key) throw new Error('元素识别未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY（智谱开放平台）。');
+  const base64 = String(imageBase64 || '').replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
+  if (!base64) throw new Error('缺少待识别的图片。');
+  if (base64.length > 6 * 1024 * 1024) throw new Error('图片过大，请改用缩略图识别。');
+  const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean).slice(0, 100);
+  const activities = (Array.isArray(activityVocabulary) ? activityVocabulary : []).filter(Boolean).slice(0, 30);
+  const lines = [
+    '你在帮案例库物料打搜索标签。看图，只描述画面里看得见的实体：食物、饮品、动物、人物、角色或吉祥物、餐具与道具、餐桌桌面、背景场景与节日布置（挂旗、气球、桌布等）。',
+    '不要把图片里的文字当成元素输出，但判断活动主题时可以用上文字信息（节日祝福语、活动名、问候语等）。标语、价格、水印、LOGO 仍然忽略。',
+    words.includes('kiki') ? '如果画面中的老虎角色是 Keeta 的黄色品牌吉祥物，必须标为 kiki，不要写卡通老虎、老虎吉祥物或黄色老虎；普通真实老虎仍标为老虎。' : '',
+    words.length ? `优先使用这份现有词表的写法（命中就必须原样使用）：${words.join('、')}。` : '',
+    activities.length ? `同时推断这张物料的核心活动主题：从画面内容和文字信息（节日祝福语、活动名等）自由归纳一个词，2-8 个字，例如：开学、世界杯、夏日、开斋节、宰牲节、聚餐、新年、国庆节、游戏、生日、万圣节、圣诞、情人节等，不限于以上例子；主题词要简短通用。画面和文字都推不出主题时才返回空字符串。` : '',
+    `每条 1-${ELEMENT_TAG_MAX_CHARS} 个汉字，按「主体优先、再补场景与次要物体」尽量列满，最多 ${ELEMENT_TAG_MAX_COUNT} 条；不要颜色、风格、形容词，不要解释、不要重复。`,
+    '只输出 JSON，不要代码块：{"elements":["汉堡","餐桌"],"activity":"聚餐"}'
+  ].filter(Boolean);
+  const data = await postJson(GLM_VISION_URL, {
+    model: GLM_VISION_MODEL,
+    temperature: 0.2,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: base64 } },
+          { type: 'text', text: lines.join('\n') }
+        ]
+      }
+    ]
+  }, { Authorization: `Bearer ${key}` });
+  const content = data?.choices?.[0]?.message?.content;
+  const text = typeof content === 'string'
+    ? content
+    : Array.isArray(content) ? content.map(part => part?.text || '').join('') : '';
+  return parseCaseTagSuggestions(text, words, activities);
+}
+
+export async function analyzeElementsWithGlm(env, imageBase64, vocabulary) {
+  return (await analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, [])).elements;
+}
+// 图库入库：看图从品类词表里选一个最匹配的（食物品类或 logo 类）
+export const GALLERY_TAG_MAX_CHARS = 12;
+
+export function parseGalleryTagSuggestion(text, vocabulary = []) {
+  const allowed = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean);
+  const raw = String(text || '').trim();
+  if (!raw || !allowed.length) return '';
+  const compact = function(value) { return String(value || '').replace(/\s+/g, '').toLowerCase(); };
+  const allowedCompact = allowed.map(function(word) { return { word: word, compact: compact(word) }; });
+  const pick = function(candidate) {
+    const key = compact(candidate);
+    if (!key) return '';
+    const hit = allowedCompact.find(function(entry) { return entry.compact === key; });
+    return hit ? hit.word : '';
+  };
+  // 1) 优先认 JSON 里的 tag/category/label
+  const jsonMatch = raw.match(/\{[\s\S]*?\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      const value = String((parsed && (parsed.tag || parsed.category || parsed.label)) || '').trim();
+      const hit = pick(value);
+      if (hit) return hit;
+      if (value && /^(未分类|无法判断|判断不出|不确定|none|unknown)$/i.test(value)) return '';
+      if (value) return '';   // 明确给了值但不在词表 → 不猜
+    } catch (_error) {}
+  }
+  // 2) 容忍模型直接吐词（含「商家 logo」这种带空格的写法），或一句话里带出词表词
+  const cleaned = raw.replace(/[{}\[\]"'`]/g, ' ').replace(/[，,。.;；:：!！?？]/g, ' ');
+  const flat = compact(cleaned);
+  const embedded = allowedCompact
+    .filter(function(entry) { return flat.includes(entry.compact); })
+    .sort(function(a, b) { return b.compact.length - a.compact.length; })[0];
+  return embedded ? embedded.word : '';
+}
+
+export async function analyzeGalleryTagWithGlm(env, imageBase64, vocabulary) {
+  const key = elementTagApiKey(env);
+  if (!key) throw new Error('图片识别未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY（智谱开放平台）。');
+  const base64 = String(imageBase64 || '').replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
+  if (!base64) throw new Error('缺少待识别的图片。');
+  if (base64.length > 6 * 1024 * 1024) throw new Error('图片过大，请改用缩略图识别。');
+  const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean).slice(0, 60);
+  if (!words.length) throw new Error('缺少品类词表。');
+  const lines = [
+    '你在帮图库素材选一个「品类」标签。看图判断画面主体属于下列哪一个品类。',
+    `只能在以下词表里选一个，原样输出：${words.join('、')}。`,
+    '如果画面主体是品牌标志/字标/图形标识，选 logo 类词条；如果是食物或饮品，选最接近的那一个品类。',
+    '判断不出、看不清、或都不匹配时返回空字符串——不要猜、不要创造新词、不要解释。',
+    '只输出 JSON，不要代码块：{"tag":"汉堡"}'
+  ];
+  const data = await postJson(GLM_VISION_URL, {
+    model: GLM_VISION_MODEL,
+    temperature: 0.1,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: base64 } },
+          { type: 'text', text: lines.join('\n') }
+        ]
+      }
+    ]
+  }, { Authorization: `Bearer ${key}` });
+  const content = data?.choices?.[0]?.message?.content;
+  const text = typeof content === 'string'
+    ? content
+    : Array.isArray(content) ? content.map(part => part?.text || '').join('') : '';
+  return parseGalleryTagSuggestion(text, words);
+}
+
+
+// ===== 物料语言（英语 / 阿拉伯语）：文件名里没有 en/ar 线索时，看图里的文字书写系统判断 =====
+// 只认 en / ar 两个值；判断不出返回空字符串（前端记「无」，EN/AR 筛选里照旧显示，不藏图）。
+export function normalizeLanguageValue(value) {
+  const v = String(value == null ? '' : value).trim().toLowerCase();
+  if (['en', 'eng', 'english', '英语', '英文'].indexOf(v) >= 0) return 'en';
+  if (['ar', 'ara', 'arabic', '阿拉伯语', '阿语', '阿拉伯'].indexOf(v) >= 0) return 'ar';
+  return '';
+}
+
+export function parseLanguageDetection(text) {
+  const raw = String(text || '');
+  if (!raw.trim()) return '';
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      const direct = normalizeLanguageValue(parsed.lang || parsed.language || parsed.value);
+      if (direct) return direct;
+      if (Object.prototype.hasOwnProperty.call(parsed, 'lang') || Object.prototype.hasOwnProperty.call(parsed, 'language')) return '';
+    } catch (_e) { /* 不是 JSON：按关键词兜底 */ }
+  }
+  const lower = raw.toLowerCase();
+  const saysEnglish = /english|拉丁|\blatin\b|英语|英文/.test(lower);
+  const saysArabic = /arabic|عربي|阿拉伯|阿语/.test(lower);
+  if (saysEnglish && !saysArabic) return 'en';
+  if (saysArabic && !saysEnglish) return 'ar';
+  return '';
+}
+
+export async function analyzeLanguageWithGlm(env, imageBase64) {
+  const key = elementTagApiKey(env);
+  if (!key) throw new Error('图片识别未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY（智谱开放平台）。');
+  const base64 = String(imageBase64 || '').replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
+  if (!base64) throw new Error('缺少待识别的图片。');
+  if (base64.length > 6 * 1024 * 1024) throw new Error('图片过大，请改用缩略图识别。');
+  // 真实素材里「英语+阿语同一张」很常见（双语 banner）：这种一律返回空，
+  // 前端记「无」，在英语、阿语两个筛选下都会显示 —— 比强行猜一个更符合实际。
+  const lines = [
+    '你在帮设计素材判断画面文案是英语还是阿拉伯语。只看文字的书写系统：',
+    '拉丁字母（A-Z）＝英语；阿拉伯字母（ا ب ت…）＝阿拉伯语。',
+    '只有一种文字、且它是画面文案的主体时，才给出 en 或 ar。',
+    '画面里两种文字都有（双语 banner）、只有零星装饰/水印文字、文字太小看不清、没有文字时，返回空字符串——不要猜、不要挑一个。',
+    '只输出 JSON，不要代码块：{"lang":"en"} 或 {"lang":"ar"} 或 {"lang":""}'
+  ];
+  const data = await postJson(GLM_VISION_URL, {
+    model: GLM_VISION_MODEL,
+    temperature: 0.1,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: base64 } },
+          { type: 'text', text: lines.join('\n') }
+        ]
+      }
+    ]
+  }, { Authorization: `Bearer ${key}` });
+  const content = data?.choices?.[0]?.message?.content;
+  const text = typeof content === 'string'
+    ? content
+    : Array.isArray(content) ? content.map(part => part?.text || '').join('') : '';
+  return parseLanguageDetection(text);
+}

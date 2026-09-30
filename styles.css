@@ -1903,6 +1903,222 @@ select:focus {
   font-weight: 800;
 }
 
+/* v829 扩展搜索提示；v835 起词条渲染在搜索框左侧 chips（.library-expansion-chips） */
+.library-stat.expansion {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.library-stat.expansion.is-off {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.library-stat.expansion strong {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1d4ed8;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* v835 搜索框左侧的 AI 相关词 chips：可收缩、溢出隐藏，避免挤爆工具栏盖住标签页；
+   v839 容器放宽到 380px，词条裁剪交给内部 clip 区，保证开关按钮永不被切 */
+.library-expansion-chips {
+display: flex;
+align-items: center;
+gap: 6px;
+flex-wrap: nowrap;
+flex: 0 1 auto;
+min-width: 0;
+max-width: 380px;
+}
+
+.library-expansion-chips[hidden] {
+display: none;
+}
+
+/* v839 词条裁剪区：label + 词条装这里裁剪，开关按钮在区外完整可见 */
+.library-expansion-chips-clip {
+display: flex;
+align-items: center;
+gap: 6px;
+flex: 0 1 auto;
+min-width: 0;
+overflow: hidden;
+}
+
+/* v856：词条可横向滚动查看全部（手动刷新追加的词不被裁掉），滚动条隐藏保持外观 */
+.library-expansion-chips-clip {
+overflow-x: auto;
+scrollbar-width: none;
+}
+.library-expansion-chips-clip::-webkit-scrollbar {
+display: none;
+}
+
+/* v856：AI 重新联想刷新按钮（词条区尾部、搜索框左侧） */
+.library-expansion-refresh {
+flex: 0 0 auto;
+width: 22px;
+height: 22px;
+display: inline-flex;
+align-items: center;
+justify-content: center;
+padding: 0;
+border: 1px solid #93c5fd;
+border-radius: 999px;
+background: #fff;
+color: #1d4ed8;
+cursor: pointer;
+}
+.library-expansion-refresh:hover {
+background: #dbeafe;
+border-color: #3b82f6;
+}
+.library-expansion-refresh.is-busy svg {
+animation: library-expansion-spin 0.8s linear infinite;
+}
+
+.library-expansion-chips .library-expansion-toggle {
+flex: 0 0 auto;
+white-space: nowrap;
+}
+
+/* v841 AI 搜索滑块开关：搜索框右侧，默认开；关闭后恢复普通搜索 */
+.library-ai-switch {
+display: flex;
+align-items: center;
+gap: 6px;
+flex: 0 0 auto;
+cursor: pointer;
+user-select: none;
+}
+
+.library-ai-switch input {
+position: absolute;
+opacity: 0;
+pointer-events: none;
+}
+
+.library-ai-switch-track {
+width: 30px;
+height: 17px;
+border-radius: 999px;
+background: #cbd5e1;
+position: relative;
+transition: background 0.2s ease;
+flex: 0 0 auto;
+}
+
+.library-ai-switch-thumb {
+position: absolute;
+top: 2px;
+left: 2px;
+width: 13px;
+height: 13px;
+border-radius: 50%;
+background: #fff;
+box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+transition: left 0.2s ease;
+}
+
+.library-ai-switch input:checked + .library-ai-switch-track {
+background: #1d4ed8;
+}
+
+.library-ai-switch input:checked + .library-ai-switch-track .library-ai-switch-thumb {
+left: 15px;
+}
+
+.library-ai-switch-text {
+font-size: 11px;
+font-weight: 600;
+color: var(--muted);
+white-space: nowrap;
+}
+
+@media (max-width: 1420px) {
+.library-ai-switch-text {
+display: none;
+}
+}
+
+.library-expansion-chips-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.library-expansion-chip {
+  flex: 0 0 auto;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 10px;
+  border: 1px solid #93c5fd;
+  border-radius: 999px;
+  background: #eff6ff;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1d4ed8;
+  cursor: default;
+}
+
+@media (max-width: 1420px) {
+  .library-expansion-chips-label {
+    display: none;
+  }
+}
+
+/* v837 AI 联想中的加载态 chip + 转圈动画 */
+.library-expansion-chip.is-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #60a5fa;
+}
+
+.library-expansion-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #bfdbfe;
+  border-top-color: #1d4ed8;
+  border-radius: 50%;
+  animation: library-expansion-spin 0.8s linear infinite;
+}
+
+@keyframes library-expansion-spin {
+  to { transform: rotate(360deg); }
+}
+
+.library-expansion-toggle {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #93c5fd;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #1d4ed8;
+  cursor: pointer;
+}
+
+.library-expansion-toggle:hover {
+  background: #dbeafe;
+  border-color: #3b82f6;
+}
+
+.library-stat.expansion.is-off .library-expansion-toggle {
+  border-color: var(--border);
+  color: var(--muted);
+}
+
 .library-board {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
@@ -2469,16 +2685,13 @@ select:focus {
 
   .library-filterbar,
   .library-form-grid,
-  .library-form-grid.two {
+  .library-form-grid.two,
+  .library-form-grid.library-form-grid-three {
     grid-template-columns: 1fr;
   }
 
   .library-board {
     grid-template-columns: 1fr;
-  }
-
-  .library-grid {
-    columns: 2 150px;
   }
 
   .inspector-sticky,
@@ -2489,6 +2702,148 @@ select:focus {
   .library-card-body {
     min-height: 0;
   }
+}
+
+/* v523: compact dark-glass AI task status across every route. */
+.global-ai-task-status {
+  position: fixed;
+  top: auto;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(520px, calc(100vw - 48px));
+  min-height: 62px;
+  padding: 11px 14px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 18px;
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(24, 28, 34, .82), rgba(10, 13, 18, .72));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .08);
+  transform: translateX(-50%);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  pointer-events: none;
+  animation: global-ai-task-enter .22s ease-out;
+}
+
+.global-ai-task-status[hidden] {
+  display: none;
+}
+
+.global-ai-task-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 50%;
+  color: #101318;
+  background: #c9ff3d;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.global-ai-task-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid rgba(16, 19, 24, .22);
+  border-top-color: #101318;
+  border-radius: 50%;
+  animation: global-ai-task-spin .8s linear infinite;
+}
+
+.global-ai-task-copy {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 780;
+  line-height: 1.5;
+  letter-spacing: .01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-ai-task-close {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border: 0;
+  border-radius: 9px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, .12);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.global-ai-task-cancel {
+  min-width: 82px;
+  height: 34px;
+  flex: 0 0 auto;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, .24);
+  border-radius: 10px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, .10);
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background .16s ease, border-color .16s ease, opacity .16s ease;
+}
+
+.global-ai-task-cancel:hover {
+  border-color: rgba(255, 255, 255, .52);
+  background: rgba(255, 255, 255, .19);
+}
+
+.global-ai-task-cancel:disabled {
+  opacity: .56;
+  cursor: wait;
+}
+
+.global-ai-task-status.is-success .global-ai-task-indicator {
+  background: #8ff0b1;
+}
+
+.global-ai-task-status.is-error .global-ai-task-indicator {
+  color: #ffffff;
+  background: #ef4444;
+}
+
+@keyframes global-ai-task-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes global-ai-task-enter {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (max-width: 640px) {
+  .global-ai-task-status {
+    top: auto;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    width: calc(100vw - 24px);
+    min-height: 64px;
+    padding: 12px 14px;
+    border-radius: 15px;
+  }
+
+  .global-ai-task-copy {
+    font-size: 14px;
+    white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .global-ai-task-status { animation: none; }
 }
 
 /* 素材库冷启动：数据返回前在筛选栏下方提供明确的进度反馈。 */
@@ -4377,22 +4732,18 @@ html body #app-shell.app-shell[data-route="library"] .library-card .library-card
   position: absolute;
   inset: 0;
   z-index: 0;
-  background:
-    linear-gradient(110deg, transparent 28%, rgba(255, 255, 255, .48) 44%, transparent 60%) -180% 0 / 220% 100% no-repeat,
-    linear-gradient(145deg, #e5e9ee, #f3f5f7 54%, #e7ebef);
+  /* 加载占位是静态纯色，不带扫光/渐变：动画与斜纹渐变都多次被当故障报后彻底去掉 */
+  background: #eef1f4;
   opacity: 1;
   transition: opacity 260ms ease;
-  animation: library-bookmark-preview-shimmer 1.25s ease-in-out infinite;
 }
 
 .library-preview-shell.is-preview-ready::before {
   opacity: 0;
-  animation: none;
 }
 
 .library-preview-shell.is-preview-error::before {
   opacity: .5;
-  animation: none;
 }
 
 .library-preview-shell > .library-progressive-image {
@@ -4423,11 +4774,6 @@ html body #app-shell.app-shell[data-route="library"] .library-card .library-card
   opacity: 1;
   filter: blur(0);
   transform: scale(1);
-}
-
-@keyframes library-bookmark-preview-shimmer {
-  0% { background-position: 180% 0, 0 0; }
-  100% { background-position: -80% 0, 0 0; }
 }
 
 .library-bookmark-template-placeholder {
@@ -4682,7 +5028,6 @@ html body #app-shell.app-shell[data-route="library"] .library-card .library-card
   .library-bookmark-hover { transition: none !important; }
   .library-bookmark-template-card:hover,
   .library-bookmark-template-card:active { transform: none !important; }
-  .library-preview-shell::before { animation: none !important; }
   .library-progressive-image { transition: opacity 120ms ease !important; }
 }
 
@@ -6691,12 +7036,41 @@ body,
   margin-top: -4px;
 }
 
+/* 素材墙：固定 4 列瀑布流。grid 会让每行按最高的卡片对齐，短图下方留白；
+   多列布局各列独立纵向排列，卡片上下间距一致且允许错行。 */
 .library-grid {
-  columns: 5 304px;
+  columns: 4;
   column-gap: 10px;
 }
 
+/* 案例墙：四列分列摆放（不用真网格，也不用 CSS 多列瀑布流）。案例封面高矮参差，
+   真网格的行高按最高卡算，短封面下方会留一大块空白；多列瀑布流又按列高平衡分配，
+   数量不足一整行时末几张会漂到中间的列上。分列由 JS 按"最矮列优先"落卡
+   （renderCaseBoardColumns）：首行固定左起四张，之后的卡补进最矮的一列，通常是
+   短封面下方——既没有成片空白，末行也从左边开始。 */
+.library-grid.library-grid-cases {
+  columns: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.library-grid.library-grid-cases .library-column {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.library-grid.library-grid-cases .library-card {
+  margin-bottom: 0;
+  break-inside: auto;
+}
+
 .library-card {
+  display: block;
+  break-inside: avoid;
   margin-bottom: 10px;
   border-radius: 8px;
   background: #d6d7d4;
@@ -6820,10 +7194,6 @@ body,
 }
 
 @media (max-width: 980px) {
-  .library-grid {
-    columns: 4 286px;
-  }
-
   .library-control-strip {
     grid-template-columns: 1fr;
   }
@@ -6861,10 +7231,6 @@ body,
 
   .library-page-home .library-module-row {
     grid-template-columns: 1fr;
-  }
-
-  .library-grid {
-    columns: 1;
   }
 }
 
@@ -12134,6 +12500,19 @@ html body #app-shell.app-shell[data-route="home"] .library-thumb img {
   #library-upload-modal .library-form-grid.two { grid-template-columns: 1fr !important; }
 }
 
+/* v703: upload modal — tag1 / tag2 / country-or-activity share one 3-column line. */
+#library-upload-modal .upload-tags-line {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+}
+#library-upload-modal .upload-tags-line .library-upload-tags,
+#library-upload-modal .upload-tags-line .library-form-grid.two { display: contents !important; }
+#library-upload-modal .upload-tags-line [hidden] { display: none !important; }
+@media (max-width: 640px) {
+  #library-upload-modal .upload-tags-line { grid-template-columns: 1fr !important; }
+}
+
 /* Homepage polish: refined brand mark, optically centered chevrons and image-only cards. */
 html body #app-shell.app-shell[data-route="home"] .sidebar-brand .brand-mark {
   width: 38px !important;
@@ -12597,6 +12976,8 @@ html body #app-shell.app-shell[data-route="library"] .library-control-actions {
   gap: 8px !important;
   min-width: 0;
   white-space: nowrap;
+  flex-wrap: wrap !important;
+  row-gap: 8px !important;
 }
 
 html body #app-shell.app-shell[data-route="library"] .library-control-actions .search-wrap,
@@ -12808,4 +13189,59 @@ html body #app-shell.app-shell .sidebar .nav-item::after {
   .ui-restriction-control {
     justify-self: end;
   }
+}
+
+/* v705: 团队管理 —— 账号管理 / 使用者名单 可折叠（点头部或右侧箭头，状态本机记忆） */
+.panel .account-panel-head {
+  cursor: pointer;
+}
+
+.panel.panel-collapsed > *:not(.account-panel-head) {
+  display: none !important;
+}
+
+.panel-fold-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex: none;
+}
+
+.panel-fold-toggle:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.panel-fold-caret {
+  display: block;
+  width: 9px;
+  height: 9px;
+  margin-top: -3px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.18s ease;
+}
+
+.panel.panel-collapsed .panel-fold-caret {
+  margin-top: 0;
+  margin-left: -3px;
+  transform: rotate(-45deg);
+}
+
+/* v705 修正：让标题块可收缩，操作区（含折叠箭头）保持一行不换行 */
+.panel .account-panel-head > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.panel .account-panel-head .account-row-actions {
+  flex: 0 0 auto;
 }
