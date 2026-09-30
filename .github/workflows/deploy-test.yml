@@ -16,10 +16,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Build
-        run: npm run build:pages
-
-      - name: Deploy to Cloudflare Pages (test branch)
-        run: npx --yes wrangler@4.60.0 pages deploy dist --project-name visual-factory --branch asset-gallery-test
+      - name: Deploy to Cloudflare Pages (test branch) - prebuilt dist
+        run: npx --yes wrangler@4.60.0 pages deploy dist --project-name visual-factory --branch asset-gallery-test --commit-dirty=true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
