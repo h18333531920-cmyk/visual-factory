@@ -296,14 +296,44 @@ curl -s "https://gccdesign.app/?cb=$(date +%s)" | grep -o 'app\.js?v=[^"]*'
 - **网络很慢**：1 MB 的文件下载经常中途截断。验证时一定带 `?cb=$(date +%s)` 破坏缓存，并注意**截断 ≠ 文件坏了**（曾因此误判线上文件不一致）。
 - **禁止 `git reset` / `checkout` / `clean` 覆盖工作区** —— 主站工作区长期有未提交改动，那是唯一真相。
 
-### 8.7 回滚（万一发错）
+### 8.7 回滚（正式站原生支持，随时可退）
 
-Cloudflare Pages 支持把生产环境指回任意历史部署，几秒钟生效、不动数据：
+Cloudflare Pages **原生支持**把生产环境指回任意历史部署：几秒钟生效、不动数据。官方说明：[Rollbacks](https://developers.cloudflare.com/pages/configuration/rollbacks/)。
 
-`https://dash.cloudflare.com/555fab154fbf8785df1faf9380a9ce81/pages/view/visual-factory/deployments`
-→ 找到目标部署（看 Environment = Production + 时间）→ **先点开它自己的 URL 验货**（确认是想要的版本）→ `⋯` → Rollback。
+1. 打开部署列表：`https://dash.cloudflare.com/555fab154fbf8785df1faf9380a9ce81/pages/view/visual-factory/deployments`
+2. 在 **All deployments** 里找目标部署（看 Environment = **Production** + 时间）→ **先点开它自己的 URL 验货**（确认是想要的那一版）
+3. 点它右边的 `⋯` → **Rollback to this deployment** → 确认 → **生产环境立刻切换**
+4. 回退后仍可再往前滚回更新的版本（双向）
 
-⚠️ 回滚同样属于"正式站发布动作"，**要先拿授权**；而且回滚目标必须先验明（本项目正式站历史上多次是手动直发的，未必有"上一条 Production 就是上次线上版本"的直觉）。
+三个前提，缺一个回退就靠不住：
+
+- **正式站必须继续用 `--branch main` 发布**。只有"生产部署"是合法回退目标；用别的分支发出的是 **Preview，不能当回退目标**（官方原文：preview deployments are not valid rollback targets）。
+- **必须先关掉"生产分支自动部署"**（见 §8.8）。否则你回退完，下一次 push `main` 又会自动把新版本推回正式站。
+- 回滚属于"正式站发布动作"，同样**先拿用户授权**；历史遗留的正式站版本多为手动直发，回退目标要先验货再点。
+
+### 8.8 环境配置：自动部署只发测试版，正式站只走手动
+
+本项目的既定要求：**日常改动只自动部署测试站；正式站一律手动、且随时可回退。** 所以有两条"自动发正式站"的路必须关掉（官方说明：[Branch deployment controls](https://developers.cloudflare.com/pages/configuration/branch-build-controls/)）：
+
+| # | 哪条路 | 怎么关 | 状态 |
+|---|---|---|---|
+| 1 | **Cloudflare 自身的自动部署**（Git 集成：push 到生产分支就自动构建发布） | Pages 项目 → **设置 → 构建和部署 → 配置生产部署** → 取消勾选 **「为生产分支启用自动部署」** → 保存 | ⏸ 暂缓（2026-10-10 用户决定先不做） |
+| 2 | **GitHub Actions `deploy.yml`**（push `main` → 构建 → 发正式站） | 仓库 → **Actions** → 左侧选 `Deploy to Cloudflare Pages` → `⋯` → **Disable workflow** | ⏸ 暂缓（2026-10-10 用户决定先不做） |
+
+> **状态说明（2026-10-10）**：用户决定**暂缓**上面两步（Cloudflare 后台为英文界面，操作成本高）。在缓做期间，风险由这四条兜住：
+> ① `main` 无人推送（停在 2026-08-27）；② 正式站发布必须当次授权（§8.0 红线）；③ 发错可一键回退（§8.7）；④ 每次发布必须记录部署 ID（§0）。
+> 想做时照上表点击即可，**不需要改任何代码**。
+
+预览分支保持默认「所有非生产分支」即可 —— 这样推 `main` 会生成一个**预览**部署（可以先看再决定），但**不会**动正式站。
+
+关掉之后的行为：
+
+- **测试站照旧自动发**：`.github/workflows/deploy-test.yml` 监听 `tmp-deploy-*` 分支；本机 `.local/deploy-*.sh` 也可直发 `--branch asset-gallery-test`。
+- **正式站只能手动发**：按 §8.4 的 `wrangler ... --branch main`（需用户当次授权），发错了按 §8.7 一键回退。
+- 仍然存在的口子：拿到部署凭证的人/AI 可以**手动**发正式站（技术无法阻止，因为 token 权限只到"Cloudflare Pages:Edit"，管不到分支）。补偿手段就是本节 + §8.7 + 每次发布必须记录部署 ID。
+
+> **本节属于"配置事实"，改动它要当作正式站发布来对待。**
+> 教训：2026-10-10 有会话绕过全部流程手动直发正式站（部署 `9dc6e063`），当时"自动部署"仍处于开启状态，等于正式站有两条无人看管的入口。
 
 ---
 
