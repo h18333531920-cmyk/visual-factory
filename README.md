@@ -1,56 +1,20 @@
-# Visual Factory V1
+# GCC Design（visual-factory）
 
-V1 is a stability-first integration shell:
+给设计工作流用的网页工具集：素材 / 案例库、静态 DIY 海报编辑器、动态 DIY 动画编辑器、ICON 生成工具（制作金刚）、提需流程、数据看板、团队与账号权限管理。
 
-- Public login page
-- Supabase Auth for email/password accounts
-- White SaaS sidebar shell
-- Embedded legacy Library, Static DIY, and Dynamic DIY tools
-- Cloud project-save foundation
-- Admin UI for creating accounts and categories
-- Supabase SQL schema for profiles, categories, assets, projects, and storage buckets
+- 线上：<https://gccdesign.app>（Cloudflare Pages 项目 `visual-factory`）
+- 测试站：<https://asset-gallery-test.visual-factory.pages.dev>
+- 技术栈：Supabase（PostgreSQL + Auth + Storage + RLS）+ Cloudflare Pages / Functions + 原生 JS 单文件前端（无框架）
 
-## Local Preview
+## 开发 / 交接：先读这一份
+
+**→ [HANDOVER.md](HANDOVER.md)** —— 唯一正本：现状速览、架构、数据结构、功能模块、部署、已知坑、待办、风险。
 
 ```bash
-npm run dev
+npm run dev            # 本地预览 http://127.0.0.1:8791
+node --check app.js    # 语法
+node --test tests/     # 自动化测试（基线 365 项）
+npm run build:pages    # 生成 dist/（wrangler 发布的就是它）
 ```
 
-Open `http://127.0.0.1:8791/`.
-
-Local preview can use the local role buttons. Those buttons are only for checking the shell UI and do not write to Supabase.
-
-## Supabase Setup
-
-Done for the current project:
-
-- Supabase project: `https://juuqvjmhzdgfggzrivbb.supabase.co`
-- Core SQL has been run successfully.
-- First admin account has been created and confirmed.
-- Cloud project save has been smoke-tested successfully.
-
-Admin account backup is stored locally outside this deployable folder.
-
-## Vercel Environment Variables
-
-Set these on Vercel:
-
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-
-AI routes are currently authenticated stubs. The previous Volcengine implementation is preserved at:
-
-`docs/server0603.reference.js`
-
-## Migration Notes
-
-The files under `tools/` are copies of the current tools. The original files on Desktop are not modified.
-
-The next stable step is to migrate the material library data model from `assets_library` into `vf_assets` and connect image selection from the library into both DIY tools.
-
-## Verified On 2026-06-03
-
-- Admin email/password login works.
-- `vf-projects` private storage upload works.
-- `vf_projects` insert and read works under authenticated RLS.
+规矩与红线见 [AGENTS.md](AGENTS.md)。历史文档（**不要当现状读**）见 [docs/archive/](docs/archive/README.md)。
