@@ -8,6 +8,7 @@ create table if not exists public.vf_preview_ai_tags (
   preview_id uuid not null references public.vf_asset_previews(id) on delete cascade,
   source_file_id uuid not null references public.vf_source_files(id) on delete cascade,
   ai_tags text[] not null default '{}',
+  manual_tags text[] not null default '{}',
   excluded_tags text[] not null default '{}',
   status text not null default 'idle'
     check (status in ('idle', 'running', 'success', 'failed', 'expired')),
@@ -20,6 +21,9 @@ create table if not exists public.vf_preview_ai_tags (
   updated_at timestamptz not null default now(),
   primary key (experiment_key, preview_id)
 );
+
+alter table public.vf_preview_ai_tags
+  add column if not exists manual_tags text[] not null default '{}';
 
 create index if not exists idx_preview_ai_tags_source
   on public.vf_preview_ai_tags(experiment_key, source_file_id);

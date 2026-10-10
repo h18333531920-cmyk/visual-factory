@@ -164,6 +164,22 @@ datalist { display: none; }
 .case-edit-body { display: grid; gap: 16px; padding: 4px 32px 24px; overflow-y: auto; max-height: 60vh; }
 .case-edit-body label > span { display: block; margin-bottom: 6px; font-size: 12.5px; color: #64748b; }
 .case-edit-body input, .case-edit-body select { width: 100%; padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 13px; color: #0f172a; background: #fff; }
+/* ── 项目浮窗就地编辑（v870+）：紧凑内联编辑表单 ── */
+.case-head-inline-edit { display: none; }
+.case-head-inline-edit.is-active { display: grid; gap: 6px; margin-top: 4px; padding-top: 8px; border-top: 1px solid #f1f5f9; }
+.case-head-inline-edit label { display: block; }
+.case-head-inline-edit label > span { display: block; margin-bottom: 3px; font-size: 11px; color: #94a3b8; font-weight: 500; }
+.case-head-inline-edit input { width: 100%; padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 7px; font-size: 13px; color: #0f172a; background: #fff; box-sizing: border-box; }
+.case-head-inline-edit input:focus { border-color: #94a3b8; outline: none; }
+.case-head-inline-edit .case-inline-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.case-head-inline-edit .case-tag-bar { padding: 8px 0 2px; }
+.case-head-inline-edit .case-inline-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
+.case-head-inline-edit .case-inline-actions button { padding: 6px 14px; border: 0; border-radius: 7px; font-size: 12px; cursor: pointer; font-weight: 500; }
+.case-head-inline-edit .case-inline-save { background: #0f172a; color: #fff; }
+.case-head-inline-edit .case-inline-save:hover { background: #1e293b; }
+.case-head-inline-edit .case-inline-save:disabled { opacity: .6; cursor: wait; }
+.case-head-inline-edit .case-inline-cancel { background: #f1f5f9; color: #475569; }
+.case-head-inline-edit .case-inline-cancel:hover { background: #e2e8f0; }
 .case-edit-body .case-field-secondary > span { color: #b7c0cc; font-size: 12px; }
 .case-edit-body .case-field-secondary input { border-color: #f1f4f8; background: #fbfcfd; color: #64748b; }
 .case-side-overlay { position: absolute; left: 0; right: 0; bottom: 0; padding: 24px 8px 7px; background: linear-gradient(to top, rgba(0, 0, 0, 0.74), rgba(0, 0, 0, 0)); opacity: 0; transition: opacity 180ms ease; pointer-events: none; }
@@ -617,15 +633,30 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-foot-tools { flex: 0 0 auto; display: flex; gap: 6px; }
 .case-preview-ai-panel { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .case-preview-ai-title { font-size: 11px; font-weight: 650; color: #64748b; white-space: nowrap; }
-.case-preview-ai-chips { display: flex; align-items: center; gap: 5px; min-width: 0; overflow-x: auto; padding: 2px 0; scrollbar-width: thin; }
-.case-preview-ai-tag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 5px 8px; border: 1px solid #fdba74; border-radius: 999px; background: #fff7ed; color: #9a3412; font-size: 11px; line-height: 1; }
-.case-preview-ai-tag button { width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #c2410c; font-size: 13px; line-height: 12px; cursor: pointer; }
+.case-preview-ai-chips { display: flex; align-items: center; gap: 5px; min-width: 0; overflow-x: auto; padding: 2px 0; scrollbar-width: thin; position: relative; }
+.case-preview-ai-tag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 5px 8px; border: 1px solid #fdba74; border-radius: 999px; background: #fff7ed; color: #9a3412; font-size: 11px; line-height: 1; cursor: default; }
+.case-preview-ai-tag.is-manual { border-color: #86efac; background: #f0fdf4; color: #166534; }
+.case-preview-ai-tag button { display: none; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #c2410c; font-size: 13px; line-height: 12px; cursor: pointer; }
+.case-preview-ai-tag.is-editing button { display: inline-flex; align-items: center; justify-content: center; }
 .case-preview-ai-tag button:hover { background: #fed7aa; }
-.case-preview-ai-excluded { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 4px 7px; border-radius: 999px; background: #f1f5f9; color: #94a3b8; font-size: 10.5px; text-decoration: line-through; }
+.case-preview-ai-excluded { display: none; align-items: center; gap: 4px; flex: 0 0 auto; padding: 4px 7px; border-radius: 999px; background: #f1f5f9; color: #94a3b8; font-size: 10.5px; text-decoration: line-through; }
+.case-preview-ai-excluded.is-editing { display: inline-flex; }
 .case-preview-ai-excluded button { padding: 0; border: 0; background: transparent; color: #4f46e5; font-size: 10.5px; cursor: pointer; text-decoration: none; }
 .case-preview-ai-empty { color: #94a3b8; font-size: 11px; white-space: nowrap; }
 .case-preview-ai-status { color: #94a3b8; font-size: 10.5px; white-space: nowrap; }
 .case-preview-ai-status.is-error { color: #dc2626; }
+.case-preview-ai-edit-btn { flex: 0 0 auto; display: inline-flex; align-items: center; padding: 3px 8px; border: 1px dashed #cbd5e1; background: #fff; color: #64748b; font-size: 11px; line-height: 1; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.case-preview-ai-edit-btn:hover { border-color: #94a3b8; color: #0f172a; background: #f1f5f9; }
+.case-preview-ai-pop { position: fixed; z-index: 300; display: none; flex-direction: column; gap: 4px; max-width: min(520px, 90vw); max-height: 260px; overflow: auto; padding: 10px 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14); }
+.case-preview-ai-pop.is-visible { display: flex; }
+.case-preview-ai-pop .case-preview-ai-tag { cursor: default; }
+.case-preview-ai-pop .case-preview-ai-tag button { display: none; }
+.case-preview-ai-add-row { flex: 1 0 100%; display: none; align-items: center; gap: 6px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
+.case-preview-ai-add-row.is-editing { display: flex; }
+.case-preview-ai-add-row input { flex: 1 1 auto; min-width: 0; padding: 5px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; outline: none; }
+.case-preview-ai-add-row input:focus { border-color: #f97316; }
+.case-preview-ai-add-row button { flex: 0 0 auto; padding: 5px 12px; border: 0; border-radius: 6px; background: #f97316; color: #fff; font-size: 12px; cursor: pointer; }
+.case-preview-ai-add-row button:hover { background: #ea580c; }
 .case-foot-tool-btn { flex: 0 0 auto; display: inline-flex; align-items: center; padding: 5px 11px; border: 1px dashed #b7c2d4; background: #fff; color: #475569; font-size: 12px; line-height: 1; border-radius: 999px; cursor: pointer; white-space: nowrap; }
 .case-foot-tool-btn:hover { border-color: #64748b; color: #0f172a; background: #f1f5f9; }
 .case-foot-tool-btn:disabled { color: #cbd5e1; border-color: #e2e8f0; background: #fafbfc; cursor: not-allowed; }
@@ -805,7 +836,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870';
+const TOOL_UI_VERSION = '20260924-ai-inline-edit-v871';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4068,9 +4099,7 @@ return;
   }
 
   function isCasePreviewAiExperimentSource(source) {
-    return !!source
-      && source.id === CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID
-      && String(source.title || '').trim() === CASE_PREVIEW_AI_EXPERIMENT_TITLE;
+    return !!source && source.id === CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID;
   }
 
   function casePreviewAiRow(previewId) {
@@ -4081,7 +4110,9 @@ return;
     const row = casePreviewAiRow(previewId);
     const preview = state.libraryPreviews.find(function(item) { return item.id === previewId; });
     if (row && preview && row.content_key && row.content_key !== casePreviewAiContentKey(preview)) return [];
-    return row && Array.isArray(row.ai_tags) ? row.ai_tags.filter(Boolean) : [];
+    const aiTags = row && Array.isArray(row.ai_tags) ? row.ai_tags.filter(Boolean) : [];
+    const manualTags = row && Array.isArray(row.manual_tags) ? row.manual_tags.filter(Boolean) : [];
+    return Array.from(new Set(manualTags.concat(aiTags)));
   }
 
   function caseProjectFixedTagsHtml(source) {
@@ -4106,7 +4137,7 @@ return;
   async function loadPreviewAiTagsForSource(sourceId) {
     if (!state.supabase || sourceId !== CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID) return [];
     const result = await state.supabase.from(CASE_PREVIEW_AI_TABLE)
-      .select('experiment_key,preview_id,source_file_id,ai_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at')
+      .select('experiment_key,preview_id,source_file_id,ai_tags,manual_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at')
       .eq('experiment_key', 'augpicks-v1')
       .eq('source_file_id', sourceId);
     if (result.error) {
@@ -4141,30 +4172,82 @@ return;
     if (row.status === 'running') return state.lang === 'zh' ? '识别中…' : 'Analyzing…';
     if (row.status === 'failed') return state.lang === 'zh' ? '识别失败' : 'Failed';
     if (row.status === 'expired') return state.lang === 'zh' ? '结果已过期' : 'Expired';
-    if (row.status === 'success') return (row.ai_tags || []).length
-      ? (state.lang === 'zh' ? 'AI直接应用' : 'Applied by AI')
-      : (state.lang === 'zh' ? '已识别，未发现标签' : 'Analyzed, no tags');
+    if (row.status === 'success') {
+      if ((row.ai_tags || []).length) return state.lang === 'zh' ? 'AI直接应用' : 'Applied by AI';
+      if ((row.manual_tags || []).length) return state.lang === 'zh' ? '含人工标签，AI未发现标签' : 'Manual tags; AI found none';
+      return state.lang === 'zh' ? '已识别，未发现标签' : 'Analyzed, no tags';
+    }
     return state.lang === 'zh' ? '未识别' : 'Not analyzed';
   }
 
   function renderCasePreviewAiPanel(backdrop, preview, canManage) {
     const panel = backdrop && backdrop.querySelector('#case-preview-ai-panel');
     if (!panel || !preview) return;
+    const openPop = document.getElementById('case-preview-ai-pop');
+    if (openPop) openPop.classList.remove('is-visible');
     const row = casePreviewAiRow(preview.id);
+    const stale = !!(row && row.content_key && row.content_key !== casePreviewAiContentKey(preview));
+    const aiTags = !stale && row && Array.isArray(row.ai_tags) ? row.ai_tags.filter(Boolean) : [];
+    const manualTags = !stale && row && Array.isArray(row.manual_tags) ? row.manual_tags.filter(Boolean) : [];
     const tags = casePreviewAiTags(preview.id);
     const status = casePreviewAiStatusText(row, preview);
     const excluded = row && Array.isArray(row.excluded_tags) ? row.excluded_tags.filter(Boolean) : [];
+    const isEditing = panel.dataset.editing === '1';
     panel.dataset.previewId = preview.id;
+    const editingClass = isEditing ? ' is-editing' : '';
     panel.innerHTML = '<span class="case-preview-ai-title">' + (state.lang === 'zh' ? '当前物料 AI 标签' : 'Current material AI tags') + '</span>'
-      + '<div class="case-preview-ai-chips">'
-      + tags.map(function(tag) {
-        return '<span class="case-preview-ai-tag">' + escapeHtml(tag)
-          + (canManage ? '<button type="button" data-preview-ai-exclude="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '删除错误标签 ' : 'Remove incorrect tag ') + tag) + '">×</button>' : '')
+      + '<div class="case-preview-ai-chips' + editingClass + '">'
+      + manualTags.map(function(tag) {
+        return '<span class="case-preview-ai-tag is-manual' + editingClass + '" title="' + (state.lang === 'zh' ? '人工标签' : 'Manual tag') + '">' + escapeHtml(tag)
+          + (canManage ? '<button type="button" data-preview-manual-remove="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '删除人工标签 ' : 'Remove manual tag ') + tag) + '">×</button>' : '')
+          + '</span>';
+      }).join('')
+      + aiTags.filter(function(tag) { return manualTags.indexOf(tag) < 0; }).map(function(tag) {
+        return '<span class="case-preview-ai-tag' + editingClass + '" title="' + (state.lang === 'zh' ? 'AI标签' : 'AI tag') + '">' + escapeHtml(tag)
+          + (canManage ? '<button type="button" data-preview-ai-exclude="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '排除AI标签 ' : 'Exclude AI tag ') + tag) + '">×</button>' : '')
           + '</span>';
       }).join('')
       + (!tags.length ? '<span class="case-preview-ai-empty">' + escapeHtml(status) + '</span>' : '')
-      + excluded.map(function(tag) { return canManage ? '<span class="case-preview-ai-excluded">已排除 ' + escapeHtml(tag) + '<button type="button" data-preview-ai-restore="' + escapeAttr(tag) + '">撤销</button></span>' : ''; }).join('')
-      + '</div><span class="case-preview-ai-status' + (row && row.status === 'failed' ? ' is-error' : '') + '">' + escapeHtml(status) + '</span>';
+      + excluded.map(function(tag) { return canManage ? '<span class="case-preview-ai-excluded' + editingClass + '">已排除 ' + escapeHtml(tag) + '<button type="button" data-preview-ai-restore="' + escapeAttr(tag) + '">撤销</button></span>' : ''; }).join('')
+      + (isEditing && canManage ? '<div class="case-preview-ai-add-row is-editing"><input type="text" id="case-preview-ai-add-input" placeholder="' + (state.lang === 'zh' ? '输入新标签，回车添加' : 'Type tag and press Enter') + '" /><button type="button" id="case-preview-ai-add-btn">' + (state.lang === 'zh' ? '添加' : 'Add') + '</button></div>' : '')
+      + '</div>'
+      + (canManage && !isEditing ? '<button type="button" class="case-preview-ai-edit-btn" id="case-preview-ai-edit-toggle">' + (state.lang === 'zh' ? '编辑' : 'Edit') + '</button>' : '')
+      + (canManage && isEditing ? '<button type="button" class="case-preview-ai-edit-btn" id="case-preview-ai-edit-done">' + (state.lang === 'zh' ? '完成' : 'Done') + '</button>' : '')
+      + '<span class="case-preview-ai-status' + (row && row.status === 'failed' ? ' is-error' : '') + '">' + escapeHtml(status) + '</span>';
+    wireCasePreviewAiHover(panel, manualTags, aiTags, excluded);
+  }
+
+  function wireCasePreviewAiHover(panel, manualTags, aiTags, excluded) {
+    if (!panel) return;
+    const chips = panel.querySelector('.case-preview-ai-chips');
+    const tags = Array.from(new Set((manualTags || []).concat(aiTags || [])));
+    if (!chips || !tags.length) return;
+    let pop = document.getElementById('case-preview-ai-pop');
+    if (!pop) {
+      pop = document.createElement('div');
+      pop.id = 'case-preview-ai-pop';
+      pop.className = 'case-preview-ai-pop';
+      document.body.appendChild(pop);
+    }
+    let timer = null;
+    const showPop = function() {
+      if (!panel.isConnected || !chips.isConnected) return;
+      if (chips.scrollWidth <= chips.clientWidth + 2) return;
+      pop.innerHTML = (manualTags || []).map(function(tag) { return '<span class="case-preview-ai-tag is-manual">' + escapeHtml(tag) + '</span>'; }).join('')
+        + (aiTags || []).filter(function(tag) { return (manualTags || []).indexOf(tag) < 0; }).map(function(tag) { return '<span class="case-preview-ai-tag">' + escapeHtml(tag) + '</span>'; }).join('');
+      const rect = chips.getBoundingClientRect();
+      pop.style.left = rect.left + 'px';
+      pop.style.top = (rect.bottom + 6) + 'px';
+      pop.style.maxWidth = rect.width + 'px';
+      pop.classList.add('is-visible');
+    };
+    const hidePop = function() {
+      pop.classList.remove('is-visible');
+    };
+    chips.addEventListener('mouseenter', function() { clearTimeout(timer); timer = setTimeout(showPop, 300); });
+    chips.addEventListener('mouseleave', function() { clearTimeout(timer); hidePop(); });
+    pop.onmouseenter = function() { clearTimeout(timer); };
+    pop.onmouseleave = function() { hidePop(); };
   }
 
   function updateCasePreviewAiRunUi(sourceId) {
@@ -7479,7 +7562,111 @@ return;
   function showCaseDeleteToast(count) { showCaseToast(count && count > 1 ? (state.lang === 'zh' ? ('已删除 ' + count + ' 张物料') : ('Deleted ' + count + ' material(s)')) : (state.lang === 'zh' ? '已删除该物料' : 'Deleted this material')); }
   function showCaseAppendToast(count) { showCaseToast(state.lang === 'zh' ? ('已追加 ' + count + ' 张物料') : ('Added ' + count + ' material(s)'), 2600); }
 
+  // ── 项目浮窗就地编辑（v870+）：不另开弹窗，在头部标题区直接切换成编辑表单 ──
+  function enterCaseHeadInlineEdit(backdrop, source, callbacks) {
+    const onSaved = (callbacks && callbacks.onSaved) || null;
+    const onCancelled = (callbacks && callbacks.onCancelled) || null;
+    if (!backdrop || !backdrop.querySelector) return;
+    if (backdrop.querySelector('.case-head-inline-edit.is-active')) return;
+    const chipPrefill = caseChipSelectionOf(source);
+    const wrap = document.createElement('div');
+    wrap.className = 'case-head-inline-edit';
+    wrap.innerHTML = `
+      <label><span>${state.lang === 'zh' ? '项目名称' : 'Project Name'}</span><input name="title" maxlength="120" value="${escapeAttr(source.title || '')}"></label>
+      <div class="case-inline-row">
+        <label><span>${state.lang === 'zh' ? '项目链接' : 'Project Link'}</span><input name="project_link" maxlength="500" value="${escapeAttr(source.project_note || '')}"></label>
+        <label><span>${state.lang === 'zh' ? '下载链接' : 'Download Link'}</span><input name="download_link" maxlength="500" value="${escapeAttr(source.download_link || '')}"></label>
+      </div>
+      <label><span>${state.lang === 'zh' ? '物料所有者' : 'Material Owner'}</span>${renderOwnerCombobox({ value: source.owner_name || '', contact: source.owner_contact || '', inputId: 'case-head-edit-owner' })}</label>
+      <div class="case-tag-bar" data-case-inline-tag-bar>${renderCaseTagBar(chipPrefill)}</div>
+      <div class="case-inline-actions">
+        <button type="button" class="case-inline-cancel" data-inline-cancel>${state.lang === 'zh' ? '取消' : 'Cancel'}</button>
+        <button type="button" class="case-inline-save" data-inline-save>${state.lang === 'zh' ? '保存' : 'Save'}</button>
+      </div>`;
+    const modal = backdrop.querySelector('.case-project-modal');
+    const header = backdrop.querySelector('.case-project-head');
+    if (modal && header && header.nextSibling) modal.insertBefore(wrap, header.nextSibling);
+    else modal.appendChild(wrap);
+    wrap.classList.add('is-active');
+    // 隐藏原有固定标签行，避免编辑时重复显示
+    const fixedTags = backdrop.querySelector('.case-project-fixed-tags');
+    if (fixedTags) fixedTags.style.display = 'none';
+    wireOwnerCombobox(wrap);
+    const inlineTagBar = wrap.querySelector('[data-case-inline-tag-bar]');
+    wireCaseTagBar(inlineTagBar);
+    applyCaseTagBarSelections(inlineTagBar, chipPrefill);
+    const exit = function() { wrap.remove(); if (fixedTags) fixedTags.style.display = ''; if (onCancelled) onCancelled(); };
+    wrap.querySelector('[data-inline-cancel]').addEventListener('click', exit);
+    const saveBtn = wrap.querySelector('[data-inline-save]');
+    saveBtn.addEventListener('click', async function() {
+      const value = sel => String((wrap.querySelector('[name="' + sel + '"]') || {}).value || '').trim();
+      const title = value('title');
+      if (!title) { alert(state.lang === 'zh' ? '请填写项目名称。' : 'Project name is required.'); return; }
+      saveBtn.disabled = true;
+      saveBtn.textContent = state.lang === 'zh' ? '保存中...' : 'Saving...';
+      try {
+        const fresh = await state.supabase.from('vf_source_files').select('tags,country_id,activity_id,updated_at').eq('id', source.id).maybeSingle();
+        if (fresh.error) throw fresh.error;
+        if (!fresh.data) throw new Error(state.lang === 'zh' ? '项目不存在。' : 'Project does not exist.');
+        const base = Object.assign({}, source, {
+          tags: Array.isArray(fresh.data.tags) ? fresh.data.tags : (source.tags || []),
+          country_id: fresh.data.country_id,
+          activity_id: fresh.data.activity_id
+        });
+        const chipSel = (inlineTagBar || {})._caseTagSel || {};
+        const tagPayload = caseTagSelectionUpdatePayload(base, chipSel);
+        let updateQuery = state.supabase.from('vf_source_files').update({
+          title: title,
+          owner_name: value('owner_name'),
+          owner_contact: value('owner_contact'),
+          project_note: value('project_link'),
+          download_link: value('download_link'),
+          tags: tagPayload.tags,
+          country_id: tagPayload.country_id,
+          activity_id: tagPayload.activity_id
+        }).eq('id', source.id).eq('updated_at', fresh.data.updated_at);
+        const result = await updateQuery.select('id,title,owner_name,owner_contact,project_note,download_link,tags,country_id,activity_id,updated_at').maybeSingle();
+        if (result.error) throw result.error;
+        if (!result.data) throw new Error(state.lang === 'zh' ? '项目已被其他操作更新，请刷新后重试。' : 'The project changed. Refresh and retry.');
+        Object.assign(source, result.data);
+        wrap.remove();
+        if (fixedTags) fixedTags.style.display = '';
+        if (onSaved) onSaved(result.data);
+      } catch (error) {
+        alert(error.message || (state.lang === 'zh' ? '保存失败，请重试' : 'Save failed. Please retry.'));
+        saveBtn.disabled = false;
+        saveBtn.textContent = state.lang === 'zh' ? '保存' : 'Save';
+      }
+    });
+  }
+
   let caseProjectKeyHandler = null;
+  // v870+：就地保存后刷新弹窗头部信息（标题 / 时间 / 项目链接 / 所有者 / 固定标签），不重开弹窗
+  function renderCaseProjectHeadInfo(backdrop, source) {
+    if (!backdrop || !(source && source.id)) return;
+    const titleEl = backdrop.querySelector('.case-project-titlewrap .case-title-row h2');
+    if (titleEl) titleEl.textContent = source.title || '';
+    const sub = backdrop.querySelector('.case-project-titlewrap .case-project-sub');
+    if (sub) {
+      const updatedAt = source.updated_at ? formatDate(source.updated_at) : '';
+      const linkHtml = source.project_note
+        ? `<span class="case-dot">·</span><a class="case-project-link" href="${escapeAttr(source.project_note)}" target="_blank" rel="noopener">${state.lang === 'zh' ? '项目链接' : 'Project Link'} ↗</a>`
+        : '';
+      sub.innerHTML = `<span>${escapeHtml(updatedAt)}</span>${linkHtml}`;
+    }
+    const ownerLine = backdrop.querySelector('.case-project-titlewrap .case-owner-line');
+    if (ownerLine) {
+      const ownerText = source.owner_name || '';
+      const contact = source.owner_contact || '';
+      ownerLine.innerHTML = ownerText
+        ? `${state.lang === 'zh' ? '源文件请联系' : 'For the source file, contact'} <b>${escapeHtml(ownerText)}</b>${contact ? (state.lang === 'zh' ? `（大象 ${escapeHtml(contact)}）` : ` (Daxiang ${escapeHtml(contact)})`) : ''}`
+        : (state.lang === 'zh' ? '源文件未上传' : 'Source file not uploaded');
+    }
+    const tags = backdrop.querySelector('.case-project-titlewrap .case-project-fixed-tags');
+    if (tags) {
+      tags.innerHTML = `<span class="case-project-fixed-tags-label">${state.lang === 'zh' ? '项目固定标签' : 'Project tags'}</span>${caseProjectFixedTagsHtml(source)}`;
+    }
+  }
   function openCaseProjectModal(sourceId, focusType) {
     const requestedSource = state.librarySources.find(s => s.id === sourceId);
     if (!requestedSource) return;
@@ -7962,13 +8149,16 @@ return;
       const editBtn = backdrop.querySelector('#case-edit-btn');
       if (editBtn) editBtn.onclick = function() {
         if (moreMenu) moreMenu.hidden = true;
-        closeCaseProjectModal();
-        openCaseProjectEdit(source, {
-          onClose: function() { openCaseProjectModal(sourceId, tabValue); },
-          onSaved: async function() {
-            try { await refreshCaseProjectSource(source); } catch (error) { /* 忽略：弹窗照常恢复 */ }
+        // v870+：改成项目浮窗就地编辑——不再关闭弹窗另开编辑窗口，保存后就地刷新头部信息
+        enterCaseHeadInlineEdit(backdrop, source, {
+          onSaved: async function(saved) {
+            if (saved) Object.assign(source, saved);
+            try {
+              const refreshed = await refreshCaseProjectSource(source);
+              if (refreshed) Object.assign(source, refreshed);
+            } catch (error) { /* 忽略 */ }
             renderLibraryGrid();
-            openCaseProjectModal(sourceId, tabValue);
+            renderCaseProjectHeadInfo(backdrop, source);
           }
         });
       };
@@ -7982,9 +8172,11 @@ return;
     if (contactBtn) contactBtn.onclick = function() {
       // 复制大象编号（唯一标识，避免重名搜错人）：
       // 优先用素材上存的编号，其次用名单把姓名解析成编号（老素材没存编号时靠这个兜底），最后才退回复制姓名
-      const resolvedFromRoster = ownerContact ? '' : resolveTeamMemberDaxiang(owner);
-      const contactValue = ownerContact || resolvedFromRoster || owner;
-      const copiedId = !!(ownerContact || resolvedFromRoster);
+      const currentOwner = String(source.owner_name || '').trim();
+      const currentOwnerContact = String(source.owner_contact || '').trim();
+      const resolvedFromRoster = currentOwnerContact ? '' : resolveTeamMemberDaxiang(currentOwner);
+      const contactValue = currentOwnerContact || resolvedFromRoster || currentOwner;
+      const copiedId = !!(currentOwnerContact || resolvedFromRoster);
       if (!contactValue) { alert(state.lang === 'zh' ? '这个项目还没有填写物料所有者。' : 'This project has no material owner yet.'); return; }
       const finish = function() {
         const toast = document.createElement('div');
@@ -8002,10 +8194,10 @@ return;
           helper.value = contactValue;
           document.body.append(helper);
           helper.select();
-          try { document.execCommand('copy'); finish(); } catch (e) { alert(owner); }
+          try { document.execCommand('copy'); finish(); } catch (e) { alert(currentOwner); }
           helper.remove();
         });
-      } else { alert(owner); }
+      } else { alert(currentOwner); }
     };
     const setMaterialType = function(previewId, nextType) {
       const material = materials.find(item => item.id === previewId);
@@ -8309,6 +8501,23 @@ return;
     });
     backdrop.addEventListener('click', function(event) {
       if (event.target === backdrop) { closeCaseProjectModal(); return; }
+      const removeManualTag = event.target.closest('[data-preview-manual-remove]');
+      if (removeManualTag) {
+        event.stopPropagation();
+        const panel = removeManualTag.closest('#case-preview-ai-panel');
+        const previewId = panel && panel.dataset.previewId;
+        const tag = removeManualTag.getAttribute('data-preview-manual-remove');
+        if (!previewId || !tag) return;
+        removeManualTag.disabled = true;
+        postCasePreviewAiTagAction({action: 'manual-remove', previewId: previewId, tag: tag}).then(function() {
+          if (backdrop.isConnected && currentId === previewId) renderCasePreviewAiPanel(backdrop, current(), canManage);
+          renderLibraryGrid();
+        }).catch(function(error) {
+          removeManualTag.disabled = false;
+          alert(state.lang === 'zh' ? ('标签删除失败：' + (error.message || '请重试')) : ('Failed to remove tag: ' + (error.message || 'Please retry')));
+        });
+        return;
+      }
       const excludeAiTag = event.target.closest('[data-preview-ai-exclude]');
       if (excludeAiTag) {
         event.stopPropagation();
@@ -8340,6 +8549,39 @@ return;
         }).catch(function(error) {
           restoreAiTag.disabled = false;
           alert(state.lang === 'zh' ? ('撤销失败：' + (error.message || '请重试')) : ('Restore failed: ' + (error.message || 'Please retry')));
+        });
+        return;
+      }
+      const editToggle = event.target.closest('#case-preview-ai-edit-toggle');
+      if (editToggle) {
+        event.stopPropagation();
+        const panel = backdrop.querySelector('#case-preview-ai-panel');
+        if (panel) { panel.dataset.editing = '1'; renderCasePreviewAiPanel(backdrop, current(), canManage); }
+        return;
+      }
+      const editDone = event.target.closest('#case-preview-ai-edit-done');
+      if (editDone) {
+        event.stopPropagation();
+        const panel = backdrop.querySelector('#case-preview-ai-panel');
+        if (panel) { delete panel.dataset.editing; renderCasePreviewAiPanel(backdrop, current(), canManage); }
+        return;
+      }
+      const addBtn = event.target.closest('#case-preview-ai-add-btn');
+      if (addBtn) {
+        event.stopPropagation();
+        const input = backdrop.querySelector('#case-preview-ai-add-input');
+        const tag = input && String(input.value || '').trim();
+        if (!tag) return;
+        const panel = addBtn.closest('#case-preview-ai-panel');
+        const previewId = panel && panel.dataset.previewId;
+        if (!previewId) return;
+        addBtn.disabled = true;
+        postCasePreviewAiTagAction({action: 'manual-add', previewId: previewId, tag: tag}).then(function() {
+          if (backdrop.isConnected && currentId === previewId) renderCasePreviewAiPanel(backdrop, current(), canManage);
+          renderLibraryGrid();
+        }).catch(function(error) {
+          addBtn.disabled = false;
+          alert(state.lang === 'zh' ? ('添加失败：' + (error.message || '请重试')) : ('Add failed: ' + (error.message || 'Please retry')));
         });
         return;
       }
@@ -8409,6 +8651,24 @@ return;
       if (event.key === 'Escape') closeCaseProjectModal();
       else if (event.key === 'ArrowLeft') step(-1);
       else if (event.key === 'ArrowRight') step(1);
+      else if (event.key === 'Enter') {
+        const input = backdrop.querySelector('#case-preview-ai-add-input');
+        if (input && document.activeElement === input) {
+          const tag = String(input.value || '').trim();
+          if (!tag) return;
+          const panel = backdrop.querySelector('#case-preview-ai-panel');
+          const previewId = panel && panel.dataset.previewId;
+          if (!previewId) return;
+          input.disabled = true;
+          postCasePreviewAiTagAction({action: 'manual-add', previewId: previewId, tag: tag}).then(function() {
+            if (backdrop.isConnected) renderCasePreviewAiPanel(backdrop, current(), canManage);
+            renderLibraryGrid();
+          }).catch(function(error) {
+            input.disabled = false;
+            alert(state.lang === 'zh' ? ('添加失败：' + (error.message || '请重试')) : ('Add failed: ' + (error.message || 'Please retry')));
+          });
+        }
+      }
     };
     document.addEventListener('keydown', caseProjectKeyHandler);
   }
@@ -8417,6 +8677,8 @@ return;
     const node = document.getElementById('case-project-backdrop');
     if (node) node.remove();
     closeCaseFootTagsPop();
+    const aiPop = document.getElementById('case-preview-ai-pop');
+    if (aiPop) aiPop.remove();
     if (caseFootToolsCleanup) { caseFootToolsCleanup(); caseFootToolsCleanup = null; }
     if (caseProjectKeyHandler) { document.removeEventListener('keydown', caseProjectKeyHandler); caseProjectKeyHandler = null; }
     document.body.style.overflow = '';

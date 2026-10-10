@@ -62,6 +62,7 @@ export async function handleCasePreviewAiTags(request, env) {
       preview_id: preview.id,
       source_file_id: preview.source_file_id,
       ai_tags: cleanTags(current?.ai_tags),
+      manual_tags: cleanTags(current?.manual_tags),
       excluded_tags: cleanTags(current?.excluded_tags),
       status: current?.status || 'idle',
       model: String(current?.model || ''),
@@ -101,6 +102,31 @@ export async function handleCasePreviewAiTags(request, env) {
       if (!tag || tag.length > 12) return json({success: false, message: '标签无效'}, 400);
       base.ai_tags = base.ai_tags.filter(value => value !== tag);
       base.excluded_tags = cleanTags(base.excluded_tags.concat(tag));
+      return json({success: true, row: await saveRow(env, base)});
+    }
+
+    if (action === 'manual-add') {
+      const tag = String(body.tag || '').trim();
+      if (!tag || tag.length > 12) return json({success: false, message: '标签无效'}, 400);
+      if (base.content_key && base.content_key !== expectedContentKey) {
+        base.ai_tags = [];
+        base.manual_tags = [];
+        base.excluded_tags = [];
+        base.status = 'idle';
+        base.model = '';
+        base.error_message = '';
+      }
+      base.content_key = expectedContentKey;
+      base.ai_tags = base.ai_tags.filter(value => value !== tag);
+      base.manual_tags = cleanTags(base.manual_tags.concat(tag));
+      base.excluded_tags = base.excluded_tags.filter(value => value !== tag);
+      return json({success: true, row: await saveRow(env, base)});
+    }
+
+    if (action === 'manual-remove') {
+      const tag = String(body.tag || '').trim();
+      if (!tag || tag.length > 12) return json({success: false, message: '标签无效'}, 400);
+      base.manual_tags = base.manual_tags.filter(value => value !== tag);
       return json({success: true, row: await saveRow(env, base)});
     }
 

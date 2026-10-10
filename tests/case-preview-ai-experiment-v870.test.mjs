@@ -39,8 +39,39 @@ test('数据库：逐图标签独立存储、级联删除、实验键和人工�
   assert.match(sql,/primary key \(experiment_key, preview_id\)/);
   assert.match(sql,/preview_id uuid not null references public\.vf_asset_previews\(id\) on delete cascade/);
   assert.match(sql,/ai_tags text\[\] not null default '\{\}'/);
+  assert.match(sql,/manual_tags text\[\] not null default '\{\}'/);
   assert.match(sql,/excluded_tags text\[\] not null default '\{\}'/);
   assert.match(sql,/vf_preview_ai_tags_admin_write/);
+});
+
+test('服务端：手动标签独立保存，AI重识别不会覆盖',async t=>{
+  const mock=mockFetch({current:{preview_id:previewId,source_file_id:sourceId,ai_tags:['摩托车'],manual_tags:['kiki'],excluded_tags:[],status:'success'}});
+  const old=globalThis.fetch;globalThis.fetch=mock.fetcher;t.after(()=>{globalThis.fetch=old;});
+  const response=await handleCasePreviewAiTags(request({action:'save',previewId,tags:['汉堡'],model:'glm-4v-flash',contentKey}),env);
+  assert.equal(response.status,200);
+  assert.deepEqual(mock.writes.at(-1).ai_tags,['汉堡']);
+  assert.deepEqual(mock.writes.at(-1).manual_tags,['kiki']);
+});
+
+test('服务端：人工新增不走AI整组覆盖，并可单独删除',async t=>{
+  const current={preview_id:previewId,source_file_id:sourceId,ai_tags:['摩托车'],manual_tags:[],excluded_tags:['kiki'],status:'success'};
+  const add=mockFetch({current});let old=globalThis.fetch;globalThis.fetch=add.fetcher;t.after(()=>{globalThis.fetch=old;});
+  let response=await handleCasePreviewAiTags(request({action:'manual-add',previewId,tag:'kiki'}),env);
+  assert.equal(response.status,200);
+  assert.deepEqual(add.writes.at(-1).ai_tags,['摩托车']);
+  assert.deepEqual(add.writes.at(-1).manual_tags,['kiki']);
+  assert.deepEqual(add.writes.at(-1).excluded_tags,[]);
+});
+
+test('服务端：图片变化后人工新增会清理旧内容证据并绑定当前版本',async t=>{
+  const current={preview_id:previewId,source_file_id:sourceId,ai_tags:['旧AI'],manual_tags:['旧人工'],excluded_tags:['旧排除'],status:'success',content_key:'old'};
+  const mock=mockFetch({current});const old=globalThis.fetch;globalThis.fetch=mock.fetcher;t.after(()=>{globalThis.fetch=old;});
+  const response=await handleCasePreviewAiTags(request({action:'manual-add',previewId,tag:'新标签'}),env);
+  assert.equal(response.status,200);
+  assert.deepEqual(mock.writes.at(-1).ai_tags,[]);
+  assert.deepEqual(mock.writes.at(-1).manual_tags,['新标签']);
+  assert.deepEqual(mock.writes.at(-1).excluded_tags,[]);
+  assert.equal(mock.writes.at(-1).content_key,contentKey);
 });
 
 test('服务端：重新识别直接应用，但人工排除词不会被加回',async t=>{
@@ -82,6 +113,8 @@ test('前端：仅实验项目显示一键识别、固定标签顶部、当前�
   assert.match(appSource,/id="case-preview-ai-panel"/);
   assert.match(appSource,/renderCasePreviewAiPanel\(backdrop, p, canManage\)/);
   assert.match(appSource,/data-preview-ai-restore/);
+  assert.match(appSource,/action: 'manual-add'/);
+  assert.match(appSource,/action: 'manual-remove'/);
   assert.match(appSource,/action: 'save', previewId: preview\.id, tags:/);
   assert.match(appSource,/casePreviewAiMatchesQuery/);
   assert.match(appSource,/previewAiMatch\.preview/);

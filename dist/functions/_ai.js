@@ -1269,7 +1269,8 @@ export function parseCaseTagSuggestions(text, elementVocabulary = [], activityVo
 export async function analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, activityVocabulary = []) {
   const key = elementTagApiKey(env);
   if (!key) throw new Error('元素识别未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY（智谱开放平台）。');
-  const base64 = String(imageBase64 || '').replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
+  const raw = String(imageBase64 || '');
+  const base64 = raw.replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
   if (!base64) throw new Error('缺少待识别的图片。');
   if (base64.length > 6 * 1024 * 1024) throw new Error('图片过大，请改用缩略图识别。');
   const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean).slice(0, 100);
@@ -1290,7 +1291,7 @@ export async function analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, activ
       {
         role: 'user',
         content: [
-          { type: 'image_url', image_url: { url: base64 } },
+          { type: 'image_url', image_url: { url: raw } },
           { type: 'text', text: lines.join('\n') }
         ]
       }
@@ -1345,7 +1346,8 @@ export function parseGalleryTagSuggestion(text, vocabulary = []) {
 export async function analyzeGalleryTagWithGlm(env, imageBase64, vocabulary) {
   const key = elementTagApiKey(env);
   if (!key) throw new Error('图片识别未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY（智谱开放平台）。');
-  const base64 = String(imageBase64 || '').replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
+  const raw = String(imageBase64 || '');
+  const base64 = raw.replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
   if (!base64) throw new Error('缺少待识别的图片。');
   if (base64.length > 6 * 1024 * 1024) throw new Error('图片过大，请改用缩略图识别。');
   const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean).slice(0, 60);
@@ -1364,7 +1366,7 @@ export async function analyzeGalleryTagWithGlm(env, imageBase64, vocabulary) {
       {
         role: 'user',
         content: [
-          { type: 'image_url', image_url: { url: base64 } },
+          { type: 'image_url', image_url: { url: raw } },
           { type: 'text', text: lines.join('\n') }
         ]
       }
@@ -1410,7 +1412,8 @@ export function parseLanguageDetection(text) {
 export async function analyzeLanguageWithGlm(env, imageBase64) {
   const key = elementTagApiKey(env);
   if (!key) throw new Error('图片识别未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY（智谱开放平台）。');
-  const base64 = String(imageBase64 || '').replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
+  const raw = String(imageBase64 || '');
+  const base64 = raw.replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
   if (!base64) throw new Error('缺少待识别的图片。');
   if (base64.length > 6 * 1024 * 1024) throw new Error('图片过大，请改用缩略图识别。');
   // 真实素材里「英语+阿语同一张」很常见（双语 banner）：这种一律返回空，
@@ -1429,7 +1432,7 @@ export async function analyzeLanguageWithGlm(env, imageBase64) {
       {
         role: 'user',
         content: [
-          { type: 'image_url', image_url: { url: base64 } },
+          { type: 'image_url', image_url: { url: raw } },
           { type: 'text', text: lines.join('\n') }
         ]
       }
