@@ -89,6 +89,15 @@ datalist { display: none; }
 .case-project-head { padding: 26px 32px 16px; align-items: flex-start; }
 .case-project-titlewrap { min-width: 0; }
 .case-title-row h2 { font-size: 21px; font-weight: 650; letter-spacing: -0.01em; }
+.case-project-fixed-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 10px; }
+.case-project-fixed-tags-label { font-size: 11px; color: #98a2b3; margin-right: 2px; }
+.case-fixed-tag { display: inline-flex; align-items: center; padding: 4px 8px; border: 1px solid #bbf7d0; border-radius: 999px; background: #f0fdf4; color: #166534; font-size: 11px; line-height: 1; }
+.case-ai-scan-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 88px; height: 34px; padding: 0 13px; border: 1px solid #c7d2fe; border-radius: 10px; background: #eef2ff; color: #3730a3; font-size: 12px; font-weight: 650; cursor: pointer; white-space: nowrap; }
+.case-ai-scan-btn:hover { border-color: #a5b4fc; background: #e0e7ff; }
+.case-ai-scan-btn:disabled { color: #818cf8; cursor: wait; opacity: .76; }
+.case-ai-run-progress { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; font-size: 11px; color: #64748b; }
+.case-ai-run-progress[hidden] { display: none !important; }
+.case-ai-run-progress button { border: 0; background: transparent; color: #4f46e5; font-size: 11px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .case-project-sub { margin-top: 8px; font-size: 12.5px; color: #8a94a6; }
 .case-owner-line { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12.5px; color: #8a94a6; }
 .case-owner-line b { color: #4b5563; font-weight: 600; }
@@ -606,6 +615,17 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-foot-tags-pop-tools { flex: 1 0 100%; display: flex; gap: 6px; margin-top: 4px; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
 .case-foot-line { flex: 1 1 auto; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .case-foot-tools { flex: 0 0 auto; display: flex; gap: 6px; }
+.case-preview-ai-panel { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.case-preview-ai-title { font-size: 11px; font-weight: 650; color: #64748b; white-space: nowrap; }
+.case-preview-ai-chips { display: flex; align-items: center; gap: 5px; min-width: 0; overflow-x: auto; padding: 2px 0; scrollbar-width: thin; }
+.case-preview-ai-tag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 5px 8px; border: 1px solid #fdba74; border-radius: 999px; background: #fff7ed; color: #9a3412; font-size: 11px; line-height: 1; }
+.case-preview-ai-tag button { width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #c2410c; font-size: 13px; line-height: 12px; cursor: pointer; }
+.case-preview-ai-tag button:hover { background: #fed7aa; }
+.case-preview-ai-excluded { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 4px 7px; border-radius: 999px; background: #f1f5f9; color: #94a3b8; font-size: 10.5px; text-decoration: line-through; }
+.case-preview-ai-excluded button { padding: 0; border: 0; background: transparent; color: #4f46e5; font-size: 10.5px; cursor: pointer; text-decoration: none; }
+.case-preview-ai-empty { color: #94a3b8; font-size: 11px; white-space: nowrap; }
+.case-preview-ai-status { color: #94a3b8; font-size: 10.5px; white-space: nowrap; }
+.case-preview-ai-status.is-error { color: #dc2626; }
 .case-foot-tool-btn { flex: 0 0 auto; display: inline-flex; align-items: center; padding: 5px 11px; border: 1px dashed #b7c2d4; background: #fff; color: #475569; font-size: 12px; line-height: 1; border-radius: 999px; cursor: pointer; white-space: nowrap; }
 .case-foot-tool-btn:hover { border-color: #64748b; color: #0f172a; background: #f1f5f9; }
 .case-foot-tool-btn:disabled { color: #cbd5e1; border-color: #e2e8f0; background: #fafbfc; cursor: not-allowed; }
@@ -785,7 +805,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260924-case-complete-v869';
+const TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -854,6 +874,9 @@ let chartLibraryPromise = null;
   // 案例库的活动词表改用 case_activity 类型存放（旧版查询碰不到），读取时两类合并。
   const CASE_ACTIVITY_OPTION_TYPE = 'case_activity';
   const CASE_ACTIVITY_LEGACY_NAMES = ['日常活动', 'S级活动', '系列活动'];
+  const CASE_PREVIEW_AI_TABLE = 'vf_preview_ai_tags';
+  const CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID = 'bfa82ce5-fca0-403b-8f7e-c6b6eafaf4c5';
+  const CASE_PREVIEW_AI_EXPERIMENT_TITLE = 'AugPicks campaign (8.27-8.31)';
   const LIBRARY_THUMBNAIL_BACKFILL_WIDTH = 480;
   const LIBRARY_THUMBNAIL_BACKFILL_DELAY_MS = 1200;
   // GIF 小动图逐个预览生成，用逐预览的标记 tag 记录（一个案例项目可能有多张 GIF 物料）。
@@ -1071,6 +1094,7 @@ let chartLibraryPromise = null;
     libraryPreviewUrlSignedAt: {},
     libraryBookmarkMemberIds: new Set(),
     libraryBookmarkGroups: [],
+    previewAiTagsByPreviewId: new Map(),
     // DIY 回收站在真正清理云端前，先让父页素材库同步隐藏同一记录。
     librarySessionHiddenSourceIds: new Set(),
     libraryFavorites: new Set(),
@@ -1113,6 +1137,8 @@ let chartLibraryPromise = null;
   const LIBRARY_PREVIEW_NODE_CACHE_LIMIT = 320;
   const libraryPreviewImageNodeCache = new Map();
   const libraryPreviewSigningPromises = new Map();
+  const casePreviewAiRuns = new Map();
+  let previewAiTagsTableReady = null;
   // path → 失败时间。只冷却一小段时间，不整场会话拉黑：一次网络抖动就让封面
   // 去下几 MB 到十几 MB 的原图、并且再也回不到小图，代价远大于重试一次。
   const LIBRARY_THUMB_FAIL_COOLDOWN_MS = 60000;
@@ -3280,12 +3306,13 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
     const materialTypes = projectMaterials
       ? projectMaterials.map(function(p) { return p.material_type || ''; })
       : [preview.material_type || ''];
+    const previewElementTags = casePreviewAiTags(preview.id);
     const vocab = [
       libraryKindLabel(libraryKindOfSource(source)),
       optionNameById(source.country_id),
       optionNameById(source.activity_id),
       optionNameById(source.category_id),
-    ].concat(materialTypes, visibleLibraryTags(source));
+    ].concat(materialTypes, visibleLibraryTags(source), previewElementTags);
     const parts = [
       source.title,
       source.owner_name,
@@ -4038,6 +4065,210 @@ return;
       img.onerror = function() { URL.revokeObjectURL(url); reject(new Error('图片读取失败')); };
       img.src = url;
     });
+  }
+
+  function isCasePreviewAiExperimentSource(source) {
+    return !!source
+      && source.id === CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID
+      && String(source.title || '').trim() === CASE_PREVIEW_AI_EXPERIMENT_TITLE;
+  }
+
+  function casePreviewAiRow(previewId) {
+    return state.previewAiTagsByPreviewId.get(String(previewId || '')) || null;
+  }
+
+  function casePreviewAiTags(previewId) {
+    const row = casePreviewAiRow(previewId);
+    const preview = state.libraryPreviews.find(function(item) { return item.id === previewId; });
+    if (row && preview && row.content_key && row.content_key !== casePreviewAiContentKey(preview)) return [];
+    return row && Array.isArray(row.ai_tags) ? row.ai_tags.filter(Boolean) : [];
+  }
+
+  function caseProjectFixedTagsHtml(source) {
+    const sel = caseChipSelectionOf(source);
+    const chips = [];
+    ['tag1', 'country', 'activity', 'strategy', 'format', 'quantity'].forEach(function(key) {
+      caseTagSelValues(sel, key).forEach(function(value) { chips.push({ key: key, value: value }); });
+    });
+    return chips.map(function(item) {
+      return '<span class="case-fixed-tag" data-case-tag-kind="' + item.key + '">' + escapeHtml(libraryDisplayLabel(item.value)) + '</span>';
+    }).join('');
+  }
+
+  function casePreviewAiContentKey(preview) {
+    return [preview?.preview_path || '', preview?.preview_size_bytes || 0, preview?.updated_at || ''].join('|');
+  }
+
+  function isPreviewAiTagsUnavailableError(error) {
+    return /vf_preview_ai_tags|relation.*does not exist|schema cache|请求路径无效/i.test(String(error && error.message || error || ''));
+  }
+
+  async function loadPreviewAiTagsForSource(sourceId) {
+    if (!state.supabase || sourceId !== CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID) return [];
+    const result = await state.supabase.from(CASE_PREVIEW_AI_TABLE)
+      .select('experiment_key,preview_id,source_file_id,ai_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at')
+      .eq('experiment_key', 'augpicks-v1')
+      .eq('source_file_id', sourceId);
+    if (result.error) {
+      if (isPreviewAiTagsUnavailableError(result.error)) {
+        previewAiTagsTableReady = false;
+        return [];
+      }
+      throw result.error;
+    }
+    previewAiTagsTableReady = true;
+    (result.data || []).forEach(function(row) { state.previewAiTagsByPreviewId.set(row.preview_id, row); });
+    return result.data || [];
+  }
+
+  async function postCasePreviewAiTagAction(payload) {
+    const token = (state.session && state.session.access_token) || '';
+    if (!token) throw new Error(state.lang === 'zh' ? '登录已失效，请重新登录' : 'Please sign in again.');
+    const response = await fetch('/api/case-preview-ai-tags', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(function() { return {}; });
+    if (!response.ok || !data.success) throw new Error(translateServerError(data.message) || ('HTTP ' + response.status));
+    if (data.row && data.row.preview_id) state.previewAiTagsByPreviewId.set(data.row.preview_id, data.row);
+    return data.row || null;
+  }
+
+  function casePreviewAiStatusText(row, preview) {
+    if (!row) return state.lang === 'zh' ? '未识别' : 'Not analyzed';
+    if (preview && row.content_key && row.content_key !== casePreviewAiContentKey(preview)) return state.lang === 'zh' ? '图片已变化，标签待重新识别' : 'Image changed; re-analysis needed';
+    if (row.status === 'running') return state.lang === 'zh' ? '识别中…' : 'Analyzing…';
+    if (row.status === 'failed') return state.lang === 'zh' ? '识别失败' : 'Failed';
+    if (row.status === 'expired') return state.lang === 'zh' ? '结果已过期' : 'Expired';
+    if (row.status === 'success') return (row.ai_tags || []).length
+      ? (state.lang === 'zh' ? 'AI直接应用' : 'Applied by AI')
+      : (state.lang === 'zh' ? '已识别，未发现标签' : 'Analyzed, no tags');
+    return state.lang === 'zh' ? '未识别' : 'Not analyzed';
+  }
+
+  function renderCasePreviewAiPanel(backdrop, preview, canManage) {
+    const panel = backdrop && backdrop.querySelector('#case-preview-ai-panel');
+    if (!panel || !preview) return;
+    const row = casePreviewAiRow(preview.id);
+    const tags = casePreviewAiTags(preview.id);
+    const status = casePreviewAiStatusText(row, preview);
+    const excluded = row && Array.isArray(row.excluded_tags) ? row.excluded_tags.filter(Boolean) : [];
+    panel.dataset.previewId = preview.id;
+    panel.innerHTML = '<span class="case-preview-ai-title">' + (state.lang === 'zh' ? '当前物料 AI 标签' : 'Current material AI tags') + '</span>'
+      + '<div class="case-preview-ai-chips">'
+      + tags.map(function(tag) {
+        return '<span class="case-preview-ai-tag">' + escapeHtml(tag)
+          + (canManage ? '<button type="button" data-preview-ai-exclude="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '删除错误标签 ' : 'Remove incorrect tag ') + tag) + '">×</button>' : '')
+          + '</span>';
+      }).join('')
+      + (!tags.length ? '<span class="case-preview-ai-empty">' + escapeHtml(status) + '</span>' : '')
+      + excluded.map(function(tag) { return canManage ? '<span class="case-preview-ai-excluded">已排除 ' + escapeHtml(tag) + '<button type="button" data-preview-ai-restore="' + escapeAttr(tag) + '">撤销</button></span>' : ''; }).join('')
+      + '</div><span class="case-preview-ai-status' + (row && row.status === 'failed' ? ' is-error' : '') + '">' + escapeHtml(status) + '</span>';
+  }
+
+  function updateCasePreviewAiRunUi(sourceId) {
+    const backdrop = document.getElementById('case-project-backdrop');
+    if (!backdrop || backdrop.dataset.sourceId !== sourceId) return;
+    const run = casePreviewAiRuns.get(sourceId);
+    const button = backdrop.querySelector('#case-ai-recognize-all');
+    const progress = backdrop.querySelector('#case-ai-run-progress');
+    if (!button || !progress) return;
+    if (!run) {
+      button.disabled = false;
+      button.textContent = state.lang === 'zh' ? '一键识别' : 'Analyze all';
+      progress.hidden = true;
+      return;
+    }
+    const finished = run.success + run.failed;
+    button.disabled = !!run.running;
+    button.textContent = run.running
+      ? (state.lang === 'zh' ? ('识别中 ' + finished + '/' + run.total) : ('Analyzing ' + finished + '/' + run.total))
+      : (state.lang === 'zh' ? '重新识别' : 'Analyze again');
+    progress.hidden = false;
+    progress.innerHTML = '<span>' + escapeHtml(state.lang === 'zh'
+      ? ('完成 ' + run.success + ' · 失败 ' + run.failed + (run.skipped ? ' · 跳过 ' + run.skipped : ''))
+      : ('Done ' + run.success + ' · Failed ' + run.failed + (run.skipped ? ' · Skipped ' + run.skipped : ''))) + '</span>'
+      + (run.running ? '<button type="button" id="case-ai-cancel-run">' + (state.lang === 'zh' ? '停止后续任务' : 'Stop remaining') + '</button>' : '')
+      + (!run.running && run.failed ? '<button type="button" id="case-ai-retry-failed">' + (state.lang === 'zh' ? '重试失败项' : 'Retry failed') + '</button>' : '');
+  }
+
+  async function recognizeCasePreviewAiTags(source, preview, run) {
+    const contentKey = casePreviewAiContentKey(preview);
+    await postCasePreviewAiTagAction({action: 'status', status: 'running', previewId: preview.id, runId: run.id, contentKey: contentKey});
+    try {
+      await signVisibleLibraryUrls([{source: source, preview: preview}]);
+      const url = state.libraryPreviewUrls[preview.preview_path] || '';
+      if (!url) throw new Error(state.lang === 'zh' ? '原图链接不可用' : 'Image URL unavailable');
+      const imageResponse = await fetch(url, {mode: 'cors'});
+      if (!imageResponse.ok) throw new Error('HTTP ' + imageResponse.status);
+      const blob = await imageResponse.blob();
+      const file = new File([blob], String(preview.preview_filename || 'preview'), {type: blob.type || 'image/jpeg'});
+      const image = await caseElementThumbnailDataUrl(file);
+      const token = (state.session && state.session.access_token) || '';
+      const response = await fetch('/api/analyze-elements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({image: image, vocabulary: FILTER_SECTIONS_CONFIG.element.values, activities: []})
+      });
+      const data = await response.json().catch(function() { return {}; });
+      if (!response.ok || !data.success) throw new Error(translateServerError(data.message) || ('HTTP ' + response.status));
+      const row = await postCasePreviewAiTagAction({
+        action: 'save', previewId: preview.id, tags: Array.isArray(data.elements) ? data.elements : [],
+        model: data.provider || 'glm-4v-flash', contentKey: contentKey, runId: run.id
+      });
+      return row;
+    } catch (error) {
+      try {
+        await postCasePreviewAiTagAction({action: 'status', status: 'failed', previewId: preview.id, runId: run.id, contentKey: contentKey, error: error.message || '识别失败'});
+      } catch (_statusError) {}
+      throw error;
+    }
+  }
+
+  async function startCasePreviewAiRun(source, materials, onlyIds) {
+    if (!isCasePreviewAiExperimentSource(source)) return;
+    if (previewAiTagsTableReady !== true) {
+      await loadPreviewAiTagsForSource(source.id);
+      if (previewAiTagsTableReady !== true) throw new Error(state.lang === 'zh' ? '请先执行 sql/021_preview_ai_tags_experiment.sql。' : 'Run sql/021_preview_ai_tags_experiment.sql first.');
+    }
+    const wanted = onlyIds ? new Set(onlyIds) : null;
+    const eligible = materials.filter(function(preview) {
+      if (wanted && !wanted.has(preview.id)) return false;
+      return !!preview.preview_path && !String(preview.preview_mime_type || '').toLowerCase().startsWith('video/');
+    });
+    const skipped = wanted ? 0 : materials.length - eligible.length;
+    if (!eligible.length) throw new Error(state.lang === 'zh' ? '没有可识别的图片物料。' : 'No supported images to analyze.');
+    const existing = casePreviewAiRuns.get(source.id);
+    if (existing && existing.running) return existing;
+    const run = {id: crypto.randomUUID(), sourceId: source.id, running: true, cancelled: false, total: eligible.length, success: 0, failed: 0, skipped: skipped, failedIds: []};
+    casePreviewAiRuns.set(source.id, run);
+    updateCasePreviewAiRunUi(source.id);
+    let cursor = 0;
+    const worker = async function() {
+      while (!run.cancelled) {
+        const index = cursor++;
+        if (index >= eligible.length) return;
+        const preview = eligible[index];
+        try { await recognizeCasePreviewAiTags(source, preview, run); run.success += 1; }
+        catch (_error) { run.failed += 1; run.failedIds.push(preview.id); }
+        const backdrop = document.getElementById('case-project-backdrop');
+        if (backdrop && backdrop.dataset.sourceId === source.id) {
+          const currentId = backdrop.dataset.currentPreviewId;
+          const currentPreview = materials.find(function(item) { return item.id === currentId; });
+          if (currentPreview) renderCasePreviewAiPanel(backdrop, currentPreview, true);
+        }
+        updateCasePreviewAiRunUi(source.id);
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    run.running = false;
+    updateCasePreviewAiRunUi(source.id);
+    renderLibraryGrid();
+    showCaseToast(state.lang === 'zh'
+      ? ('逐图识别完成：成功 ' + run.success + '，失败 ' + run.failed + (run.cancelled ? '，已停止后续任务' : ''))
+      : ('Analysis finished: ' + run.success + ' succeeded, ' + run.failed + ' failed'), 4200);
+    return run;
   }
 
   // 上传时请求 AI 元素建议（只建议，不自动写入；用户点一下才进标签）。
@@ -5105,7 +5336,8 @@ return;
         refreshLibraryFilterCounts();
         await Promise.all([
           loadLibraryPreviews(),
-          loadLibraryBookmarkGroups()
+          loadLibraryBookmarkGroups(),
+          loadPreviewAiTagsForSource(CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID)
         ]);
         state.libraryDataLoaded = true;
       })();
@@ -5130,6 +5362,8 @@ return;
     state.libraryDataPromise = null;
     state.libraryPreviewUrls = {};
     state.libraryPreviewUrlSignedAt = {};
+    state.previewAiTagsByPreviewId.clear();
+    previewAiTagsTableReady = null;
     libraryPreviewImageNodeCache.clear();
     libraryUnavailableThumbnailPaths.clear();
     state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
@@ -7257,6 +7491,7 @@ return;
     const tabValue = focusType || (caseMaterialTypeSet(state.libraryFilters.tag2 || 'all') ? state.libraryFilters.tag2 : 'all');
     const pick = caseCoverFor(source, tabValue) || { cover: materials[0], group: materials };
     const canManage = canManageSource(source);
+    const aiExperiment = isCasePreviewAiExperimentSource(source);
     // 预热使用者名单：老素材可能只存了姓名/或把编号当姓名存，联系时要靠名单解析出真正的大象编号
     void loadTeamMembers().catch(function() {});
     const owner = source.owner_name || '';
@@ -7294,9 +7529,11 @@ return;
                 ${source.project_note ? `<span class="case-dot">·</span><a class="case-project-link" href="${escapeAttr(source.project_note)}" target="_blank" rel="noopener">${state.lang === 'zh' ? '项目链接' : 'Project Link'} ↗</a>` : ''}
               </div>
               <div class="case-owner-line">${owner ? `${state.lang === 'zh' ? '源文件请联系' : 'For the source file, contact'} <b>${escapeHtml(owner)}</b>${ownerContact ? (state.lang === 'zh' ? `（大象 ${escapeHtml(ownerContact)}）` : ` (Daxiang ${escapeHtml(ownerContact)})`) : ''}` : (state.lang === 'zh' ? '源文件未上传' : 'Source file not uploaded')}</div>
+              ${aiExperiment ? `<div class="case-project-fixed-tags"><span class="case-project-fixed-tags-label">${state.lang === 'zh' ? '项目固定标签' : 'Project tags'}</span>${caseProjectFixedTagsHtml(source)}</div>` : ''}
             </div>
           </div>
           <div class="case-head-actions">
+            ${aiExperiment && canManage ? `<button type="button" class="case-ai-scan-btn" id="case-ai-recognize-all">${state.lang === 'zh' ? '一键识别' : 'Analyze all'}</button><span class="case-ai-run-progress" id="case-ai-run-progress" hidden></span>` : ''}
             ${canManage ? `<button type="button" class="icon-btn" id="case-more-btn" aria-label="${state.lang === 'zh' ? '更多操作' : 'More actions'}">⋯</button>` : ''}
             <button type="button" class="icon-btn case-project-close" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}"><svg viewBox="0 0 16 16" width="15" height="15"><path d="m4 4 8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
           </div>
@@ -7331,10 +7568,10 @@ return;
           </aside>
         </div>
         <footer class="case-project-foot">
-          <div class="case-foot-line">
+          ${aiExperiment ? `<div class="case-preview-ai-panel" id="case-preview-ai-panel"></div>` : `<div class="case-foot-line">
             <div class="case-foot-tags" id="case-foot-tags">${caseFootTagsHtml(source)}</div>
             ${canManage ? `<div class="case-foot-tools"><button type="button" class="case-foot-tool-btn" id="case-foot-add-tag" title="${state.lang === 'zh' ? '点击标签即时保存到云端' : 'Click a tag to save instantly'}">＋ ${state.lang === 'zh' ? '标签' : 'Tags'}</button><button type="button" class="case-foot-tool-btn" id="case-foot-ai-tag" title="${state.lang === 'zh' ? 'AI 识别画面元素并建议标签' : 'AI suggests tags from the cover'}">${state.lang === 'zh' ? 'AI 识别' : 'AI Tags'}</button></div>` : ''}
-          </div>
+          </div>`}
           <div class="case-foot-actions">
             <button type="button" class="case-secondary-btn" id="case-download-all">${state.lang === 'zh' ? '下载图片物料' : 'Download Images'}</button>
             <button type="button" class="case-primary-btn" id="case-download-source" ${String(source.download_link || '').trim() ? '' : 'disabled title="当前无下载链接，请联系所有者"'}>${state.lang === 'zh' ? '下载源文件' : 'Download Source'}</button>
@@ -7352,6 +7589,7 @@ return;
         <input type="file" id="case-append-input" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,.gif,.mp4,.mov,.webm" multiple hidden>
         ${canManage ? `<div class="case-more-menu" id="case-more-menu" hidden><button type="button" id="case-append-btn">＋ ${state.lang === 'zh' ? '追加物料' : 'Add Materials'}</button><button type="button" id="case-edit-btn">✎ ${state.lang === 'zh' ? '编辑信息' : 'Edit Info'}</button><button type="button" class="danger" id="case-delete-btn">${state.lang === 'zh' ? '删除项目' : 'Delete Project'}</button></div>` : ''}
       </div>`;
+    backdrop.dataset.sourceId = source.id;
     document.body.append(backdrop);
     document.body.style.overflow = 'hidden';
     let currentId = pick.cover.id;
@@ -7369,7 +7607,9 @@ return;
       const p = materials.find(m => m.id === previewId);
       if (!p) return;
       currentId = p.id;
+      backdrop.dataset.currentPreviewId = p.id;
       renderStage(p);
+      if (aiExperiment) renderCasePreviewAiPanel(backdrop, p, canManage);
       const stageInfo = backdrop.querySelector('#case-stage-info');
       if (stageInfo) {
         stageInfo.textContent = [
@@ -7393,6 +7633,24 @@ return;
       renderStage(current());
       renderSideGrid();
     });
+    if (aiExperiment) {
+      void loadPreviewAiTagsForSource(source.id).then(function() {
+        if (!backdrop.isConnected) return;
+        show(currentId);
+        updateCasePreviewAiRunUi(source.id);
+      }).catch(function(error) {
+        console.warn('Preview AI tags unavailable:', error && error.message);
+      });
+      const recognizeButton = backdrop.querySelector('#case-ai-recognize-all');
+      if (recognizeButton) recognizeButton.onclick = function(event) {
+        event.stopPropagation();
+        startCasePreviewAiRun(source, materials).catch(function(error) {
+          alert(state.lang === 'zh' ? ('一键识别未开始：' + (error.message || '请重试')) : ('Analysis did not start: ' + (error.message || 'Please retry')));
+          updateCasePreviewAiRunUi(source.id);
+        });
+      };
+      updateCasePreviewAiRunUi(source.id);
+    }
     let caseSideMode = 'grid2';
     let caseSideLang = 'all';
     // 多选（批量改类型/删除）：默认不开，开了才在卡片上出勾选框、底部才出操作条
@@ -8051,6 +8309,57 @@ return;
     });
     backdrop.addEventListener('click', function(event) {
       if (event.target === backdrop) { closeCaseProjectModal(); return; }
+      const excludeAiTag = event.target.closest('[data-preview-ai-exclude]');
+      if (excludeAiTag) {
+        event.stopPropagation();
+        const panel = excludeAiTag.closest('#case-preview-ai-panel');
+        const previewId = panel && panel.dataset.previewId;
+        const tag = excludeAiTag.getAttribute('data-preview-ai-exclude');
+        if (!previewId || !tag) return;
+        excludeAiTag.disabled = true;
+        postCasePreviewAiTagAction({action: 'exclude', previewId: previewId, tag: tag}).then(function() {
+          if (backdrop.isConnected && currentId === previewId) renderCasePreviewAiPanel(backdrop, current(), canManage);
+          renderLibraryGrid();
+        }).catch(function(error) {
+          excludeAiTag.disabled = false;
+          alert(state.lang === 'zh' ? ('标签删除失败：' + (error.message || '请重试')) : ('Failed to remove tag: ' + (error.message || 'Please retry')));
+        });
+        return;
+      }
+      const restoreAiTag = event.target.closest('[data-preview-ai-restore]');
+      if (restoreAiTag) {
+        event.stopPropagation();
+        const panel = restoreAiTag.closest('#case-preview-ai-panel');
+        const previewId = panel && panel.dataset.previewId;
+        const tag = restoreAiTag.getAttribute('data-preview-ai-restore');
+        if (!previewId || !tag) return;
+        restoreAiTag.disabled = true;
+        postCasePreviewAiTagAction({action: 'restore', previewId: previewId, tag: tag}).then(function() {
+          if (backdrop.isConnected && currentId === previewId) renderCasePreviewAiPanel(backdrop, current(), canManage);
+          renderLibraryGrid();
+        }).catch(function(error) {
+          restoreAiTag.disabled = false;
+          alert(state.lang === 'zh' ? ('撤销失败：' + (error.message || '请重试')) : ('Restore failed: ' + (error.message || 'Please retry')));
+        });
+        return;
+      }
+      if (event.target.closest('#case-ai-cancel-run')) {
+        event.stopPropagation();
+        const run = casePreviewAiRuns.get(source.id);
+        if (run) run.cancelled = true;
+        updateCasePreviewAiRunUi(source.id);
+        return;
+      }
+      if (event.target.closest('#case-ai-retry-failed')) {
+        event.stopPropagation();
+        const run = casePreviewAiRuns.get(source.id);
+        const failedIds = run && Array.isArray(run.failedIds) ? run.failedIds.slice() : [];
+        if (!failedIds.length) return;
+        startCasePreviewAiRun(source, materials, failedIds).catch(function(error) {
+          alert(state.lang === 'zh' ? ('重试未开始：' + (error.message || '请重试')) : ('Retry did not start: ' + (error.message || 'Please retry')));
+        });
+        return;
+      }
       const del = event.target.closest('[data-case-del]');
       if (del) {
         event.stopPropagation();
@@ -11097,7 +11406,7 @@ return;
     return 'id,source_file_id,preview_path,preview_filename,preview_mime_type,preview_size_bytes,width,height'
       + (withMaterialType ? ',material_type' : '')
       + (previewLanguageReady ? ',language' : '')
-      + ',sort_order,created_at';
+      + ',sort_order,created_at,updated_at';
   }
   function isMissingLanguageColumnError(error) {
     const message = String((error && error.message) || error || '');
@@ -11533,6 +11842,12 @@ return;
     }
     return '';
   }
+  function casePreviewAiMatchesQuery(previewId, query) {
+    const tokens = String(query || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!tokens.length) return false;
+    const text = casePreviewAiTags(previewId).join(' ').toLowerCase();
+    return !!text && tokens.every(function(token) { return text.includes(token); });
+  }
   // 网格里每个项目只出一张卡片，封面跟随当前分类标签（搜索词是物料类型时优先跟随搜索词）
   function collapseCaseProjectItems(items) {
     const fallbackType = state.libraryFilters.tag2 || 'all';
@@ -11543,6 +11858,18 @@ return;
       if (!isCaseProject(item.source)) { out.push(item); return; }
       if (seen.has(item.source.id)) return;
       seen.add(item.source.id);
+      // 单项目逐图标签实验：关键词直接命中某张物料的 AI 标签时，项目卡临时使用
+      // 这张真实命中图。只影响搜索封面，不改项目默认封面。
+      const previewAiMatch = state.libraryFilters.query
+        ? items.find(function(candidate) {
+            return candidate.source.id === item.source.id
+              && casePreviewAiMatchesQuery(candidate.preview.id, state.libraryFilters.query);
+          })
+        : null;
+      if (previewAiMatch) {
+        out.push({ source: item.source, preview: previewAiMatch.preview, url: previewAiMatch.url || '', thumbUrl: previewAiMatch.thumbUrl || '', isCaseProjectCard: true });
+        return;
+      }
       // 只有项目里真有这个类型才切换封面，避免匹配来自标签时把卡片弄丢
       const typeValue = (queryType && projectMatchesType(item.source, queryType)) ? queryType : fallbackType;
       const pick = caseCoverFor(item.source, typeValue);
