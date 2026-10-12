@@ -132,8 +132,7 @@ test('v894 浮窗里只出「库内确实存在」的标签，标签可点（点
   assert.match(appSource, /class="library-expansion-chip is-clickable" data-library-expansion-term="/);
   assert.match(appSource, /库内已有的标签；点一下改成只搜这个词/);
   assert.match(appSource, /target\.closest\('\[data-library-expansion-term\]'\)/);
-  assert.match(appSource, /state\.libraryFilters\.query = term;/);
-  // 搜索框左边那一排 chips 已经不要了；「AI 新词」这一层也停了
+  assert.match(appSource, /state\.libraryFilters\.query = term;/);  // 搜索框左边那一排 chips 已经不要了；「AI 新词」这一层也停了
   assert.doesNotMatch(appSource, /id="library-expansion-chips"/);
   assert.doesNotMatch(appSource, /AI 新词/);
   assert.doesNotMatch(appSource, /is-fresh/);
@@ -141,6 +140,13 @@ test('v894 浮窗里只出「库内确实存在」的标签，标签可点（点
   const css = readFileSync(join(here, '..', 'styles.css'), 'utf8');
   assert.match(css, /\.library-expansion-chip\.is-clickable \{/);
   assert.match(css, /\.search-history-items \{\s*\n\s*align-items: center;/);
+});
+
+test('v896 点标签：搜索框显示界面语言的写法，过滤仍按库内标签原文', () => {
+  assert.match(appSource, /const displayLabel = libraryChipDisplayLabel\(term\);/, '框里写显示名（英文界面不显示中文）');
+  assert.match(appSource, /input\.value = displayLabel;/);
+  assert.match(appSource, /state\.libraryFilters\.query = term;/, '实际过滤用库内标签原文（中文），保证精确命中');
+  assert.match(appSource, /input\.focus\(\); {8}\/\/ 保持聚焦：浮窗不关，可以接着点下一个标签继续延伸/);
 });
 
 test('v894 匹配与缓存：只用库内那一层，缓存键升 v7', () => {

@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-related-recall-v895`（标签平表 + 相关词列；搜索框下方浮窗显示「库内关联标签」= 词表 related 列 + AI 从库内全量标签里挑的，**只出库内确实存在的标签**；原「历史搜索」已删）；部署 `047b0d38-6b65-4f94-862f-b6c586aa4546`，2026-10-12 本机 wrangler 直发 | 实测 2026-10-12 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-related-click-en-v896`（标签平表 + 相关词列；搜索框下方浮窗显示「库内关联标签」= 词表 related 列 + AI 从库内全量标签里挑的；点标签改成只搜它、**框里仍显示界面语言**）；部署 `cf77b25c-d534-4306-9831-f83837bdecdd`，2026-10-12 本机 wrangler 直发 | 实测 2026-10-12 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
 | 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`e054347`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-12 |
-| 自动化测试 | `node --test tests/` → **391/391 通过**（含标签词表平表 / 相关词 / 库内标签口径 12 项） | 实测 2026-10-12 |
+| 自动化测试 | `node --test tests/` → **392/392 通过**（含标签词表平表 / 相关词 / 库内标签口径 / 点击显示语言 13 项） | 实测 2026-10-12 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在） | 实测 2026-10-12 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -412,11 +412,12 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 >   3. 提示词只说"从词表里挑"，没说"要挑全"，模型偏保守（**推断**）
 >   修法（三条一起）：端点自己读 `vf_tag_vocabulary` 全量标签（≤300）合并前端词表再喂模型；提示词加「0.5 要挑全」（同场景/赛事/配套物件/相关的人都算，给「足球 → 世界杯、球衣、体育赛事、球场、运动员、球迷」的例子）；客户端判断改成「**词表 ∪ 库内在用的标签/物料类型/筛选项**」（`libraryLabelsInUseSet()`）。
 > - **浮窗内容 = 两层来源**：① **零 AI 的确定性关联**（词表里那一行 `related` 列填了什么，**不用等 AI 立刻显示**）② AI 从库内标签里挑的（去重追加），合计上限 10，搜索词本身不显示。
+> - **⭐ v896 修「英文界面点标签，搜索框变中文」**：点击浮窗里的标签时，**框里显示界面语言的写法**（英文界面点 `Football` 保持 `Football`），但**实际过滤仍用库内标签原文（中文）**——按中文标签才是精确命中、不会漏物料；同时点完把焦点还给输入框（浮窗不关，可以接着点下一个标签继续延伸）。
 > - **v894 删掉的东西**：`state.libraryFilters.searchHistory` + 「历史搜索」浮窗内容（整条链路删干净）、搜索框左侧那一排 `#library-expansion-chips`、以及「AI 新词」层在界面上的所有痕迹（`libraryExpansionFresh` / `is-fresh` / 空结果提示 chip）。
 > - 前端缓存键升到 `vf_library_search_expansion_v7`（v6 里存着「新造词」那一层，必须升）
 > - **v891 删掉的**（别再找）：`AI 自动归类`按钮、折叠分组/缩进、上位词 `parent_id`、别名浮窗、`/api/tag-vocabulary-suggest`、`parseVocabularySuggestions` / `suggestVocabularyGroupsWithGlm`、`tagVocabularyDescendantsOf`
 >
-> **已验证**：391/391 测试全绿；`select=related` 实测该列存在；测试站两处版本号均为 `20261012-related-recall-v895`；两个端点存在且要登录；本地实机（dist + Admin 预览）打字后浮窗正常弹出「库内关联标签」（本地没登录属降级路径，说明渲染链路没崩）；用户实测中文搜「甜点」→ 关联标签全是库内词（蛋糕/饼干/冰淇淋/甜甜圈）。
+> **已验证**：392/392 测试全绿；`select=related` 实测该列存在；测试站两处版本号 + `styles.css` 均为 `20261012-related-click-en-v896`；线上 app.js 里确实带着新的点击逻辑（`displayLabel`）；两个端点存在且要登录；本地实机（dist + Admin 预览）打字后浮窗正常弹出「库内关联标签」；用户实测中文搜「甜点」→ 关联标签全是库内词（蛋糕/饼干/冰淇淋/甜甜圈），英文界面点标签不再变中文（v896）。
 > **未验证（要人点一下）**：v895 之后搜「足球」是否真的能出 世界杯/球衣/体育赛事（本轮就是修这个，需要再搜一次确认）；词表「AI 建议」按钮。
 > **还没解决 / 可能的下一步**：① AI 挑词仍由模型决定，**最稳的"要全"手段是在词表里给大词填 `related`**（零 AI、立刻生效、人工可校正）② 逐图 AI 标签面板里没有「词表里没有 = 新词」的标记（现在的 `is-new` 是"本轮新认出"）③ 端点喂给模型的库内标签上限 300，标签总量很大时仍可能截断（可改成按搜索词先粗筛再喂）。
 >

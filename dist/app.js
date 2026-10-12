@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-related-recall-v895';
+const TOOL_UI_VERSION = '20261012-related-click-en-v896';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3817,11 +3817,17 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         event.preventDefault();
         const term = termButton.getAttribute('data-library-expansion-term') || '';
         if (!term) return;
-        const input = document.getElementById('library-search');
-        if (input) input.value = term;
+        // v896：搜索框里显示「界面语言」的写法（英文界面点 Football，框里不该变成中文「足球」），
+        // 但实际过滤仍用库内标签原文（中文）——按中文标签才是精确命中，不会漏物料。
+        const displayLabel = libraryChipDisplayLabel(term);
         state.libraryFilters.query = term;
         state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
-        renderLibraryGrid();
+        renderLibraryGrid();   // 它会按 query 重画搜索框，所以显示值必须在它之后写
+        const input = document.getElementById('library-search');
+        if (input) {
+          input.value = displayLabel;
+          input.focus();        // 保持聚焦：浮窗不关，可以接着点下一个标签继续延伸
+        }
         applyLibraryQueryExpansion(term);
       }
     });
