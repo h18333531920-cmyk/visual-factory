@@ -836,7 +836,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v873';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v874';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -14170,12 +14170,13 @@ function libraryTagsForForm(formData, kind) {
   // 云端存译名，第一次遇到新词时问一次 AI 落库，之后全站命中；表不存在则永久退回显示原文。
   const TAG_VOCABULARY_TABLE = 'vf_tag_vocabulary';
   const TAG_TRANSLATE_ENDPOINT = '/api/tag-translate';
-  const TAG_TRANSLATE_BATCH = 40;
+  const TAG_TRANSLATE_BATCH = 20;
   const TAG_TRANSLATE_MAX_CHARS = 20;
+  const TAG_TRANSLATE_MAX_ATTEMPTS = 2;
   let tagVocabularyReady = null;
   let tagVocabularyPromise = null;
   const tagVocabularyByName = new Map();
-  const tagTranslateRequested = new Set();
+  const tagTranslateAttempts = new Map();
 
   function isMissingTagVocabularyError(error) {
     return /vf_tag_vocabulary|relation.*does not exist|schema cache|请求路径无效/i.test(String(error && error.message || error || ''));
@@ -14227,37 +14228,43 @@ function libraryTagsForForm(formData, kind) {
 
   async function translateMissingTagNames(labels) {
     if (tagVocabularyReady !== true || state.lang !== 'en') return 0;
-    const missing = [];
+    const pending = [];
     for (const raw of labels || []) {
       const label = String(raw == null ? '' : raw).trim();
-      if (!label || tagVocabularyByName.get(label) || tagTranslateRequested.has(label)) continue;
-      missing.push(label);
-      if (missing.length >= TAG_TRANSLATE_BATCH) break;
+      if (!label || tagVocabularyByName.get(label)) continue;
+      if (pending.indexOf(label) < 0) pending.push(label);
     }
-    if (!missing.length) return 0;
-    // 已请求过的词不再重复请求（哪怕这次没翻出来），避免每次加载都打接口
-    missing.forEach(function (label) { tagTranslateRequested.add(label); });
-    try {
-      const token = (state.session && state.session.access_token) || '';
-      const response = await fetch(TAG_TRANSLATE_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ terms: missing })
-      });
-      const data = await response.json().catch(function () { return {}; });
-      const map = data && data.map && typeof data.map === 'object' ? data.map : {};
-      let added = 0;
-      Object.keys(map).forEach(function (nameZh) {
-        const nameEn = String(map[nameZh] || '').trim();
-        if (!nameZh || !nameEn || tagVocabularyByName.get(nameZh)) return;
-        tagVocabularyByName.set(nameZh, nameEn);
-        added += 1;
-      });
-      return added;
-    } catch (error) {
-      console.warn('标签翻译失败:', error && error.message);
-      return 0;
+    if (!pending.length) return 0;
+    let added = 0;
+    // 模型一次给太多词会漏（实测 40 个必漏几个），所以小批多轮；
+    // 漏掉的词允许重试，但按词计数、超过上限就不再请求，避免每次加载都打接口。
+    for (let round = 0; round < 2; round += 1) {
+      const batch = pending.filter(function (label) {
+        return !tagVocabularyByName.get(label) && (tagTranslateAttempts.get(label) || 0) < TAG_TRANSLATE_MAX_ATTEMPTS;
+      }).slice(0, TAG_TRANSLATE_BATCH);
+      if (!batch.length) break;
+      batch.forEach(function (label) { tagTranslateAttempts.set(label, (tagTranslateAttempts.get(label) || 0) + 1); });
+      try {
+        const token = (state.session && state.session.access_token) || '';
+        const response = await fetch(TAG_TRANSLATE_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ terms: batch })
+        });
+        const data = await response.json().catch(function () { return {}; });
+        const map = data && data.map && typeof data.map === 'object' ? data.map : {};
+        Object.keys(map).forEach(function (nameZh) {
+          const nameEn = String(map[nameZh] || '').trim();
+          if (!nameZh || !nameEn || tagVocabularyByName.get(nameZh)) return;
+          tagVocabularyByName.set(nameZh, nameEn);
+          added += 1;
+        });
+      } catch (error) {
+        console.warn('标签翻译失败:', error && error.message);
+        break;
+      }
     }
+    return added;
   }
 
   // 英文界面下补齐英文名：先加载词表，再补翻库内还没英文名的词。首次渲染前调用，避免中文闪一下再变英文。

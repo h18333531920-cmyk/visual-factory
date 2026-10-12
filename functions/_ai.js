@@ -1240,8 +1240,9 @@ export async function translateTagsWithGlm(env, terms = []) {
     '1. 用最通俗、最常见的英文词（例：饮料→Drinks，不要 Beverage；餐桌→Table；炸鸡→Fried Chicken）；',
     '2. 品牌名和专有名词保留通用写法（例：kiki→KIKI、Keeta→Keeta、麦当劳→McDonald\'s）；',
     '3. 一个中文词对应一个英文词，不加冠词、不加解释、不要复数化；',
-    '4. 不确定就原样返回中文，不要编造；',
-    '5. 只输出 JSON，不要代码块：{"translations":{"披萨":"Pizza","炸鸡":"Fried Chicken"}}',
+    '4. 必须为下面列表里的每一个词都给出译名，一个都不能漏（漏掉会显示成中文）；',
+    '5. 不确定就原样返回中文，不要编造；',
+    '6. 只输出 JSON，不要代码块：{"translations":{"披萨":"Pizza","炸鸡":"Fried Chicken"}}',
   ];
   const data = await postJson(GLM_VISION_URL, {
     model: GLM_TEXT_MODEL,
