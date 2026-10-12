@@ -867,7 +867,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v884';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v885';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -14303,7 +14303,7 @@ function libraryTagsForForm(formData, kind) {
   }
 
   async function translateMissingTagNames(labels) {
-    if (tagVocabularyReady !== true || state.lang !== 'en') return 0;
+    if (tagVocabularyReady !== true) return 0;
     const pending = [];
     for (const raw of labels || []) {
       const label = String(raw == null ? '' : raw).trim();
@@ -14347,8 +14347,10 @@ function libraryTagsForForm(formData, kind) {
   // 英文界面额外把库内还没有英文名的词补翻一次；首次渲染前调用，避免中文闪一下再变英文。
   async function ensureTagTranslations() {
     await loadTagVocabulary();
-    if (state.lang !== 'en') return 0;
-    return translateMissingTagNames(collectTagLabelsInUse());
+    if (state.lang === 'en') return translateMissingTagNames(collectTagLabelsInUse());
+    // 中文界面也要让词表跟着新标签长起来：后台补翻，不阻塞渲染（英文界面才需要等译名齐了再画）
+    void translateMissingTagNames(collectTagLabelsInUse()).catch(function() {});
+    return 0;
   }
 
   function libraryDisplayLabel(value) {
@@ -16332,6 +16334,7 @@ function libraryTagsForForm(formData, kind) {
           : 'Chinese / English names and aliases. English names can be auto-generated or edited by hand; aliases make every wording searchable.') + '</p></div>'
       + '<div class="tv-actions">'
       + '<button type="button" class="tv-btn" data-tv-translate="1"' + (missing.length ? '' : ' disabled') + '>' + (zh ? ('补翻译' + (missing.length ? '（' + missing.length + '）' : '')) : ('Translate missing (' + missing.length + ')')) + '</button>'
+      + '<button type="button" class="tv-btn" data-tv-suggest="1" title="' + escapeAttr(zh ? 'AI 读完整张词表，自动合并同义叫法、自动挂上位词（直接生效）' : 'AI groups the whole vocabulary automatically') + '">' + (zh ? 'AI 自动归类' : 'AI auto-group') + '</button>'
       + '<button type="button" class="tv-btn" data-tv-refresh="1">' + (zh ? '刷新' : 'Refresh') + '</button>'
       + '</div></div>'
       + '<div class="tv-body">'
@@ -16401,6 +16404,34 @@ function libraryTagsForForm(formData, kind) {
         const rowId = parentBtn.getAttribute('data-tv-parent') || '';
         tagVocabularyParentId = tagVocabularyParentId === rowId ? '' : rowId;
         rerenderBody();
+        return;
+      }
+      if (event.target.closest('[data-tv-suggest]')) {
+        const suggestButton = section.querySelector('[data-tv-suggest]');
+        if (suggestButton) {
+          suggestButton.disabled = true;
+          suggestButton.textContent = state.lang === 'zh' ? '归类中…' : 'Grouping…';
+        }
+        tagVocabularyMessage = state.lang === 'zh' ? 'AI 正在读词表并自动归类…' : 'AI is grouping…';
+        const suggestToken = (state.session && state.session.access_token) || '';
+        fetch('/api/tag-vocabulary-suggest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + suggestToken }
+        })
+          .then(function(response) { return response.json().catch(function() { return {}; }); })
+          .then(function(data) {
+            if (!data || !data.success) throw new Error((data && data.message) || '归类失败');
+            return reloadTagVocabulary(section).then(function() {
+              tagVocabularyMessage = state.lang === 'zh'
+                ? ('已自动归类：上位词 ' + data.parentsApplied + ' 个（' + data.parentGroups + ' 组）· 合并叫法 ' + data.mergesApplied + ' 个（' + data.mergeGroups + ' 组）')
+                : ('Auto-grouped: ' + data.parentsApplied + ' children / ' + data.mergesApplied + ' merged.');
+              renderTagVocabularySection(section);
+            });
+          })
+          .catch(function(error) {
+            tagVocabularyMessage = state.lang === 'zh' ? ('自动归类失败：' + (error.message || '').slice(0, 80)) : 'Auto-group failed.';
+            renderTagVocabularySection(section);
+          });
         return;
       }
       if (event.target.closest('[data-tv-translate]')) {

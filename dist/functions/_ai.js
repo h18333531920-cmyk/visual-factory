@@ -1258,6 +1258,65 @@ function parseResponseContent(data) {
   return Array.isArray(content) ? content.map(part => part?.text || '').join('') : '';
 }
 
+// 词表自动归类：让模型读完整个词表，给出「这些是同一个东西（合并别名）」和「这些属于某个上位词」的建议。
+export function parseVocabularySuggestions(text, known = []) {
+  const knownSet = new Set((Array.isArray(known) ? known : []).map(v => String(v || '').trim()).filter(Boolean));
+  const out = { merges: [], parents: [] };
+  const raw = String(text || '');
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const body = fenced ? fenced[1] : raw;
+  const start = body.indexOf('{');
+  const end = body.lastIndexOf('}');
+  if (start < 0 || end <= start) return out;
+  let parsed = null;
+  try { parsed = JSON.parse(body.slice(start, end + 1)); } catch (_error) { return out; }
+  if (!parsed || typeof parsed !== 'object') return out;
+  const pick = value => String(value == null ? '' : value).trim();
+  for (const item of Array.isArray(parsed.merges) ? parsed.merges : []) {
+    const keep = pick(item && item.keep);
+    if (!knownSet.has(keep)) continue;
+    const aliases = (Array.isArray(item && item.aliases) ? item.aliases : [])
+      .map(pick).filter(value => value && value !== keep && knownSet.has(value));
+    if (aliases.length) out.merges.push({ keep: keep, aliases: aliases.slice(0, 20) });
+    if (out.merges.length >= 30) break;
+  }
+  for (const item of Array.isArray(parsed.parents) ? parsed.parents : []) {
+    const parent = pick(item && item.parent);
+    if (!knownSet.has(parent)) continue;
+    const children = (Array.isArray(item && item.children) ? item.children : [])
+      .map(pick).filter(value => value && value !== parent && knownSet.has(value));
+    if (children.length) out.parents.push({ parent: parent, children: children.slice(0, 60) });
+    if (out.parents.length >= 20) break;
+  }
+  return out;
+}
+
+export async function suggestVocabularyGroupsWithGlm(env, terms = []) {
+  const key = elementTagApiKey(env);
+  if (!key) throw new Error('词表归类未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY。');
+  const list = (Array.isArray(terms) ? terms : [])
+    .map(v => String(v == null ? '' : v).trim())
+    .filter(Boolean)
+    .filter((v, index, all) => all.indexOf(v) === index)
+    .slice(0, 240);
+  if (list.length < 2) return { merges: [], parents: [] };
+  const lines = [
+    '你在整理一个中东外卖业务的设计素材库「标签词表」（标签是图片里出现的东西的名字）。请把它整理成两类建议：',
+    `词表：${list.join('、')}。`,
+    '1. merges：哪些是**同一个东西的不同叫法**，应该合成一个。keep 选最通用的中文名，aliases 放其余叫法（例：番茄/西红柿 → keep 番茄；薯条/炸薯条 → keep 薯条）。',
+    '2. parents：哪些词属于一个**更大的概念**。parent 必须是大词（例：食物、饮料、人物、场景、物料类型），children 放具体小词（例：parent 食物 → children 汉堡、披萨、沙拉…）。只给有把握的，别硬凑。',
+    '3. 品牌名、平台名、物料类型名不要互相合并。',
+    '4. parent / children / keep / aliases 里的词必须**原样来自上面词表**，不要新造词。',
+    '5. 只输出 JSON，不要代码块：{"merges":[{"keep":"番茄","aliases":["西红柿"]}],"parents":[{"parent":"食物","children":["汉堡","披萨"]}]}',
+  ];
+  const data = await postJson(GLM_VISION_URL, {
+    model: GLM_TEXT_MODEL,
+    temperature: 0.2,
+    messages: [{ role: 'user', content: lines.join('\n') }]
+  }, { Authorization: `Bearer ${key}` });
+  return parseVocabularySuggestions(parseResponseContent(data), list);
+}
+
 const GLM_VISION_MODEL = 'glm-4v-flash';
 export const ELEMENT_TAG_MAX_CHARS = 5;
 export const ELEMENT_TAG_MAX_COUNT = 12;
