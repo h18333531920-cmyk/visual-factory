@@ -45,10 +45,10 @@ test('前端：英文界面查词表译名，缺表时永久退回原文', () =>
 
 test('新表与新端点：代理白名单已登记、版本号六处同步', () => {
   assert.match(policySource, /'vf_tag_vocabulary'/, '非维护账号要能读词表');
-  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v889/);
-  const refs = indexSource.match(/\?v=20261012-tag-i18n-v889/g) || [];
+  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v890/);
+  const refs = indexSource.match(/\?v=20261012-tag-i18n-v890/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v889'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v890'/);
 });
 
 test('标签词表：折叠分组（上位词成组，默认收起）', () => {
@@ -78,12 +78,12 @@ test('词表自动归类：按钮 + 端点 + 建议解析（直接应用，不�
   assert.deepEqual(withNewParent.parents, [{ parent: '甜点', children: ['蛋挞'], parentIsNew: true }], '允许 AI 提出新的上位词');
 });
 
-test('标签词表：搜索归一 + 上位词展开 + 父级字段', () => {
-  assert.match(appSource, /select\('id,name_zh,name_en,aliases,kind,parent_id'\)/, '词表要读父级与别名');
-  assert.match(appSource, /\/parent_id\/i\.test\(String\(result\.error\.message/, 'sql/023 未执行时要能退化为无父级');
-  assert.match(appSource, /function tagVocabularyDescendantsOf/, '要有上位词展开');
+test('标签词表：搜索三层（子串 + 中英归一 + 相关词）', () => {
+  assert.match(appSource, /select\('id,name_zh,name_en,aliases,kind,parent_id,related'\)/, '词表要读相关词');
+  assert.match(appSource, /\/parent_id\|related\/i\.test\(String\(result\.error\.message/, 'sql/023/024 未执行时要能退化');
   assert.match(appSource, /function tagVocabularyQueryTerms/, '要有查询归一');
+  assert.match(appSource, /canonicalRow\.related/, '相关词要一起参与匹配');
   assert.match(appSource, /const vocabTerms = \(typeof tagVocabularyQueryTerms === 'function'\)/, '搜索匹配要接入词表归一');
-  const sqlSource = readFileSync(join(here, '..', 'sql', '023_tag_vocabulary_parent.sql'), 'utf8');
-  assert.match(sqlSource, /add column if not exists parent_id text/, 'sql/023 要有幂等的加列语句');
+  const sqlSource = readFileSync(join(here, '..', 'sql', '024_tag_vocabulary_related.sql'), 'utf8');
+  assert.match(sqlSource, /add column if not exists related text\[\] not null default '\{\}'/, 'sql/024 要有幂等的加列语句');
 });

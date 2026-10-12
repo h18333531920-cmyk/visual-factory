@@ -16,7 +16,7 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-tag-i18n-v888`（标签双语 + 词表（AI 分批自动归类·可新建上位词 / 新增词 AI 补另一种语言）+ 搜索归一/上位词） | 实测 2026-10-12 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-tag-i18n-v890`（标签双语 + 中英对照表 + **相关词表**（`sql/024` 待执行）；搜索 = 子串 + 中英归一 + 相关词） | 实测 2026-10-12 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |

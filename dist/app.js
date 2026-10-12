@@ -867,7 +867,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v889';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v890';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -14246,9 +14246,9 @@ function libraryTagsForForm(formData, kind) {
     tagVocabularyPromise = (async function () {
       try {
         if (!state.supabase || !state.session) return false;
-        let result = await state.supabase.from(TAG_VOCABULARY_TABLE).select('id,name_zh,name_en,aliases,kind,parent_id');
-        if (result.error && /parent_id/i.test(String(result.error.message || ''))) {
-          // sql/023 还没执行：退回不带父级的读法，双语显示等其它功能照常，只是上位词为空
+        let result = await state.supabase.from(TAG_VOCABULARY_TABLE).select('id,name_zh,name_en,aliases,kind,parent_id,related');
+        if (result.error && /parent_id|related/i.test(String(result.error.message || ''))) {
+          // sql/023 / sql/024 还没执行：退回不带这些字段的读法，双语显示与搜索归一照常，只是上位词/相关词为空
           result = await state.supabase.from(TAG_VOCABULARY_TABLE).select('id,name_zh,name_en,aliases,kind');
         }
         if (result.error) {
@@ -14388,6 +14388,10 @@ function libraryTagsForForm(formData, kind) {
     return out;
   }
 
+  // 搜索词展开（保持极简，只有三层）：
+  // ① 原词本身（子串匹配由调用方做）
+  // ② 中英归一：英文名/中文名互相找到同一个概念（搜 coffee → 咖啡）
+  // ③ 相关词：该概念的「相关词」清单一并参与匹配（搜 甜点 → 蛋挞/蛋糕…）
   function tagVocabularyQueryTerms(token) {
     const out = [];
     const push = function(value) {
@@ -14398,19 +14402,12 @@ function libraryTagsForForm(formData, kind) {
     if (!raw) return out;
     push(raw);
     const lower = raw.toLowerCase();
-    const directRow = tagVocabularyRowsByZh.get(raw);
-    const canonicalZh = directRow ? raw : (tagVocabularyByEn.get(lower) || tagVocabularyAliasToZh.get(lower) || '');
+    const canonicalZh = tagVocabularyRowsByZh.has(raw) ? raw : (tagVocabularyByEn.get(lower) || '');
     if (!canonicalZh) return out;
     push(canonicalZh);
     push(tagVocabularyByName.get(canonicalZh));
     const canonicalRow = tagVocabularyRowsByZh.get(canonicalZh);
-    (Array.isArray(canonicalRow && canonicalRow.aliases) ? canonicalRow.aliases : []).forEach(push);
-    tagVocabularyDescendantsOf(canonicalZh).forEach(function(childZh) {
-      push(childZh);
-      push(tagVocabularyByName.get(childZh));
-      const childRow = tagVocabularyRowsByZh.get(childZh);
-      (Array.isArray(childRow && childRow.aliases) ? childRow.aliases : []).forEach(push);
-    });
+    (Array.isArray(canonicalRow && canonicalRow.related) ? canonicalRow.related : []).forEach(push);
     return out;
   }
 
