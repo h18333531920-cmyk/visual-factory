@@ -1,6 +1,6 @@
 import {accountFeatures} from './_account-features.js';
 import { fail } from './_account-access.js';
-const tables = new Set(['vf_profiles','vf_projects','vf_categories','vf_library_options','vf_source_files','vf_asset_previews','vf_asset_favorites','vf_asset_events','vf_team_members','vf_material_catalog','vf_preview_ai_tags']);
+const tables = new Set(['vf_profiles','vf_projects','vf_categories','vf_library_options','vf_source_files','vf_asset_previews','vf_asset_favorites','vf_asset_events','vf_team_members','vf_material_catalog','vf_preview_ai_tags','vf_tag_vocabulary']);
 const ownsPath = (path,id) => typeof path === 'string' && path.startsWith(id + '/') && !path.split('/').some(p=>p==='.'||p==='..');
 const safePath = path => typeof path === 'string' && path.length > 0 && !path.startsWith('/') && !path.includes('\\') && !path.split('/').some(p=>p==='.'||p==='..');
 export function dataPlan(ctx, path, method, base, headers) {

@@ -1196,6 +1196,67 @@ export async function expandQueryWithGlm(env, query, vocabulary = []) {
   const parsed = parseQueryExpansionI18n(text, words, q);
   return { terms: parsed.terms, translations: parsed.translations };
 }
+
+// 标签词表（sql/022）：把中文标签批量翻成英文显示名，供英文界面显示。
+// 只做「显示名翻译」，不参与搜索匹配；结果由 /api/tag-translate 落库缓存，同一个词只问一次 AI。
+export const TAG_TRANSLATE_MAX_TERMS = 40;
+export const TAG_TRANSLATE_MAX_CHARS = 20;
+
+export function parseTagTranslations(text, terms = []) {
+  const wanted = (Array.isArray(terms) ? terms : []).map(v => String(v == null ? '' : v).trim()).filter(Boolean);
+  const out = {};
+  if (!wanted.length) return out;
+  const raw = String(text || '');
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const body = fenced ? fenced[1] : raw;
+  const start = body.indexOf('{');
+  const end = body.lastIndexOf('}');
+  if (start < 0 || end <= start) return out;
+  let parsed = null;
+  try { parsed = JSON.parse(body.slice(start, end + 1)); } catch (_error) { return out; }
+  if (!parsed || typeof parsed !== 'object') return out;
+  const dict = parsed.translations && typeof parsed.translations === 'object' ? parsed.translations : parsed;
+  for (const term of wanted) {
+    const value = dict[term];
+    const en = String(value == null ? '' : value).trim();
+    if (!en || en === term || en.length > 60) continue;
+    out[term] = en;
+  }
+  return out;
+}
+
+export async function translateTagsWithGlm(env, terms = []) {
+  const key = elementTagApiKey(env);
+  if (!key) throw new Error('标签翻译未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY。');
+  const list = (Array.isArray(terms) ? terms : [])
+    .map(v => String(v == null ? '' : v).trim())
+    .filter(v => v && v.length <= TAG_TRANSLATE_MAX_CHARS)
+    .filter((v, index, all) => all.indexOf(v) === index)
+    .slice(0, TAG_TRANSLATE_MAX_TERMS);
+  if (!list.length) return {};
+  const lines = [
+    '你在把一个设计素材库的中文标签翻成英文显示名，给英文界面的同事看。',
+    `中文标签：${list.join('、')}。规则：`,
+    '1. 用最通俗、最常见的英文词（例：饮料→Drinks，不要 Beverage；餐桌→Table；炸鸡→Fried Chicken）；',
+    '2. 品牌名和专有名词保留通用写法（例：kiki→KIKI、Keeta→Keeta、麦当劳→McDonald\'s）；',
+    '3. 一个中文词对应一个英文词，不加冠词、不加解释、不要复数化；',
+    '4. 不确定就原样返回中文，不要编造；',
+    '5. 只输出 JSON，不要代码块：{"translations":{"披萨":"Pizza","炸鸡":"Fried Chicken"}}',
+  ];
+  const data = await postJson(GLM_VISION_URL, {
+    model: GLM_TEXT_MODEL,
+    temperature: 0.2,
+    messages: [{ role: 'user', content: lines.join('\n') }]
+  }, { Authorization: `Bearer ${key}` });
+  return parseTagTranslations(parseResponseContent(data), list);
+}
+
+function parseResponseContent(data) {
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content === 'string') return content;
+  return Array.isArray(content) ? content.map(part => part?.text || '').join('') : '';
+}
+
 const GLM_VISION_MODEL = 'glm-4v-flash';
 export const ELEMENT_TAG_MAX_CHARS = 5;
 export const ELEMENT_TAG_MAX_COUNT = 12;

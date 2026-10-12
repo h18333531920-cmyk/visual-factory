@@ -836,7 +836,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260924-ai-inline-edit-v872';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v873';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4217,17 +4217,17 @@ return;
     panel.innerHTML = '<span class="case-preview-ai-title">' + (state.lang === 'zh' ? '当前物料 AI 标签' : 'Current material AI tags') + '</span>'
       + '<div class="case-preview-ai-chips' + editingClass + '">'
       + manualTags.map(function(tag) {
-        return '<span class="case-preview-ai-tag is-manual' + editingClass + '" title="' + (state.lang === 'zh' ? '人工标签' : 'Manual tag') + '">' + escapeHtml(tag)
+        return '<span class="case-preview-ai-tag is-manual' + editingClass + '" title="' + (state.lang === 'zh' ? '人工标签' : 'Manual tag') + '">' + escapeHtml(libraryDisplayLabel(tag))
           + (canEdit ? '<button type="button" data-preview-manual-remove="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '删除人工标签 ' : 'Remove manual tag ') + tag) + '">×</button>' : '')
           + '</span>';
       }).join('')
       + aiTags.filter(function(tag) { return manualTags.indexOf(tag) < 0; }).map(function(tag) {
-        return '<span class="case-preview-ai-tag' + editingClass + '" title="' + (state.lang === 'zh' ? 'AI标签' : 'AI tag') + '">' + escapeHtml(tag)
+        return '<span class="case-preview-ai-tag' + editingClass + '" title="' + (state.lang === 'zh' ? 'AI标签' : 'AI tag') + '">' + escapeHtml(libraryDisplayLabel(tag))
           + (canEdit ? '<button type="button" data-preview-ai-exclude="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '排除AI标签 ' : 'Exclude AI tag ') + tag) + '">×</button>' : '')
           + '</span>';
       }).join('')
       + (!tags.length ? '<span class="case-preview-ai-empty">' + escapeHtml(status) + '</span>' : '')
-      + excluded.map(function(tag) { return canEdit ? '<span class="case-preview-ai-excluded' + editingClass + '">已排除 ' + escapeHtml(tag) + '<button type="button" data-preview-ai-restore="' + escapeAttr(tag) + '">撤销</button></span>' : ''; }).join('')
+      + excluded.map(function(tag) { return canEdit ? '<span class="case-preview-ai-excluded' + editingClass + '">' + (state.lang === 'zh' ? '已排除 ' : 'Excluded ') + escapeHtml(libraryDisplayLabel(tag)) + '<button type="button" data-preview-ai-restore="' + escapeAttr(tag) + '">' + (state.lang === 'zh' ? '撤销' : 'Undo') + '</button></span>' : ''; }).join('')
       + (isEditing ? '<div class="case-preview-ai-add-row is-editing"><input type="text" id="case-preview-ai-add-input" placeholder="' + (state.lang === 'zh' ? '输入新标签，回车添加' : 'Type tag and press Enter') + '" /><button type="button" id="case-preview-ai-add-btn">' + (state.lang === 'zh' ? '添加' : 'Add') + '</button></div>' : '')
       + '</div>'
       + (canEdit && !isEditing ? '<button type="button" class="case-preview-ai-edit-btn" id="case-preview-ai-edit-toggle">' + (state.lang === 'zh' ? '编辑' : 'Edit') + '</button>' : '')
@@ -4253,8 +4253,8 @@ return;
     const showPop = function() {
       if (!panel.isConnected || !chips.isConnected) return;
       if (chips.scrollWidth <= chips.clientWidth + 2) return;
-      pop.innerHTML = (manualTags || []).map(function(tag) { return '<span class="case-preview-ai-tag is-manual">' + escapeHtml(tag) + '</span>'; }).join('')
-        + (aiTags || []).filter(function(tag) { return (manualTags || []).indexOf(tag) < 0; }).map(function(tag) { return '<span class="case-preview-ai-tag">' + escapeHtml(tag) + '</span>'; }).join('');
+      pop.innerHTML = (manualTags || []).map(function(tag) { return '<span class="case-preview-ai-tag is-manual">' + escapeHtml(libraryDisplayLabel(tag)) + '</span>'; }).join('')
+        + (aiTags || []).filter(function(tag) { return (manualTags || []).indexOf(tag) < 0; }).map(function(tag) { return '<span class="case-preview-ai-tag">' + escapeHtml(libraryDisplayLabel(tag)) + '</span>'; }).join('');
       const rect = chips.getBoundingClientRect();
       pop.style.left = rect.left + 'px';
       pop.style.top = (rect.bottom + 6) + 'px';
@@ -5451,6 +5451,8 @@ return;
         state.libraryDataLoaded = true;
       })();
       await state.libraryDataPromise;
+      // 英文界面：首次渲染前补齐标签英文名（只有新词才发请求；失败不影响任何显示）
+      try { await ensureTagTranslations(); } catch (_tagTranslateError) {}
       refreshLibraryLoadedUi();
     } catch (error) {
       if (!status) return;
@@ -14164,9 +14166,111 @@ function libraryTagsForForm(formData, kind) {
     return state.lang === 'zh' ? (option.name_zh || option.name_en) : option.name_en;
   }
 
+  // ── 标签词表（sql/022）：中文标签 → 英文显示名 ──
+  // 云端存译名，第一次遇到新词时问一次 AI 落库，之后全站命中；表不存在则永久退回显示原文。
+  const TAG_VOCABULARY_TABLE = 'vf_tag_vocabulary';
+  const TAG_TRANSLATE_ENDPOINT = '/api/tag-translate';
+  const TAG_TRANSLATE_BATCH = 40;
+  const TAG_TRANSLATE_MAX_CHARS = 20;
+  let tagVocabularyReady = null;
+  let tagVocabularyPromise = null;
+  const tagVocabularyByName = new Map();
+  const tagTranslateRequested = new Set();
+
+  function isMissingTagVocabularyError(error) {
+    return /vf_tag_vocabulary|relation.*does not exist|schema cache|请求路径无效/i.test(String(error && error.message || error || ''));
+  }
+
+  function loadTagVocabulary() {
+    if (tagVocabularyPromise) return tagVocabularyPromise;
+    tagVocabularyPromise = (async function () {
+      try {
+        if (!state.supabase || !state.session) return false;
+        const result = await state.supabase.from(TAG_VOCABULARY_TABLE).select('name_zh,name_en');
+        if (result.error) {
+          if (isMissingTagVocabularyError(result.error)) {
+            tagVocabularyReady = false;
+            return false;
+          }
+          throw result.error;
+        }
+        tagVocabularyReady = true;
+        (result.data || []).forEach(function (row) {
+          const nameZh = String(row && row.name_zh || '').trim();
+          const nameEn = String(row && row.name_en || '').trim();
+          if (nameZh && nameEn) tagVocabularyByName.set(nameZh, nameEn);
+        });
+        return true;
+      } catch (error) {
+        tagVocabularyReady = false;
+        console.warn('标签词表不可用:', error && error.message);
+        return false;
+      }
+    })();
+    return tagVocabularyPromise;
+  }
+
+  // 当前库内实际用到的标签（去掉 vf: 内部标记），用于补翻译
+  function collectTagLabelsInUse() {
+    const out = [];
+    const push = function (value) {
+      const label = String(value == null ? '' : value).trim();
+      if (!label || label.length > TAG_TRANSLATE_MAX_CHARS || label.indexOf('vf:') === 0) return;
+      if (out.indexOf(label) < 0) out.push(label);
+    };
+    (state.librarySources || []).forEach(function (source) {
+      (Array.isArray(source && source.tags) ? source.tags : []).forEach(push);
+    });
+    (state.libraryPreviews || []).forEach(function (preview) { push(preview && preview.material_type); });
+    return out;
+  }
+
+  async function translateMissingTagNames(labels) {
+    if (tagVocabularyReady !== true || state.lang !== 'en') return 0;
+    const missing = [];
+    for (const raw of labels || []) {
+      const label = String(raw == null ? '' : raw).trim();
+      if (!label || tagVocabularyByName.get(label) || tagTranslateRequested.has(label)) continue;
+      missing.push(label);
+      if (missing.length >= TAG_TRANSLATE_BATCH) break;
+    }
+    if (!missing.length) return 0;
+    // 已请求过的词不再重复请求（哪怕这次没翻出来），避免每次加载都打接口
+    missing.forEach(function (label) { tagTranslateRequested.add(label); });
+    try {
+      const token = (state.session && state.session.access_token) || '';
+      const response = await fetch(TAG_TRANSLATE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ terms: missing })
+      });
+      const data = await response.json().catch(function () { return {}; });
+      const map = data && data.map && typeof data.map === 'object' ? data.map : {};
+      let added = 0;
+      Object.keys(map).forEach(function (nameZh) {
+        const nameEn = String(map[nameZh] || '').trim();
+        if (!nameZh || !nameEn || tagVocabularyByName.get(nameZh)) return;
+        tagVocabularyByName.set(nameZh, nameEn);
+        added += 1;
+      });
+      return added;
+    } catch (error) {
+      console.warn('标签翻译失败:', error && error.message);
+      return 0;
+    }
+  }
+
+  // 英文界面下补齐英文名：先加载词表，再补翻库内还没英文名的词。首次渲染前调用，避免中文闪一下再变英文。
+  async function ensureTagTranslations() {
+    if (state.lang !== 'en') return 0;
+    await loadTagVocabulary();
+    return translateMissingTagNames(collectTagLabelsInUse());
+  }
+
   function libraryDisplayLabel(value) {
     const label = String(value || '');
-    return state.lang === 'zh' ? label : (LIBRARY_LABELS_EN[label] || label);
+    if (state.lang === 'zh') return label;
+    return tagVocabularyByName.get(label) || LIBRARY_LABELS_EN[label] || label;
   }
 
   function optionNameById(id) {

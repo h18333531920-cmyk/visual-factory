@@ -1,0 +1,48 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const appSource = readFileSync(join(here, '..', 'app.js'), 'utf8');
+const policySource = readFileSync(join(here, '..', 'functions', '_account-data-policy.js'), 'utf8');
+const indexSource = readFileSync(join(here, '..', 'index.html'), 'utf8');
+
+test('标签词表：解析 AI 返回的译名（容忍代码块、只取请求过的词、原样返回视为未翻译）', async () => {
+  const ai = await import('../functions/_ai.js');
+  assert.deepEqual(ai.parseTagTranslations('{"translations":{"披萨":"Pizza"}}', ['披萨']), {披萨: 'Pizza'});
+  assert.deepEqual(
+    ai.parseTagTranslations('```json\n{"translations":{"炸鸡":"Fried Chicken"}}\n```', ['炸鸡']),
+    {炸鸡: 'Fried Chicken'},
+    '代码块包裹也能认'
+  );
+  assert.deepEqual(
+    ai.parseTagTranslations('{"translations":{"汉堡":"Burger","薯条":"Fries"}}', ['汉堡']),
+    {汉堡: 'Burger'},
+    '没请求过的词不进结果'
+  );
+  assert.deepEqual(ai.parseTagTranslations('{"translations":{"披萨":"披萨"}}', ['披萨']), {}, '原样返回等于没翻出来');
+  assert.deepEqual(ai.parseTagTranslations(JSON.stringify({translations: {披萨: 'x'.repeat(80)}}), ['披萨']), {}, '超长译名丢弃');
+  assert.deepEqual(ai.parseTagTranslations('not json', ['披萨']), {});
+  assert.deepEqual(ai.parseTagTranslations('', []), {});
+});
+
+test('前端：英文界面查词表译名，缺表时永久退回原文', () => {
+  assert.match(appSource, /const TAG_VOCABULARY_TABLE = 'vf_tag_vocabulary'/);
+  assert.match(appSource, /return tagVocabularyByName\.get\(label\) \|\| LIBRARY_LABELS_EN\[label\] \|\| label;/);
+  assert.match(appSource, /function isMissingTagVocabularyError/);
+  assert.match(appSource, /tagVocabularyReady = false;/);
+  assert.match(appSource, /await ensureTagTranslations\(\);/);
+  assert.match(appSource, /tagTranslateRequested\.has\(label\)/, '已请求过的词不重复请求');
+  assert.match(appSource, /data-preview-manual-remove="' \+ escapeAttr\(tag\)/, '按钮动作仍用原始标签，不能被译名污染');
+  assert.match(appSource, /escapeHtml\(libraryDisplayLabel\(tag\)\)/, '面板标签按界面语言显示');
+});
+
+test('新表与新端点：代理白名单已登记、版本号六处同步', () => {
+  assert.match(policySource, /'vf_tag_vocabulary'/, '非维护账号要能读词表');
+  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v873/);
+  const refs = indexSource.match(/\?v=20261012-tag-i18n-v873/g) || [];
+  assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v873'/);
+});
