@@ -55,24 +55,25 @@ test('相关词输入：中英文逗号/顿号/分号都能分隔，去重、去
   assert.deepEqual(parse('1,2,3,4,5,6,7,8,9,10'), ['1', '2', '3', '4', '5', '6', '7', '8'], '最多 8 个');
 });
 
-test('词表区块整段能渲染：四列表头 + 只有「补翻译 / 刷新」两个顶部按钮', () => {
+test('词表区块整段能渲染：三列表头 + 顶部「补翻译 / 同步库内标签 / 刷新」', () => {
   const c = loadVocabularyUi([
     { id: 'el:甜点', name_zh: '甜点', name_en: 'Dessert', kind: 'element', source: 'manual', related: ['蛋挞'] }
   ]);
   const html = c.tagVocabularyHtml();
-  assert.equal((html.match(/<th>/g) || []).length, 4, '四列表头');
+  assert.equal((html.match(/<th>/g) || []).length, 3, 'v900：只剩三列（中文名 / 英文名 / 相关词）');
   assert.match(html, /<th>中文名<\/th>/);
   assert.match(html, /<th>英文名（可直接改）<\/th>/);
   assert.match(html, /<th>相关词（逗号分隔）<\/th>/);
-  assert.match(html, /<th>操作<\/th>/);
+  assert.doesNotMatch(html, /<th>操作<\/th>/, '删除按钮撤掉后操作列也去掉了');
   assert.match(html, /data-tv-translate="1"/, '保留补翻译');
+  assert.match(html, /data-tv-sync="1"/, 'v900：新增「同步库内标签」');
   assert.match(html, /data-tv-refresh="1"/, '保留刷新');
   assert.doesNotMatch(html, /data-tv-suggest="1"|AI 自动归类/, 'AI 自动归类按钮已删');
-  assert.match(html, /相关词：搜这个词时这些词也算命中/, '提示里说明相关词怎么用');
+  assert.match(html, /这张表 = 站内正在用的标签，由数据库自动同步/, '提示里说明词表来源与同步机制');
   assert.doesNotMatch(html, /别名|上位词/, '别名/上位词字样不再出现在界面上');
 });
 
-test('词表是一张平表：中文名 | 英文名 | 相关词 | 删除', () => {
+test('词表是一张平表：中文名 | 英文名 | 相关词（没有删除按钮）', () => {
   const c = loadVocabularyUi([
     { id: 'el:甜点', name_zh: '甜点', name_en: 'Dessert', kind: 'element', source: 'manual', related: ['蛋挞', '蛋糕'] },
     { id: 'el:披萨', name_zh: '披萨', name_en: 'Pizza', kind: 'element', source: 'ai', related: [] }
@@ -81,7 +82,7 @@ test('词表是一张平表：中文名 | 英文名 | 相关词 | 删除', () =>
   assert.match(html, /data-tv-en="el:甜点"/);
   assert.match(html, /data-tv-related="el:甜点"/);
   assert.match(html, /value="蛋挞，蛋糕"/, '相关词用中文逗号回填到输入框');
-  assert.match(html, /data-tv-delete="el:甜点"/);
+  assert.doesNotMatch(html, /data-tv-delete/, 'v900：删除按钮撤掉（词表由数据库自动收全/清孤儿）');
   assert.doesNotMatch(html, /data-tv-collapse|data-tv-alias|↳|\bdepth\b/, '不再有折叠/缩进/别名');
   assert.equal((html.match(/<tr>/g) || []).length, 2, '一行一个词，不分组');
 });
@@ -139,13 +140,44 @@ test('界面残留清理：没有 AI 自动归类按钮、折叠分组、上位�
   assert.match(appSource, /saveTagVocabularyPatch\(row\.id, \{ related: merged, source: 'manual' \}\)/, 'AI 建议并进这一行后落库（函数留着备用）');
 });
 
-test('v899 词表再简一刀：去掉「新增词」和「AI 建议」，删除确认写清不动物料标签', () => {
+test('v899/v900 词表只剩「中文名 + 英文名 + 相关词」：新增/删除按钮都没了，靠数据库同步', () => {
   assert.doesNotMatch(appSource, /data-tv-add/, '新增词入口已去掉');
   assert.doesNotMatch(appSource, /tv-add-zh|tv-add-en/, '新增词输入框已去掉');
   assert.doesNotMatch(appSource, /data-tv-suggest-related/, 'AI 建议按钮已从界面撤掉');
-  assert.match(appSource, /data-tv-delete="' \+ escapeAttr\(row\.id\) \+ '"/, '删除按钮保留');
-  assert.match(appSource, /只删这张对照表里的一行，物料上的这个标签原样保留，不会删任何素材/, '删除确认写清不会动物料');
+  assert.doesNotMatch(appSource, /data-tv-delete/, 'v900：删除按钮也去掉');
+  assert.doesNotMatch(appSource, /从词表删除/, '手工删除的确认文案一并删掉');
   assert.match(appSource, /placeholder="' \+ \(zh \? '相关词' : 'related'\) \+ '"/, '相关词列占位文案缩短');
+  // 代替删除按钮：数据库自动同步 + 一个手动同步入口
+  assert.match(appSource, /data-tv-sync="1"/);
+  assert.match(appSource, /state\.supabase\.rpc\('vf_sync_tag_vocabulary'\)/);
+  assert.match(appSource, /sql\/025_tag_vocabulary_auto_sync\.sql/, '失败提示里指路 sql/025');
+});
+
+test('v900 相关词在英文界面显示英文，存库仍写回库内中文标签', () => {
+  assert.match(appSource, /function tagVocabularyRelatedDisplayText\(related\)/);
+  assert.match(appSource, /return list\.map\(function\(word\) \{ return libraryChipDisplayLabel\(word\); \}\)\.join\('，'\);/);
+  assert.match(appSource, /function tagVocabularyRelatedStorageWords\(words\)/);
+  assert.match(appSource, /const canonical = libraryExpansionCanonicalTerm\(word\);/);
+  assert.match(appSource, /value="' \+ escapeAttr\(tagVocabularyRelatedDisplayText\(related\)\) \+ '"/);
+  assert.match(appSource, /const stored = tagVocabularyRelatedStorageWords\(next\);/);
+  assert.match(appSource, /saveTagVocabularyPatch\(id, \{ related: stored, source: 'manual' \}\)/);
+});
+
+test('sql/025：词表自动同步（收全 + 删孤儿 + 三张源表触发器）', () => {
+  const sql = readFileSync(join(here, '..', 'sql', '025_tag_vocabulary_auto_sync.sql'), 'utf8');
+  assert.match(sql, /create or replace function public\.vf_sync_tag_vocabulary\(\)/);
+  assert.match(sql, /security definer/, '要能绕过 RLS 写词表');
+  assert.match(sql, /on conflict \(name_zh\) do nothing/, '只在缺词条时插入，不覆盖人工编辑');
+  assert.match(sql, /unnest\(tags\) as name_zh from public\.vf_source_files/);
+  assert.match(sql, /select material_type from public\.vf_asset_previews/);
+  assert.match(sql, /unnest\(manual_tags\) from public\.vf_preview_ai_tags/);
+  assert.match(sql, /unnest\(ai_tags\) from public\.vf_preview_ai_tags/);
+  assert.match(sql, /delete from public\.vf_tag_vocabulary v\s*\n\s*where btrim\(v\.name_zh\) not in/, '删孤儿');
+  ['vf_source_files', 'vf_asset_previews', 'vf_preview_ai_tags'].forEach(function(table) {
+    assert.match(sql, new RegExp('after insert or update or delete on public\\.' + table), table + ' 上要有触发器');
+  });
+  assert.match(sql, /for each statement execute function/, '语句级触发器：一次写入只重算一遍');
+  assert.match(sql, /select public\.vf_sync_tag_vocabulary\(\);/, '建完立刻回填一次');
 });
 
 test('AI 建议相关词：先收词表里已有的，词表里没有符合的才给新词（≤3）', async () => {

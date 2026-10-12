@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-vocab-slim-v899`（词表简化为 中文名 / 英文名 / 相关词 / 删除；浮窗「库内关联标签」分来源；缓存命中会后台静默重问）；部署 `4599f4ef-f725-4a8e-a0a5-70b1cc3d4501`，2026-10-12 本机 wrangler 直发 | 实测 2026-10-12 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-vocab-autosync-v900`（词表 3 列：中文名/英文名/相关词，靠数据库自动同步；浮窗「库内关联标签」分来源；缓存命中会后台静默重问）；部署 `29ee8d46-a84c-4579-82e8-95773e952740`，2026-10-12 本机 wrangler 直发 | 实测 2026-10-12 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
 | 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`fa06335`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-12 |
-| 自动化测试 | `node --test tests/` → **395/395 通过**（含标签词表平表 / 相关词 / 库内标签口径 / 浮窗分源 / 缓存重问 / 词表简化 16 项） | 实测 2026-10-12 |
+| 自动化测试 | `node --test tests/` → **397/397 通过**（含标签词表平表 / 相关词 / 库内标签口径 / 浮窗分源 / 缓存重问 / 词表自动同步 18 项） | 实测 2026-10-12 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在） | 实测 2026-10-12 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -425,6 +425,18 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 >   - **去掉每行的「AI 建议」按钮**（`suggestRelatedWordsForRow` 函数与 `/api/tag-vocabulary-related` 端点**保留备用**，加回按钮即可）。
 >   - **删除确认框写明**："只删这张对照表里的一行，物料上的这个标签原样保留，不会删任何素材"。
 >   - **「相关词」列保留**（没按用户原话删掉，理由要记住）：它是**唯一零 AI 的关联兜底**——AI 挑不全/答错时只能靠它（"搜足球缺世界杯"就是靠手工填 related 救回来的），而且不用等 AI、立刻显示。要连它一起删，用户说一声即可（DB 里的列和数据不会动，只是界面不再可编辑）。
+> - **⭐⭐ v900 词表改成「数据库自动同步」**（用户四个诉求：不漏 / 实时 / 不留孤儿 / 去掉删除按钮）：
+>   - **新增 `sql/025_tag_vocabulary_auto_sync.sql`（需要用户在 Supabase SQL Editor 执行，AI 不代跑）**：
+>     一个 `security definer` 的重算函数 `vf_sync_tag_vocabulary()` + 三张源表上的**语句级触发器**
+>     （`vf_source_files` / `vf_asset_previews` / `vf_preview_ai_tags`）⇒
+>     ① **收全**：库内标签直接在数据库里算，不受"当前账号看得到多少"限制；
+>     ② **实时**：上传/识别出新标签那一刻进表；
+>     ③ **删孤儿**：物料删掉后没人再用的标签自动删（**人工改过的行也一样删**，避免留下点进去 0 条结果的死词条——用户确认过这个取舍）；
+>     ④ 只在词条不存在时插入（`on conflict (name_zh) do nothing`），**不覆盖**人工写的 `name_en` / `related`；函数末尾会立刻回填一次。
+>   - 界面配套：**删掉「删除」按钮 + 「新增词」入口**（都交给自动同步），顶部加「**同步库内标签**」按钮（调 `supabase.rpc('vf_sync_tag_vocabulary')`）；表格从 4 列变 **3 列：中文名 / 英文名 / 相关词**。
+>   - 相关词列**英文界面显示英文**（`tagVocabularyRelatedDisplayText` 走 `libraryDisplayLabel`），**保存时用词表反查换回库内中文标签**（`tagVocabularyRelatedStorageWords` → `libraryExpansionCanonicalTerm`）——存库仍是中文，匹配链路不变。
+>   - ⚠️ **没执行 sql/025 时的降级**：一切照旧（前端补翻 + 手动改英文名/相关词），只是不会自动收全/清孤儿；点「同步库内标签」会报"函数不存在"并提示去执行 SQL。
+>   - 🚧 **已知未做**：`vf_library_options`（国家/活动/类别）里的词不进词表（它们是选项、有自己的双语字段）；`vf_preview_ai_tags.excluded_tags` 也不算"在用标签"。
 >
 > **词表的三条事实（2026-10-12 逐条查代码核实，回答用户提问）**
 > 1. **不保证等于"库内全量标签"**：它是「见到过、并且机翻成功过」的标签字典。四种漏法：① `tag-translate` 只为**翻出来**的词插行，AI 没翻出的词不落库；② 只收集**当前账号看得到**的物料上的标签（`collectTagLabelsInUse` 读的是已加载的 `librarySources/previews`，受 RLS 影响）；③ 超过 20 字、带 `vf:` 前缀的标签不收；④ 触发时机是"打开素材库 / 切语言"，不是上传那一刻。

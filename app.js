@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-vocab-slim-v899';
+const TOOL_UI_VERSION = '20261012-vocab-autosync-v900';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -16366,15 +16366,33 @@ function libraryTagsForForm(formData, kind) {
     return out;
   }
 
+  // v900：相关词在英文界面显示英文写法，但存的仍是库内中文标签 ——
+  // 显示走 libraryDisplayLabel（词表 name_en），保存时用词表反查换回中文（换不回的按原样存）。
+  function tagVocabularyRelatedDisplayText(related) {
+    const list = Array.isArray(related) ? related : [];
+    if (state.lang === 'zh') return list.join('，');
+    return list.map(function(word) { return libraryChipDisplayLabel(word); }).join('，');
+  }
+
+  function tagVocabularyRelatedStorageWords(words) {
+    const out = [];
+    (Array.isArray(words) ? words : []).forEach(function(word) {
+      const canonical = libraryExpansionCanonicalTerm(word);
+      if (!canonical || out.indexOf(canonical) >= 0) return;
+      out.push(canonical);
+    });
+    return out;
+  }
+
   function tagVocabularyRowsHtml() {
     const zh = state.lang === 'zh';
     const all = tagVocabularyTableRows();
     const display = tagVocabularyVisibleRows();
     if (!all.length) {
-      return '<tr><td colspan="4" class="tv-empty">' + (zh ? '还没有词。上传/识别过的标签会自动出现在这里。' : 'No terms yet.') + '</td></tr>';
+      return '<tr><td colspan="3" class="tv-empty">' + (zh ? '还没有词。上传/识别过的标签会自动出现在这里。' : 'No terms yet.') + '</td></tr>';
     }
     if (!display.length) {
-      return '<tr><td colspan="4" class="tv-empty">' + (zh ? '没有匹配的词。' : 'No matching terms.') + '</td></tr>';
+      return '<tr><td colspan="3" class="tv-empty">' + (zh ? '没有匹配的词。' : 'No matching terms.') + '</td></tr>';
     }
     return display.map(function(row) {
       const related = Array.isArray(row.related) ? row.related : [];
@@ -16385,12 +16403,9 @@ function libraryTagsForForm(formData, kind) {
           + (row.source === 'manual' ? '<span class="tv-mark">' + (zh ? '人工' : 'manual') + '</span>' : '')
           + '</td>'
         + '<td class="tv-related-cell">'
-          + '<input class="tv-related" data-tv-related="' + escapeAttr(row.id) + '" value="' + escapeAttr(related.join('，')) + '"'
+          + '<input class="tv-related" data-tv-related="' + escapeAttr(row.id) + '" value="' + escapeAttr(tagVocabularyRelatedDisplayText(related)) + '"'
             + (relatedReady ? '' : ' disabled') + ' placeholder="' + (zh ? '相关词' : 'related') + '"'
-            + ' title="' + escapeAttr(zh ? '逗号分隔；搜中文名时这些词也算命中（零 AI，改完点一下别处即保存）' : 'Comma separated; matching these words too when this term is searched') + '">'
-        + '</td>'
-        + '<td class="tv-ops">'
-          + '<button type="button" class="tv-btn tv-danger" data-tv-delete="' + escapeAttr(row.id) + '">' + (zh ? '删除' : 'Delete') + '</button>'
+            + ' title="' + escapeAttr(zh ? '逗号分隔；搜中文名时这些词也算命中（零 AI，改完点一下别处即保存）' : 'Comma separated; searching this term also matches these words (saved when you click away)') + '">'
         + '</td></tr>';
     }).join('');
   }
@@ -16403,10 +16418,11 @@ function libraryTagsForForm(formData, kind) {
     return ''
       + '<div class="account-panel-head"><div><h3>' + (zh ? '标签词表' : 'Tag vocabulary') + '</h3>'
       + '<p class="tv-sub">' + (zh
-          ? '中文名 / 英文名 / 相关词。英文名管双语显示和「搜英文命中中文」；相关词管「搜大词带出小词」，改完即时生效。'
-          : 'Chinese / English names and related words. English names drive the bilingual display; related words widen the search. Saves instantly.') + '</p></div>'
+          ? '站内正在用的标签都在这里（数据库自动同步）＋ 你维护的英文名和相关词。'
+          : 'Every tag currently used in the library (synced by the database), plus the English names and related words you maintain.') + '</p></div>'
       + '<div class="tv-actions">'
       + '<button type="button" class="tv-btn" data-tv-translate="1"' + (missing.length ? '' : ' disabled') + '>' + (zh ? ('补翻译' + (missing.length ? '（' + missing.length + '）' : '')) : ('Translate missing (' + missing.length + ')')) + '</button>'
+      + '<button type="button" class="tv-btn" data-tv-sync="1" title="' + escapeAttr(zh ? '让数据库立刻按站内标签重算一遍（需要先执行 sql/025）' : 'Re-sync from the library now (needs sql/025)') + '">' + (zh ? '同步库内标签' : 'Sync from library') + '</button>'
       + '<button type="button" class="tv-btn" data-tv-refresh="1">' + (zh ? '刷新' : 'Refresh') + '</button>'
       + '</div></div>'
       + '<div class="tv-body">'
@@ -16420,11 +16436,10 @@ function libraryTagsForForm(formData, kind) {
       + '<th>' + (zh ? '中文名' : 'Chinese') + '</th>'
       + '<th>' + (zh ? '英文名（可直接改）' : 'English (editable)') + '</th>'
       + '<th>' + (zh ? '相关词（逗号分隔）' : 'Related (comma separated)') + '</th>'
-      + '<th>' + (zh ? '操作' : 'Actions') + '</th>'
       + '</tr></thead><tbody id="tv-table-body">' + tagVocabularyRowsHtml() + '</tbody></table>'
       + '<p class="tv-hint">' + (zh
-          ? '相关词：搜这个词时这些词也算命中（例：给「甜点」填 蛋挞、蛋糕 → 搜「甜点」能带出标了蛋挞/蛋糕的物料）。逗号分隔，最多 8 个，改完点一下别处即保存。'
-          : 'Related: searching this term also matches these words. Comma separated, up to 8; saved when you click away.') + '</p>'
+          ? '这张表 = 站内正在用的标签，由数据库自动同步（sql/025：上传/识别出新标签立刻进表；物料删掉后没人用的标签自动移除）。你只需要维护两件事：英文名（管双语显示和「搜英文命中中文」）、相关词（搜这个词时这些词也算命中，例：给「甜点」填 蛋挞、蛋糕，逗号分隔最多 8 个，改完点一下别处即保存）。'
+          : 'This table mirrors the tags in use and is synced by the database (sql/025). You only maintain the English name (bilingual display + English search) and related words (comma separated, up to 8; saved when you click away).') + '</p>'
       + '</div>';
   }
 
@@ -16517,6 +16532,29 @@ function libraryTagsForForm(formData, kind) {
     const rerenderBody = function() { refreshTagVocabularyBody(section); };
     section.addEventListener('click', function(event) {
       if (event.target.closest('[data-tv-refresh]')) { reloadTagVocabulary(section); return; }
+      // v900：手动触发一次「按站内标签重算词表」（数据库函数，sql/025 提供）
+      if (event.target.closest('[data-tv-sync]')) {
+        const zh = state.lang === 'zh';
+        const button = section.querySelector('[data-tv-sync]');
+        if (button) { button.disabled = true; button.textContent = zh ? '同步中…' : 'Syncing…'; }
+        const rpc = state.supabase && state.supabase.rpc ? state.supabase.rpc('vf_sync_tag_vocabulary') : null;
+        if (!rpc) { tagVocabularyMessage = zh ? '同步失败：客户端不支持。' : 'Sync failed.'; renderTagVocabularySection(section); return; }
+        rpc.then(function(result) {
+          if (result && result.error) throw result.error;
+          return reloadTagVocabulary(section);
+        }).then(function() {
+          tagVocabularyMessage = zh
+            ? '已按站内标签重算一遍（收全 + 清掉没人用的词条）。'
+            : 'Re-synced from the library.';
+          renderTagVocabularySection(section);
+        }).catch(function(error) {
+          tagVocabularyMessage = zh
+            ? ('同步失败：' + (error.message || '').slice(0, 60) + '（若提示函数不存在，请先在 Supabase 执行 sql/025_tag_vocabulary_auto_sync.sql）')
+            : 'Sync failed. Run sql/025 first.';
+          renderTagVocabularySection(section);
+        });
+        return;
+      }
       if (event.target.closest('[data-tv-translate]')) {
         const missing = (tagVocabularyRows || []).filter(function(row) { return row.kind !== TAG_VOCABULARY_IGNORED && !String(row.name_en || '').trim(); });
         const terms = missing.map(function(row) { return row.name_zh; }).slice(0, TAG_TRANSLATE_BATCH * 2);
@@ -16545,9 +16583,11 @@ function libraryTagsForForm(formData, kind) {
       const relatedInput = event.target.closest('[data-tv-related]');
       if (relatedInput) {
         const id = relatedInput.getAttribute('data-tv-related') || '';
+        // v900：英文界面里看到的是英文写法，存库前用词表反查换回库内中文标签
         const next = parseRelatedWordsInput(relatedInput.value);
+        const stored = tagVocabularyRelatedStorageWords(next);
         tagVocabularyMessage = '';
-        saveTagVocabularyPatch(id, { related: next, source: 'manual' })
+        saveTagVocabularyPatch(id, { related: stored, source: 'manual' })
           .then(function() { tagVocabularyMessage = state.lang === 'zh' ? '相关词已保存。' : 'Related words saved.'; rerenderBody(); })
           .catch(function(error) { tagVocabularyMessage = state.lang === 'zh' ? ('保存失败：' + (error.message || '').slice(0, 60)) : 'Save failed.'; renderTagVocabularySection(section); });
       }
@@ -16556,25 +16596,12 @@ function libraryTagsForForm(formData, kind) {
       if (event.target.id === 'tv-search') { tagVocabularyQuery = event.target.value || ''; rerenderBody(); }
     });
 
-    // ── 删除：只删这张"中英对照表"里的一行，绝不动物料上的标签（v899 把这条写进确认框）──
-    section.addEventListener('click', function(event) {
-      const deleteBtn = event.target.closest('[data-tv-delete]');
-      if (!deleteBtn) return;
-      const id = deleteBtn.getAttribute('data-tv-delete') || '';
-      const row = (tagVocabularyRows || []).find(function(item) { return item.id === id; });
-      if (!row) return;
-      if (!confirm(state.lang === 'zh'
-        ? ('从词表删除「' + row.name_zh + '」？\n\n· 只删这张对照表里的一行，物料上的这个标签原样保留，不会删任何素材\n· 影响：英文界面这个标签退回显示中文；「搜英文命中中文」对这个词失效')
-        : ('Delete "' + row.name_zh + '" from the vocabulary?\n\nIt only removes this dictionary row. Tags on assets stay untouched; nothing is deleted.\nEffect: English UI falls back to Chinese for this tag.'))) return;
-      tagVocabularyMessage = '';
-      state.supabase.from(TAG_VOCABULARY_TABLE).delete().eq('id', id)
-        .then(function(result) { if (result.error) throw result.error; return reloadTagVocabulary(section); })
-        .catch(function(error) { tagVocabularyMessage = state.lang === 'zh' ? ('删除失败：' + (error.message || '').slice(0, 60)) : 'Delete failed.'; renderTagVocabularySection(section); });
-    });
+    // ── v900：删除按钮已去掉 ──
+    // 词表由数据库按「站内正在用的标签」自动同步（sql/025）：某个标签连最后一条物料都没了，
+    // 它自己会被清掉；不再提供"手工删一行"的入口（那只会留下搜不到的死词条、或者让人误以为能删标签）。
 
-    // v899：「新增词」入口已去掉 —— 词表是"站内已有标签"的对照表，
-    // 手工新增的词并不会成为任何物料的标签（搜不到），只会让 AI 候选池混入虚词。
-    // 需要新增时直接在 Supabase 表编辑器里插一行（id 形如 el:中文名）。
+    // v899：「新增词」入口同样已去掉 —— 手工新增的词不会成为任何物料的标签（搜不到），
+    // 只会让 AI 候选池混入虚词。词表由 sql/025 自动收全。
   }
 
   function ensureTagVocabularySection(container) {
