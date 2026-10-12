@@ -867,7 +867,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v879';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v880';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -14278,7 +14278,11 @@ function libraryTagsForForm(formData, kind) {
     (state.librarySources || []).forEach(function (source) {
       (Array.isArray(source && source.tags) ? source.tags : []).forEach(push);
     });
-    (state.libraryPreviews || []).forEach(function (preview) { push(preview && preview.material_type); });
+    (state.libraryPreviews || []).forEach(function (preview) {
+      push(preview && preview.material_type);
+      // 逐图 AI 标签（vf_preview_ai_tags）也纳入收集，否则只出现在逐图标签里的新词在英文界面会退回中文
+      (casePreviewAiTags(preview && preview.id) || []).forEach(push);
+    });
     return out;
   }
 
@@ -16218,6 +16222,11 @@ function libraryTagsForForm(formData, kind) {
       + (tagVocabularyMessage ? '<div class="tv-message">' + escapeHtml(tagVocabularyMessage) + '</div>' : '')
       + '<div class="tv-toolbar">'
       + '<input type="search" class="tv-search" id="tv-search" value="' + escapeAttr(tagVocabularyQuery) + '" placeholder="' + (zh ? '搜中文 / 英文 / 别名…' : 'Search Chinese / English / alias…') + '">'
+      + '<span class="tv-add">'
+      + '<input type="text" class="tv-add-zh" placeholder="' + (zh ? '新增：中文名' : 'New: Chinese name') + '" style="width:130px;padding:6px 9px;border:1px solid #e2e8f0;border-radius:8px;font-size:12.5px;">'
+      + '<input type="text" class="tv-add-en" placeholder="' + (zh ? '英文名（可选）' : 'English (optional)') + '" style="width:150px;padding:6px 9px;border:1px solid #e2e8f0;border-radius:8px;font-size:12.5px;">'
+      + '<button type="button" class="tv-btn" data-tv-add="1">' + (zh ? '新增' : 'Add') + '</button>'
+      + '</span>'
       + '<span class="tv-count">' + (zh ? ('共 ' + rows.length + ' 个' + (missing.length ? ' · 待补英文 ' + missing.length + ' 个' : '')) : (rows.length + ' terms' + (missing.length ? ' · ' + missing.length + ' missing' : ''))) + '</span>'
       + '</div>'
       + '<table class="tv-table"><thead><tr>'
@@ -16431,6 +16440,37 @@ function libraryTagsForForm(formData, kind) {
       if (aliasPop.contains(event.target)) return;
       if (event.target.closest('[data-tv-alias]')) return;
       closeAliasPop();
+    });
+
+    // ── 新增词：预置中英名，等这个标签以后出现时直接就有译名 ──
+    section.addEventListener('click', function(event) {
+      if (!event.target.closest('[data-tv-add]')) return;
+      const zhInput = section.querySelector('.tv-add-zh');
+      const enInput = section.querySelector('.tv-add-en');
+      const nameZh = String((zhInput && zhInput.value) || '').trim();
+      const nameEn = String((enInput && enInput.value) || '').trim();
+      if (!nameZh) {
+        tagVocabularyMessage = state.lang === 'zh' ? '先填中文名。' : 'Chinese name required.';
+        renderTagVocabularySection(section);
+        return;
+      }
+      if ((tagVocabularyRows || []).some(function(row) { return String(row.name_zh) === nameZh; })) {
+        tagVocabularyMessage = state.lang === 'zh' ? ('「' + nameZh + '」已经在词表里了。') : ('"' + nameZh + '" is already in the vocabulary.');
+        renderTagVocabularySection(section);
+        return;
+      }
+      tagVocabularyMessage = '';
+      state.supabase.from(TAG_VOCABULARY_TABLE)
+        .insert({ id: 'el:' + nameZh, name_zh: nameZh, name_en: nameEn, aliases: [], kind: 'element', source: 'manual' })
+        .then(function(result) { if (result.error) throw result.error; return reloadTagVocabulary(section); })
+        .then(function() {
+          tagVocabularyMessage = state.lang === 'zh' ? ('已新增「' + nameZh + '」。') : ('Added "' + nameZh + '".');
+          renderTagVocabularySection(section);
+        })
+        .catch(function(error) {
+          tagVocabularyMessage = state.lang === 'zh' ? ('新增失败：' + (error.message || '').slice(0, 60)) : 'Add failed.';
+          renderTagVocabularySection(section);
+        });
     });
   }
 
