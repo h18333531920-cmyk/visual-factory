@@ -45,17 +45,10 @@ test('前端：英文界面查词表译名，缺表时永久退回原文', () =>
 
 test('新表与新端点：代理白名单已登记、版本号六处同步', () => {
   assert.match(policySource, /'vf_tag_vocabulary'/, '非维护账号要能读词表');
-  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v890/);
-  const refs = indexSource.match(/\?v=20261012-tag-i18n-v890/g) || [];
+  assert.match(indexSource, /app\.js\?v=20261012-tag-flat-v891/);
+  const refs = indexSource.match(/\?v=20261012-tag-flat-v891/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v890'/);
-});
-
-test('标签词表：折叠分组（上位词成组，默认收起）', () => {
-  assert.match(appSource, /function tagVocabularyDisplayRows/, '要有成组显示顺序');
-  assert.match(appSource, /const tagVocabularyCollapsed = new Set\(\)/, '要有折叠状态');
-  assert.match(appSource, /data-tv-collapse="/, '父级行要有展开/收起按钮');
-  assert.match(appSource, /depth \* 18/, '子级要有缩进');
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-flat-v891'/);
 });
 
 test('标签词表：自动更新（中文界面也补翻，不阻塞渲染）', () => {
@@ -63,24 +56,9 @@ test('标签词表：自动更新（中文界面也补翻，不阻塞渲染）',
   assert.doesNotMatch(appSource, /tagVocabularyReady !== true \|\| state\.lang !== 'en'/, '补翻不应只在英文界面发生');
 });
 
-test('词表自动归类：按钮 + 端点 + 建议解析（直接应用，不逐条确认）', async () => {
-  assert.match(appSource, /data-tv-suggest="1"/, '词表卡片要有 AI 自动归类按钮');
-  assert.match(appSource, /'\/api\/tag-vocabulary-suggest'/, '前端要调归类端点');
-  const apiSource = readFileSync(join(here, '..', 'functions', 'api', 'tag-vocabulary-suggest.js'), 'utf8');
-  assert.match(apiSource, /requireAdmin/, '会改词表数据，必须限管理员');
-  assert.match(apiSource, /parent_id: parentRow\.id/, '要真的写上位词');
-  const ai = await import('../functions/_ai.js');
-  const known = ['食物', '汉堡', '披萨', '番茄', '西红柿'];
-  const parsed = ai.parseVocabularySuggestions('{"merges":[{"keep":"番茄","aliases":["西红柿","土豆"]}],"parents":[{"parent":"食物","children":["汉堡","披萨","空气"]}]}', known);
-  assert.deepEqual(parsed.merges, [{ keep: '番茄', aliases: ['西红柿'] }], '词表里没有的词要丢掉');
-  assert.deepEqual(parsed.parents, [{ parent: '食物', children: ['汉堡', '披萨'], parentIsNew: false }]);
-  const withNewParent = ai.parseVocabularySuggestions('{"parents":[{"parent":"甜点","children":["蛋挞"]}]}', ['蛋挞', '蛋糕']);
-  assert.deepEqual(withNewParent.parents, [{ parent: '甜点', children: ['蛋挞'], parentIsNew: true }], '允许 AI 提出新的上位词');
-});
-
 test('标签词表：搜索三层（子串 + 中英归一 + 相关词）', () => {
-  assert.match(appSource, /select\('id,name_zh,name_en,aliases,kind,parent_id,related'\)/, '词表要读相关词');
-  assert.match(appSource, /\/parent_id\|related\/i\.test\(String\(result\.error\.message/, 'sql/023/024 未执行时要能退化');
+  assert.match(appSource, /select\('id,name_zh,name_en,kind,related'\)/, '词表要读相关词');
+  assert.match(appSource, /\/related\/i\.test\(String\(result\.error\.message/, 'sql/024 未执行时要能退化');
   assert.match(appSource, /function tagVocabularyQueryTerms/, '要有查询归一');
   assert.match(appSource, /canonicalRow\.related/, '相关词要一起参与匹配');
   assert.match(appSource, /const vocabTerms = \(typeof tagVocabularyQueryTerms === 'function'\)/, '搜索匹配要接入词表归一');
