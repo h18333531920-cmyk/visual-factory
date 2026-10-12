@@ -867,7 +867,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v881';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v882';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3762,6 +3762,9 @@ return;
     for (let i = 0; i < tokens.length; i++) {
       if (text.includes(tokens[i])) continue;
       exact = false;
+      // v882 词表归一 + 上位词展开：coffee→咖啡（命中「冰咖啡」「黑咖啡」）；搜「食物」带上它挂的所有子孙词
+      const vocabTerms = (typeof tagVocabularyQueryTerms === 'function') ? tagVocabularyQueryTerms(tokens[i]) : [];
+      if (vocabTerms.some(function(t) { return t !== tokens[i] && text.includes(t); })) continue;
       // v849 搜索扩展：搜子类别名（如 顶通）时，命中所属大类别（头图）的物料；映射来自当前清单，实时生效
       const subNameTypes = (typeof materialCatalogSubNameTypes === 'function') ? materialCatalogSubNameTypes(tokens[i]) : [];
       if (subNameTypes.some(function(t) { return text.includes(t); })) continue;
@@ -14230,6 +14233,8 @@ function libraryTagsForForm(formData, kind) {
   let tagVocabularyPromise = null;
   const tagVocabularyByName = new Map();   // 中文名 → 英文名（英文界面用）
   const tagVocabularyByEn = new Map();     // 英文名（小写）→ 中文名（中文界面用：标签本身是英文时也能显示中文）
+  const tagVocabularyAliasToZh = new Map();// 别名（小写）→ 中文名（搜索归一：比萨 → 披萨）
+  const tagVocabularyRowsByZh = new Map(); // 中文名 → 整行（别名、父级都从这里取）
   const tagTranslateAttempts = new Map();
 
   function isMissingTagVocabularyError(error) {
@@ -14241,7 +14246,7 @@ function libraryTagsForForm(formData, kind) {
     tagVocabularyPromise = (async function () {
       try {
         if (!state.supabase || !state.session) return false;
-        const result = await state.supabase.from(TAG_VOCABULARY_TABLE).select('name_zh,name_en');
+        const result = await state.supabase.from(TAG_VOCABULARY_TABLE).select('id,name_zh,name_en,aliases,kind,parent_id');
         if (result.error) {
           if (isMissingTagVocabularyError(result.error)) {
             tagVocabularyReady = false;
@@ -14252,10 +14257,17 @@ function libraryTagsForForm(formData, kind) {
         tagVocabularyReady = true;
         (result.data || []).forEach(function (row) {
           const nameZh = String(row && row.name_zh || '').trim();
+          if (!nameZh) return;
+          tagVocabularyRowsByZh.set(nameZh, row);
           const nameEn = String(row && row.name_en || '').trim();
-          if (!nameZh || !nameEn) return;
-          tagVocabularyByName.set(nameZh, nameEn);
-          if (!tagVocabularyByEn.has(nameEn.toLowerCase())) tagVocabularyByEn.set(nameEn.toLowerCase(), nameZh);
+          if (nameEn) {
+            tagVocabularyByName.set(nameZh, nameEn);
+            if (!tagVocabularyByEn.has(nameEn.toLowerCase())) tagVocabularyByEn.set(nameEn.toLowerCase(), nameZh);
+          }
+          (Array.isArray(row && row.aliases) ? row.aliases : []).forEach(function (alias) {
+            const key = String(alias || '').trim().toLowerCase();
+            if (key && !tagVocabularyAliasToZh.has(key)) tagVocabularyAliasToZh.set(key, nameZh);
+          });
         });
         return true;
       } catch (error) {
@@ -14340,6 +14352,60 @@ function libraryTagsForForm(formData, kind) {
     if (!label) return label;
     if (state.lang === 'zh') return tagVocabularyByEn.get(label.toLowerCase()) || label;
     return tagVocabularyByName.get(label) || LIBRARY_LABELS_EN[label] || label;
+  }
+
+  // ── 搜索归一 + 上位词展开（v882）──
+  // 把搜索词展开成「应该匹配的所有写法」：自己 + 归一后的中文名 + 它的英文名 + 别名 + 所有子孙词。
+  // 例：coffee → 咖啡（于是能命中「冰咖啡」「黑咖啡」）；食物 → 汉堡、披萨、甜点…（上位词兜底，不靠 AI 联想）
+  function tagVocabularyDescendantsOf(nameZh) {
+    const out = [];
+    if (tagVocabularyReady !== true || !nameZh) return out;
+    const seen = new Set();
+    let frontier = [nameZh];
+    for (let depth = 0; depth < 4 && frontier.length; depth += 1) {
+      const next = [];
+      frontier.forEach(function(parentZh) {
+        const parentRow = tagVocabularyRowsByZh.get(parentZh);
+        const parentId = String(parentRow && parentRow.id || '');
+        if (!parentId) return;
+        tagVocabularyRowsByZh.forEach(function(row) {
+          if (String(row && row.parent_id || '') !== parentId) return;
+          const childZh = String(row.name_zh || '').trim();
+          if (!childZh || childZh === nameZh || seen.has(childZh)) return;
+          seen.add(childZh);
+          out.push(childZh);
+          next.push(childZh);
+        });
+      });
+      frontier = next;
+    }
+    return out;
+  }
+
+  function tagVocabularyQueryTerms(token) {
+    const out = [];
+    const push = function(value) {
+      const text = String(value == null ? '' : value).trim().toLowerCase();
+      if (text && out.indexOf(text) < 0) out.push(text);
+    };
+    const raw = String(token || '').trim();
+    if (!raw) return out;
+    push(raw);
+    const lower = raw.toLowerCase();
+    const directRow = tagVocabularyRowsByZh.get(raw);
+    const canonicalZh = directRow ? raw : (tagVocabularyByEn.get(lower) || tagVocabularyAliasToZh.get(lower) || '');
+    if (!canonicalZh) return out;
+    push(canonicalZh);
+    push(tagVocabularyByName.get(canonicalZh));
+    const canonicalRow = tagVocabularyRowsByZh.get(canonicalZh);
+    (Array.isArray(canonicalRow && canonicalRow.aliases) ? canonicalRow.aliases : []).forEach(push);
+    tagVocabularyDescendantsOf(canonicalZh).forEach(function(childZh) {
+      push(childZh);
+      push(tagVocabularyByName.get(childZh));
+      const childRow = tagVocabularyRowsByZh.get(childZh);
+      (Array.isArray(childRow && childRow.aliases) ? childRow.aliases : []).forEach(push);
+    });
+    return out;
   }
 
   function optionNameById(id) {
@@ -16127,13 +16193,14 @@ function libraryTagsForForm(formData, kind) {
   let tagVocabularyRows = null;
   let tagVocabularyMounting = false;
   let tagVocabularyQuery = '';
+  let tagVocabularyParentId = '';
   let tagVocabularyMessage = '';
   const TAG_VOCABULARY_IGNORED = 'ignored';
 
   async function fetchTagVocabularyRows() {
     if (!state.supabase) return [];
     const result = await state.supabase.from(TAG_VOCABULARY_TABLE)
-      .select('id,name_zh,name_en,aliases,kind,source')
+      .select('id,name_zh,name_en,aliases,kind,source,parent_id')
       .order('name_zh', { ascending: true })
       .limit(1000);
     if (result.error) throw result.error;
@@ -16178,6 +16245,19 @@ function libraryTagsForForm(formData, kind) {
     return visible.map(function(row) {
       const ignored = row.kind === TAG_VOCABULARY_IGNORED;
       const aliases = Array.isArray(row.aliases) ? row.aliases : [];
+      const parentRow = row.parent_id ? rows.find(function(item) { return String(item.id) === String(row.parent_id); }) : null;
+      const parentLabel = parentRow ? String(parentRow.name_zh) : (zh ? '无' : 'none');
+      const childCount = rows.filter(function(item) { return String(item.parent_id || '') === String(row.id); }).length;
+      const parentOpen = tagVocabularyParentId === row.id;
+      const parentCell = parentOpen
+        ? '<select class="tv-merge-select" data-tv-parent-target="' + escapeAttr(row.id) + '">'
+            + '<option value="">' + (zh ? '无上位词' : 'No parent') + '</option>'
+            + rows.filter(function(item) { return String(item.id) !== String(row.id); }).map(function(item) {
+                return '<option value="' + escapeAttr(item.id) + '"' + (String(item.id) === String(row.parent_id || '') ? ' selected' : '') + '>' + escapeHtml(item.name_zh) + '</option>';
+              }).join('')
+          + '</select>'
+        : '<button type="button" class="tv-btn" data-tv-parent="' + escapeAttr(row.id) + '" title="' + escapeAttr(zh ? '上位词：搜索命中它时，它下面挂的词也算命中' : 'Broader term: searching it also matches its children') + '">'
+          + (zh ? '上位词：' : 'Parent: ') + escapeHtml(parentLabel) + (childCount ? (zh ? '（' + childCount + ' 子级）' : ' (+' + childCount + ')') : '') + '</button>';
       return '<tr class="' + (ignored ? 'is-ignored' : '') + '">'
         + '<td class="tv-zh">' + escapeHtml(row.name_zh) + '</td>'
         + '<td class="tv-en-cell"><input class="tv-en" data-tv-en="' + escapeAttr(row.id) + '" value="' + escapeAttr(row.name_en || '') + '" placeholder="' + (zh ? '点这里填英文' : 'type English') + '">'
@@ -16185,7 +16265,7 @@ function libraryTagsForForm(formData, kind) {
           + '</td>'
         + '<td class="tv-alias"><span class="tv-alias-trigger" data-tv-alias="' + escapeAttr(row.id) + '" title="' + escapeAttr(zh ? '鼠标移上来查看 / 添加别名' : 'Hover to view / add aliases') + '">'
           + (aliases.length ? (zh ? aliases.length + ' 个' : aliases.length + ' aliases') : '<span class="tv-dim">—</span>') + '</span></td>'
-        + '<td class="tv-ops">'
+        + '<td class="tv-ops">' + parentCell
           + '<button type="button" class="tv-btn tv-danger" data-tv-delete="' + escapeAttr(row.id) + '">' + (zh ? '删除' : 'Delete') + '</button>'
         + '</td></tr>';
     }).join('');
@@ -16258,6 +16338,13 @@ function libraryTagsForForm(formData, kind) {
     const rerenderBody = function() { refreshTagVocabularyBody(section); };
     section.addEventListener('click', function(event) {
       if (event.target.closest('[data-tv-refresh]')) { reloadTagVocabulary(section); return; }
+      const parentBtn = event.target.closest('[data-tv-parent]');
+      if (parentBtn) {
+        const rowId = parentBtn.getAttribute('data-tv-parent') || '';
+        tagVocabularyParentId = tagVocabularyParentId === rowId ? '' : rowId;
+        rerenderBody();
+        return;
+      }
       if (event.target.closest('[data-tv-translate]')) {
         const missing = (tagVocabularyRows || []).filter(function(row) { return row.kind !== TAG_VOCABULARY_IGNORED && !String(row.name_en || '').trim(); });
         const terms = missing.map(function(row) { return row.name_zh; }).slice(0, TAG_TRANSLATE_BATCH * 2);
@@ -16273,6 +16360,19 @@ function libraryTagsForForm(formData, kind) {
       }
     });
     section.addEventListener('change', function(event) {
+      const parentSelect = event.target.closest('[data-tv-parent-target]');
+      if (parentSelect) {
+        const rowId = parentSelect.getAttribute('data-tv-parent-target') || '';
+        const nextParentId = parentSelect.value || '';
+        tagVocabularyParentId = '';
+        saveTagVocabularyPatch(rowId, { parent_id: nextParentId, source: 'manual' })
+          .then(function() { return reloadTagVocabulary(section); })
+          .catch(function(error) {
+            tagVocabularyMessage = state.lang === 'zh' ? ('保存失败：' + (error.message || '').slice(0, 60)) : 'Save failed.';
+            renderTagVocabularySection(section);
+          });
+        return;
+      }
       const input = event.target.closest('[data-tv-en]');
       if (input) {
         const id = input.getAttribute('data-tv-en') || '';

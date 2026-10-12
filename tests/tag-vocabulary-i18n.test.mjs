@@ -45,8 +45,17 @@ test('前端：英文界面查词表译名，缺表时永久退回原文', () =>
 
 test('新表与新端点：代理白名单已登记、版本号六处同步', () => {
   assert.match(policySource, /'vf_tag_vocabulary'/, '非维护账号要能读词表');
-  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v881/);
-  const refs = indexSource.match(/\?v=20261012-tag-i18n-v881/g) || [];
+  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v882/);
+  const refs = indexSource.match(/\?v=20261012-tag-i18n-v882/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v881'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v882'/);
+});
+
+test('标签词表：搜索归一 + 上位词展开 + 父级字段', () => {
+  assert.match(appSource, /select\('id,name_zh,name_en,aliases,kind,parent_id'\)/, '词表要读父级与别名');
+  assert.match(appSource, /function tagVocabularyDescendantsOf/, '要有上位词展开');
+  assert.match(appSource, /function tagVocabularyQueryTerms/, '要有查询归一');
+  assert.match(appSource, /const vocabTerms = \(typeof tagVocabularyQueryTerms === 'function'\)/, '搜索匹配要接入词表归一');
+  const sqlSource = readFileSync(join(here, '..', 'sql', '023_tag_vocabulary_parent.sql'), 'utf8');
+  assert.match(sqlSource, /add column if not exists parent_id text/, 'sql/023 要有幂等的加列语句');
 });
