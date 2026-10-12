@@ -1225,7 +1225,7 @@ export function parseTagTranslations(text, terms = []) {
   return out;
 }
 
-export async function translateTagsWithGlm(env, terms = []) {
+export async function translateTagsWithGlm(env, terms = [], direction = 'zh2en') {
   const key = elementTagApiKey(env);
   if (!key) throw new Error('标签翻译未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY。');
   const list = (Array.isArray(terms) ? terms : [])
@@ -1234,16 +1234,28 @@ export async function translateTagsWithGlm(env, terms = []) {
     .filter((v, index, all) => all.indexOf(v) === index)
     .slice(0, TAG_TRANSLATE_MAX_TERMS);
   if (!list.length) return {};
-  const lines = [
-    '你在把一个设计素材库的中文标签翻成英文显示名，给英文界面的同事看。',
-    `中文标签：${list.join('、')}。规则：`,
-    '1. 用最通俗、最常见的英文词（例：饮料→Drinks，不要 Beverage；餐桌→Table；炸鸡→Fried Chicken）；',
-    '2. 品牌名和专有名词保留通用写法（例：kiki→KIKI、Keeta→Keeta、麦当劳→McDonald\'s）；',
-    '3. 一个中文词对应一个英文词，不加冠词、不加解释、不要复数化；',
-    '4. 必须为下面列表里的每一个词都给出译名，一个都不能漏（漏掉会显示成中文）；',
-    '5. 不确定就原样返回中文，不要编造；',
-    '6. 只输出 JSON，不要代码块：{"translations":{"披萨":"Pizza","炸鸡":"Fried Chicken"}}',
-  ];
+  const toEnglish = direction !== 'en2zh';
+  const lines = toEnglish
+    ? [
+        '你在把一个设计素材库的中文标签翻成英文显示名，给英文界面的同事看。',
+        `中文标签：${list.join('、')}。规则：`,
+        '1. 用最通俗、最常见的英文词（例：饮料→Drinks，不要 Beverage；餐桌→Table；炸鸡→Fried Chicken）；',
+        '2. 品牌名和专有名词保留通用写法（例：kiki→KIKI、Keeta→Keeta、麦当劳→McDonald\'s）；',
+        '3. 一个中文词对应一个英文词，不加冠词、不加解释、不要复数化；',
+        '4. 必须为下面列表里的每一个词都给出译名，一个都不能漏（漏掉会显示成中文）；',
+        '5. 不确定就原样返回中文，不要编造；',
+        '6. 只输出 JSON，不要代码块：{"translations":{"披萨":"Pizza","炸鸡":"Fried Chicken"}}',
+      ]
+    : [
+        '你在把一个设计素材库的英文标签翻成简体中文常用说法（给中文界面的同事看）。',
+        `英文标签：${list.join('、')}。规则：`,
+        '1. 用最通俗、最常见的中文词（例：Fried Chicken→炸鸡；Drinks→饮料；Ice Cream→冰淇淋）；',
+        '2. 品牌名和专有名词保留通用写法（例：KIKI→kiki、Keeta→Keeta、McDonald\'s→麦当劳）；',
+        '3. 一个英文词对应一个中文词，不要解释、不要加"类"字后缀；',
+        '4. 必须为下面列表里的每一个词都给出译名，一个都不能漏；',
+        '5. 不确定就原样返回英文，不要编造；',
+        '6. 只输出 JSON，不要代码块：{"translations":{"Pizza":"披萨","Ice Cream":"冰淇淋"}}',
+      ];
   const data = await postJson(GLM_VISION_URL, {
     model: GLM_TEXT_MODEL,
     temperature: 0.2,
@@ -1282,10 +1294,12 @@ export function parseVocabularySuggestions(text, known = []) {
   }
   for (const item of Array.isArray(parsed.parents) ? parsed.parents : []) {
     const parent = pick(item && item.parent);
-    if (!knownSet.has(parent)) continue;
+    if (!parent || parent.length > 12) continue;
+    // parent 允许是词表里还没有的新概念（例：库里有蛋挞/蛋糕但没有「甜点」→ 由 AI 提出「甜点」，
+    // 端点会把它建出来再挂子级）；children 必须是词表里真实存在的词。
     const children = (Array.isArray(item && item.children) ? item.children : [])
       .map(pick).filter(value => value && value !== parent && knownSet.has(value));
-    if (children.length) out.parents.push({ parent: parent, children: children.slice(0, 60) });
+    if (children.length) out.parents.push({ parent: parent, children: children.slice(0, 60), parentIsNew: !knownSet.has(parent) });
     if (out.parents.length >= 20) break;
   }
   return out;
@@ -1304,10 +1318,12 @@ export async function suggestVocabularyGroupsWithGlm(env, terms = []) {
     '你在整理一个中东外卖业务的设计素材库「标签词表」（标签是图片里出现的东西的名字）。请把它整理成两类建议：',
     `词表：${list.join('、')}。`,
     '1. merges：哪些是**同一个东西的不同叫法**，应该合成一个。keep 选最通用的中文名，aliases 放其余叫法（例：番茄/西红柿 → keep 番茄；薯条/炸薯条 → keep 薯条）。',
-    '2. parents：哪些词属于一个**更大的概念**。parent 必须是大词（例：食物、饮料、人物、场景、物料类型），children 放具体小词（例：parent 食物 → children 汉堡、披萨、沙拉…）。只给有把握的，别硬凑。',
-    '3. 品牌名、平台名、物料类型名不要互相合并。',
-    '4. parent / children / keep / aliases 里的词必须**原样来自上面词表**，不要新造词。',
-    '5. 只输出 JSON，不要代码块：{"merges":[{"keep":"番茄","aliases":["西红柿"]}],"parents":[{"parent":"食物","children":["汉堡","披萨"]}]}',
+    '2. parents：哪些词属于一个**更大的概念**。parent 可以是大词（例：食物、饮料、人物、场景、物料类型），**也可以是词表里还没有的新概念**（例：词表里有蛋挞、蛋糕、甜甜圈但没有「甜点」→ parent 就写「甜点」，系统会新建它）。children 放具体小词。',
+    '3. **重要**：挂父子之前先看字面 —— 如果子词里**已经包含** parent 的字面（例：牛肉汉堡 含「汉堡」、黑咖啡 含「咖啡」），**就不要挂**，因为搜索时按字面就能命中；父子只用来补"字面看不出来"的（例：蛋挞 → 甜点）。',
+    '4. **层级最多两层**，不要再往下套（例：食物 → 汉堡 就够了，汉堡的变体靠字面命中）。',
+    '5. 品牌名、平台名、物料类型名不要互相合并，也不要给它们套上位词。',
+    '6. children / keep / aliases 里的词必须**原样来自上面词表**，不要新造；只有 parent 允许是新的。',
+    '7. 只输出 JSON，不要代码块：{"merges":[{"keep":"番茄","aliases":["西红柿"]}],"parents":[{"parent":"食物","children":["汉堡","披萨"]}]}',
   ];
   const data = await postJson(GLM_VISION_URL, {
     model: GLM_TEXT_MODEL,

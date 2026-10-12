@@ -77,8 +77,9 @@ export async function onRequest({ request, env }) {
     if (!missing.length) return json({ success: true, map, translated: 0 });
 
     let translations = {};
+    const direction = body.direction === 'en2zh' ? 'en2zh' : 'zh2en';
     try {
-      translations = await translateTagsWithGlm(env, missing);
+      translations = await translateTagsWithGlm(env, missing, direction);
       // 模型批量翻译会稳定地漏 1–2 个词（实测 20 个也会漏）：只把漏掉的再问一次，
       // 列表短、命中率高；两次都拿不到的留给人工在词表维护里补。
       const leftover = missing.filter(term => !translations[term]);
@@ -100,11 +101,14 @@ export async function onRequest({ request, env }) {
 
     let written = 0;
     if (Object.keys(translations).length) {
-      try {
-        written = await writeTranslations(env, translations, existingSources);
-      } catch (error) {
-        // 写库失败不影响本次显示：译名已拿到，前端先用着，下次再落库。
-        console.warn('标签词表写入失败:', error && error.message);
+      // en2zh 是"英文 → 中文"，只借 AI 得到译名，不落库（落库会把英文词当成中文名写进表，行由前端按正确中文名新建）
+      if (direction !== 'en2zh') {
+        try {
+          written = await writeTranslations(env, translations, existingSources);
+        } catch (error) {
+          // 写库失败不影响本次显示：译名已拿到，前端先用着，下次再落库。
+          console.warn('标签词表写入失败:', error && error.message);
+        }
       }
       Object.assign(map, translations);
     }

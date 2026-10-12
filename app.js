@@ -867,7 +867,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v887';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v888';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -16201,6 +16201,7 @@ function libraryTagsForForm(formData, kind) {
   let tagVocabularyQuery = '';
   let tagVocabularyParentId = '';
   let tagVocabularyMessage = '';
+  let tagVocabularySuggesting = false;   // 归类分批跑进行中（防止重复点击）
   const tagVocabularyCollapsed = new Set();   // 折叠的组（存父级 id）：默认折叠，只显示顶层词
   const TAG_VOCABULARY_IGNORED = 'ignored';
 
@@ -16392,29 +16393,48 @@ function libraryTagsForForm(formData, kind) {
         return;
       }
       if (event.target.closest('[data-tv-suggest]')) {
-        const suggestButton = section.querySelector('[data-tv-suggest]');
-        if (suggestButton) {
-          suggestButton.disabled = true;
-          suggestButton.textContent = state.lang === 'zh' ? '归类中…' : 'Grouping…';
-        }
-        tagVocabularyMessage = state.lang === 'zh' ? 'AI 正在读词表并自动归类…' : 'AI is grouping…';
+        if (tagVocabularySuggesting) return;
+        tagVocabularySuggesting = true;
         const suggestToken = (state.session && state.session.access_token) || '';
-        fetch('/api/tag-vocabulary-suggest', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + suggestToken }
-        })
-          .then(function(response) { return response.json().catch(function() { return {}; }); })
-          .then(function(data) {
-            if (!data || !data.success) throw new Error((data && data.message) || '归类失败');
-            return reloadTagVocabulary(section).then(function() {
-              tagVocabularyMessage = state.lang === 'zh'
-                ? ('已自动归类：上位词 ' + data.parentsApplied + ' 个（' + data.parentGroups + ' 组）· 合并叫法 ' + data.mergesApplied + ' 个（' + data.mergeGroups + ' 组）')
-                : ('Auto-grouped: ' + data.parentsApplied + ' children / ' + data.mergesApplied + ' merged.');
-              renderTagVocabularySection(section);
+        let totalParents = 0;
+        let totalCreated = 0;
+        let totalMerges = 0;
+        const createdNames = [];
+        const runBatch = function(offset, round) {
+          tagVocabularyMessage = state.lang === 'zh'
+            ? ('AI 正在分批归类…第 ' + round + ' 批（每批 60 个词，请稍等）')
+            : ('AI is grouping… batch ' + round);
+          renderTagVocabularySection(section);
+          return fetch('/api/tag-vocabulary-suggest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + suggestToken },
+            body: JSON.stringify({ offset: offset, batchSize: 60 })
+          })
+            .then(function(response) { return response.json().catch(function() { return {}; }); })
+            .then(function(data) {
+              if (!data || !data.success) throw new Error((data && data.message) || '归类失败');
+              totalParents += Number(data.parentsApplied) || 0;
+              totalCreated += Number(data.parentsCreated) || 0;
+              totalMerges += Number(data.mergesApplied) || 0;
+              (data.createdNames || []).forEach(function(name) { if (createdNames.indexOf(name) < 0) createdNames.push(name); });
+              if (data.nextOffset === null || data.nextOffset === undefined) return null;
+              return runBatch(Number(data.nextOffset) || 0, round + 1);
             });
+        };
+        runBatch(0, 1)
+          .then(function() { return reloadTagVocabulary(section); })
+          .then(function() {
+            tagVocabularySuggesting = false;
+            tagVocabularyMessage = state.lang === 'zh'
+              ? ('已自动归类：新建上位词 ' + totalCreated + ' 个' + (createdNames.length ? '（' + createdNames.slice(0, 5).join('、') + '）' : '') + ' · 归入子级 ' + totalParents + ' 个 · 合并叫法 ' + totalMerges + ' 个')
+              : ('Auto-grouped: +' + totalCreated + ' parents / ' + totalParents + ' children / ' + totalMerges + ' merged.');
+            renderTagVocabularySection(section);
           })
           .catch(function(error) {
-            tagVocabularyMessage = state.lang === 'zh' ? ('自动归类失败：' + (error.message || '').slice(0, 80)) : 'Auto-group failed.';
+            tagVocabularySuggesting = false;
+            tagVocabularyMessage = state.lang === 'zh'
+              ? ('归类中断：' + (error.message || '').slice(0, 80) + '（可再点一次继续）')
+              : 'Grouping stopped.';
             renderTagVocabularySection(section);
           });
         return;
@@ -16566,33 +16586,64 @@ function libraryTagsForForm(formData, kind) {
       closeAliasPop();
     });
 
-    // ── 新增词：预置中英名，等这个标签以后出现时直接就有译名 ──
+    // ── 新增词：中文或英文填一个就行，AI 自动补另一种语言 ──
     section.addEventListener('click', function(event) {
       if (!event.target.closest('[data-tv-add]')) return;
+      const addZh = state.lang === 'zh';
       const zhInput = section.querySelector('.tv-add-zh');
       const enInput = section.querySelector('.tv-add-en');
-      const nameZh = String((zhInput && zhInput.value) || '').trim();
-      const nameEn = String((enInput && enInput.value) || '').trim();
-      if (!nameZh) {
-        tagVocabularyMessage = state.lang === 'zh' ? '先填中文名。' : 'Chinese name required.';
+      let nameZh = String((zhInput && zhInput.value) || '').trim();
+      let nameEn = String((enInput && enInput.value) || '').trim();
+      if (!nameZh && !nameEn) {
+        tagVocabularyMessage = addZh ? '中文名或英文名，填一个就行。' : 'Fill in the Chinese or English name.';
         renderTagVocabularySection(section);
         return;
       }
-      if ((tagVocabularyRows || []).some(function(row) { return String(row.name_zh) === nameZh; })) {
-        tagVocabularyMessage = state.lang === 'zh' ? ('「' + nameZh + '」已经在词表里了。') : ('"' + nameZh + '" is already in the vocabulary.');
-        renderTagVocabularySection(section);
-        return;
-      }
-      tagVocabularyMessage = '';
-      state.supabase.from(TAG_VOCABULARY_TABLE)
-        .insert({ id: 'el:' + nameZh, name_zh: nameZh, name_en: nameEn, aliases: [], kind: 'element', source: 'manual' })
-        .then(function(result) { if (result.error) throw result.error; return reloadTagVocabulary(section); })
-        .then(function() {
-          tagVocabularyMessage = state.lang === 'zh' ? ('已新增「' + nameZh + '」。') : ('Added "' + nameZh + '".');
+      const insertRow = function() {
+        if ((tagVocabularyRows || []).some(function(row) { return String(row.name_zh) === nameZh; })) {
+          tagVocabularyMessage = addZh ? ('「' + nameZh + '」已经在词表里了。') : ('"' + nameZh + '" is already in the vocabulary.');
           renderTagVocabularySection(section);
+          return;
+        }
+        tagVocabularyMessage = '';
+        state.supabase.from(TAG_VOCABULARY_TABLE)
+          .insert({ id: 'el:' + nameZh, name_zh: nameZh, name_en: nameEn, aliases: [], kind: 'element', source: 'manual' })
+          .then(function(result) { if (result.error) throw result.error; return reloadTagVocabulary(section); })
+          .then(function() {
+            tagVocabularyMessage = addZh ? ('已新增「' + nameZh + '」' + (nameEn ? '' : '（英文待补，可点「补翻译」）')) : ('Added "' + nameZh + '".');
+            renderTagVocabularySection(section);
+          })
+          .catch(function(error) {
+            tagVocabularyMessage = addZh ? ('新增失败：' + (error.message || '').slice(0, 60)) : 'Add failed.';
+            renderTagVocabularySection(section);
+          });
+      };
+      if (nameZh && nameEn) { insertRow(); return; }
+      const given = nameZh || nameEn;
+      const direction = nameZh ? 'zh2en' : 'en2zh';
+      tagVocabularyMessage = addZh ? 'AI 正在补另一种语言…' : 'AI is translating…';
+      renderTagVocabularySection(section);
+      const addToken = (state.session && state.session.access_token) || '';
+      fetch(TAG_TRANSLATE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + addToken },
+        body: JSON.stringify({ terms: [given], direction: direction })
+      })
+        .then(function(response) { return response.json().catch(function() { return {}; }); })
+        .then(function(data) {
+          const map = data && data.map && typeof data.map === 'object' ? data.map : {};
+          const translated = String(map[given] || '').trim();
+          if (nameZh) nameEn = translated || nameEn;
+          else nameZh = translated || nameZh;
+          if (!nameZh) {
+            tagVocabularyMessage = addZh ? 'AI 没翻出中文名，请手动填中文名再点新增。' : 'Could not translate; please type the Chinese name.';
+            renderTagVocabularySection(section);
+            return;
+          }
+          insertRow();
         })
         .catch(function(error) {
-          tagVocabularyMessage = state.lang === 'zh' ? ('新增失败：' + (error.message || '').slice(0, 60)) : 'Add failed.';
+          tagVocabularyMessage = addZh ? ('翻译失败：' + (error.message || '').slice(0, 60)) : 'Translation failed.';
           renderTagVocabularySection(section);
         });
     });

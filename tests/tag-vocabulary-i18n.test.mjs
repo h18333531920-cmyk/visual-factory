@@ -45,10 +45,10 @@ test('前端：英文界面查词表译名，缺表时永久退回原文', () =>
 
 test('新表与新端点：代理白名单已登记、版本号六处同步', () => {
   assert.match(policySource, /'vf_tag_vocabulary'/, '非维护账号要能读词表');
-  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v887/);
-  const refs = indexSource.match(/\?v=20261012-tag-i18n-v887/g) || [];
+  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v888/);
+  const refs = indexSource.match(/\?v=20261012-tag-i18n-v888/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v887'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v888'/);
 });
 
 test('标签词表：折叠分组（上位词成组，默认收起）', () => {
@@ -73,7 +73,9 @@ test('词表自动归类：按钮 + 端点 + 建议解析（直接应用，不�
   const known = ['食物', '汉堡', '披萨', '番茄', '西红柿'];
   const parsed = ai.parseVocabularySuggestions('{"merges":[{"keep":"番茄","aliases":["西红柿","土豆"]}],"parents":[{"parent":"食物","children":["汉堡","披萨","空气"]}]}', known);
   assert.deepEqual(parsed.merges, [{ keep: '番茄', aliases: ['西红柿'] }], '词表里没有的词要丢掉');
-  assert.deepEqual(parsed.parents, [{ parent: '食物', children: ['汉堡', '披萨'] }]);
+  assert.deepEqual(parsed.parents, [{ parent: '食物', children: ['汉堡', '披萨'], parentIsNew: false }]);
+  const withNewParent = ai.parseVocabularySuggestions('{"parents":[{"parent":"甜点","children":["蛋挞"]}]}', ['蛋挞', '蛋糕']);
+  assert.deepEqual(withNewParent.parents, [{ parent: '甜点', children: ['蛋挞'], parentIsNew: true }], '允许 AI 提出新的上位词');
 });
 
 test('标签词表：搜索归一 + 上位词展开 + 父级字段', () => {
