@@ -5,8 +5,8 @@ import { getBearerToken, json, requireAdmin, requireCloudflareEnv, supabaseFetch
 import { suggestVocabularyGroupsWithGlm } from '../_ai.js';
 
 const TABLE = 'vf_tag_vocabulary';
-const DEFAULT_BATCH = 60;
-const MAX_BATCH = 80;
+const DEFAULT_BATCH = 15;
+const MAX_BATCH = 20;
 
 function encodeList(values) {
   return (Array.isArray(values) ? values : []).map(v => encodeURIComponent(v)).join(',');

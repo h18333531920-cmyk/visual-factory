@@ -1323,7 +1323,8 @@ export async function suggestVocabularyGroupsWithGlm(env, terms = []) {
     '4. **层级最多两层**，不要再往下套（例：食物 → 汉堡 就够了，汉堡的变体靠字面命中）。',
     '5. 品牌名、平台名、物料类型名不要互相合并，也不要给它们套上位词。',
     '6. children / keep / aliases 里的词必须**原样来自上面词表**，不要新造；只有 parent 允许是新的。',
-    '7. 只输出 JSON，不要代码块：{"merges":[{"keep":"番茄","aliases":["西红柿"]}],"parents":[{"parent":"食物","children":["汉堡","披萨"]}]}',
+    '7. **宁少勿多**：最多给 8 组 merges、8 组 parents，每组最多 12 个词 —— 输出越短越快，剩下的下次再给。',
+    '8. 只输出 JSON，不要代码块：{"merges":[{"keep":"番茄","aliases":["西红柿"]}],"parents":[{"parent":"食物","children":["汉堡","披萨"]}]}',
   ];
   const data = await postJson(GLM_VISION_URL, {
     model: GLM_TEXT_MODEL,

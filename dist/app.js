@@ -867,7 +867,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v888';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v889';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -16400,34 +16400,46 @@ function libraryTagsForForm(formData, kind) {
         let totalCreated = 0;
         let totalMerges = 0;
         const createdNames = [];
+        const MAX_ROUNDS = 4;   // 一次点击最多跑 4 批（≈60 个词），避免一跑好几分钟
         const runBatch = function(offset, round) {
           tagVocabularyMessage = state.lang === 'zh'
-            ? ('AI 正在分批归类…第 ' + round + ' 批（每批 60 个词，请稍等）')
-            : ('AI is grouping… batch ' + round);
+            ? ('AI 正在归类…第 ' + round + '/' + MAX_ROUNDS + ' 批（每批 15 个词）· 已归入子级 ' + totalParents + ' 个')
+            : ('AI is grouping… batch ' + round + '/' + MAX_ROUNDS);
           renderTagVocabularySection(section);
+          let controller = null;
+          try { controller = typeof AbortController === 'function' ? new AbortController() : null; } catch (_e) { controller = null; }
+          const timer = controller ? setTimeout(function() { try { controller.abort(); } catch (_e) {} }, 25000) : null;
           return fetch('/api/tag-vocabulary-suggest', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + suggestToken },
-            body: JSON.stringify({ offset: offset, batchSize: 60 })
+            body: JSON.stringify({ offset: offset, batchSize: 15 }),
+            signal: controller ? controller.signal : undefined
           })
             .then(function(response) { return response.json().catch(function() { return {}; }); })
+            .catch(function(error) {
+              if (error && error.name === 'AbortError') throw new Error('这一批 25 秒没返回（AI 太慢）');
+              throw error;
+            })
             .then(function(data) {
+              if (timer) clearTimeout(timer);
               if (!data || !data.success) throw new Error((data && data.message) || '归类失败');
               totalParents += Number(data.parentsApplied) || 0;
               totalCreated += Number(data.parentsCreated) || 0;
               totalMerges += Number(data.mergesApplied) || 0;
               (data.createdNames || []).forEach(function(name) { if (createdNames.indexOf(name) < 0) createdNames.push(name); });
               if (data.nextOffset === null || data.nextOffset === undefined) return null;
+              if (round >= MAX_ROUNDS) return 'more';
               return runBatch(Number(data.nextOffset) || 0, round + 1);
             });
         };
         runBatch(0, 1)
-          .then(function() { return reloadTagVocabulary(section); })
-          .then(function() {
+          .then(function(result) { return reloadTagVocabulary(section).then(function() { return result; }); })
+          .then(function(result) {
             tagVocabularySuggesting = false;
+            const more = result === 'more';
             tagVocabularyMessage = state.lang === 'zh'
-              ? ('已自动归类：新建上位词 ' + totalCreated + ' 个' + (createdNames.length ? '（' + createdNames.slice(0, 5).join('、') + '）' : '') + ' · 归入子级 ' + totalParents + ' 个 · 合并叫法 ' + totalMerges + ' 个')
-              : ('Auto-grouped: +' + totalCreated + ' parents / ' + totalParents + ' children / ' + totalMerges + ' merged.');
+              ? ('已自动归类：新建上位词 ' + totalCreated + ' 个' + (createdNames.length ? '（' + createdNames.slice(0, 5).join('、') + '）' : '') + ' · 归入子级 ' + totalParents + ' 个 · 合并叫法 ' + totalMerges + ' 个' + (more ? ' · 还有更多词没处理，再点一次继续' : ''))
+              : ('Auto-grouped: +' + totalCreated + ' parents / ' + totalParents + ' children / ' + totalMerges + ' merged.' + (more ? ' Click again for more.' : ''));
             renderTagVocabularySection(section);
           })
           .catch(function(error) {
