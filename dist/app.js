@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-related-click-en-v896';
+const TOOL_UI_VERSION = '20261012-related-groups-v897';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3661,10 +3661,19 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       panel.hidden = false;
       return;
     }
-    list.innerHTML = label + '<div class="search-history-items">'
-      + libraryExpansionTerms.map(term => '<button type="button" class="library-expansion-chip is-clickable" data-library-expansion-term="' + escapeAttr(term) + '" title="' + escapeAttr(zhUi ? '库内已有的标签；点一下改成只搜这个词' : 'An existing library tag; click to search this term only') + '">' + escapeHtml(libraryChipDisplayLabel(term)) + '</button>').join('')
-      + pendingChip
-      + '</div>';
+    // v897：分两组显示，便于一眼看出"这条是谁给的"——
+    // 「词表设定」= 你在标签词表里给这个词填的相关词（确定性）；「AI 关联」= 模型自己挑的（有不准的可能）
+    const manualTerms = libraryDeterministicRelatedTerms(q);
+    const chipHtml = function(term) {
+      return '<button type="button" class="library-expansion-chip is-clickable" data-library-expansion-term="' + escapeAttr(term) + '" title="' + escapeAttr(zhUi ? '库内已有的标签；点一下改成只搜这个词' : 'An existing library tag; click to search this term only') + '">' + escapeHtml(libraryChipDisplayLabel(term)) + '</button>';
+    };
+    const manualChips = manualTerms.filter(function(term) { return libraryExpansionTerms.indexOf(term) >= 0; }).map(chipHtml).join('');
+    const aiTerms = libraryExpansionTerms.filter(function(term) { return manualTerms.indexOf(term) < 0; });
+    const aiChips = aiTerms.map(chipHtml).join('');
+    list.innerHTML = label
+      + (manualChips ? '<div class="search-history-items"><small class="search-history-group">' + (zhUi ? '词表设定' : 'From vocabulary') + '</small>' + manualChips + '</div>' : '')
+      + (aiChips ? '<div class="search-history-items"><small class="search-history-group">' + (zhUi ? 'AI 关联' : 'AI related') + '</small>' + aiChips + '</div>' : '')
+      + (pendingChip ? '<div class="search-history-items">' + pendingChip + '</div>' : '');
     panel.hidden = false;
   }
 

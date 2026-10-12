@@ -2022,6 +2022,15 @@ display: none;
   align-items: center;
 }
 
+/* v897：浮窗里分组标题（「词表设定」/「AI 关联」），并排显示便于区分来源 */
+.search-history-group {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--muted);
+  margin-right: 2px;
+}
+
 .library-expansion-chip {
   flex: 0 0 auto;
   max-width: 160px;

@@ -156,6 +156,17 @@ test('v894 匹配与缓存：只用库内那一层，缓存键升 v7', () => {
   assert.match(appSource, /function writeLibraryExpansionCache\(query, terms, termsEn\)/);
 });
 
+test('v897 浮窗分组标明来源（词表设定 / AI 关联）+ 提示词反对"凑数"', () => {
+  assert.match(appSource, /const manualTerms = libraryDeterministicRelatedTerms\(q\);/);
+  assert.match(appSource, /'词表设定' : 'From vocabulary'/, '词表里手填的相关词单独一组');
+  assert.match(appSource, /'AI 关联' : 'AI related'/, 'AI 挑的单独一组（有不准的可能）');
+  assert.match(appSource, /const aiTerms = libraryExpansionTerms\.filter\(function\(term\) \{ return manualTerms\.indexOf\(term\) < 0; \}\);/);
+  const css = readFileSync(join(here, '..', 'styles.css'), 'utf8');
+  assert.match(css, /\.search-history-group \{/);
+  assert.match(aiSource, /宁缺毋滥/, '挑全但不能凑数');
+  assert.match(aiSource, /搜「世界杯」返回「手机」「耳机」「PS5」是错的/, '把这次的坏例子写进提示词');
+});
+
 test('两个端点仍然把两层透传给前端（前端只消费库内层）', () => {
   assert.match(expandRoute, /Array\.isArray\(result\.fresh\) \? result\.fresh : \[\]/);
   assert.match(expandRoute, /terms: terms, fresh: fresh, termsEn: termsEn/);
