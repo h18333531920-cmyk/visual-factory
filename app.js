@@ -867,7 +867,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v886';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v887';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -16281,43 +16281,29 @@ function libraryTagsForForm(formData, kind) {
     const rows = Array.isArray(tagVocabularyRows) ? tagVocabularyRows : [];
     const display = tagVocabularyDisplayRows();
     if (!rows.length) {
-      return '<tr><td colspan="4" class="tv-empty">' + (zh ? '还没有词。上传/识别过的标签会自动出现在这里。' : 'No terms yet.') + '</td></tr>';
+      return '<tr><td colspan="3" class="tv-empty">' + (zh ? '还没有词。上传/识别过的标签会自动出现在这里。' : 'No terms yet.') + '</td></tr>';
     }
     if (!display.length) {
-      return '<tr><td colspan="4" class="tv-empty">' + (zh ? '没有匹配的词。' : 'No matching terms.') + '</td></tr>';
+      return '<tr><td colspan="3" class="tv-empty">' + (zh ? '没有匹配的词。' : 'No matching terms.') + '</td></tr>';
     }
     return display.map(function(item) {
       const row = item.row;
       const depth = item.depth;
       const ignored = row.kind === TAG_VOCABULARY_IGNORED;
-      const aliases = Array.isArray(row.aliases) ? row.aliases : [];
       const parentRow = row.parent_id ? rows.find(function(other) { return String(other.id) === String(row.parent_id); }) : null;
-      const parentLabel = parentRow ? String(parentRow.name_zh) : (zh ? '无' : 'none');
-      const parentOpen = tagVocabularyParentId === row.id;
       const collapsed = tagVocabularyCollapsed.has(String(row.id));
       const leading = item.hasChildren
         ? '<button type="button" class="tv-collapse" data-tv-collapse="' + escapeAttr(row.id) + '" title="' + escapeAttr(zh ? '展开/收起子级' : 'Expand / collapse') + '" style="border:0;background:transparent;cursor:pointer;color:#64748b;font-size:11px;padding:0 3px 0 0;">' + (collapsed ? '▸' : '▾') + '</button>'
         : (depth > 0 ? '<span style="color:#cbd5e1;padding-right:3px;">↳</span>' : '');
-      const countBadge = item.hasChildren
-        ? '<span style="margin-left:6px;font-size:11px;color:#94a3b8;">' + (zh ? '（' + item.childCount + ' 子级）' : ' (' + item.childCount + ')') + '</span>'
-        : '';
-      const parentCell = parentOpen
-        ? '<select class="tv-merge-select" data-tv-parent-target="' + escapeAttr(row.id) + '">'
-            + '<option value="">' + (zh ? '无上位词（移到顶层）' : 'No parent (top level)') + '</option>'
-            + rows.filter(function(other) { return String(other.id) !== String(row.id); }).map(function(other) {
-                return '<option value="' + escapeAttr(other.id) + '"' + (String(other.id) === String(row.parent_id || '') ? ' selected' : '') + '>' + escapeHtml(other.name_zh) + '</option>';
-              }).join('')
-          + '</select>'
-        : '<button type="button" class="tv-btn" data-tv-parent="' + escapeAttr(row.id) + '" title="' + escapeAttr(zh ? '上位词：搜索命中它时，它下面挂的词也算命中；也可用来把词移进/移出某组' : 'Broader term: searching it also matches its children') + '">'
-          + (zh ? '上位词：' : 'Parent: ') + escapeHtml(parentLabel) + '</button>';
+      // 只读徽章：让 AI 归好的关系一眼可见（不再提供手工设置入口）
+      const badges = (item.hasChildren ? '<span style="margin-left:6px;font-size:11px;color:#94a3b8;">' + (zh ? '（' + item.childCount + ' 子级）' : ' (' + item.childCount + ')') + '</span>' : '')
+        + (parentRow ? '<span style="margin-left:6px;font-size:11px;color:#cbd5e1;">· ' + escapeHtml(String(parentRow.name_zh)) + '</span>' : '');
       return '<tr class="' + (ignored ? 'is-ignored' : '') + '">'
-        + '<td class="tv-zh" style="padding-left:' + (8 + depth * 18) + 'px;">' + leading + escapeHtml(row.name_zh) + countBadge + '</td>'
+        + '<td class="tv-zh" style="padding-left:' + (8 + depth * 18) + 'px;">' + leading + escapeHtml(row.name_zh) + badges + '</td>'
         + '<td class="tv-en-cell"><input class="tv-en" data-tv-en="' + escapeAttr(row.id) + '" value="' + escapeAttr(row.name_en || '') + '" placeholder="' + (zh ? '点这里填英文' : 'type English') + '">'
           + (row.source === 'manual' ? '<span class="tv-mark">' + (zh ? '人工' : 'manual') + '</span>' : '')
           + '</td>'
-        + '<td class="tv-alias"><span class="tv-alias-trigger" data-tv-alias="' + escapeAttr(row.id) + '" title="' + escapeAttr(zh ? '鼠标移上来查看 / 添加别名' : 'Hover to view / add aliases') + '">'
-          + (aliases.length ? (zh ? aliases.length + ' 个' : aliases.length + ' aliases') : '<span class="tv-dim">—</span>') + '</span></td>'
-        + '<td class="tv-ops">' + parentCell
+        + '<td class="tv-ops">'
           + '<button type="button" class="tv-btn tv-danger" data-tv-delete="' + escapeAttr(row.id) + '">' + (zh ? '删除' : 'Delete') + '</button>'
         + '</td></tr>';
     }).join('');
@@ -16351,7 +16337,6 @@ function libraryTagsForForm(formData, kind) {
       + '<table class="tv-table"><thead><tr>'
       + '<th>' + (zh ? '中文名' : 'Chinese') + '</th>'
       + '<th>' + (zh ? '英文名（可直接改）' : 'English (editable)') + '</th>'
-      + '<th>' + (zh ? '别名' : 'Aliases') + '</th>'
       + '<th>' + (zh ? '操作' : 'Actions') + '</th>'
       + '</tr></thead><tbody id="tv-table-body">' + tagVocabularyRowsHtml() + '</tbody></table>'
       + '<p class="tv-hint">' + (zh
