@@ -16,7 +16,7 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-search-en-v893`（标签平表 + 相关词列；AI 联想统一两层：先找库内现有标签，没有符合的才生成新词；**英文/拼音联想词会反查词表换回中文**）；部署 `87659e3e-b673-4fe5-b95a-e4b0ac895c87`，2026-10-12 本机 wrangler 直发 | 实测 2026-10-12 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-related-popup-v894`（标签平表 + 相关词列；搜索框下方浮窗显示「库内关联标签」，**只出库内确实存在的标签**；原「历史搜索」已删）；部署 `c74fa2ae-71dd-4779-b3c4-0ad3ec60f14f`，2026-10-12 本机 wrangler 直发 | 实测 2026-10-12 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
@@ -194,7 +194,7 @@
 - 上传流程 `renderUploadModal()`：支持单图 / 多图 / 项目上传；案例库上传**必填平台 + 国家**、单次上限 **100** 张、进度按张数、取消上传不再卡按钮。
 - 批量编辑 `openBatchEditModal()`；多选 `libraryMultiSelect` / `librarySelectedIds`。
 - 书签系统 `renderLibraryBookmarkModal()` / `renderLibraryBookmarkInlineHover()`。
-- 搜索：`libraryItemSearchText()` / `libraryItemMatchesQuery()`，含拼音与英文扩展表。**AI 联想两层口径（v892）**：先找库内现有标签（`/api/expand-query` 的 `terms`，服务端词表锚定 + 复合词/同族/中东节日桥接）→ 界面「库内相关词」；词表里一个都没符合时才允许 AI 新造词（`fresh`，≤3）→ 界面「AI 新词」。词表 `related` 那一层是**零 AI 的确定性扩展**（`tagVocabularyQueryTerms`）。
+- 搜索：`libraryItemSearchText()` / `libraryItemMatchesQuery()`，含拼音与英文扩展表。**AI 联想只从库内标签里挑（v894）**：搜索框下方浮窗显示「库内关联标签」（`/api/expand-query` 的 `terms` 经客户端反查/词表校验后的结果，点一下改成只搜该标签）；AI 返回但库里没有的词一律丢掉、也不参与匹配。词表 `related` 那一层是**零 AI 的确定性扩展**（`tagVocabularyQueryTerms`）。
 - **案例项目的判定**：`source_path` 为空 **且** 有预览图 ⇒ 案例项目（`isCaseProject()`）。
 
 ### 7.2 案例项目浮窗（case project modal）—— 改动最频繁的模块
@@ -390,37 +390,36 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 
 ## 11. 待办与未决事项
 
-> **标签词表 / 搜索 的交接（2026-10-12 第四轮收尾快照 v893，新对话从这里接手）**
+> **标签词表 / 搜索 的交接（2026-10-12 第五轮收尾快照 v894，新对话从这里接手）**
 >
-> **测试站已上线 v893（部署 `87659e3e`；生产未动）**
+> **测试站已上线 v894（部署 `c74fa2ae`；生产未动）**
 > - 标签**双语显示**：中文界面显中文、英文界面显英文；新标签自动进词表 + 自动补英文（中文界面后台补，不阻塞）
 > - 「中英对照表」= 表 `vf_tag_vocabulary`（`name_zh` / `name_en`）：管双语显示 + 搜英文命中中文
 > - 「相关词表」= 同表的 `related text[]` 字段：管"搜大词带出小词"。**设计口径已定死，不要再加层级/概念 ID/多父级/别名**
 > - 搜索三层：① 子串 ② 中英归一（`coffee`→咖啡）③ 该行 `related` 一并匹配（`app.js` 的 `tagVocabularyQueryTerms`）
 > - 已执行的 SQL：`022`（词表）、`023`（parent_id，**已废弃不用**）、`024`（related）
 > - **词表界面是平表**：`中文名 | 英文名 | 相关词 | 删除`；相关词逗号分隔输入框（中英文逗号/顿号/分号都认），**失焦即存**；每行「AI 建议」调 `/api/tag-vocabulary-related`
-> - **⭐ v892 的统一口径（AI 联想标签一律照这条走）**：**先找库内现有标签；一个都没符合，才允许生成新词（最多 3 个）**。落地在两处：
->   - 搜索联想 `/api/expand-query`：`terms` = 词表里已有的（能直接命中）→ 界面显示为「**库内相关词**」；只有 `terms` 为空时才有 `fresh` → 显示为「**AI 新词**」（虚线灰底 + 说明"只有标题/文件名含它才命中"）。两层都参与匹配，靠联想命中的仍排在精确命中之后。
->   - 相关词建议 `/api/tag-vocabulary-related`：`related` = 词表已有的；`relatedNew` = 词表没有符合的时 AI 新造的（落库时界面会写明"还不是库内标签"）。
->   - 词表锚定规则本来就有（v831 复合词桥接 / v839 券票卡同族 / v845 中东节日桥 / v831 服务端词表锚定）；v892 只是把「词表命中 vs 新造」**分开、并且优先**。
-> - 前端缓存键升到 `vf_library_search_expansion_v6`（v5 旧缓存不分两层，必须升，否则老结果里混着旧算法的自由词）
-> - **⭐ v893 修「英文搜索联想为空」**（用户实测反馈：英文界面搜 `Football` 一个 chips 都没有）。两个原因、两处修：
->   1. **提示词太保守**：v892 写"只返回词表里的词"，模型遇到英文词就干脆返回空数组 → 改成"词表里没有符合的**也一定要给** 1–3 个新词，**不要返回空数组**"；
->   2. **英文词命中不到中文标签**：AI 直接回英文词时，库里标签是中文 → 客户端新增 `libraryExpansionCanonicalTerm()`，用词表反查（英文名 → 中文名）换回中文，换到的算「库内相关词」（能真的命中），换不到的才留在「AI 新词」层；
->   3. 另外：AI 真一个词都没给出时，界面显示「AI 这次没给出相关词」+ 刷新按钮（以前什么都不显示，看起来像功能坏了）。
->   提示词也补了：`terms 里一律写中文`、英文说法放 `terms_en`、例子 `搜「Football」→ 足球、世界杯`。
-> - **v891 删掉的东西**（别再找）：`AI 自动归类`按钮、折叠分组/缩进、上位词 `parent_id`、别名浮窗、`/api/tag-vocabulary-suggest`、`parseVocabularySuggestions` / `suggestVocabularyGroupsWithGlm`、`tagVocabularyDescendantsOf`
+> - **⭐⭐ v894 的最终口径（AI 联想标签照这条走，别的都别加）**：
+>   **AI 只负责「从库内现有标签里挑」，挑不到就空着。库里没有的联想词一律不显示、不参与匹配。**
+>   理由（用户定的）：搜索是按标签字面命中的，库里没有的词**搜不到任何物料**，显示出来只会误导人。
+>   - 落地在搜索框下方的浮窗：**「库内关联标签」**（`#search-history-dropdown` 那个位置）——只在搜索框聚焦时弹，列出当前关键词命中的库内标签，**点一下 = 改成只搜该标签**；AI 开关关掉就不弹。
+>   - 客户端硬过滤：AI 返回的词先 `libraryExpansionCanonicalTerm()` 反查词表换回中文（英文/拼音搜索必须），再用 `libraryExpansionIsLibraryTerm()` 判断「库内到底有没有」，**只留有的**；词表没加载时（返回 null）不乱丢。
+>   - 服务端 `/api/expand-query` 仍返回 `terms`（库内命中）/`fresh`（词表外新造）两桶，但**前端只消费库内层**；提示词已改成「只从词表里挑，挑不到返回空数组，不要编造词表外的词」。
+>   - 词表锚定规则本来就有（v831 复合词桥接 / v839 券票卡同族 / v845 中东节日桥 / 服务端词表锚定），一并在服务端生效。
+> - **v894 删掉的东西**：`state.libraryFilters.searchHistory` + 「历史搜索」浮窗内容（整条链路删干净）、搜索框左侧那一排 `#library-expansion-chips`、以及「AI 新词」层在界面上的所有痕迹（`libraryExpansionFresh` / `is-fresh` / 空结果提示 chip）。
+> - 前端缓存键升到 `vf_library_search_expansion_v7`（v6 里存着「新造词」那一层，必须升）
+> - **v891 删掉的**（别再找）：`AI 自动归类`按钮、折叠分组/缩进、上位词 `parent_id`、别名浮窗、`/api/tag-vocabulary-suggest`、`parseVocabularySuggestions` / `suggestVocabularyGroupsWithGlm`、`tagVocabularyDescendantsOf`
 >
-> **已验证**：390/390 测试全绿（含 AI 两层口径 8 项，其中反查函数有行为测试）；`select=related` 实测该列存在；测试站两处版本号均为 `20261012-search-en-v893`；两个端点存在且要登录；用户已实测中文搜「甜点」→ chips 只出库内词（蛋糕/饼干/冰淇淋/甜甜圈）。
-> **未验证（要人点一下）**：英文搜索的实际效果（这次改的就是它，需要再点一次 `Football` 这类词验收）；词表「AI 建议」按钮。
-> **没做的（可能是下一步）**：① 逐图 AI 标签面板里还没有「词表里没有 = 新词」的标记（现在的 `is-new` 是"本轮新认出"）；② 用于锚定的词表是前端带上来的（上限 120），库很大时可能漏掉真实标签 → 可让 `/api/expand-query` 自己读 `vf_tag_vocabulary` 全量词表。
+> **已验证**：390/390 测试全绿；`select=related` 实测该列存在；测试站两处版本号均为 `20261012-related-popup-v894`；两个端点存在且要登录；用户实测中文搜「甜点」→ 关联标签全是库内词（蛋糕/饼干/冰淇淋/甜甜圈）；本地实机（dist + Admin 预览）打字后浮窗正常弹出「库内关联标签」+「库里没有相关联的标签」（本地没登录，属降级路径，说明渲染链路没崩）。
+> **未验证（要人点一下）**：真实 AI 下浮窗里的标签列表（要管理员登录 + GLM_API_KEY）；英文搜 `Football` 的实际结果；词表「AI 建议」按钮。
+> **没做的（可能是下一步）**：① 逐图 AI 标签面板里没有「词表里没有 = 新词」的标记（现在的 `is-new` 是"本轮新认出"）；② 用于锚定的词表是前端带上来的（上限 120），库很大时可能漏掉真实标签 → 可让 `/api/expand-query` 自己读 `vf_tag_vocabulary` 全量词表。
 >
 > **下一步（候选，按用户优先级）**
-> 1. 管理员在测试站**真机验收**：① 英文搜 `Football` 之类的词看是否有 chips ② 搜词看「库内相关词 / AI 新词」两层 ③ 团队管理页 →「标签词表」→ 填相关词 / 点「AI 建议」
+> 1. 管理员在测试站**真机验收**：① 搜中文词看浮窗只出库内标签、点一个标签能改成只搜它 ② 英文搜 `Football` ③ 团队管理页 →「标签词表」→ 填相关词 / 点「AI 建议」
 > 2. 老数据清理：库里 `parent_id`（sql/023 的上位词链）和 `aliases` 已不参与任何逻辑，是否清空由用户定
 > 3. `dist/functions/api/tag-translate.js` 仍**未进 git**（Actions 通道发不出它）——是否提交进仓库由用户定（本仓库 public，文件不含密钥）
 >
-> **踩过的坑（别再犯）**：① 搜索要接进 `libraryItemQueryMatchRank`，别只改渲染；② 大表改列数时**别用全量替换** `colspan`（曾误改 8 处无关表格）；③ AI 调用要**小批量**；④ 词表/SQL 新增字段要**带降级**（`related` 读不到就把该列变只读并提示执行 `sql/024`）；⑤ **部署后 1–3 分钟内线上文件可能新旧混着**（§8.3）；⑥ 改联想口径**必须同时升缓存键**，否则用户本地旧缓存会让新规则看着"没生效"；⑦ **收紧提示词要留"没有符合的也要给"的出口**，否则英文/生僻词会直接返回空数组（v892→v893 的教训）；⑧ AI 回的联想词**要能对上库内标签的写法**（英文词先反查换中文），否则"有 chip 也搜不到东西"。
+> **踩过的坑（别再犯）**：① 搜索要接进 `libraryItemQueryMatchRank`，别只改渲染；② 大表改列数时**别用全量替换** `colspan`（曾误改 8 处无关表格）；③ AI 调用要**小批量**；④ 词表/SQL 新增字段要**带降级**（`related` 读不到就把该列变只读并提示执行 `sql/024`）；⑤ **部署后 1–3 分钟内线上文件可能新旧混着**（§8.3）；⑥ 改联想口径**必须同时升缓存键**，否则用户本地旧缓存会让新规则看着"没生效"（v892 升 v6、v894 升 v7 都是这个原因）；⑦ **搜索联想只显示库内确实存在的标签**（v894 定的口径）——库内没有的词搜不到任何物料，**不要再加回「AI 新词」那种展示层**，服务端的 `fresh` 桶只作兜底、前端不消费；⑧ AI 回的联想词**要能对上库内标签的写法**（英文/拼音词先反查换中文），否则"有标签也搜不到东西"。
 
 **等用户决定 / 授权的**
 

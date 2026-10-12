@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-search-en-v893';
+const TOOL_UI_VERSION = '20261012-related-popup-v894';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -1186,8 +1186,7 @@ let chartLibraryPromise = null;
       selectedStrategies: [],
       selectedElements: [],
       selectedFormats: [],
-      selectedQuantities: [],
-      searchHistory: []
+      selectedQuantities: []
     }
   };
 
@@ -2541,12 +2540,12 @@ let chartLibraryPromise = null;
             ${LIBRARY_KIND_TABS.map(tab => `<button type="button" class="${activeKind === tab.id ? 'active' : ''}" data-library-kind="${tab.id}">${escapeHtml(state.lang === 'zh' ? tab.zh : tab.en)}<small> · ${libraryCountsPending ? '…' : (kindCounts[tab.id] || 0)}</small></button>`).join('')}
           </div>
           <div class="library-control-actions">
-            <div id="library-expansion-chips" class="library-expansion-chips" hidden></div>
             <div class="search-wrap">
               <label class="library-search-pill" aria-label="${state.lang === 'zh' ? '搜索内容' : 'Search'}">
                 <input id="library-search" placeholder="" value="${escapeAttr(state.libraryFilters.query)}">
                 <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg></span>
               </label>
+              <!-- v894：原来的「历史搜索」浮窗改成「库内关联标签」浮窗（只显示库内确实存在的标签） -->
               <div id="search-history-dropdown" class="search-history-dropdown" hidden>
                 <div class="search-history-list" id="search-history-list"></div>
               </div>
@@ -3177,10 +3176,6 @@ let chartLibraryPromise = null;
       if (event.key === 'Enter') {
         clearTimeout(librarySearchDebounceTimer);
         state.libraryFilters.query = event.target.value.trim();
-        if (state.libraryFilters.query && !state.libraryFilters.searchHistory.includes(state.libraryFilters.query)) {
-          state.libraryFilters.searchHistory.unshift(state.libraryFilters.query);
-          if (state.libraryFilters.searchHistory.length > 6) state.libraryFilters.searchHistory.pop();
-        }
         state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
         filterLibraryCardsInPlace();
         applyLibraryQueryExpansion(state.libraryFilters.query);
@@ -3203,24 +3198,8 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
           if (svg) svg.style.stroke = '#ffffff';
         }
       }
-      const history = document.getElementById('search-history-dropdown');
-      const list = document.getElementById('search-history-list');
-      if (history && list && state.libraryFilters.searchHistory.length) {
-        const label = state.lang === 'zh' ? '历史搜索' : 'History';
-        list.innerHTML = '<div class="search-history-label">' + label + '</div><div class="search-history-items">' +
-          state.libraryFilters.searchHistory.map(q => '<button type="button" class="search-history-item">' + escapeHtml(q) + '</button>').join('') +
-          '</div>';
-        list.querySelectorAll('.search-history-item').forEach(btn => {
-          btn.addEventListener('click', () => {
-            state.libraryFilters.query = btn.textContent;
-            if (searchInput) searchInput.value = state.libraryFilters.query;
-            history.hidden = true;
-            state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
-            renderLibraryGrid();
-          });
-        });
-        history.hidden = false;
-      }
+      // v894：浮窗不再显示「历史搜索」，改为显示当前关键词的「库内关联标签」（内容由 renderLibraryExpansionChips 渲染）
+      renderLibraryExpansionChips();
     });
     searchInput?.addEventListener('blur', () => {
       const pill = searchInput.closest('.library-search-pill');
@@ -3394,22 +3373,15 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
   // 并加 7 天有效期：词表随素材增长，老缓存到期后自动重新扩展。
   // v839：缓存键升到 v3（v2 里缓存了词表锚定前的无效联想词，如红包→红包礼券，需要重新扩展）
   // v856：缓存键升到 v5（v4 里没有英文翻译 termsEn，英文模式下联想词缺英文显示），沿用 7 天有效期
-  // v892：缓存键升到 v6（v5 里不分「词表命中」和「AI 新词」，两层口径改了，旧缓存要重来）
-  var LIBRARY_EXPANSION_CACHE_PREFIX = 'vf_library_search_expansion_v6:';
+  // v894：缓存键升到 v7（v6 里存着「词表命中 + 新造词」两层，现在只留库内命中的那一层）
+  var LIBRARY_EXPANSION_CACHE_PREFIX = 'vf_library_search_expansion_v7:';
   var LIBRARY_EXPANSION_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-  var libraryExpansionTerms = [];          // 第一层：词表里已有的相关词（能直接命中物料）
-  var libraryExpansionFresh = [];          // 第二层：词表里没有符合的时 AI 新造的词（≤3，单独展示）
+  var libraryExpansionTerms = [];          // 库内确实存在的关联标签（只有这一层，浮窗里显示的就是它）
   var libraryExpansionTermsEn = {};        // v856 英文模式：中文联想词→英文说法（AI 逐词翻译，配不上的走词表兑底）
-  var libraryExpansionRefreshing = false;  // v856 手动刷新中：chips 不清空，仅刷新按钮转圈
+  var libraryExpansionRefreshing = false;  // v856 手动刷新中：浮窗不清空，仅刷新按钮转圈
   var libraryExpansionRequestKey = '';
   var libraryExpansionLastQuery = null;
   var libraryExpansionPendingQuery = '';
-  var libraryExpansionEmptyQuery = '';     // v893：AI 一个联想词都没给出（单独提示，不再什么都不显示）
-
-  // 参与匹配的词 = 两层合并（新词只在词表一个都没命中时才会出现）
-  function libraryExpansionMatchTerms() {
-    return libraryExpansionTerms.concat(libraryExpansionFresh);
-  }
 
   function librarySearchExactOnly() {
     try { return localStorage.getItem('vf_library_search_exact_only_v1') === '1'; }
@@ -3432,14 +3404,13 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
       if (!list) return null;
       if (typeof parsed.ts === 'number' && Date.now() - parsed.ts > LIBRARY_EXPANSION_CACHE_TTL_MS) return null;
       const terms = list.filter(Boolean);
-      const fresh = !Array.isArray(parsed) && Array.isArray(parsed.fresh) ? parsed.fresh.filter(Boolean) : [];
       const termsEn = !Array.isArray(parsed) && parsed.termsEn && typeof parsed.termsEn === 'object' ? parsed.termsEn : {};
-      return { terms: terms, fresh: fresh, termsEn: termsEn };
+      return { terms: terms, termsEn: termsEn };
     } catch (_error) { return null; }
   }
 
-  function writeLibraryExpansionCache(query, terms, fresh, termsEn) {
-    try { localStorage.setItem(LIBRARY_EXPANSION_CACHE_PREFIX + String(query).trim().toLowerCase(), JSON.stringify({ ts: Date.now(), terms: terms || [], fresh: fresh || [], termsEn: termsEn || {} })); }
+  function writeLibraryExpansionCache(query, terms, termsEn) {
+    try { localStorage.setItem(LIBRARY_EXPANSION_CACHE_PREFIX + String(query).trim().toLowerCase(), JSON.stringify({ ts: Date.now(), terms: terms || [], termsEn: termsEn || {} })); }
     catch (_error) {}
   }
 
@@ -3612,8 +3583,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   }
 
   // v893：联想词归一 —— AI 对英文/拼音搜索词有时直接回英文词（如 Football），
-  // 而库里标签是中文，英文词命中不到任何物料。这里用词表反查（英文名 → 中文名）换回中文：
-  // 换得到 = 它本来就是库内标签（进「库内相关词」）；换不到 = 留在「AI 新词」。
+  // 而库里标签是中文，英文词命中不到任何物料。这里用词表反查（英文名 → 中文名）换回中文；
+  // 换不到的说明库里没有这个标签，调用方会把它丢掉（v894：库内没有的联想词一律不显示）。
   function libraryExpansionCanonicalTerm(value) {
     const term = String(value == null ? '' : value).trim();
     if (!term || tagVocabularyReady !== true) return term;
@@ -3626,67 +3597,46 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return tagVocabularyRowsByZh.has(term) || tagVocabularyByName.has(term);
   }
 
+  // v894：搜索框下方的浮窗（原来是「历史搜索」的位置）显示当前关键词的「库内关联标签」。
+  // 只显示库内**确实存在**的标签：库内没有的联想词一律不显示（反正也搜不到东西），AI 只负责"从现有标签里挑"。
   function renderLibraryExpansionChips() {
-    const chipsHost = document.getElementById('library-expansion-chips');
-    if (!chipsHost) return;
+    const panel = document.getElementById('search-history-dropdown');
+    const list = document.getElementById('search-history-list');
+    if (!panel || !list) return;
+    const zhUi = state.lang === 'zh';
     const q = String(state.libraryFilters.query || '').trim();
-    if (!q) {
-      chipsHost.hidden = true;
-      chipsHost.innerHTML = '';
+    // 只在搜索框聚焦时弹出（否则用户在页面别处操作时会突然冒出来）
+    const focused = !!document.activeElement && document.activeElement.id === 'library-search';
+    if (!q || !focused || librarySearchExactOnly()) {
+      panel.hidden = true;
+      list.innerHTML = '';
       return;
     }
-if (librarySearchExactOnly()) {
-// v841：AI 开关改到搜索框右侧滑块，关闭时左侧词条区直接隐藏（恢复普通搜索）
-chipsHost.hidden = true;
-chipsHost.innerHTML = '';
-return;
-}
-    if (libraryExpansionPendingQuery === q && !libraryExpansionTerms.length && !libraryExpansionFresh.length) {
-      chipsHost.hidden = false;
-      chipsHost.innerHTML = `<span class="library-expansion-chip is-pending"><span class="library-expansion-spinner" aria-hidden="true"></span>${state.lang === 'zh' ? 'AI 联想中…' : '…AI thinking…'}</span>`;
+    const refreshButton = '<button type="button" class="library-expansion-refresh' + (libraryExpansionRefreshing ? ' is-busy' : '') + '" id="library-expansion-refresh" title="' + escapeAttr(zhUi ? '重新找一遍库内关联标签' : 'Look up related library tags again') + '" aria-label="' + escapeAttr(zhUi ? '重新查找' : 'Refresh') + '"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>';
+    const label = '<div class="search-history-label">' + (zhUi ? '库内关联标签' : 'Related library tags') + refreshButton + '</div>';
+    if (libraryExpansionPendingQuery === q && !libraryExpansionTerms.length) {
+      list.innerHTML = label + '<span class="library-expansion-chip is-pending"><span class="library-expansion-spinner" aria-hidden="true"></span>' + (zhUi ? 'AI 联想中…' : '…AI thinking…') + '</span>';
+      panel.hidden = false;
       return;
     }
-    if (libraryExpansionTerms.length || libraryExpansionFresh.length) {
-      // v839：词条装进裁剪区（chips-clip），开关按钮放裁剪区外——
-      // 否则词条多时容器 overflow:hidden 会把「仅精确匹配」切掉一半
-      // v856：词条不再只显示前 3 个（裁剪区可横向滚动），尾部加刷新按钮手动追加联想词
-      // v892：两层展示——「库内相关词」= 词表里已有的标签（能直接命中）；
-      //       「AI 新词」= 词表里一个都没符合时 AI 新造的（还没进词表，多半搜不到）
-      const zhUi = state.lang === 'zh';
-      const knownChips = libraryExpansionTerms.map(term => `<span class="library-expansion-chip" title="${zhUi ? '库内已有的标签，命中这个词的物料也会出现在结果里' : 'An existing tag in the library; matching assets also appear in results'}">${escapeHtml(libraryChipDisplayLabel(term))}</span>`).join('');
-      const freshChips = libraryExpansionFresh.length
-        ? `<small class="library-expansion-chips-label is-fresh">${zhUi ? 'AI 新词' : 'AI new words'}</small>`
-          + libraryExpansionFresh.map(term => `<span class="library-expansion-chip is-fresh" title="${zhUi ? '标签词表里没有符合的，这是 AI 新造的词：只有标题/文件名里出现它才命中' : 'Not in the vocabulary yet; only matches titles/file names'}">${escapeHtml(libraryChipDisplayLabel(term))}</span>`).join('')
-        : '';
-      chipsHost.hidden = false;
-      chipsHost.innerHTML = `<span class="library-expansion-chips-clip"><small class="library-expansion-chips-label">${zhUi ? '库内相关词' : 'Related library tags'}</small>`
-        + knownChips
-        + freshChips
-        + `</span><button type="button" class="library-expansion-refresh${libraryExpansionRefreshing ? ' is-busy' : ''}" id="library-expansion-refresh" title="${zhUi ? 'AI 重新联想，追加相关词' : 'Ask AI for more related terms'}" aria-label="${zhUi ? '重新联想' : 'Refresh related terms'}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>`;
+    if (!libraryExpansionTerms.length) {
+      list.innerHTML = label + '<span class="library-expansion-chip is-empty">' + (zhUi ? '库里没有相关联的标签' : 'No related tags in the library') + '</span>';
+      panel.hidden = false;
       return;
     }
-    // v893：请求成功但 AI 一个词都没给（英文/生僻词常见）——给一条明确提示 + 刷新按钮；
-    // 以前是直接什么都不显示，看起来像"功能坏了"
-    if (libraryExpansionEmptyQuery === q) {
-      const zhEmpty = state.lang === 'zh';
-      chipsHost.hidden = false;
-      chipsHost.innerHTML = `<span class="library-expansion-chip is-empty" title="${zhEmpty ? 'AI 这次没想出相关词，可以点右边刷新再试' : 'AI had no related terms this time; try refresh'}">${zhEmpty ? 'AI 这次没给出相关词' : 'AI found no related terms'}</span>`
-        + `<button type="button" class="library-expansion-refresh${libraryExpansionRefreshing ? ' is-busy' : ''}" id="library-expansion-refresh" title="${zhEmpty ? 'AI 重新联想' : 'Ask AI again'}" aria-label="${zhEmpty ? '重新联想' : 'Refresh related terms'}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>`;
-      return;
-    }
-    chipsHost.hidden = true;
-    chipsHost.innerHTML ='';
+    list.innerHTML = label + '<div class="search-history-items">'
+      + libraryExpansionTerms.map(term => '<button type="button" class="library-expansion-chip is-clickable" data-library-expansion-term="' + escapeAttr(term) + '" title="' + escapeAttr(zhUi ? '库内已有的标签；点一下改成只搜这个词' : 'An existing library tag; click to search this term only') + '">' + escapeHtml(libraryChipDisplayLabel(term)) + '</button>').join('')
+      + '</div>';
+    panel.hidden = false;
   }
 
   function applyLibraryQueryExpansion(query) {
     const q = String(query || '').trim();
     if (!q || librarySearchExactOnly()) {
       libraryExpansionTerms = [];
-      libraryExpansionFresh = [];
       libraryExpansionTermsEn = {};
       libraryExpansionRefreshing = false;
       libraryExpansionPendingQuery = '';
-      libraryExpansionEmptyQuery = '';
       if (libraryExpansionLastQuery !== null) filterLibraryCardsInPlace();
       libraryExpansionLastQuery = q;
       renderLibraryExpansionChips();
@@ -3695,11 +3645,9 @@ return;
     const cached = readLibraryExpansionCache(q);
     if (cached) {
       libraryExpansionTerms = cached.terms;
-      libraryExpansionFresh = cached.fresh || [];
       libraryExpansionTermsEn = cached.termsEn || {};
       libraryExpansionRefreshing = false;
       libraryExpansionPendingQuery = '';
-      libraryExpansionEmptyQuery = (cached.terms.length || (cached.fresh || []).length) ? '' : q;
       if (libraryExpansionLastQuery !== q) filterLibraryCardsInPlace();
       libraryExpansionLastQuery = q;
       renderLibraryExpansionChips();
@@ -3712,8 +3660,6 @@ return;
     libraryExpansionRequestKey = requestKey;
     libraryExpansionRefreshing = false;   // v856 新查询开始，取消进行中的手动刷新态
     libraryExpansionTerms = [];          // 旧查询的词条对新查询无效，清空后才能渲染 pending 态
-    libraryExpansionFresh = [];
-    libraryExpansionEmptyQuery = '';
     libraryExpansionPendingQuery = q;
     renderLibraryExpansionChips();
     fetch('/api/expand-query', {
@@ -3722,33 +3668,27 @@ return;
       body: JSON.stringify({ query: q, vocabulary: librarySearchVocabulary() })
     }).then(r => r.json()).then(function(data) {
       if (libraryExpansionRequestKey !== requestKey) return;         // 已换搜索词，旧结果作废
-      const terms = data && data.success && Array.isArray(data.terms) ? data.terms.filter(Boolean).slice(0, 8) : [];
-      // v892：词表里一个都没命中时才会有 fresh（AI 新造词，≤3）
-      const fresh = data && data.success && Array.isArray(data.fresh) ? data.fresh.filter(Boolean).slice(0, 3) : [];
+      const terms = data && data.success && Array.isArray(data.terms) ? data.terms.filter(Boolean) : [];
+      const fresh = data && data.success && Array.isArray(data.fresh) ? data.fresh.filter(Boolean) : [];
       const termsEn = data && data.termsEn && typeof data.termsEn === 'object' ? data.termsEn : {};
       libraryExpansionTermsEn = termsEn;
-      // v893：英文/拼音联想词先反查词表换回中文；换回中文的算「库内相关词」（它能真的命中物料）
-      const knownTerms = [];
-      const newTerms = [];
-      const pushTerm = function(list, value, max) {
+      // v894：两层口径收敛成一层——只保留「库内确实存在」的标签：
+      //   ① 英文/拼音联想词先反查词表换回中文（v893）
+      //   ② 换完还不在词表里的，一律丢掉（库内没有 = 搜不到，显示了也是误导）
+      const kept = [];
+      terms.concat(fresh).forEach(function(value) {
         const term = libraryExpansionCanonicalTerm(value);
-        if (!term || list.length >= max || list.indexOf(term) >= 0) return;
-        list.push(term);
-      };
-      terms.forEach(function(term) { pushTerm(knownTerms, term, 8); });
-      fresh.forEach(function(term) {
-        const canonicalTerm = libraryExpansionCanonicalTerm(term);
-        if (canonicalTerm !== String(term || '').trim() || libraryExpansionIsLibraryTerm(canonicalTerm) === true) pushTerm(knownTerms, canonicalTerm, 8);
-        else pushTerm(newTerms, canonicalTerm, 3);
+        if (!term || kept.length >= 8 || kept.indexOf(term) >= 0) return;
+        const libraryTerm = libraryExpansionIsLibraryTerm(term);
+        if (libraryTerm === false) return;      // 词表已加载且确认库内没有 → 丢
+        kept.push(term);
       });
-      writeLibraryExpansionCache(q, knownTerms, newTerms, termsEn);
-      libraryExpansionTerms = knownTerms;
-      libraryExpansionFresh = newTerms;
-      libraryExpansionEmptyQuery = (knownTerms.length || newTerms.length) ? '' : q;   // v893：AI 一个都没给出来时给个明确提示
+      writeLibraryExpansionCache(q, kept, termsEn);
+      libraryExpansionTerms = kept;
       libraryExpansionPendingQuery = '';
       renderLibraryExpansionChips();
       const live = document.getElementById('library-search');
-      if ((knownTerms.length || newTerms.length) && live && live.value.trim() === q) filterLibraryCardsInPlace();
+      if (kept.length && live && live.value.trim() === q) filterLibraryCardsInPlace();
     }).catch(function() {
       if (libraryExpansionRequestKey !== requestKey) return;
       libraryExpansionPendingQuery = '';
@@ -3779,35 +3719,24 @@ return;
       const incomingFresh = data && data.success && Array.isArray(data.fresh) ? data.fresh.filter(Boolean) : [];
       const enMap = data && data.termsEn && typeof data.termsEn === 'object' ? data.termsEn : {};
       const normKey = function(value) { return String(value || '').replace(/\s+/g, '').toLowerCase(); };
-      const beforeCount = libraryExpansionTerms.length + libraryExpansionFresh.length;
+      const beforeCount = libraryExpansionTerms.length;
       const merged = libraryExpansionTerms.slice();
-      incoming.forEach(function(term) {
+      // v894：只收「库内确实存在」的标签（新词层已停用；英文词先反查换回中文）
+      incoming.concat(incomingFresh).forEach(function(value) {
+        const term = libraryExpansionCanonicalTerm(value);
         const key = normKey(term);
         if (!key || merged.length >= 12) return;
         if (merged.some(function(existing) { return normKey(existing) === key; })) return;
+        if (libraryExpansionIsLibraryTerm(term) === false) return;
         merged.push(term);
       });
-      // v892：第一层（库内词）有了就不要新词；第一层本来就空时才把新词补上（上限 3）
-      const mergedFresh = libraryExpansionFresh.slice();
-      if (merged.length) {
-        mergedFresh.length = 0;
-      } else {
-        incomingFresh.forEach(function(term) {
-          const key = normKey(term);
-          if (!key || mergedFresh.length >= 3) return;
-          if (mergedFresh.some(function(existing) { return normKey(existing) === key; })) return;
-          mergedFresh.push(term);
-        });
-      }
       // v857：刷新没挤出任何新词（词库收敛或达到 12 上限）时轻提示，避免误以为按钮失灵
-      if (merged.length + mergedFresh.length === beforeCount) {
+      if (merged.length === beforeCount) {
         showCaseToast(state.lang === 'zh' ? 'AI 暂时没有更多新联想词了' : 'AI has no new related terms for now');
       }
       libraryExpansionTerms = merged;
-      libraryExpansionFresh = mergedFresh;
-      libraryExpansionEmptyQuery = (merged.length || mergedFresh.length) ? '' : q;
       libraryExpansionTermsEn = Object.assign({}, libraryExpansionTermsEn, enMap);
-      writeLibraryExpansionCache(q, merged, mergedFresh, libraryExpansionTermsEn);
+      writeLibraryExpansionCache(q, merged, libraryExpansionTermsEn);
       renderLibraryExpansionChips();
       filterLibraryCardsInPlace();
     }).catch(function() {
@@ -3817,14 +3746,34 @@ return;
     });
   }
 
-  // 刷新按钮随 chips 重建，用一次性事件委托绑定
+  // 浮窗内容随每次渲染重建，用一次性事件委托绑定（刷新按钮 + 关联标签点击）
   if (!window.__vfLibraryExpansionRefreshBound) {
     window.__vfLibraryExpansionRefreshBound = true;
+    // 浮窗内部按下鼠标不要抢走搜索框焦点（否则面板会立刻被 blur 关掉）
+    document.addEventListener('mousedown', function(event) {
+      const target = event.target;
+      if (target && typeof target.closest === 'function' && target.closest('#search-history-dropdown')) event.preventDefault();
+    });
     document.addEventListener('click', function(event) {
       const target = event.target;
-      if (target && typeof target.closest === 'function' && target.closest('#library-expansion-refresh')) {
+      if (!target || typeof target.closest !== 'function') return;
+      if (target.closest('#library-expansion-refresh')) {
         event.preventDefault();
         refreshLibraryExpansionTerms();
+        return;
+      }
+      // v894：点浮窗里的关联标签 = 直接搜这个词（原来这里点的是「历史搜索」）
+      const termButton = target.closest('[data-library-expansion-term]');
+      if (termButton) {
+        event.preventDefault();
+        const term = termButton.getAttribute('data-library-expansion-term') || '';
+        if (!term) return;
+        const input = document.getElementById('library-search');
+        if (input) input.value = term;
+        state.libraryFilters.query = term;
+        state.libraryVisibleLimit = LIBRARY_RENDER_STEP;
+        renderLibraryGrid();
+        applyLibraryQueryExpansion(term);
       }
     });
   }
@@ -6801,7 +6750,7 @@ return;
       .filter(item => { var sel = state.libraryFilters.selectedQuantities || []; return !sel.length || sel.some(function(v) { return librarySourceMatchesFilterValue('quantity', item.source, v); }); })
       .filter(item => {
         if (!state.libraryFilters.query) return true;
-        const rank = libraryItemQueryMatchRank(item, state.libraryFilters.query, libraryExpansionMatchTerms());
+        const rank = libraryItemQueryMatchRank(item, state.libraryFilters.query, libraryExpansionTerms);
         if (rank < 0) return false;
         const prev = queryRankById.get(item.source.id);
         queryRankById.set(item.source.id, prev === undefined ? rank : Math.min(prev, rank));

@@ -53,7 +53,7 @@ test('v845 中东业务桥：羊系词追加宰牲节/开斋节，菜品词保�
   assert.ok(outRamadan.includes('开斋节') && outRamadan.includes('宰牲节'));
   // 提示词有中东业务规则 + 前端缓存键已升 v5（v856：v4 无英文翻译 termsEn）
   assert.match(aiSource, /搜「小羊」「羊」「羔羊」→ 羊肉串、烤羊肉这类相关词可以保留/, 'v845 中东追加式规则：菜品词保留 + 节日词必返回');
-  assert.match(appSource, /vf_library_search_expansion_v6:/, 'v892 缓存键升 v6：v5 旧缓存不分「词表命中 / AI 新词」两层');
+  assert.match(appSource, /vf_library_search_expansion_v7:/, 'v894 缓存键升 v7：v6 旧缓存存着「AI 新词」那一层，现在只留库内标签');
 });
 
 test('v829 后端接口：登录鉴权 + 走文本模型扩展 + 返回 terms', () => {
@@ -77,16 +77,16 @@ test('v829 前端：缓存自长、秩排序精确优先、开关持久化', () 
   assert.match(appSource, /return exact \? 0 : 1;/);
   // 精确命中的排前面（稳定排序，不打乱新图优先）
   assert.match(appSource, /queryRankById\.get\(a\.source\.id\) \|\| 0\) - \(queryRankById\.get\(b\.source\.id\) \|\| 0\)/);
-  // 扩展词缓存：v833 起带 7 天 TTL，到期自动重新扩展；v892 键升 v6（分「词表命中」和「AI 新词」两层）
-  assert.match(appSource, /vf_library_search_expansion_v6:/);
+  // 扩展词缓存：v833 起带 7 天 TTL，到期自动重新扩展；v894 键升 v7（只留库内标签那一层）
+  assert.match(appSource, /vf_library_search_expansion_v7:/);
   assert.match(appSource, /LIBRARY_EXPANSION_CACHE_TTL_MS/);
   assert.match(appSource, /Date\.now\(\) - parsed\.ts > LIBRARY_EXPANSION_CACHE_TTL_MS/);
   assert.match(appSource, /function readLibraryExpansionCache/);
-  assert.match(appSource, /writeLibraryExpansionCache\(q, knownTerms, newTerms, termsEn\)/);
-  // v892 两层：匹配用两层合并，展示分开（词表命中 vs AI 新词）
-  assert.match(appSource, /function libraryExpansionMatchTerms\(\)/);
-  assert.match(appSource, /libraryItemQueryMatchRank\(item, state\.libraryFilters\.query, libraryExpansionMatchTerms\(\)\)/);
-  assert.match(appSource, /libraryExpansionFresh = \[\];/);
+  assert.match(appSource, /writeLibraryExpansionCache\(q, kept, termsEn\)/);
+  // v894：只剩「库内确实存在的标签」一层，匹配直接用它
+  assert.match(appSource, /libraryItemQueryMatchRank\(item, state\.libraryFilters\.query, libraryExpansionTerms\)/);
+  assert.doesNotMatch(appSource, /libraryExpansionMatchTerms/, '两层合并的辅助函数已删');
+  assert.doesNotMatch(appSource, /libraryExpansionFresh/, 'AI 新词层已停用');
   // 过期请求作废：换搜索词后旧扩展不覆盖新结果
   assert.match(appSource, /if \(libraryExpansionRequestKey !== requestKey\) return;/);
   // 扩展词表带全：六类筛选 + 物料类型，让 AI 优先返回库内真实标签
@@ -115,9 +115,10 @@ test('v829 前端：缓存自长、秩排序精确优先、开关持久化', () 
   // 触发点：筛选点击后 + AI 开关切换时
   assert.match(appSource, /filterLibraryCardsInPlace\(\);\s*\n\s*applyLibraryFilterExpansion\(\)/);
   assert.match(appSource, /applyLibraryQueryExpansion\(state\.libraryFilters\.query\);\s*\n\s*applyLibraryFilterExpansion\(\)/);
-  // v835：词条从状态条搬到搜索框左侧 chips 容器
-  assert.match(appSource, /id="library-expansion-chips" class="library-expansion-chips" hidden/);
-  assert.match(appSource, /library-expansion-chips-label/);
+  // v894：关联标签从「搜索框左侧 chips」搬进搜索框下方的浮窗（原「历史搜索」位置）
+  assert.match(appSource, /id="search-history-dropdown" class="search-history-dropdown" hidden/);
+  assert.match(appSource, /id="search-history-list"/);
+  assert.doesNotMatch(appSource, /id="library-expansion-chips"/, '搜索框左侧那一排已经不要了');
   assert.match(appSource, /library-expansion-chip/);
   // 调扩展接口要带登录态
   assert.match(appSource, /fetch\('\/api\/expand-query'/);
@@ -194,8 +195,8 @@ test('v837 加载态：AI 请求期间搜索框左侧显示「AI 联想中…」
   assert.match(appSource, /catch\(function\(\) \{\s*\n\s*if \(libraryExpansionRequestKey !== requestKey\) return;/);
   const css = readFileSync(join(here, '..', 'styles.css'), 'utf8');
   assert.match(css, /library-expansion-spin/);
-// 发起新请求时必须清空旧词条（两层都要清），否则 pending 态被旧词条遮蔽（线上验证发现）
-assert.match(appSource, /libraryExpansionTerms = \[\];[^\n]*\n\s*libraryExpansionFresh = \[\];\n\s*libraryExpansionEmptyQuery = '';\n\s*libraryExpansionPendingQuery = q;/);
+// 发起新请求时必须清空旧词条，否则 pending 态被旧词条遮蔽（线上验证发现）
+assert.match(appSource, /libraryExpansionTerms = \[\];[^\n]*\n\s*libraryExpansionPendingQuery = q;/);
 });
 
 test('v839 词表锚定 + 语素兜底桥接 + chips 按钮防遮挡', async () => {
@@ -208,12 +209,12 @@ test('v839 词表锚定 + 语素兜底桥接 + chips 按钮防遮挡', async () 
   // 票族尾字桥接：AI 返回库里不存在的「电影票」→ 兜底桥接出词表里的门票
   const out2 = ai.parseQueryExpansion('{"terms":["电影票"]}', vocab, '票根');
   assert.ok(out2.includes('门票'), '票族尾字桥接到门票');
-  // 前端：词条裁剪区结构（v841 起开关改到搜索框右侧滑块，chips 只剩词条）
-  assert.match(appSource, /library-expansion-chips-clip/, '词条装进裁剪区');
-  assert.doesNotMatch(appSource, /library-expansion-chips-clip[\s\S]{0,400}library-expansion-toggle/, '裁剪区内不再有开关按钮');
+  // v894：浮窗里的关联标签用 search-history-items 排布，标签本身仍走 library-expansion-chip 样式
+  assert.match(appSource, /class="search-history-items"/, '浮窗里一排标签');
+  assert.match(appSource, /class="library-expansion-chip is-clickable" data-library-expansion-term=/, '标签可点（点一下改成只搜它）');
   const css = readFileSync(join(here, '..', 'styles.css'), 'utf8');
-  assert.match(css, /\.library-expansion-chips-clip/);
-  assert.match(css, /\.library-expansion-chips \.library-expansion-toggle \{\s*\nflex: 0 0 auto;/, '开关按钮不可压缩不换行');
+  assert.match(css, /\.search-history-items \{\s*\n\s*align-items: center;/);
+  assert.match(css, /\.library-expansion-chip\.is-clickable \{/);
 });
 
 test('v840 词表去虚词 + 英文搜索规则', () => {
@@ -259,7 +260,7 @@ test('v856 英文模式：AI 联想词逐词带英文翻译，配不上的走前
 test('v856 手动刷新：词条区尾部刷新按钮，追加不覆盖，优先匹配库内标签不变', () => {
   // 刷新按钮渲染在 chips 尾部（搜索框左侧），busy 态转圈
   assert.match(appSource, /id="library-expansion-refresh"/);
-  assert.match(appSource, /class="library-expansion-refresh\$\{libraryExpansionRefreshing \? ' is-busy' : ''\}"/);
+  assert.match(appSource, /class="library-expansion-refresh' \+ \(libraryExpansionRefreshing \? ' is-busy' : ''\) \+ '"/);
   // 刷新期间不清空已有词条（只有换新搜索词才清空）
   assert.match(appSource, /function refreshLibraryExpansionTerms\(\)/);
   assert.match(appSource, /libraryExpansionRefreshing = true;/);
@@ -267,26 +268,21 @@ test('v856 手动刷新：词条区尾部刷新按钮，追加不覆盖，优先
   const fnEnd = appSource.indexOf('// 匹配返回秩：-1 不命中', fnStart);
   const fn = appSource.slice(fnStart, fnEnd);
   assert.ok(!/libraryExpansionTerms = \[\];/.test(fn), '刷新函数内不得清空已有词条');
-  // 追加合并：新词去重后 push 到已有词条后面，总上限 12
+  // 追加合并：新词去重后 push 到已有词条后面，总上限 12（v894：只收库内确实存在的标签）
   assert.match(fn, /const merged = libraryExpansionTerms\.slice\(\);/);
   assert.match(fn, /if \(!key \|\| merged\.length >= 12\) return;/);
   assert.match(fn, /merged\.some\(function\(existing\) \{ return normKey\(existing\) === key; \}\)/);
-  assert.match(fn, /writeLibraryExpansionCache\(q, merged, mergedFresh, libraryExpansionTermsEn\);/, '合并结果（两层）写回缓存');
-  // v892：第一层有命中就不要新词；第一层本来就空时才补新词（≤3）
-  assert.match(fn, /const mergedFresh = libraryExpansionFresh\.slice\(\);/);
-  assert.match(fn, /if \(merged\.length\) \{\s*\n\s*mergedFresh\.length = 0;/);
-  assert.match(fn, /if \(!key \|\| mergedFresh\.length >= 3\) return;/);
+  assert.match(fn, /if \(libraryExpansionIsLibraryTerm\(term\) === false\) return;/);
+  assert.match(fn, /writeLibraryExpansionCache\(q, merged, libraryExpansionTermsEn\);/, '合并结果写回缓存');
   // 匹配优先库内标签：请求仍带全量词表（服务端词表锚定规则不变）
   assert.match(fn, /vocabulary: librarySearchVocabulary\(\)/);
-  // 按钮随 chips 重建，用一次性事件委托绑定
+  // 按钮随浮窗内容重建，用一次性事件委托绑定
   assert.match(appSource, /__vfLibraryExpansionRefreshBound/);
   assert.match(appSource, /target\.closest\('#library-expansion-refresh'\)/);
   // v857：刷新没挤出任何新词时弹轻提示（词库收敛或达 12 上限），避免误以为按钮失灵
   assert.match(appSource, /AI 暂时没有更多新联想词了/);
-  assert.match(appSource, /if \(merged\.length \+ mergedFresh\.length === beforeCount\) \{\s*\n\s*showCaseToast\(state\.lang === 'zh' \? 'AI 暂时没有更多新联想词了' : 'AI has no new related terms for now'\);/);
-  // 词条区可横向滚动（追加的词不被裁剪区吞掉）
+  assert.match(appSource, /if \(merged\.length === beforeCount\) \{\s*\n\s*showCaseToast\(state\.lang === 'zh' \? 'AI 暂时没有更多新联想词了' : 'AI has no new related terms for now'\);/);
   const css = readFileSync(join(here, '..', 'styles.css'), 'utf8');
-  assert.match(css, /\.library-expansion-chips-clip \{\s*\noverflow-x: auto;/);
   assert.match(css, /\.library-expansion-refresh/);
   assert.match(css, /\.library-expansion-refresh\.is-busy svg \{\s*\nanimation: library-expansion-spin/);
 });

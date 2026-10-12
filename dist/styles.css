@@ -1903,7 +1903,7 @@ select:focus {
   font-weight: 800;
 }
 
-/* v829 扩展搜索提示；v835 起词条渲染在搜索框左侧 chips（.library-expansion-chips） */
+/* v829 扩展搜索提示；v894 起「库内关联标签」显示在搜索框下方的浮窗里（.search-history-dropdown） */
 .library-stat.expansion {
   border-color: #bfdbfe;
   background: #eff6ff;
@@ -1926,40 +1926,9 @@ select:focus {
 
 /* v835 搜索框左侧的 AI 相关词 chips：可收缩、溢出隐藏，避免挤爆工具栏盖住标签页；
    v839 容器放宽到 380px，词条裁剪交给内部 clip 区，保证开关按钮永不被切 */
-.library-expansion-chips {
-display: flex;
-align-items: center;
-gap: 6px;
-flex-wrap: nowrap;
-flex: 0 1 auto;
-min-width: 0;
-max-width: 380px;
-}
+/* v894：关联标签显示在浮窗里（.search-history-items 自动换行），不再需要左侧裁剪区 */
 
-.library-expansion-chips[hidden] {
-display: none;
-}
-
-/* v839 词条裁剪区：label + 词条装这里裁剪，开关按钮在区外完整可见 */
-.library-expansion-chips-clip {
-display: flex;
-align-items: center;
-gap: 6px;
-flex: 0 1 auto;
-min-width: 0;
-overflow: hidden;
-}
-
-/* v856：词条可横向滚动查看全部（手动刷新追加的词不被裁掉），滚动条隐藏保持外观 */
-.library-expansion-chips-clip {
-overflow-x: auto;
-scrollbar-width: none;
-}
-.library-expansion-chips-clip::-webkit-scrollbar {
-display: none;
-}
-
-/* v856：AI 重新联想刷新按钮（词条区尾部、搜索框左侧） */
+/* v856：AI 重新联想刷新按钮（浮窗标题行右侧） */
 .library-expansion-refresh {
 flex: 0 0 auto;
 width: 22px;
@@ -1980,11 +1949,6 @@ border-color: #3b82f6;
 }
 .library-expansion-refresh.is-busy svg {
 animation: library-expansion-spin 0.8s linear infinite;
-}
-
-.library-expansion-chips .library-expansion-toggle {
-flex: 0 0 auto;
-white-space: nowrap;
 }
 
 /* v841 AI 搜索滑块开关：搜索框右侧，默认开；关闭后恢复普通搜索 */
@@ -2046,16 +2010,21 @@ display: none;
 }
 }
 
-.library-expansion-chips-label {
-  flex: 0 0 auto;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
+/* v894：浮窗标题行（「库内关联标签」+ 重新查找按钮） */
+.search-history-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.search-history-items {
+  align-items: center;
 }
 
 .library-expansion-chip {
   flex: 0 0 auto;
-  max-width: 96px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2069,31 +2038,29 @@ display: none;
   cursor: default;
 }
 
-/* v892：词表里没有符合的标签时，AI 新造的词单独一组——虚线灰底，提示"还不是库内标签" */
-.library-expansion-chips-label.is-fresh {
-  margin-left: 6px;
-  color: #94a3b8;
+/* v894：浮窗里的关联标签可以点（点一下改成只搜这个词） */
+.library-expansion-chip.is-clickable {
+  cursor: pointer;
 }
 
-.library-expansion-chip.is-fresh {
-  border-style: dashed;
-  border-color: #cbd5e1;
-  background: #f8fafc;
-  color: #64748b;
+.library-expansion-chip.is-clickable:hover {
+  background: #dbeafe;
+  border-color: #3b82f6;
 }
 
-/* v893：AI 一个联想词都没给出来时的提示 chip（以前什么都不显示，看起来像坏了） */
+/* v894：AI 没找到库内关联标签时的灰字提示（浮窗里显示） */
 .library-expansion-chip.is-empty {
   border-style: dashed;
   border-color: #e2e8f0;
   background: #fbfcfe;
   color: #94a3b8;
   font-weight: 500;
+  max-width: none;
 }
 
 @media (max-width: 1420px) {
-  .library-expansion-chips-label {
-    display: none;
+  .search-history-label {
+    font-size: 10.5px;
   }
 }
 
