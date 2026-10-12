@@ -836,7 +836,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v876';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v877';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4452,15 +4452,17 @@ return;
           ? (seen.length + themes.length > freshCount ? '（本次新认出 ' + freshCount + ' 个，点一下采纳）' : '（点一下采纳）')
           : '(click to add)');
       };
+      // 英文界面：等译名齐了再画，避免「先中文闪一下再变英文」；译文已在词表里时这一步瞬时完成。
+      // 加 6 秒上限：翻译接口异常也不会把建议区卡住。
+      if (state.lang === 'en') {
+        await Promise.race([
+          translateMissingTagNames(themes.concat(seen)).catch(function () { return 0; }),
+          new Promise(function (resolve) { setTimeout(resolve, 6000); })
+        ]);
+      }
       renderSuggestionChips();
       if (actions) actions.hidden = false;
       syncCaseAiSuggestionState(root);
-      // 英文界面：建议词也走同一套翻译，新翻出来的词回来后再画一次
-      if (state.lang === 'en') {
-        void translateMissingTagNames(themes.concat(seen)).then(function (added) {
-          if (added > 0 && root.isConnected && root.dataset.aiElementKey === requestKey) renderSuggestionChips();
-        }).catch(function () {});
-      }
     } catch (error) {
       if (!root.isConnected || root.dataset.aiElementKey !== requestKey) return;
       chipsBox.innerHTML = hint(state.lang === 'zh' ? '识别失败，可重新识别或手动添加' : 'Detection failed');
@@ -5106,7 +5108,7 @@ return;
           });
         })
         .then(r => r.json())
-        .then(function(data) {
+        .then(async function(data) {
           aiBtn.disabled = false;
           if (!data || !data.success) throw new Error(translateServerError(data && data.message) || 'HTTP 错误');
           const elements = Array.isArray(data.elements) ? data.elements : [];
@@ -5116,6 +5118,13 @@ return;
           if (!suggestSeen.length && !suggestThemes.length) {
             showCaseToast(zh() ? '没识别到可用的元素或主题' : 'No elements detected', 2400);
             return;
+          }
+          // 英文界面：译名齐了再画建议弹窗，避免先中文后英文的闪动（6 秒上限防止接口异常卡住）
+          if (state.lang === 'en') {
+            await Promise.race([
+              translateMissingTagNames(suggestSeen.concat(suggestThemes)).catch(function () { return 0; }),
+              new Promise(function (resolve) { setTimeout(resolve, 6000); })
+            ]);
           }
           renderSuggestPop();
         })
