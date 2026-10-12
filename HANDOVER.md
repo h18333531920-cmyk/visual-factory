@@ -16,14 +16,14 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-tag-i18n-v890`（标签双语 + 中英对照表 + **相关词表**（**`sql/024` 已执行**）；搜索 = 子串 + 中英归一 + 相关词） | 实测 2026-10-12 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-tag-flat-v891`（标签**平表**：中文名 / 英文名 / **相关词（可直接编辑 + 「AI 建议」）** / 删除；搜索 = 子串 + 中英归一 + 相关词）；部署 `34457530-0961-42c9-91f2-31c754c3ae52`，2026-10-12 本机 wrangler 直发 | 实测 2026-10-12 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
-| 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`1787a45` 已全部提交）；测试站走 GitHub Actions 预构建 dist 通道发布 | 实测 2026-10-12 |
-| 自动化测试 | `node --test tests/` → **368/368 通过**（含标签双语 3 项） | 实测 2026-10-12 |
+| 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`d193c03` 起）；测试站走**本机 wrangler 直发**（github Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-12 |
+| 自动化测试 | `node --test tests/` → **379/379 通过**（含标签词表平表 / 相关词 11 项） | 实测 2026-10-12 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
-| 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在） | 实测 2026-10-10 |
+| 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在） | 实测 2026-10-12 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
 
 **当前需要人决定/处理的事** → §11；**风险和安全边界** → §12。
@@ -169,6 +169,7 @@
 |---|---|---|
 | `vf_preview_ai_tags` | PK(`experiment_key`,`preview_id`)、`source_file_id`、`ai_tags`、**`manual_tags`**、`excluded_tags`、`status`(`idle`/`running`/`success`/`failed`/`expired`)、`model`、`content_key`、`run_id`、`error_message`、`updated_by` | 逐图 AI 标签实验（`sql/021`）。与项目级 `tags` 分离，**逻辑副本**：不改原项目、不复制图片文件。`manual_tags` 是后补的列——**没执行最新 `sql/021` 时前端会提示"需补执行 sql/021"**（本地 v872 改动加的保护） |
 | `vf_material_catalog` | 单行 `entries jsonb` | **物料清单 = 识别规则的唯一依据**（三层：**端 → 大类别 → 子类别尺寸**）。识别函数 `detectMaterialTypeByCatalog(platform,w,h)`：严格按端、同比例 ±2% 命中、不跨端兜底，都不中就留空"未分类"。老口径 `CASE_TYPE_RULES` / `CASE_FILENAME_TYPE_KEYWORDS` 已**删除**（不要再找它们） |
+| **`vf_tag_vocabulary`** | `id`（形如 `el:披萨`）、`name_zh`（唯一）、`name_en`、`kind`（`element` / `group` / `ignored`）、`source`（`ai` / `manual`）、**`related text[]`**；**已废弃的列**：`aliases`、`parent_id` | 标签词表（`sql/022` + `sql/024`；`023` 的 `parent_id` 自 v891 起不再读写）。管三件事：① 双语显示 ② 搜英文（`coffee`）命中中文标签 ③ 搜大词（`甜点`）带出该行 `related`（蛋挞、蛋糕…）。界面在团队管理页，**平表**：中文名 / 英文名 / 相关词 / 删除，改完即存；每行「AI 建议」走 `/api/tag-vocabulary-related`。RLS：读 = 登录用户，写 = 管理员 |
 | `vf_team_members` | 见 `sql/015_team_members.sql` | 使用者名单（上传表单的"负责人"等） |
 
 ### 6.3 账号权限系统
@@ -262,19 +263,23 @@ npm run build:pages         # 生成 dist/，wrangler 发的就是它
 ### 8.3 发测试站（自由发，发完把链接给用户）
 
 ```bash
-NODE_OPTIONS="--require $PWD/.local/dns-hook.cjs" \
-  npx --yes wrangler@4.60.0 pages deploy dist \
+# 2026-10-12 实测：本机不需要 DNS 绕过也能发（§8.6 已更正，别再加 NODE_OPTIONS）
+npx --yes wrangler@4.60.0 pages deploy dist \
   --project-name visual-factory --branch asset-gallery-test --commit-dirty=true
 
-# 验证（版本号应变）
+# 验证（两处版本号都要变）
 curl -s "https://asset-gallery-test.visual-factory.pages.dev/?cb=$(date +%s)" | grep -o 'app\.js?v=[^"]*'
+curl -s "https://asset-gallery-test.visual-factory.pages.dev/app.js?cb=$(date +%s)" | grep -m1 "TOOL_UI_VERSION"
 ```
+
+- ⚠️ **发完有 1–3 分钟窗口期**：实测刚发完时 `index.html` 已是新版、`app.js` 还是旧版（`?cb=` 也不一定救回来）。判不定就打开本次部署自己的 URL（`https://<部署 ID 前 8 位>.visual-factory.pages.dev`）验货，或者过一两分钟再测。
+- ⚠️ **`dist/functions/api/` 里有文件没进 git**：`tag-translate.js` 从来没有（未跟踪 + `dist` 在 `.gitignore` 里），2026-10-12 新增的 `tag-vocabulary-related.js` 已用 `git add -f` 补进去。GitHub Actions 的 checkout 拿不到未跟踪文件 ⇒ **Actions 那条测试站通道发不出这些端点**，**本机 `wrangler` 直发才是完整通道**。
+- 部署完记得把**部署 ID / 版本号 / 时间**记进 §0。
 
 ### 8.4 发正式站（**先拿到用户当次授权**）
 
 ```bash
-NODE_OPTIONS="--require $PWD/.local/dns-hook.cjs" \
-  npx --yes wrangler@4.60.0 pages deploy dist \
+npx --yes wrangler@4.60.0 pages deploy dist \
   --project-name visual-factory --branch main
 
 # 验证 + 记录
@@ -289,11 +294,14 @@ curl -s "https://gccdesign.app/?cb=$(date +%s)" | grep -o 'app\.js?v=[^"]*'
 | `.github/workflows/deploy.yml` | push **`main`** | 构建 + 发**正式站**。⚠️ 只有确认 `main` 就是要发的代码才能用 —— 现在 `main` 落后 6 周，推它等于用旧代码覆盖正式站 |
 | `.github/workflows/deploy-test.yml` | push **`tmp-deploy-*`** 分支 | 把**提交里那份 `dist/`** 发到**测试站**，**不重新构建**。所以走这条路必须先 `npm run build:pages` 并把 `dist/` 一起提交 |
 
+> ⚠️ **2026-10-12 实测更正**：这条路**发不全**。checkout 只拿得到 git 跟踪的文件，而 `dist/functions/api/` 下有未跟踪文件（`tag-translate.js` 等）⇒ 走 Actions 会把已有的端点发丢。**测试站请用 §8.3 的本机直发。**
+
 ### 8.6 这台机器专属的坑（很重要）
 
-- **DNS 被污染**：本机解析 `api.cloudflare.com` 会失败/被劫持，wrangler **必须**加 `NODE_OPTIONS="--require $PWD/.local/dns-hook.cjs"`（脚本把该域名指向 Cloudflare 真实 IP `104.16.123.96`），否则报网络/证书错误。
+- **DNS 绕过脚本已过时（2026-10-12 实测）**：`api.cloudflare.com` 现在本机能正确解析（`104.19.192.x`）；再套 `.local/dns-hook.cjs`（硬编码 `104.16.123.96`）反而被 Cloudflare 拒绝（`GET /user -> 403`，页面报 **error code 1034 / Edge IP Restricted**），看起来像"没登录"。**现在直接用 `npx wrangler` 即可，不要加 `NODE_OPTIONS`。**（脚本文件留在 `.local/` 备用。）
+- 本机已有 wrangler OAuth 登录态（账号 `h18333531920@gmail.com`，账号 ID `555fab154fbf8785df1faf9380a9ce81`，8 月登录，2026-10-12 仍有效）；`wrangler whoami` 可自查。
 - 现成脚本：`.local/deploy-fast.sh`（60 次重试）、`.local/deploy-retry.sh`（20 次重试）、`.local/poll-version.sh`（轮询线上版本号确认生效）。
-- **网络很慢**：1 MB 的文件下载经常中途截断。验证时一定带 `?cb=$(date +%s)` 破坏缓存，并注意**截断 ≠ 文件坏了**（曾因此误判线上文件不一致）。
+- **网络很慢**：1 MB 的文件下载经常中途截断。验证时一定带 `?cb=$(date +%s)`，并注意**截断 ≠ 文件坏了**（曾因此误判线上文件不一致）。改完看**文件字节数**比 grep 更可靠。
 - **禁止 `git reset` / `checkout` / `clean` 覆盖工作区** —— 主站工作区长期有未提交改动，那是唯一真相。
 
 ### 8.7 回滚（正式站原生支持，随时可退）
@@ -382,23 +390,27 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 
 ## 11. 待办与未决事项
 
-> **标签词表 / 搜索 的交接（2026-10-12 收尾快照，新对话从这里接手）**
+> **标签词表 / 搜索 的交接（2026-10-12 第二轮收尾快照 v891，新对话从这里接手）**
 >
-> **已上线（测试站 v890，生产未动）**
+> **测试站已上线 v891（部署 `34457530`；生产未动）**
 > - 标签**双语显示**：中文界面显中文、英文界面显英文；新标签自动进词表 + 自动补英文（中文界面后台补，不阻塞）
 > - 「中英对照表」= 表 `vf_tag_vocabulary`（`name_zh` / `name_en`）：管双语显示 + 搜英文命中中文
 > - 「相关词表」= 同表的 `related text[]` 字段：管"搜大词带出小词"。**设计口径已定死，不要再加层级/概念 ID/多父级/别名**
 > - 搜索三层：① 子串 ② 中英归一（`coffee`→咖啡）③ 该行 `related` 一并匹配（`app.js` 的 `tagVocabularyQueryTerms`）
-> - 已执行的 SQL：`022`（词表）、`023`（parent_id，**已不再使用**）、`024`（related）
+> - 已执行的 SQL：`022`（词表）、`023`（parent_id，**已废弃不用**）、`024`（related）
+> - **词表界面已回归平表**：`中文名 | 英文名 | 相关词 | 删除`；相关词是逗号分隔输入框（中英文逗号/顿号/分号都认），**失焦即存**；每行有「AI 建议」按钮（调 `/api/tag-vocabulary-related`，AI 从词表里挑一版相关词，并进该行后落库，人工再删改）
+> - **本轮删掉的东西**（别再找）：`AI 自动归类`按钮、折叠分组/缩进、上位词 `parent_id`、别名浮窗、`/api/tag-vocabulary-suggest` 端点、`_ai.js` 的 `parseVocabularySuggestions` / `suggestVocabularyGroupsWithGlm`、`tagVocabularyDescendantsOf`
+> - 词表删除行 + 词表内搜索都还在；`kind='ignored'`（老「不做标签」）的行**现在直接从表里隐藏**
 >
-> **下一步（就这三件，按顺序）**
-> 1. 词表界面加「**相关词**」列（逗号分隔输入，改完即存）——**目前只能在 Supabase 表编辑器里填**
-> 2. **删掉**界面上的「AI 自动归类」按钮、折叠分组、上位词/别名残留（目标是回归一张平表：`中文名 | 英文名 | 相关词 | 删除`）
-> 3. （可选）「AI 建议相关词」按钮：给每行填一版建议，人工删改
+> **已验证**：379/379 测试全绿；`select=related` 实测该列存在（假列名对比返回 400）；测试站两处版本号均为 `20261012-tag-flat-v891`、旧端点已 404/405、新端点存在且要登录。
+> **未验证（要人点一下）**：「AI 建议」真的跑通 AI（要管理员登录 + GLM_API_KEY）；真实库里填了相关词后搜索的实际命中效果。
 >
-> **已验证可用的用法**：在 `vf_tag_vocabulary` 里给「甜点」那行填 `related = {蛋挞,蛋糕,冰淇淋,甜甜圈}` → 搜「甜点」能带出这些词的物料。
+> **下一步（候选，按用户优先级）**
+> 1. 管理员在测试站**真机验收**：团队管理页 →「标签词表」→ 填相关词 / 点「AI 建议」
+> 2. 老数据清理：库里 `parent_id`（sql/023 的上位词链）和 `aliases` 已不参与任何逻辑，是否清空由用户定
+> 3. `dist/functions/api/tag-translate.js` 仍**未进 git**（Actions 通道发不出它）——是否提交进仓库由用户定（本仓库 public，文件不含密钥）
 >
-> **这轮踩过的坑（别再犯）**：① 搜索要接进 `libraryItemQueryMatchRank`，别只改渲染；② 大表改列数时**别用全量替换** `colspan`（我曾误改 8 处无关表格）；③ AI 分类调用要**小批量**（15 词/批，一次 60 词会超平台时限、请求永久挂住）；④ 词表读取新增字段时要**带降级**（SQL 未执行时退回旧读法）。
+> **这轮踩过的坑（别再犯）**：① 搜索要接进 `libraryItemQueryMatchRank`，别只改渲染；② 大表改列数时**别用全量替换** `colspan`（曾误改 8 处无关表格）；③ AI 调用要**小批量**；④ 词表读取新增字段时要**带降级**（SQL 未执行时退回旧读法，v891 对 `related` 就是这么做：读不到就把该列变只读并提示执行 `sql/024`）；⑤ **部署后 1–3 分钟内线上文件可能新旧混着**（§8.3），别据此误判。
 
 **等用户决定 / 授权的**
 
@@ -407,9 +419,9 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 | B / D / M 端的物料清单尺寸未补 | 这三个端上传的素材一律识别为"未分类"。等用户按实际导出尺寸补 |
 | 团队管理页「按清单重跑识别」 | 未执行（**会写共享库**，需用户当次授权） |
 | 正式站怎么办：回滚旧版 / 保持现状 | 用户倾向**保持现状**（线上功能正常，回滚反而让同事面对陌生旧界面） |
-| **轮换 Cloudflare API Token** | 未做。这是唯一能"从根上"杜绝再次未经授权发布正式站的动作 |
+| **轮换 Cloudflare API Token** | 未做。这是唯一能"从根上"杜绝再次未经授权发布正式站的动作。⚠️ 2026-10-12 实测更正：本机**确实存着 wrangler OAuth 登录态**（`~/Library/Preferences/.wrangler/config/default.toml`，账号 `h18333531920@gmail.com`，`pages:write` 权限，`wrangler whoami` 可自查），所以本机任何 AI 会话都能发正式站 —— 这条比 §12 原判断更严重 |
 | 首页检索栏下沿 1px 细线是否保留 / 是否也做自动叠起 / "联系所有者"是否再显示手机号 | 2026-09-18 起就挂在文档里，用户未答复 |
-| 本地未提交的 v872 改动（逐图 AI 标签迁移兜底） | 未提交，等用户决定 |
+| 本地未提交的 v872 改动（逐图 AI 标签迁移兜底） | **已解决**：2026-10-12 工作区干净，这些改动早已随提交进仓库（§0 的 `1787a45` 起） |
 
 **已知未修 / 未验证的 bug**
 
@@ -431,7 +443,7 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 | 风险 | 说明与建议 |
 |---|---|
 | **公开仓库 + 私有信息** | 代码仓库是 **public**。`services/`（含腾讯云实例 ID、公网 IP、控制台链接）、`.local/`、`.codex-backups/`、`.gemini-designer/`、`docs/archive/` 都**未进 git**，已列入 `.gitignore`。**永远不要 `git add -A` 全量提交** |
-| **部署凭证** | 本机没有持久保存的 Cloudflare 凭证（已核查：`.env` / `.wrangler` / shell profile 里都没有）；历史上的发布用的是**会话里临时给出的 token**。**建议立即轮换该 token**，且不要把 token 交给 AI 会话 |
+| **部署凭证（2026-10-12 更正）** | ❌ 原文写"本机没有持久保存的 Cloudflare 凭证"—— **实测是错的**：`~/Library/Preferences/.wrangler/config/default.toml` 里有 8 月登录的 wrangler OAuth token（账号 `h18333531920@gmail.com`，含 `pages:write`），`wrangler whoami` 能直接列出账号。⇒ **任何拿到这台机器的人/AI 会话都能发正式站**，红线只能靠人和文档守。要收紧就 `wrangler logout` 或轮换；不要把这个 token 贴进聊天 |
 | **`main` 分支** | 落后 6 周。一次 `git push origin main` 就会用 8 月的代码覆盖正式站。**不要推 main**，除非就是要发那份代码 |
 | **明文共享密钥（历史）** | 归档的旧文档里出现过明文同步密钥 `vf-jimeng-sync-2026`（对应接口已 410 下线）。该密钥若还在用，需更换；`docs/archive/` 不进 git 就是为了不扩散这类内容 |
 | **账号密码遗留** | 历史文档记录过 `icons@gccdesign.app` 的密码曾出现在聊天里、以及 `admin01` 弱密码，只有"建议重设"没有重设证据。**是否需要重设请自查**（未核实） |
