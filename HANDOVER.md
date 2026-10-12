@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-cache-revalidate-v898`（标签平表 + 相关词列；浮窗显示「库内关联标签」并按来源分组：词表设定 / AI 关联；**命中缓存会后台静默重问，答得不一样就替换**）；部署 `4f3e6f9c-d0c5-4272-9c45-14f762dd2948`，2026-10-12 本机 wrangler 直发 | 实测 2026-10-12 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-vocab-slim-v899`（词表简化为 中文名 / 英文名 / 相关词 / 删除；浮窗「库内关联标签」分来源；缓存命中会后台静默重问）；部署 `4599f4ef-f725-4a8e-a0a5-70b1cc3d4501`，2026-10-12 本机 wrangler 直发 | 实测 2026-10-12 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
 | 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`b7abe56`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-12 |
-| 自动化测试 | `node --test tests/` → **394/394 通过**（含标签词表平表 / 相关词 / 库内标签口径 / 浮窗分源 / 缓存重问 15 项） | 实测 2026-10-12 |
+| 自动化测试 | `node --test tests/` → **395/395 通过**（含标签词表平表 / 相关词 / 库内标签口径 / 浮窗分源 / 缓存重问 / 词表简化 16 项） | 实测 2026-10-12 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在） | 实测 2026-10-12 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -420,6 +420,17 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 >   2. **数据写错**：如果是你在标签词表里给「世界杯」那行填过 手机/耳机/PS5（或早期实验残留），那确定性关联层就会照实显示。
 >   ⇒ **浮窗现在分两组显示来源**：「**词表设定**」（你在词表 `related` 列填的，确定性）和「**AI 关联**」（模型挑的，可能不准）。**以后一看到不相关的词，先看它在哪一组**：AI 组 = 模型问题（点刷新重问 / 收紧提示词）；词表组 = 数据问题（去团队管理页把那行的相关词删掉）。
 > - **⭐ v898 修「答错的词会一直错」（用户实测）**：根因是**前端缓存**——本地把 AI 的答案按词缓存 7 天（`vf_library_search_expansion_v7:`），所以那次答错的「手机/耳机/PS5」每次搜「世界杯」都会被原样搬出来，只有手动点"重新查找"才会重问。现在：**缓存只负责"立刻显示"，命中缓存后后台再静默问一次 AI；答案不一样就用新的替换**（同一个词一次会话只重问一次，避免连打接口；这次没答出来就保留旧的那份、不清空面板；换词了就静默丢弃）。手动刷新按钮仍是"追加"语义。
+> - **⭐ v899 词表再简一刀**（用户要求"只留中文和英文"）：
+>   - **去掉「新增词」入口**：手工新增的词不会成为任何物料的标签（搜不到），只会往 AI 候选池里掺虚词。要加词就在 Supabase 表编辑器插一行（`id` 形如 `el:中文名`）。
+>   - **去掉每行的「AI 建议」按钮**（`suggestRelatedWordsForRow` 函数与 `/api/tag-vocabulary-related` 端点**保留备用**，加回按钮即可）。
+>   - **删除确认框写明**："只删这张对照表里的一行，物料上的这个标签原样保留，不会删任何素材"。
+>   - **「相关词」列保留**（没按用户原话删掉，理由要记住）：它是**唯一零 AI 的关联兜底**——AI 挑不全/答错时只能靠它（"搜足球缺世界杯"就是靠手工填 related 救回来的），而且不用等 AI、立刻显示。要连它一起删，用户说一声即可（DB 里的列和数据不会动，只是界面不再可编辑）。
+>
+> **词表的三条事实（2026-10-12 逐条查代码核实，回答用户提问）**
+> 1. **不保证等于"库内全量标签"**：它是「见到过、并且机翻成功过」的标签字典。四种漏法：① `tag-translate` 只为**翻出来**的词插行，AI 没翻出的词不落库；② 只收集**当前账号看得到**的物料上的标签（`collectTagLabelsInUse` 读的是已加载的 `librarySources/previews`，受 RLS 影响）；③ 超过 20 字、带 `vf:` 前缀的标签不收；④ 触发时机是"打开素材库 / 切语言"，不是上传那一刻。
+>    ⇒ 所以搜索里的"库内有没有"判断用「词表 ∪ 库内在用标签」（v895），**不能只看这张表**。
+> 2. **新标签会自动进表**：上传带新标签的物料 → 下次打开素材库（或切英文）时 `ensureTagTranslations()` 把缺的词批量机翻并 upsert（补 `name_en`）；同一个词只问一次 AI；`source='manual'` 的行 AI 不覆盖。
+> 3. **删物料不会清词表**：删素材只删 `vf_source_files`/`vf_asset_previews`，词表零联动 ⇒ **会留"孤儿词条"**（库内已无物料却还在表里）。害处：会被当成"库内标签"出现在浮窗里，点进去 0 条结果。目前只能手动删（或以后加个"清理孤儿词条"按钮）。
 > - **v894 删掉的东西**：`state.libraryFilters.searchHistory` + 「历史搜索」浮窗内容（整条链路删干净）、搜索框左侧那一排 `#library-expansion-chips`、以及「AI 新词」层在界面上的所有痕迹（`libraryExpansionFresh` / `is-fresh` / 空结果提示 chip）。
 > - 前端缓存键升到 `vf_library_search_expansion_v7`（v6 里存着「新造词」那一层，必须升）
 > - **v891 删掉的**（别再找）：`AI 自动归类`按钮、折叠分组/缩进、上位词 `parent_id`、别名浮窗、`/api/tag-vocabulary-suggest`、`parseVocabularySuggestions` / `suggestVocabularyGroupsWithGlm`、`tagVocabularyDescendantsOf`

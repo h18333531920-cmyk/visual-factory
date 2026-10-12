@@ -100,13 +100,13 @@ test('词表里「不做标签」的行不进表；词表内搜索连相关词�
   assert.equal(searched.tagVocabularyVisibleRows().length, 1);
 });
 
-test('sql/024 未执行时降级：相关词列只读、AI 建议禁用', () => {
+test('sql/024 未执行时降级：相关词列只读', () => {
   const c = loadVocabularyUi([
     { id: 'el:甜点', name_zh: '甜点', name_en: '', kind: 'element' }
   ], { relatedReady: false });
   const html = c.tagVocabularyRowsHtml();
   assert.match(html, /data-tv-related="el:甜点" value="" disabled/);
-  assert.match(html, /data-tv-suggest-related="el:甜点" disabled/);
+  assert.doesNotMatch(html, /data-tv-suggest-related/, 'v899：AI 建议按钮已从界面撤掉（端点留着备用）');
 });
 
 test('搜索三层：① 原词 ② 中英归一 ③ 相关词（搜「甜点」带出蛋挞/蛋糕）', () => {
@@ -136,8 +136,16 @@ test('界面残留清理：没有 AI 自动归类按钮、折叠分组、上位�
   assert.match(appSource, /const TAG_VOCABULARY_RELATED_MAX = 8;/);
   assert.match(appSource, /<th>' \+ \(zh \? '相关词（逗号分隔）'/);
   assert.match(appSource, /const TAG_VOCABULARY_RELATED_ENDPOINT = '\/api\/tag-vocabulary-related';/);
-  assert.match(appSource, /data-tv-suggest-related="' \+ escapeAttr\(row\.id\) \+ '"/, '每行一个 AI 建议按钮');
-  assert.match(appSource, /saveTagVocabularyPatch\(row\.id, \{ related: merged, source: 'manual' \}\)/, 'AI 建议并进这一行后落库');
+  assert.match(appSource, /saveTagVocabularyPatch\(row\.id, \{ related: merged, source: 'manual' \}\)/, 'AI 建议并进这一行后落库（函数留着备用）');
+});
+
+test('v899 词表再简一刀：去掉「新增词」和「AI 建议」，删除确认写清不动物料标签', () => {
+  assert.doesNotMatch(appSource, /data-tv-add/, '新增词入口已去掉');
+  assert.doesNotMatch(appSource, /tv-add-zh|tv-add-en/, '新增词输入框已去掉');
+  assert.doesNotMatch(appSource, /data-tv-suggest-related/, 'AI 建议按钮已从界面撤掉');
+  assert.match(appSource, /data-tv-delete="' \+ escapeAttr\(row\.id\) \+ '"/, '删除按钮保留');
+  assert.match(appSource, /只删这张对照表里的一行，物料上的这个标签原样保留，不会删任何素材/, '删除确认写清不会动物料');
+  assert.match(appSource, /placeholder="' \+ \(zh \? '相关词' : 'related'\) \+ '"/, '相关词列占位文案缩短');
 });
 
 test('AI 建议相关词：先收词表里已有的，词表里没有符合的才给新词（≤3）', async () => {
