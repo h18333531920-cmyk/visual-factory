@@ -82,7 +82,7 @@ test('v829 前端：缓存自长、秩排序精确优先、开关持久化', () 
   assert.match(appSource, /LIBRARY_EXPANSION_CACHE_TTL_MS/);
   assert.match(appSource, /Date\.now\(\) - parsed\.ts > LIBRARY_EXPANSION_CACHE_TTL_MS/);
   assert.match(appSource, /function readLibraryExpansionCache/);
-  assert.match(appSource, /writeLibraryExpansionCache\(q, terms, fresh, termsEn\)/);
+  assert.match(appSource, /writeLibraryExpansionCache\(q, knownTerms, newTerms, termsEn\)/);
   // v892 两层：匹配用两层合并，展示分开（词表命中 vs AI 新词）
   assert.match(appSource, /function libraryExpansionMatchTerms\(\)/);
   assert.match(appSource, /libraryItemQueryMatchRank\(item, state\.libraryFilters\.query, libraryExpansionMatchTerms\(\)\)/);
@@ -195,7 +195,7 @@ test('v837 加载态：AI 请求期间搜索框左侧显示「AI 联想中…」
   const css = readFileSync(join(here, '..', 'styles.css'), 'utf8');
   assert.match(css, /library-expansion-spin/);
 // 发起新请求时必须清空旧词条（两层都要清），否则 pending 态被旧词条遮蔽（线上验证发现）
-assert.match(appSource, /libraryExpansionTerms = \[\];[^\n]*\n\s*libraryExpansionFresh = \[\];\n\s*libraryExpansionPendingQuery = q;/);
+assert.match(appSource, /libraryExpansionTerms = \[\];[^\n]*\n\s*libraryExpansionFresh = \[\];\n\s*libraryExpansionEmptyQuery = '';\n\s*libraryExpansionPendingQuery = q;/);
 });
 
 test('v839 词表锚定 + 语素兜底桥接 + chips 按钮防遮挡', async () => {

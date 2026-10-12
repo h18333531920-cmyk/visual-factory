@@ -2082,6 +2082,15 @@ display: none;
   color: #64748b;
 }
 
+/* v893：AI 一个联想词都没给出来时的提示 chip（以前什么都不显示，看起来像坏了） */
+.library-expansion-chip.is-empty {
+  border-style: dashed;
+  border-color: #e2e8f0;
+  background: #fbfcfe;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
 @media (max-width: 1420px) {
   .library-expansion-chips-label {
     display: none;

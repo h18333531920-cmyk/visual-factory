@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-ai-vocab-first-v892';
+const TOOL_UI_VERSION = '20261012-search-en-v893';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3404,6 +3404,7 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
   var libraryExpansionRequestKey = '';
   var libraryExpansionLastQuery = null;
   var libraryExpansionPendingQuery = '';
+  var libraryExpansionEmptyQuery = '';     // v893：AI 一个联想词都没给出（单独提示，不再什么都不显示）
 
   // 参与匹配的词 = 两层合并（新词只在词表一个都没命中时才会出现）
   function libraryExpansionMatchTerms() {
@@ -3610,6 +3611,21 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return libraryExpansionTermsEn[key] || libraryDisplayLabel(term);
   }
 
+  // v893：联想词归一 —— AI 对英文/拼音搜索词有时直接回英文词（如 Football），
+  // 而库里标签是中文，英文词命中不到任何物料。这里用词表反查（英文名 → 中文名）换回中文：
+  // 换得到 = 它本来就是库内标签（进「库内相关词」）；换不到 = 留在「AI 新词」。
+  function libraryExpansionCanonicalTerm(value) {
+    const term = String(value == null ? '' : value).trim();
+    if (!term || tagVocabularyReady !== true) return term;
+    if (tagVocabularyRowsByZh.has(term)) return term;
+    return tagVocabularyByEn.get(term.toLowerCase()) || term;
+  }
+
+  function libraryExpansionIsLibraryTerm(term) {
+    if (tagVocabularyReady !== true) return null;   // 词表没加载：不判断，交给服务端分层
+    return tagVocabularyRowsByZh.has(term) || tagVocabularyByName.has(term);
+  }
+
   function renderLibraryExpansionChips() {
     const chipsHost = document.getElementById('library-expansion-chips');
     if (!chipsHost) return;
@@ -3649,8 +3665,17 @@ return;
         + `</span><button type="button" class="library-expansion-refresh${libraryExpansionRefreshing ? ' is-busy' : ''}" id="library-expansion-refresh" title="${zhUi ? 'AI 重新联想，追加相关词' : 'Ask AI for more related terms'}" aria-label="${zhUi ? '重新联想' : 'Refresh related terms'}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>`;
       return;
     }
+    // v893：请求成功但 AI 一个词都没给（英文/生僻词常见）——给一条明确提示 + 刷新按钮；
+    // 以前是直接什么都不显示，看起来像"功能坏了"
+    if (libraryExpansionEmptyQuery === q) {
+      const zhEmpty = state.lang === 'zh';
+      chipsHost.hidden = false;
+      chipsHost.innerHTML = `<span class="library-expansion-chip is-empty" title="${zhEmpty ? 'AI 这次没想出相关词，可以点右边刷新再试' : 'AI had no related terms this time; try refresh'}">${zhEmpty ? 'AI 这次没给出相关词' : 'AI found no related terms'}</span>`
+        + `<button type="button" class="library-expansion-refresh${libraryExpansionRefreshing ? ' is-busy' : ''}" id="library-expansion-refresh" title="${zhEmpty ? 'AI 重新联想' : 'Ask AI again'}" aria-label="${zhEmpty ? '重新联想' : 'Refresh related terms'}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>`;
+      return;
+    }
     chipsHost.hidden = true;
-    chipsHost.innerHTML = '';
+    chipsHost.innerHTML ='';
   }
 
   function applyLibraryQueryExpansion(query) {
@@ -3661,6 +3686,7 @@ return;
       libraryExpansionTermsEn = {};
       libraryExpansionRefreshing = false;
       libraryExpansionPendingQuery = '';
+      libraryExpansionEmptyQuery = '';
       if (libraryExpansionLastQuery !== null) filterLibraryCardsInPlace();
       libraryExpansionLastQuery = q;
       renderLibraryExpansionChips();
@@ -3673,6 +3699,7 @@ return;
       libraryExpansionTermsEn = cached.termsEn || {};
       libraryExpansionRefreshing = false;
       libraryExpansionPendingQuery = '';
+      libraryExpansionEmptyQuery = (cached.terms.length || (cached.fresh || []).length) ? '' : q;
       if (libraryExpansionLastQuery !== q) filterLibraryCardsInPlace();
       libraryExpansionLastQuery = q;
       renderLibraryExpansionChips();
@@ -3686,6 +3713,7 @@ return;
     libraryExpansionRefreshing = false;   // v856 新查询开始，取消进行中的手动刷新态
     libraryExpansionTerms = [];          // 旧查询的词条对新查询无效，清空后才能渲染 pending 态
     libraryExpansionFresh = [];
+    libraryExpansionEmptyQuery = '';
     libraryExpansionPendingQuery = q;
     renderLibraryExpansionChips();
     fetch('/api/expand-query', {
@@ -3699,13 +3727,28 @@ return;
       const fresh = data && data.success && Array.isArray(data.fresh) ? data.fresh.filter(Boolean).slice(0, 3) : [];
       const termsEn = data && data.termsEn && typeof data.termsEn === 'object' ? data.termsEn : {};
       libraryExpansionTermsEn = termsEn;
-      writeLibraryExpansionCache(q, terms, fresh, termsEn);
-      libraryExpansionTerms = terms;
-      libraryExpansionFresh = fresh;
+      // v893：英文/拼音联想词先反查词表换回中文；换回中文的算「库内相关词」（它能真的命中物料）
+      const knownTerms = [];
+      const newTerms = [];
+      const pushTerm = function(list, value, max) {
+        const term = libraryExpansionCanonicalTerm(value);
+        if (!term || list.length >= max || list.indexOf(term) >= 0) return;
+        list.push(term);
+      };
+      terms.forEach(function(term) { pushTerm(knownTerms, term, 8); });
+      fresh.forEach(function(term) {
+        const canonicalTerm = libraryExpansionCanonicalTerm(term);
+        if (canonicalTerm !== String(term || '').trim() || libraryExpansionIsLibraryTerm(canonicalTerm) === true) pushTerm(knownTerms, canonicalTerm, 8);
+        else pushTerm(newTerms, canonicalTerm, 3);
+      });
+      writeLibraryExpansionCache(q, knownTerms, newTerms, termsEn);
+      libraryExpansionTerms = knownTerms;
+      libraryExpansionFresh = newTerms;
+      libraryExpansionEmptyQuery = (knownTerms.length || newTerms.length) ? '' : q;   // v893：AI 一个都没给出来时给个明确提示
       libraryExpansionPendingQuery = '';
       renderLibraryExpansionChips();
       const live = document.getElementById('library-search');
-      if ((terms.length || fresh.length) && live && live.value.trim() === q) filterLibraryCardsInPlace();
+      if ((knownTerms.length || newTerms.length) && live && live.value.trim() === q) filterLibraryCardsInPlace();
     }).catch(function() {
       if (libraryExpansionRequestKey !== requestKey) return;
       libraryExpansionPendingQuery = '';
@@ -3762,6 +3805,7 @@ return;
       }
       libraryExpansionTerms = merged;
       libraryExpansionFresh = mergedFresh;
+      libraryExpansionEmptyQuery = (merged.length || mergedFresh.length) ? '' : q;
       libraryExpansionTermsEn = Object.assign({}, libraryExpansionTermsEn, enMap);
       writeLibraryExpansionCache(q, merged, mergedFresh, libraryExpansionTermsEn);
       renderLibraryExpansionChips();
