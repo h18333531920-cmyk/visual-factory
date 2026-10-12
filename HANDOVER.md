@@ -16,7 +16,7 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-tag-i18n-v890`（标签双语 + 中英对照表 + **相关词表**（`sql/024` 待执行）；搜索 = 子串 + 中英归一 + 相关词） | 实测 2026-10-12 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-tag-i18n-v890`（标签双语 + 中英对照表 + **相关词表**（**`sql/024` 已执行**）；搜索 = 子串 + 中英归一 + 相关词） | 实测 2026-10-12 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
@@ -381,6 +381,24 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 ---
 
 ## 11. 待办与未决事项
+
+> **标签词表 / 搜索 的交接（2026-10-12 收尾快照，新对话从这里接手）**
+>
+> **已上线（测试站 v890，生产未动）**
+> - 标签**双语显示**：中文界面显中文、英文界面显英文；新标签自动进词表 + 自动补英文（中文界面后台补，不阻塞）
+> - 「中英对照表」= 表 `vf_tag_vocabulary`（`name_zh` / `name_en`）：管双语显示 + 搜英文命中中文
+> - 「相关词表」= 同表的 `related text[]` 字段：管"搜大词带出小词"。**设计口径已定死，不要再加层级/概念 ID/多父级/别名**
+> - 搜索三层：① 子串 ② 中英归一（`coffee`→咖啡）③ 该行 `related` 一并匹配（`app.js` 的 `tagVocabularyQueryTerms`）
+> - 已执行的 SQL：`022`（词表）、`023`（parent_id，**已不再使用**）、`024`（related）
+>
+> **下一步（就这三件，按顺序）**
+> 1. 词表界面加「**相关词**」列（逗号分隔输入，改完即存）——**目前只能在 Supabase 表编辑器里填**
+> 2. **删掉**界面上的「AI 自动归类」按钮、折叠分组、上位词/别名残留（目标是回归一张平表：`中文名 | 英文名 | 相关词 | 删除`）
+> 3. （可选）「AI 建议相关词」按钮：给每行填一版建议，人工删改
+>
+> **已验证可用的用法**：在 `vf_tag_vocabulary` 里给「甜点」那行填 `related = {蛋挞,蛋糕,冰淇淋,甜甜圈}` → 搜「甜点」能带出这些词的物料。
+>
+> **这轮踩过的坑（别再犯）**：① 搜索要接进 `libraryItemQueryMatchRank`，别只改渲染；② 大表改列数时**别用全量替换** `colspan`（我曾误改 8 处无关表格）；③ AI 分类调用要**小批量**（15 词/批，一次 60 词会超平台时限、请求永久挂住）；④ 词表读取新增字段时要**带降级**（SQL 未执行时退回旧读法）。
 
 **等用户决定 / 授权的**
 
