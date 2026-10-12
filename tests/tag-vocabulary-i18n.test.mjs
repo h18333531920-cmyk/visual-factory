@@ -45,10 +45,17 @@ test('前端：英文界面查词表译名，缺表时永久退回原文', () =>
 
 test('新表与新端点：代理白名单已登记、版本号六处同步', () => {
   assert.match(policySource, /'vf_tag_vocabulary'/, '非维护账号要能读词表');
-  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v883/);
-  const refs = indexSource.match(/\?v=20261012-tag-i18n-v883/g) || [];
+  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v884/);
+  const refs = indexSource.match(/\?v=20261012-tag-i18n-v884/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v883'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v884'/);
+});
+
+test('标签词表：折叠分组（上位词成组，默认收起）', () => {
+  assert.match(appSource, /function tagVocabularyDisplayRows/, '要有成组显示顺序');
+  assert.match(appSource, /const tagVocabularyCollapsed = new Set\(\)/, '要有折叠状态');
+  assert.match(appSource, /data-tv-collapse="/, '父级行要有展开/收起按钮');
+  assert.match(appSource, /depth \* 18/, '子级要有缩进');
 });
 
 test('标签词表：搜索归一 + 上位词展开 + 父级字段', () => {

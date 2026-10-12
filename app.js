@@ -867,7 +867,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v883';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v884';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -16199,6 +16199,7 @@ function libraryTagsForForm(formData, kind) {
   let tagVocabularyQuery = '';
   let tagVocabularyParentId = '';
   let tagVocabularyMessage = '';
+  const tagVocabularyCollapsed = new Set();   // 折叠的组（存父级 id）：默认折叠，只显示顶层词
   const TAG_VOCABULARY_IGNORED = 'ignored';
 
   async function fetchTagVocabularyRows() {
@@ -16243,34 +16244,72 @@ function libraryTagsForForm(formData, kind) {
     return rows.filter(function(row) { return tagVocabularyRowMatches(row, tagVocabularyQuery); });
   }
 
+  // 显示顺序：搜索时平铺过滤结果；平时按「上位词 → 子级」成组（组默认折叠，只显示顶层词）
+  function tagVocabularyDisplayRows() {
+    const rows = Array.isArray(tagVocabularyRows) ? tagVocabularyRows : [];
+    if (String(tagVocabularyQuery || '').trim()) {
+      return tagVocabularyVisibleRows().map(function(row) { return { row: row, depth: 0, hasChildren: false, childCount: 0 }; });
+    }
+    const byId = new Map(rows.map(function(row) { return [String(row.id), row]; }));
+    const childrenOf = function(parentId) {
+      return rows.filter(function(row) { return String(row.parent_id || '') === String(parentId); });
+    };
+    const out = [];
+    const visited = new Set();
+    const walk = function(row, depth) {
+      const id = String(row.id);
+      if (visited.has(id) || depth > 4) return;
+      visited.add(id);
+      const children = childrenOf(id);
+      out.push({ row: row, depth: depth, hasChildren: children.length > 0, childCount: children.length });
+      if (tagVocabularyCollapsed.has(id)) return;
+      children.forEach(function(child) { walk(child, depth + 1); });
+    };
+    rows.filter(function(row) {
+      const parentId = String(row.parent_id || '');
+      return !parentId || !byId.has(parentId);
+    }).forEach(function(row) { walk(row, 0); });
+    // 保险：父级链异常（成环等）导致没被走到的一律补在末尾
+    rows.forEach(function(row) { if (!visited.has(String(row.id))) walk(row, 0); });
+    return out;
+  }
+
   function tagVocabularyRowsHtml() {
     const zh = state.lang === 'zh';
     const rows = Array.isArray(tagVocabularyRows) ? tagVocabularyRows : [];
-    const visible = tagVocabularyVisibleRows();
+    const display = tagVocabularyDisplayRows();
     if (!rows.length) {
       return '<tr><td colspan="4" class="tv-empty">' + (zh ? '还没有词。上传/识别过的标签会自动出现在这里。' : 'No terms yet.') + '</td></tr>';
     }
-    if (!visible.length) {
+    if (!display.length) {
       return '<tr><td colspan="4" class="tv-empty">' + (zh ? '没有匹配的词。' : 'No matching terms.') + '</td></tr>';
     }
-    return visible.map(function(row) {
+    return display.map(function(item) {
+      const row = item.row;
+      const depth = item.depth;
       const ignored = row.kind === TAG_VOCABULARY_IGNORED;
       const aliases = Array.isArray(row.aliases) ? row.aliases : [];
-      const parentRow = row.parent_id ? rows.find(function(item) { return String(item.id) === String(row.parent_id); }) : null;
+      const parentRow = row.parent_id ? rows.find(function(other) { return String(other.id) === String(row.parent_id); }) : null;
       const parentLabel = parentRow ? String(parentRow.name_zh) : (zh ? '无' : 'none');
-      const childCount = rows.filter(function(item) { return String(item.parent_id || '') === String(row.id); }).length;
       const parentOpen = tagVocabularyParentId === row.id;
+      const collapsed = tagVocabularyCollapsed.has(String(row.id));
+      const leading = item.hasChildren
+        ? '<button type="button" class="tv-collapse" data-tv-collapse="' + escapeAttr(row.id) + '" title="' + escapeAttr(zh ? '展开/收起子级' : 'Expand / collapse') + '" style="border:0;background:transparent;cursor:pointer;color:#64748b;font-size:11px;padding:0 3px 0 0;">' + (collapsed ? '▸' : '▾') + '</button>'
+        : (depth > 0 ? '<span style="color:#cbd5e1;padding-right:3px;">↳</span>' : '');
+      const countBadge = item.hasChildren
+        ? '<span style="margin-left:6px;font-size:11px;color:#94a3b8;">' + (zh ? '（' + item.childCount + ' 子级）' : ' (' + item.childCount + ')') + '</span>'
+        : '';
       const parentCell = parentOpen
         ? '<select class="tv-merge-select" data-tv-parent-target="' + escapeAttr(row.id) + '">'
-            + '<option value="">' + (zh ? '无上位词' : 'No parent') + '</option>'
-            + rows.filter(function(item) { return String(item.id) !== String(row.id); }).map(function(item) {
-                return '<option value="' + escapeAttr(item.id) + '"' + (String(item.id) === String(row.parent_id || '') ? ' selected' : '') + '>' + escapeHtml(item.name_zh) + '</option>';
+            + '<option value="">' + (zh ? '无上位词（移到顶层）' : 'No parent (top level)') + '</option>'
+            + rows.filter(function(other) { return String(other.id) !== String(row.id); }).map(function(other) {
+                return '<option value="' + escapeAttr(other.id) + '"' + (String(other.id) === String(row.parent_id || '') ? ' selected' : '') + '>' + escapeHtml(other.name_zh) + '</option>';
               }).join('')
           + '</select>'
-        : '<button type="button" class="tv-btn" data-tv-parent="' + escapeAttr(row.id) + '" title="' + escapeAttr(zh ? '上位词：搜索命中它时，它下面挂的词也算命中' : 'Broader term: searching it also matches its children') + '">'
-          + (zh ? '上位词：' : 'Parent: ') + escapeHtml(parentLabel) + (childCount ? (zh ? '（' + childCount + ' 子级）' : ' (+' + childCount + ')') : '') + '</button>';
+        : '<button type="button" class="tv-btn" data-tv-parent="' + escapeAttr(row.id) + '" title="' + escapeAttr(zh ? '上位词：搜索命中它时，它下面挂的词也算命中；也可用来把词移进/移出某组' : 'Broader term: searching it also matches its children') + '">'
+          + (zh ? '上位词：' : 'Parent: ') + escapeHtml(parentLabel) + '</button>';
       return '<tr class="' + (ignored ? 'is-ignored' : '') + '">'
-        + '<td class="tv-zh">' + escapeHtml(row.name_zh) + '</td>'
+        + '<td class="tv-zh" style="padding-left:' + (8 + depth * 18) + 'px;">' + leading + escapeHtml(row.name_zh) + countBadge + '</td>'
         + '<td class="tv-en-cell"><input class="tv-en" data-tv-en="' + escapeAttr(row.id) + '" value="' + escapeAttr(row.name_en || '') + '" placeholder="' + (zh ? '点这里填英文' : 'type English') + '">'
           + (row.source === 'manual' ? '<span class="tv-mark">' + (zh ? '人工' : 'manual') + '</span>' : '')
           + '</td>'
@@ -16349,6 +16388,14 @@ function libraryTagsForForm(formData, kind) {
     const rerenderBody = function() { refreshTagVocabularyBody(section); };
     section.addEventListener('click', function(event) {
       if (event.target.closest('[data-tv-refresh]')) { reloadTagVocabulary(section); return; }
+      const collapseBtn = event.target.closest('[data-tv-collapse]');
+      if (collapseBtn) {
+        const collapseId = collapseBtn.getAttribute('data-tv-collapse') || '';
+        if (tagVocabularyCollapsed.has(collapseId)) tagVocabularyCollapsed.delete(collapseId);
+        else tagVocabularyCollapsed.add(collapseId);
+        rerenderBody();
+        return;
+      }
       const parentBtn = event.target.closest('[data-tv-parent]');
       if (parentBtn) {
         const rowId = parentBtn.getAttribute('data-tv-parent') || '';
