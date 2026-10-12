@@ -167,6 +167,16 @@ test('v897 浮窗分组标明来源（词表设定 / AI 关联）+ 提示词反�
   assert.match(aiSource, /搜「世界杯」返回「手机」「耳机」「PS5」是错的/, '把这次的坏例子写进提示词');
 });
 
+test('v898 缓存不再"将错就错"：命中缓存后后台静默重问，答得不一样就替换', () => {
+  assert.match(appSource, /function revalidateLibraryExpansionCache\(query\)/);
+  assert.match(appSource, /var libraryExpansionRevalidated = \{\};/, '同一个词一次会话只重问一次，别连打接口');
+  assert.match(appSource, /revalidateLibraryExpansionCache\(q\);\n\s*return;/, '命中缓存的那条路径要触发重问');
+  assert.match(appSource, /if \(String\(state\.libraryFilters\.query \|\| ''\)\.trim\(\) !== q\) return;/, '换词了就静默丢弃');
+  assert.match(appSource, /if \(!kept\.length\) return;\s+\/\/ 这次没答出来：保留旧的那份，别把面板清空/);
+  assert.match(appSource, /if \(kept\.join\('\|'\) === libraryExpansionTerms\.join\('\|'\)\) return;\s+\/\/ 和现在显示的一样：不动界面/);
+  assert.match(appSource, /libraryExpansionTerms = kept;\n\s*libraryExpansionTermsEn = termsEn;\n\s*renderLibraryExpansionChips\(\);\n\s*filterLibraryCardsInPlace\(\);/);
+});
+
 test('两个端点仍然把两层透传给前端（前端只消费库内层）', () => {
   assert.match(expandRoute, /Array\.isArray\(result\.fresh\) \? result\.fresh : \[\]/);
   assert.match(expandRoute, /terms: terms, fresh: fresh, termsEn: termsEn/);

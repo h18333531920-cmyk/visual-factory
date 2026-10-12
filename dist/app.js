@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-related-groups-v897';
+const TOOL_UI_VERSION = '20261012-cache-revalidate-v898';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3414,6 +3414,45 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
     catch (_error) {}
   }
 
+  // v898：缓存只负责"立刻显示"，后台再静默问一次；答案不一样就用新的替换（同一个词一次会话只问一次）。
+  // 起因（用户反馈）：某次 AI 答得不对，那个词之后每次搜都错——因为错的答案被缓存了 7 天，
+  // 只有手动点"重新查找"才会重问。现在每次搜到缓存时都会在后台重问一遍，让它自己纠错。
+  var libraryExpansionRevalidated = {};
+  function revalidateLibraryExpansionCache(query) {
+    const q = String(query || '').trim();
+    if (!q || libraryExpansionRevalidated[q]) return;
+    const token = (state.session && state.session.access_token) || '';
+    if (!token) return;
+    libraryExpansionRevalidated[q] = true;
+    fetch('/api/expand-query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ query: q, vocabulary: librarySearchVocabulary() })
+    }).then(r => r.json()).then(function(data) {
+      // 静默重问：已经换词、或没拿到结果，就什么都不动（界面保持缓存那份）
+      if (String(state.libraryFilters.query || '').trim() !== q) return;
+      if (!data || !data.success) return;
+      const inUse = libraryLabelsInUseSet();
+      const kept = [];
+      const pushKept = function(value) {
+        const term = libraryExpansionCanonicalTerm(value);
+        if (!term || kept.length >= 10 || kept.indexOf(term) >= 0) return;
+        if (libraryExpansionIsLibraryTerm(term, inUse) === false) return;
+        kept.push(term);
+      };
+      libraryDeterministicRelatedTerms(q).forEach(pushKept);
+      (Array.isArray(data.terms) ? data.terms : []).concat(Array.isArray(data.fresh) ? data.fresh : []).forEach(pushKept);
+      if (!kept.length) return;                       // 这次没答出来：保留旧的那份，别把面板清空
+      const termsEn = data.termsEn && typeof data.termsEn === 'object' ? data.termsEn : {};
+      writeLibraryExpansionCache(q, kept, termsEn);
+      if (kept.join('|') === libraryExpansionTerms.join('|')) return;   // 和现在显示的一样：不动界面
+      libraryExpansionTerms = kept;
+      libraryExpansionTermsEn = termsEn;
+      renderLibraryExpansionChips();
+      filterLibraryCardsInPlace();
+    }).catch(function() { /* 静默失败：界面保持缓存那份 */ });
+  }
+
   // v843 筛选标签的 AI 扩展：选中的筛选值也走 /api/expand-query 联想（如「世界杯」→「足球」），
   // 让打了相关标签的物料也能被筛出来。两条安全线：
   // 1) 词表只喂该维度自己的候选值（面板配置项 + 库内实际取值），引导 AI 往同维度联想；
@@ -3704,6 +3743,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (libraryExpansionLastQuery !== q) filterLibraryCardsInPlace();
       libraryExpansionLastQuery = q;
       renderLibraryExpansionChips();
+      // v898：缓存只负责"立刻显示"，后台再问一次；答得不一样就用新的替换（用户反馈：答错的词会一直错，直到手动点刷新）
+      revalidateLibraryExpansionCache(q);
       return;
     }
     libraryExpansionLastQuery = q;
