@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-related-popup-v894';
+const TOOL_UI_VERSION = '20261012-related-recall-v895';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3592,9 +3592,48 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return tagVocabularyByEn.get(term.toLowerCase()) || term;
   }
 
-  function libraryExpansionIsLibraryTerm(term) {
-    if (tagVocabularyReady !== true) return null;   // 词表没加载：不判断，交给服务端分层
-    return tagVocabularyRowsByZh.has(term) || tagVocabularyByName.has(term);
+  // v895：判断「库内到底有没有这个词」，不能只看 vf_tag_vocabulary —— 那张表是增量长出来的
+  // （标签要经过一次翻译落库才会进表），有的标签已经在用但还没进表。所以词表 ∪ 库内在用的标签/物料类型/筛选项。
+  function libraryLabelsInUseSet() {
+    const set = new Set();
+    const add = (value) => {
+      const text = String(value == null ? '' : value).trim();
+      if (text) set.add(text);
+    };
+    if (tagVocabularyReady === true) tagVocabularyRowsByZh.forEach(function(_row, nameZh) { add(nameZh); });
+    try { collectTagLabelsInUse().forEach(add); } catch (_error) {}
+    Object.keys(FILTER_SECTIONS_CONFIG).forEach(function(key) {
+      ((FILTER_SECTIONS_CONFIG[key] || {}).values || []).forEach(add);
+    });
+    (state.libraryOptions || []).forEach(function(option) { add(option && option.name_zh); });
+    return set;
+  }
+
+  function libraryExpansionIsLibraryTerm(term, inUse) {
+    const value = String(term == null ? '' : term).trim();
+    if (!value) return false;
+    const ready = tagVocabularyReady === true || (state.librarySources || []).length > 0;
+    if (!ready) return null;                        // 库还没加载出来：不判断，交给服务端分层
+    const set = inUse || libraryLabelsInUseSet();
+    if (!set.size) return null;
+    return set.has(value) || set.has(libraryExpansionCanonicalTerm(value));
+  }
+
+  // v895：零 AI 的确定性关联 —— 词表里这一行「相关词」列填了什么，就直接当关联标签用。
+  // 和搜索匹配链路（tagVocabularyQueryTerms）同源，所以浮窗里显示的 = 真的会参与匹配的词。
+  function libraryDeterministicRelatedTerms(query) {
+    const out = [];
+    const raw = String(query || '').trim();
+    if (!raw) return out;
+    const canonicalZh = tagVocabularyRowsByZh.has(raw) ? raw : (tagVocabularyByEn.get(raw.toLowerCase()) || '');
+    if (!canonicalZh) return out;
+    const row = tagVocabularyRowsByZh.get(canonicalZh);
+    (Array.isArray(row && row.related) ? row.related : []).forEach(function(word) {
+      const text = String(word == null ? '' : word).trim();
+      if (!text || text === raw || out.indexOf(text) >= 0) return;
+      out.push(text);
+    });
+    return out;
   }
 
   // v894：搜索框下方的浮窗（原来是「历史搜索」的位置）显示当前关键词的「库内关联标签」。
@@ -3614,18 +3653,17 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     }
     const refreshButton = '<button type="button" class="library-expansion-refresh' + (libraryExpansionRefreshing ? ' is-busy' : '') + '" id="library-expansion-refresh" title="' + escapeAttr(zhUi ? '重新找一遍库内关联标签' : 'Look up related library tags again') + '" aria-label="' + escapeAttr(zhUi ? '重新查找' : 'Refresh') + '"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>';
     const label = '<div class="search-history-label">' + (zhUi ? '库内关联标签' : 'Related library tags') + refreshButton + '</div>';
-    if (libraryExpansionPendingQuery === q && !libraryExpansionTerms.length) {
-      list.innerHTML = label + '<span class="library-expansion-chip is-pending"><span class="library-expansion-spinner" aria-hidden="true"></span>' + (zhUi ? 'AI 联想中…' : '…AI thinking…') + '</span>';
-      panel.hidden = false;
-      return;
-    }
+    const pendingChip = libraryExpansionPendingQuery === q
+      ? '<span class="library-expansion-chip is-pending"><span class="library-expansion-spinner" aria-hidden="true"></span>' + (zhUi ? 'AI 联想中…' : '…AI thinking…') + '</span>'
+      : '';
     if (!libraryExpansionTerms.length) {
-      list.innerHTML = label + '<span class="library-expansion-chip is-empty">' + (zhUi ? '库里没有相关联的标签' : 'No related tags in the library') + '</span>';
+      list.innerHTML = label + (pendingChip || '<span class="library-expansion-chip is-empty">' + (zhUi ? '库里没有相关联的标签' : 'No related tags in the library') + '</span>');
       panel.hidden = false;
       return;
     }
     list.innerHTML = label + '<div class="search-history-items">'
       + libraryExpansionTerms.map(term => '<button type="button" class="library-expansion-chip is-clickable" data-library-expansion-term="' + escapeAttr(term) + '" title="' + escapeAttr(zhUi ? '库内已有的标签；点一下改成只搜这个词' : 'An existing library tag; click to search this term only') + '">' + escapeHtml(libraryChipDisplayLabel(term)) + '</button>').join('')
+      + pendingChip
       + '</div>';
     panel.hidden = false;
   }
@@ -3644,7 +3682,13 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     }
     const cached = readLibraryExpansionCache(q);
     if (cached) {
-      libraryExpansionTerms = cached.terms;
+      // v895：确定性关联词（词表 related 列）每次都在前面，缓存里的 AI 结果接在后面
+      const merged = libraryDeterministicRelatedTerms(q);
+      (cached.terms || []).forEach(function(term) {
+        if (!term || merged.length >= 10 || merged.indexOf(term) >= 0) return;
+        merged.push(term);
+      });
+      libraryExpansionTerms = merged;
       libraryExpansionTermsEn = cached.termsEn || {};
       libraryExpansionRefreshing = false;
       libraryExpansionPendingQuery = '';
@@ -3659,7 +3703,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const requestKey = q + ':' + Date.now();
     libraryExpansionRequestKey = requestKey;
     libraryExpansionRefreshing = false;   // v856 新查询开始，取消进行中的手动刷新态
-    libraryExpansionTerms = [];          // 旧查询的词条对新查询无效，清空后才能渲染 pending 态
+    // v895：先把「零 AI 的确定性关联」（词表里这一行的相关词列）显示出来，不用等 AI
+    libraryExpansionTerms = libraryDeterministicRelatedTerms(q);
     libraryExpansionPendingQuery = q;
     renderLibraryExpansionChips();
     fetch('/api/expand-query', {
@@ -3672,17 +3717,21 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       const fresh = data && data.success && Array.isArray(data.fresh) ? data.fresh.filter(Boolean) : [];
       const termsEn = data && data.termsEn && typeof data.termsEn === 'object' ? data.termsEn : {};
       libraryExpansionTermsEn = termsEn;
-      // v894：两层口径收敛成一层——只保留「库内确实存在」的标签：
+      // v894/v895：只保留「库内确实存在」的标签：
       //   ① 英文/拼音联想词先反查词表换回中文（v893）
-      //   ② 换完还不在词表里的，一律丢掉（库内没有 = 搜不到，显示了也是误导）
+      //   ② 换完还不在库内的丢掉（库内没有 = 搜不到，显示了也是误导）；
+      //      判断用「词表 ∪ 库内在用标签」，不能只看词表（词表是增量长的，可能还没收录某个标签）
+      //   ③ 确定性关联词排前面（它们本来就参与匹配），AI 挑的不重复追加
+      const inUse = libraryLabelsInUseSet();
       const kept = [];
-      terms.concat(fresh).forEach(function(value) {
+      const pushKept = function(value) {
         const term = libraryExpansionCanonicalTerm(value);
-        if (!term || kept.length >= 8 || kept.indexOf(term) >= 0) return;
-        const libraryTerm = libraryExpansionIsLibraryTerm(term);
-        if (libraryTerm === false) return;      // 词表已加载且确认库内没有 → 丢
+        if (!term || kept.length >= 10 || kept.indexOf(term) >= 0) return;
+        if (libraryExpansionIsLibraryTerm(term, inUse) === false) return;
         kept.push(term);
-      });
+      };
+      libraryDeterministicRelatedTerms(q).forEach(pushKept);
+      terms.concat(fresh).forEach(pushKept);
       writeLibraryExpansionCache(q, kept, termsEn);
       libraryExpansionTerms = kept;
       libraryExpansionPendingQuery = '';

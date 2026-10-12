@@ -56,21 +56,44 @@ test('提示词：搜索扩展只从词表里挑（挑不到就返回空数组�
   assert.match(aiSource, /才允许给词表外的新词，最多 3 个，放进 related_new/, '相关词提示词');
 });
 
-test('v893 英文/拼音联想词反查词表换回中文（这是英文搜索能出标签的关键）', () => {
+test('v893/v895 联想词归一架：反查词表换回中文 → 用「词表 ∪ 库内在用标签」判断库内有没有', () => {
   assert.match(appSource, /function libraryExpansionCanonicalTerm\(value\)/);
   assert.match(appSource, /return tagVocabularyByEn\.get\(term\.toLowerCase\(\)\) \|\| term;/);
-  assert.match(appSource, /function libraryExpansionIsLibraryTerm\(term\)/);
-  // v894：换完中文之后只留「库内确实存在」的；词表没加载时（null）不乱丢
+  assert.match(appSource, /function libraryLabelsInUseSet\(\)/);
+  assert.match(appSource, /collectTagLabelsInUse\(\)\.forEach\(add\)/, 'v895：词表是增量长的，得把"库内在用的标签"也算进来');
+  assert.match(appSource, /function libraryExpansionIsLibraryTerm\(term, inUse\)/);
+  // v894/v895：只留「库内确实存在」的，其余丢掉
   assert.match(appSource, /const term = libraryExpansionCanonicalTerm\(value\);/);
-  assert.match(appSource, /if \(libraryTerm === false\) return; {6}\/\/ 词表已加载且确认库内没有 → 丢/);
+  assert.match(appSource, /if \(libraryExpansionIsLibraryTerm\(term, inUse\) === false\) return;/);
   assert.match(appSource, /libraryExpansionTerms = kept;/);
   assert.match(appSource, /writeLibraryExpansionCache\(q, kept, termsEn\)/);
+});
+
+test('v895 确定性关联：词表里那一行的「相关词」不用等 AI 就出现在浮窗里', () => {
+  const slice = appSource.slice(
+    appSource.indexOf('  function libraryDeterministicRelatedTerms(query) {'),
+    appSource.indexOf('  function renderLibraryExpansionChips() {')
+  );
+  const context = vm.createContext({
+    tagVocabularyRowsByZh: new Map([
+      ['足球', { name_zh: '足球', name_en: 'Football', related: ['世界杯', '球衣', '体育赛事'] }],
+      ['甜点', { name_zh: '甜点', name_en: 'Dessert', related: [] }]
+    ]),
+    tagVocabularyByEn: new Map([['football', '足球'], ['dessert', '甜点']])
+  });
+  vm.runInContext(slice, context);
+  const related = value => Array.from(context.libraryDeterministicRelatedTerms(value));
+  assert.deepEqual(related('足球'), ['世界杯', '球衣', '体育赛事']);
+  assert.deepEqual(related('Football'), ['世界杯', '球衣', '体育赛事'], '英文写法也能查到同一行');
+  assert.deepEqual(related('甜点'), [], '相关词列是空的就没有确定性关联');
+  assert.deepEqual(related('库里没有的词'), []);
+  assert.deepEqual(related(''), []);
 });
 
 test('v893 反查行为：AI 回英文词时换回词表里的中文名，换不到就原样', () => {
   const slice = appSource.slice(
     appSource.indexOf('  function libraryExpansionCanonicalTerm(value) {'),
-    appSource.indexOf('  function libraryExpansionIsLibraryTerm(term) {')
+    appSource.indexOf('  function libraryLabelsInUseSet() {')
   );
   const rowsByZh = new Map([['足球', { id: 'el:足球', name_zh: '足球', name_en: 'Football' }], ['世界杯', { id: 'el:世界杯', name_zh: '世界杯', name_en: 'World Cup' }]]);
   const context = vm.createContext({

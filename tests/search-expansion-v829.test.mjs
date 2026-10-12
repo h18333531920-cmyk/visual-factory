@@ -59,7 +59,9 @@ test('v845 中东业务桥：羊系词追加宰牲节/开斋节，菜品词保�
 test('v829 后端接口：登录鉴权 + 走文本模型扩展 + 返回 terms', () => {
   const route = readFileSync(join(here, '..', 'functions', 'api', 'expand-query.js'), 'utf8');
   assert.match(route, /getUserFromToken\(env, getBearerToken\(request\)\)/, '要校验登录态');
-  assert.match(route, /expandQueryWithGlm\(env, body\.query, body\.vocabulary\)/);
+  assert.match(route, /VOCABULARY_TABLE = 'vf_tag_vocabulary'/, 'v895：模型要能看到库内全量标签，不能只看前端那 120 个');
+  assert.match(route, /readVocabularyFromDb/);
+  assert.match(route, /expandQueryWithGlm\(env, body\.query, merged\)/);
   assert.match(route, /terms/);
   const ai = readFileSync(join(here, '..', 'functions', '_ai.js'), 'utf8');
   assert.match(ai, /glm-4-flash/, '纯文本扩展走免费的 glm-4-flash，不占用识图通道');
@@ -195,8 +197,8 @@ test('v837 加载态：AI 请求期间搜索框左侧显示「AI 联想中…」
   assert.match(appSource, /catch\(function\(\) \{\s*\n\s*if \(libraryExpansionRequestKey !== requestKey\) return;/);
   const css = readFileSync(join(here, '..', 'styles.css'), 'utf8');
   assert.match(css, /library-expansion-spin/);
-// 发起新请求时必须清空旧词条，否则 pending 态被旧词条遮蔽（线上验证发现）
-assert.match(appSource, /libraryExpansionTerms = \[\];[^\n]*\n\s*libraryExpansionPendingQuery = q;/);
+// 发起新请求时必须清空旧词条（v895 起换成先塞确定性关联词 + 置 pending），否则 pending 态被旧词条遮蔽（线上验证发现）
+assert.match(appSource, /libraryExpansionTerms = libraryDeterministicRelatedTerms\(q\);[^\n]*\n\s*libraryExpansionPendingQuery = q;/);
 });
 
 test('v839 词表锚定 + 语素兜底桥接 + chips 按钮防遮挡', async () => {
