@@ -45,8 +45,8 @@ test('前端：英文界面查词表译名，缺表时永久退回原文', () =>
 
 test('新表与新端点：代理白名单已登记、版本号六处同步', () => {
   assert.match(policySource, /'vf_tag_vocabulary'/, '非维护账号要能读词表');
-  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v880/);
-  const refs = indexSource.match(/\?v=20261012-tag-i18n-v880/g) || [];
+  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v881/);
+  const refs = indexSource.match(/\?v=20261012-tag-i18n-v881/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v880'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v881'/);
 });
