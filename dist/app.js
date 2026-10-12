@@ -867,7 +867,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v882';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v883';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -14246,7 +14246,11 @@ function libraryTagsForForm(formData, kind) {
     tagVocabularyPromise = (async function () {
       try {
         if (!state.supabase || !state.session) return false;
-        const result = await state.supabase.from(TAG_VOCABULARY_TABLE).select('id,name_zh,name_en,aliases,kind,parent_id');
+        let result = await state.supabase.from(TAG_VOCABULARY_TABLE).select('id,name_zh,name_en,aliases,kind,parent_id');
+        if (result.error && /parent_id/i.test(String(result.error.message || ''))) {
+          // sql/023 还没执行：退回不带父级的读法，双语显示等其它功能照常，只是上位词为空
+          result = await state.supabase.from(TAG_VOCABULARY_TABLE).select('id,name_zh,name_en,aliases,kind');
+        }
         if (result.error) {
           if (isMissingTagVocabularyError(result.error)) {
             tagVocabularyReady = false;
@@ -16199,10 +16203,17 @@ function libraryTagsForForm(formData, kind) {
 
   async function fetchTagVocabularyRows() {
     if (!state.supabase) return [];
-    const result = await state.supabase.from(TAG_VOCABULARY_TABLE)
+    let result = await state.supabase.from(TAG_VOCABULARY_TABLE)
       .select('id,name_zh,name_en,aliases,kind,source,parent_id')
       .order('name_zh', { ascending: true })
       .limit(1000);
+    if (result.error && /parent_id/i.test(String(result.error.message || ''))) {
+      // sql/023 还没执行时也能打开这张表（只是上位词为空）
+      result = await state.supabase.from(TAG_VOCABULARY_TABLE)
+        .select('id,name_zh,name_en,aliases,kind,source')
+        .order('name_zh', { ascending: true })
+        .limit(1000);
+    }
     if (result.error) throw result.error;
     return Array.isArray(result.data) ? result.data : [];
   }
