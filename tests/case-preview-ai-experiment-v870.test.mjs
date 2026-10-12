@@ -115,6 +115,9 @@ test('前端：仅实验项目显示一键识别、固定标签顶部、当前�
   assert.match(appSource,/data-preview-ai-restore/);
   assert.match(appSource,/action: 'manual-add'/);
   assert.match(appSource,/action: 'manual-remove'/);
+  assert.match(appSource,/isMissingPreviewManualTagsColumn/);
+  assert.match(appSource,/previewAiTagsTableReady = 'needs-manual-tags-column'/);
+  assert.match(appSource,/需补执行 sql\/021/);
   assert.match(appSource,/action: 'save', previewId: preview\.id, tags:/);
   assert.match(appSource,/casePreviewAiMatchesQuery/);
   assert.match(appSource,/previewAiMatch\.preview/);

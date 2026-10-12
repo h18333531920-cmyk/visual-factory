@@ -836,7 +836,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20260924-ai-inline-edit-v871';
+const TOOL_UI_VERSION = '20260924-ai-inline-edit-v872';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4134,12 +4134,30 @@ return;
     return /vf_preview_ai_tags|relation.*does not exist|schema cache|请求路径无效/i.test(String(error && error.message || error || ''));
   }
 
+  function isMissingPreviewManualTagsColumn(error) {
+    const message = String(error && error.message || error || '');
+    return /manual_tags/i.test(message) && /column|does not exist|schema cache/i.test(message);
+  }
+
   async function loadPreviewAiTagsForSource(sourceId) {
     if (!state.supabase || sourceId !== CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID) return [];
-    const result = await state.supabase.from(CASE_PREVIEW_AI_TABLE)
+    let result = await state.supabase.from(CASE_PREVIEW_AI_TABLE)
       .select('experiment_key,preview_id,source_file_id,ai_tags,manual_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at')
       .eq('experiment_key', 'augpicks-v1')
       .eq('source_file_id', sourceId);
+    if (result.error && isMissingPreviewManualTagsColumn(result.error)) {
+      result = await state.supabase.from(CASE_PREVIEW_AI_TABLE)
+        .select('experiment_key,preview_id,source_file_id,ai_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at')
+        .eq('experiment_key', 'augpicks-v1')
+        .eq('source_file_id', sourceId);
+      if (!result.error) {
+        previewAiTagsTableReady = 'needs-manual-tags-column';
+        (result.data || []).forEach(function(row) {
+          state.previewAiTagsByPreviewId.set(row.preview_id, Object.assign({manual_tags: []}, row));
+        });
+        return result.data || [];
+      }
+    }
     if (result.error) {
       if (isPreviewAiTagsUnavailableError(result.error)) {
         previewAiTagsTableReady = false;
@@ -4192,27 +4210,29 @@ return;
     const tags = casePreviewAiTags(preview.id);
     const status = casePreviewAiStatusText(row, preview);
     const excluded = row && Array.isArray(row.excluded_tags) ? row.excluded_tags.filter(Boolean) : [];
-    const isEditing = panel.dataset.editing === '1';
+    const canEdit = canManage && previewAiTagsTableReady === true;
+    const isEditing = canEdit && panel.dataset.editing === '1';
     panel.dataset.previewId = preview.id;
     const editingClass = isEditing ? ' is-editing' : '';
     panel.innerHTML = '<span class="case-preview-ai-title">' + (state.lang === 'zh' ? '当前物料 AI 标签' : 'Current material AI tags') + '</span>'
       + '<div class="case-preview-ai-chips' + editingClass + '">'
       + manualTags.map(function(tag) {
         return '<span class="case-preview-ai-tag is-manual' + editingClass + '" title="' + (state.lang === 'zh' ? '人工标签' : 'Manual tag') + '">' + escapeHtml(tag)
-          + (canManage ? '<button type="button" data-preview-manual-remove="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '删除人工标签 ' : 'Remove manual tag ') + tag) + '">×</button>' : '')
+          + (canEdit ? '<button type="button" data-preview-manual-remove="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '删除人工标签 ' : 'Remove manual tag ') + tag) + '">×</button>' : '')
           + '</span>';
       }).join('')
       + aiTags.filter(function(tag) { return manualTags.indexOf(tag) < 0; }).map(function(tag) {
         return '<span class="case-preview-ai-tag' + editingClass + '" title="' + (state.lang === 'zh' ? 'AI标签' : 'AI tag') + '">' + escapeHtml(tag)
-          + (canManage ? '<button type="button" data-preview-ai-exclude="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '排除AI标签 ' : 'Exclude AI tag ') + tag) + '">×</button>' : '')
+          + (canEdit ? '<button type="button" data-preview-ai-exclude="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '排除AI标签 ' : 'Exclude AI tag ') + tag) + '">×</button>' : '')
           + '</span>';
       }).join('')
       + (!tags.length ? '<span class="case-preview-ai-empty">' + escapeHtml(status) + '</span>' : '')
-      + excluded.map(function(tag) { return canManage ? '<span class="case-preview-ai-excluded' + editingClass + '">已排除 ' + escapeHtml(tag) + '<button type="button" data-preview-ai-restore="' + escapeAttr(tag) + '">撤销</button></span>' : ''; }).join('')
-      + (isEditing && canManage ? '<div class="case-preview-ai-add-row is-editing"><input type="text" id="case-preview-ai-add-input" placeholder="' + (state.lang === 'zh' ? '输入新标签，回车添加' : 'Type tag and press Enter') + '" /><button type="button" id="case-preview-ai-add-btn">' + (state.lang === 'zh' ? '添加' : 'Add') + '</button></div>' : '')
+      + excluded.map(function(tag) { return canEdit ? '<span class="case-preview-ai-excluded' + editingClass + '">已排除 ' + escapeHtml(tag) + '<button type="button" data-preview-ai-restore="' + escapeAttr(tag) + '">撤销</button></span>' : ''; }).join('')
+      + (isEditing ? '<div class="case-preview-ai-add-row is-editing"><input type="text" id="case-preview-ai-add-input" placeholder="' + (state.lang === 'zh' ? '输入新标签，回车添加' : 'Type tag and press Enter') + '" /><button type="button" id="case-preview-ai-add-btn">' + (state.lang === 'zh' ? '添加' : 'Add') + '</button></div>' : '')
       + '</div>'
-      + (canManage && !isEditing ? '<button type="button" class="case-preview-ai-edit-btn" id="case-preview-ai-edit-toggle">' + (state.lang === 'zh' ? '编辑' : 'Edit') + '</button>' : '')
-      + (canManage && isEditing ? '<button type="button" class="case-preview-ai-edit-btn" id="case-preview-ai-edit-done">' + (state.lang === 'zh' ? '完成' : 'Done') + '</button>' : '')
+      + (canEdit && !isEditing ? '<button type="button" class="case-preview-ai-edit-btn" id="case-preview-ai-edit-toggle">' + (state.lang === 'zh' ? '编辑' : 'Edit') + '</button>' : '')
+      + (canEdit && isEditing ? '<button type="button" class="case-preview-ai-edit-btn" id="case-preview-ai-edit-done">' + (state.lang === 'zh' ? '完成' : 'Done') + '</button>' : '')
+      + (canManage && previewAiTagsTableReady === 'needs-manual-tags-column' ? '<span class="case-preview-ai-status is-error">需补执行 sql/021</span>' : '')
       + '<span class="case-preview-ai-status' + (row && row.status === 'failed' ? ' is-error' : '') + '">' + escapeHtml(status) + '</span>';
     wireCasePreviewAiHover(panel, manualTags, aiTags, excluded);
   }
@@ -4258,8 +4278,14 @@ return;
     const progress = backdrop.querySelector('#case-ai-run-progress');
     if (!button || !progress) return;
     if (!run) {
-      button.disabled = false;
-      button.textContent = state.lang === 'zh' ? '一键识别' : 'Analyze all';
+      const migrationMissing = previewAiTagsTableReady !== true;
+      button.disabled = migrationMissing;
+      button.textContent = migrationMissing
+        ? (state.lang === 'zh' ? '需补迁移' : 'Migration needed')
+        : (state.lang === 'zh' ? '一键识别' : 'Analyze all');
+      button.title = migrationMissing
+        ? (state.lang === 'zh' ? '请执行最新版 sql/021_preview_ai_tags_experiment.sql' : 'Run the latest sql/021_preview_ai_tags_experiment.sql')
+        : '';
       progress.hidden = true;
       return;
     }
