@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-tag-flat-v891`（标签**平表**：中文名 / 英文名 / **相关词（可直接编辑 + 「AI 建议」）** / 删除；搜索 = 子串 + 中英归一 + 相关词）；部署 `34457530-0961-42c9-91f2-31c754c3ae52`，2026-10-12 本机 wrangler 直发 | 实测 2026-10-12 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-ai-vocab-first-v892`（标签平表 + 相关词列；**AI 联想统一两层：先找库内现有标签，没有符合的才生成新词**）；部署 `2fe36bff-0a1a-4feb-b7cf-96752b1d4a16`，2026-10-12 本机 wrangler 直发 | 实测 2026-10-12 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
 | 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`d193c03` 起）；测试站走**本机 wrangler 直发**（github Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-12 |
-| 自动化测试 | `node --test tests/` → **380/380 通过**（含标签词表平表 / 相关词 12 项） | 实测 2026-10-12 |
+| 自动化测试 | `node --test tests/` → **387/387 通过**（含标签词表平表 / 相关词 12 项 + AI 两层口径 7 项） | 实测 2026-10-12 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在） | 实测 2026-10-12 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -194,7 +194,7 @@
 - 上传流程 `renderUploadModal()`：支持单图 / 多图 / 项目上传；案例库上传**必填平台 + 国家**、单次上限 **100** 张、进度按张数、取消上传不再卡按钮。
 - 批量编辑 `openBatchEditModal()`；多选 `libraryMultiSelect` / `librarySelectedIds`。
 - 书签系统 `renderLibraryBookmarkModal()` / `renderLibraryBookmarkInlineHover()`。
-- 搜索：`libraryItemSearchText()` / `libraryItemMatchesQuery()`，含拼音与英文扩展表。
+- 搜索：`libraryItemSearchText()` / `libraryItemMatchesQuery()`，含拼音与英文扩展表。**AI 联想两层口径（v892）**：先找库内现有标签（`/api/expand-query` 的 `terms`，服务端词表锚定 + 复合词/同族/中东节日桥接）→ 界面「库内相关词」；词表里一个都没符合时才允许 AI 新造词（`fresh`，≤3）→ 界面「AI 新词」。词表 `related` 那一层是**零 AI 的确定性扩展**（`tagVocabularyQueryTerms`）。
 - **案例项目的判定**：`source_path` 为空 **且** 有预览图 ⇒ 案例项目（`isCaseProject()`）。
 
 ### 7.2 案例项目浮窗（case project modal）—— 改动最频繁的模块
@@ -390,27 +390,32 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 
 ## 11. 待办与未决事项
 
-> **标签词表 / 搜索 的交接（2026-10-12 第二轮收尾快照 v891，新对话从这里接手）**
+> **标签词表 / 搜索 的交接（2026-10-12 第三轮收尾快照 v892，新对话从这里接手）**
 >
-> **测试站已上线 v891（部署 `34457530`；生产未动）**
+> **测试站已上线 v892（部署 `2fe36bff`；生产未动）**
 > - 标签**双语显示**：中文界面显中文、英文界面显英文；新标签自动进词表 + 自动补英文（中文界面后台补，不阻塞）
 > - 「中英对照表」= 表 `vf_tag_vocabulary`（`name_zh` / `name_en`）：管双语显示 + 搜英文命中中文
 > - 「相关词表」= 同表的 `related text[]` 字段：管"搜大词带出小词"。**设计口径已定死，不要再加层级/概念 ID/多父级/别名**
 > - 搜索三层：① 子串 ② 中英归一（`coffee`→咖啡）③ 该行 `related` 一并匹配（`app.js` 的 `tagVocabularyQueryTerms`）
 > - 已执行的 SQL：`022`（词表）、`023`（parent_id，**已废弃不用**）、`024`（related）
-> - **词表界面已回归平表**：`中文名 | 英文名 | 相关词 | 删除`；相关词是逗号分隔输入框（中英文逗号/顿号/分号都认），**失焦即存**；每行有「AI 建议」按钮（调 `/api/tag-vocabulary-related`，AI 从词表里挑一版相关词，并进该行后落库，人工再删改）
-> - **本轮删掉的东西**（别再找）：`AI 自动归类`按钮、折叠分组/缩进、上位词 `parent_id`、别名浮窗、`/api/tag-vocabulary-suggest` 端点、`_ai.js` 的 `parseVocabularySuggestions` / `suggestVocabularyGroupsWithGlm`、`tagVocabularyDescendantsOf`
-> - 词表删除行 + 词表内搜索都还在；`kind='ignored'`（老「不做标签」）的行**现在直接从表里隐藏**
+> - **词表界面是平表**：`中文名 | 英文名 | 相关词 | 删除`；相关词逗号分隔输入框（中英文逗号/顿号/分号都认），**失焦即存**；每行「AI 建议」调 `/api/tag-vocabulary-related`
+> - **⭐ v892 的统一口径（AI 联想标签一律照这条走）**：**先找库内现有标签；一个都没符合，才允许生成新词（最多 3 个）**。落地在两处：
+>   - 搜索联想 `/api/expand-query`：`terms` = 词表里已有的（能直接命中）→ 界面显示为「**库内相关词**」；只有 `terms` 为空时才有 `fresh` → 显示为「**AI 新词**」（虚线灰底 + 说明"只有标题/文件名含它才命中"）。两层都参与匹配，靠联想命中的仍排在精确命中之后。
+>   - 相关词建议 `/api/tag-vocabulary-related`：`related` = 词表已有的；`relatedNew` = 词表没有符合的时 AI 新造的（落库时界面会写明"还不是库内标签"）。
+>   - 词表锚定规则本来就有（v831 复合词桥接 / v839 券票卡同族 / v845 中东节日桥 / v831 服务端词表锚定）；v892 只是把「词表命中 vs 新造」**分开、并且优先**。
+> - 前端缓存键升到 `vf_library_search_expansion_v6`（v5 旧缓存不分两层，必须升，否则老结果里混着旧算法的自由词）
+> - **v891 删掉的东西**（别再找）：`AI 自动归类`按钮、折叠分组/缩进、上位词 `parent_id`、别名浮窗、`/api/tag-vocabulary-suggest`、`parseVocabularySuggestions` / `suggestVocabularyGroupsWithGlm`、`tagVocabularyDescendantsOf`
 >
-> **已验证**：380/380 测试全绿；`select=related` 实测该列存在（假列名对比返回 400）；测试站两处版本号均为 `20261012-tag-flat-v891`、旧端点已 405、新端点存在且要登录；本地 `dist/` 起服务用 Admin 预览登录实测能进素材库（app.js 改动没打断启动）。
-> **未验证（要人点一下）**：「AI 建议」真的跑通 AI（要管理员登录 + GLM_API_KEY）；真实库里填了相关词后搜索的实际命中效果。
+> **已验证**：387/387 测试全绿（含 AI 两层口径 7 项）；`select=related` 实测该列存在；测试站两处版本号均为 `20261012-ai-vocab-first-v892`；两个端点存在且要登录。
+> **未验证（要人点一下）**：真实 AI 行为（要管理员登录 + GLM_API_KEY）：搜一个词看 chips 是否只出库内词、库内没有时是否标「AI 新词」；词表「AI 建议」按钮。
+> **没做的（可能是下一步）**：逐图 AI 标签面板里还没有「这个词条词表里没有 = 新词」的标记（现在的 `is-new` 表示"本轮新认出"，不是同一个意思）。
 >
 > **下一步（候选，按用户优先级）**
-> 1. 管理员在测试站**真机验收**：团队管理页 →「标签词表」→ 填相关词 / 点「AI 建议」
+> 1. 管理员在测试站**真机验收**：① 搜词看「库内相关词 / AI 新词」两层 ② 团队管理页 →「标签词表」→ 填相关词 / 点「AI 建议」
 > 2. 老数据清理：库里 `parent_id`（sql/023 的上位词链）和 `aliases` 已不参与任何逻辑，是否清空由用户定
 > 3. `dist/functions/api/tag-translate.js` 仍**未进 git**（Actions 通道发不出它）——是否提交进仓库由用户定（本仓库 public，文件不含密钥）
 >
-> **这轮踩过的坑（别再犯）**：① 搜索要接进 `libraryItemQueryMatchRank`，别只改渲染；② 大表改列数时**别用全量替换** `colspan`（曾误改 8 处无关表格）；③ AI 调用要**小批量**；④ 词表读取新增字段时要**带降级**（SQL 未执行时退回旧读法，v891 对 `related` 就是这么做：读不到就把该列变只读并提示执行 `sql/024`）；⑤ **部署后 1–3 分钟内线上文件可能新旧混着**（§8.3），别据此误判。
+> **踩过的坑（别再犯）**：① 搜索要接进 `libraryItemQueryMatchRank`，别只改渲染；② 大表改列数时**别用全量替换** `colspan`（曾误改 8 处无关表格）；③ AI 调用要**小批量**；④ 词表/SQL 新增字段要**带降级**（`related` 读不到就把该列变只读并提示执行 `sql/024`）；⑤ **部署后 1–3 分钟内线上文件可能新旧混着**（§8.3）；⑥ 改联想口径**必须同时升缓存键**，否则用户本地旧缓存会让新规则看着"没生效"。
 
 **等用户决定 / 授权的**
 

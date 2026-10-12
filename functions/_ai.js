@@ -1068,25 +1068,39 @@ function parseQueryExpansionRaw(text) {
   return { list: list, listEn: listEn };
 }
 
-export function parseQueryExpansion(text, vocabulary = [], query = '') {
+// ── 搜索联想的两层口径（v892）──
+// 第一层 known：只收「词表里真实存在」的词（原样返回，保证一定命中真实标签）。
+// 第二层 fresh：只有 known 一个都没命中时，才把 AI 新造的词拿来兜底（最多 3 个）。
+// 为什么这么定：搜索是按标签/文本字面命中的，词表外的词基本搜不到；
+// 与其让 AI 自由联想把结果带偏，不如「先找现有标签，没有符合的才造新的」。
+export const QUERY_EXPANSION_FRESH_MAX = 3;
+
+export function parseQueryExpansionTiers(text, vocabulary = [], query = '') {
   const list = parseQueryExpansionRaw(text).list;
   const queryKey = String(query || '').replace(/\s+/g, '').toLowerCase();
   const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean);
   const seen = new Set();
-  const out = [];
+  const known = [];           // 词表内命中（顺序即返回顺序）
+  const freeCandidates = [];  // AI 新造词：只在 known 为空时启用
   const push = (value) => {
     const key = String(value).replace(/\s+/g, '').toLowerCase();
     if (!key || key === queryKey || seen.has(key)) return false;
     seen.add(key);
-    out.push(value);
+    known.push(value);
     return true;
+  };
+  const pushFree = (word) => {
+    const key = String(word).replace(/\s+/g, '').toLowerCase();
+    if (!key || key === queryKey) return;
+    if (freeCandidates.some((item) => String(item).replace(/\s+/g, '').toLowerCase() === key)) return;
+    freeCandidates.push(word);
   };
   // v831：复合词桥接词表。AI 常返回「汉堡店/汉堡王」这类复合词，而库里标签是「汉堡」；
   // 复合词包含词表短词时，把词表词也补进扩展集，保证能命中真实标签。
   const bridgeFromVocabulary = (word) => {
     const key = word.replace(/\s+/g, '').toLowerCase();
     for (const candidate of words) {
-      if (out.length >= QUERY_EXPANSION_MAX) return;
+      if (known.length >= QUERY_EXPANSION_MAX) return;
       const candidateKey = candidate.replace(/\s+/g, '').toLowerCase();
       if (candidateKey.length < 2 || candidateKey === queryKey) continue;
       if (key.includes(candidateKey)) push(candidate);
@@ -1102,7 +1116,7 @@ export function parseQueryExpansion(text, vocabulary = [], query = '') {
     const last = key.charAt(key.length - 1);
     if (!last || SUFFIX_BRIDGE_CHARS.indexOf(last) < 0) return;
     for (const candidate of words) {
-      if (out.length >= QUERY_EXPANSION_MAX) return;
+      if (known.length >= QUERY_EXPANSION_MAX) return;
       const candidateKey = candidate.replace(/\s+/g, '').toLowerCase();
       if (candidateKey.length < 2 || candidateKey === queryKey) continue;
       if (candidateKey.charAt(candidateKey.length - 1) === last) push(candidate);
@@ -1125,11 +1139,11 @@ export function parseQueryExpansion(text, vocabulary = [], query = '') {
     for (const rule of REGION_BRIDGE_RULES) {
       if (!rule.trigger.test(probe)) continue;
       for (const candidate of rule.candidates) {
-        if (out.length >= QUERY_EXPANSION_MAX) return;
+        if (known.length >= QUERY_EXPANSION_MAX) return;
         const candidateKey = candidate.replace(/\s+/g, '').toLowerCase();
         if (candidateKey === queryKey || seen.has(candidateKey)) continue;
-        const known = words.find(w => w.replace(/\s+/g, '').toLowerCase() === candidateKey);
-        if (known) push(known);
+        const knownWord = words.find(w => w.replace(/\s+/g, '').toLowerCase() === candidateKey);
+        if (knownWord) push(knownWord);
       }
     }
   };
@@ -1139,19 +1153,33 @@ export function parseQueryExpansion(text, vocabulary = [], query = '') {
     const key = word.replace(/\s+/g, '').toLowerCase();
     if (!key || key === queryKey) continue;       // 不回显搜索词本身
     if (seen.has(key)) continue;
-    // 词表里的写法优先原样返回（保证能命中真实标签），自由词在后
-    const known = words.find(w => w.replace(/\s+/g, '').toLowerCase() === key);
-    const value = known || word;
-    push(value);
-    if (!known) {
-      bridgeFromVocabulary(word);
-      bridgeBySuffix(word);
+    // ① 词表里有这个写法：原样返回（保证能命中真实标签）
+    const knownWord = words.find(w => w.replace(/\s+/g, '').toLowerCase() === key);
+    if (knownWord) {
+      push(knownWord);
+      bridgeRegion(word);
+      if (known.length >= QUERY_EXPANSION_MAX) break;
+      continue;
     }
+    // ② 词表里没有这个写法：先按桥接规则找词表里的同族词；桥不出来才留作「新词」候选
+    const before = known.length;
+    bridgeFromVocabulary(word);
+    bridgeBySuffix(word);
     bridgeRegion(word);
-    if (out.length >= QUERY_EXPANSION_MAX) break;
+    if (known.length === before) pushFree(word);
+    if (known.length >= QUERY_EXPANSION_MAX) break;
   }
   bridgeRegion(query);
-  return out.slice(0, QUERY_EXPANSION_MAX);
+  return {
+    known: known.slice(0, QUERY_EXPANSION_MAX),
+    // 有词表命中就不要新词：这正是「先找现有的，没有符合的再生成新的」
+    fresh: known.length ? [] : freeCandidates.slice(0, QUERY_EXPANSION_FRESH_MAX)
+  };
+}
+
+export function parseQueryExpansion(text, vocabulary = [], query = '') {
+  const tiers = parseQueryExpansionTiers(text, vocabulary, query);
+  return tiers.known.concat(tiers.fresh);
 }
 
 // v856 英文模式：联想词中文原词用于匹配库内标签（匹配链路不变），展示层需要英文说法。
@@ -1165,19 +1193,21 @@ export function parseQueryExpansionI18n(text, vocabulary = [], query = '') {
     const en = String(raw.listEn[i] == null ? '' : raw.listEn[i]).trim();
     if (zhKey && en && norm(en) !== zhKey) translations[zhKey] = en;
   }
-  return { terms: parseQueryExpansion(text, vocabulary, query), translations: translations };
+  const tiers = parseQueryExpansionTiers(text, vocabulary, query);
+  return { terms: tiers.known, fresh: tiers.fresh, translations: translations };
 }
 
 export async function expandQueryWithGlm(env, query, vocabulary = []) {
   const key = elementTagApiKey(env);
   if (!key) throw new Error('搜索扩展未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY。');
   const q = String(query || '').trim().slice(0, 40);
-  if (!q) return [];
-  const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean).slice(0, 120);
+  if (!q) return { terms: [], fresh: [], translations: {} };
+  const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean).slice(0, 200);
   const lines = [
     '你在帮一个设计素材库做搜索词扩展。用户输入了一个搜索词，库里的物料已经打好了受控标签。',
     words.length ? `本站的标签词表：${words.join('、')}。` : '',
     `用户搜索词：「${q}」。请返回和它语义相关的词，规则：`,
+    '0. **先找现有的**：只要词表里有和搜索词语义相关的词，就只返回词表里的词（原样，一个字都不要改）；词表里一个符合的都没有时，才允许返回词表外的新词，最多 3 个。',
     '1. 联想词必须优先从词表里选：只要词表里有和搜索词语义相关的词，必须原样返回词表词（这些能直接命中物料）。例：词表里有「优惠券」「折扣」时，搜「红包」应优先返回「优惠券」「折扣」，而不是词表外的「红包礼券」；',
     '2. 词表确实没有相关词时再自由联想，只返回搜索词指代事物的同义说法、画面主体或必要组成部分（例：搜「骑手」→ 摩托、头盔；搜「世界杯」→ 足球、球场；搜「汉堡包」→ 汉堡）；',
     '3. 搜索词是英文、拼音或其他外语时，先返回它的中文说法（优先用词表里的词），再按中文含义联想（例：搜「coupon」→ 优惠券、折扣；搜「burger」→ 汉堡）；',
@@ -1194,7 +1224,7 @@ export async function expandQueryWithGlm(env, query, vocabulary = []) {
   const content = data?.choices?.[0]?.message?.content;
   const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map(part => part?.text || '').join('') : '';
   const parsed = parseQueryExpansionI18n(text, words, q);
-  return { terms: parsed.terms, translations: parsed.translations };
+  return { terms: parsed.terms, fresh: parsed.fresh, translations: parsed.translations };
 }
 
 // 标签词表（sql/022）：把中文标签批量翻成英文显示名，供英文界面显示。
@@ -1270,9 +1300,12 @@ function parseResponseContent(data) {
   return Array.isArray(content) ? content.map(part => part?.text || '').join('') : '';
 }
 
-// 词表「相关词」建议（sql/024）：给一个词，让模型从词表里挑出「用户搜这个词时其实想找的词」。
+// 词表「相关词」建议（sql/024）：给一个词，让模型挑「用户搜这个词时其实想找的词」。
+// 两层口径（v892）：① related = 词表里**已有**的词（原样返回，能直接命中物料）；
+//                  ② relatedNew = 词表里一个都没有时，才让 AI 造新词（最多 3 个，前端会标注「新」）。
 // 上位词/别名那套（v887–v890 的自动归类）已按设计口径废弃，词表回归平表：中文名 | 英文名 | 相关词 | 删除。
 export const TAG_RELATED_MAX = 8;
+export const TAG_RELATED_NEW_MAX = 3;
 export const TAG_RELATED_MAX_CHARS = 20;
 
 export function parseRelatedTagSuggestions(text, term = '', vocabulary = []) {
@@ -1280,27 +1313,32 @@ export function parseRelatedTagSuggestions(text, term = '', vocabulary = []) {
     .map(v => String(v == null ? '' : v).trim())
     .filter(Boolean));
   const self = String(term == null ? '' : term).trim();
-  const out = [];
-  if (!self || !known.size) return out;
+  const related = [];
+  const relatedNew = [];
+  const empty = { related: related, relatedNew: relatedNew };
+  if (!self) return empty;
   const raw = String(text || '');
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const body = fenced ? fenced[1] : raw;
   const start = body.indexOf('{');
   const end = body.lastIndexOf('}');
-  if (start < 0 || end <= start) return out;
+  if (start < 0 || end <= start) return empty;
   let parsed = null;
-  try { parsed = JSON.parse(body.slice(start, end + 1)); } catch (_error) { return out; }
-  if (!parsed || typeof parsed !== 'object') return out;
+  try { parsed = JSON.parse(body.slice(start, end + 1)); } catch (_error) { return empty; }
+  if (!parsed || typeof parsed !== 'object') return empty;
+  const push = (list, word, max) => {
+    if (list.length >= max) return;
+    if (list.indexOf(word) >= 0) return;
+    list.push(word);
+  };
   for (const value of Array.isArray(parsed.related) ? parsed.related : []) {
     const word = String(value == null ? '' : value).trim();
     if (!word || word === self || word.length > TAG_RELATED_MAX_CHARS) continue;
-    // 只收词表里真实存在的词：搜索是按标签字面命中的，词表外的词基本搜不到（宁少勿滥）
-    if (!known.has(word)) continue;
-    if (out.indexOf(word) >= 0) continue;
-    out.push(word);
-    if (out.length >= TAG_RELATED_MAX) break;
+    // 词表里有的 → 第一层（能直接命中）；词表里没有的 → 只在第一层为空时兜底
+    if (known.has(word)) push(related, word, TAG_RELATED_MAX);
+    else push(relatedNew, word, TAG_RELATED_NEW_MAX);
   }
-  return out;
+  return { related: related, relatedNew: related.length ? [] : relatedNew };
 }
 
 export async function suggestRelatedTagsWithGlm(env, term, vocabulary = []) {
@@ -1313,18 +1351,18 @@ export async function suggestRelatedTagsWithGlm(env, term, vocabulary = []) {
     .filter((v, index, all) => all.indexOf(v) === index)
     .filter(v => v !== self)
     .slice(0, 240);
-  if (!self || !words.length) return [];
+  if (!self || !words.length) return { related: [], relatedNew: [] };
   const lines = [
     '你在维护一个中东外卖业务的设计素材库「标签词表」。现在要给一个词挑「相关词」。',
     `要处理的词：「${self}」。`,
-    `词表（只能从这里挑，不许新造）：${words.join('、')}。`,
+    `词表（现有的标签都在这里）：${words.join('、')}。`,
     `相关词 = 用户搜「${self}」时其实想找的那些词。规则：`,
-    '1. 只返回上面词表里原样存在的词，一个都不许新造；',
+    '1. **先找现有的**：只要词表里有符合的词，就只返回词表里的词、原样照抄（一个字都不要改）；词表里一个符合的都没有时，才允许给词表外的新词，最多 3 个，放进 related_new；',
     `2. 优先挑「字面上看不出来、但语义上是它的下位词或同类」的词（例：词=甜点 → 蛋挞、蛋糕、冰淇淋、甜甜圈）；`,
     `3. 已经包含「${self}」字面的词不要返回（例：词=咖啡 不要返回「黑咖啡」，按字面就能搜到）；`,
     `4. 不要返回与「${self}」并列的同类大词（例：词=汉堡 不要返回披萨、炸鸡）；`,
-    '5. 宁少勿滥：最多 8 个；没有合适的就返回空数组；',
-    '6. 只输出 JSON，不要代码块：{"related":["蛋挞","蛋糕","冰淇淋"]}',
+    '5. 宁少勿滥：related 最多 8 个，related_new 最多 3 个；没有合适的就返回空数组；',
+    '6. 只输出 JSON，不要代码块：{"related":["蛋挞","蛋糕","冰淇淋"],"related_new":[]}',
   ];
   const data = await postJson(GLM_VISION_URL, {
     model: GLM_TEXT_MODEL,

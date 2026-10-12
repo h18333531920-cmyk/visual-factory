@@ -24,14 +24,15 @@ export async function onRequest({ request, env }) {
       .filter(Boolean)
       .slice(0, MAX_VOCABULARY);
 
-    let related = [];
+    let suggestion = { related: [], relatedNew: [] };
     try {
-      related = await suggestRelatedTagsWithGlm(env, term, vocabulary);
+      suggestion = await suggestRelatedTagsWithGlm(env, term, vocabulary);
     } catch (error) {
       const message = String(error && error.message || '相关词建议失败');
-      return json({ success: false, reason: 'ai-failed', message, related: [] }, /未配置/.test(message) ? 503 : 502);
+      return json({ success: false, reason: 'ai-failed', message, related: [], relatedNew: [] }, /未配置/.test(message) ? 503 : 502);
     }
-    return json({ success: true, term, related });
+    // related = 词表里已有的；relatedNew = 词表里没有符合的时 AI 新造的（前端会标「新」）
+    return json({ success: true, term, related: suggestion.related, relatedNew: suggestion.relatedNew });
   } catch (error) {
     const message = error.message || '相关词建议失败。';
     const explicit = Number(error && error.status);

@@ -14,9 +14,11 @@ export async function onRequest({ request, env }) {
     const body = await request.json().catch(() => ({}));
     const result = await expandQueryWithGlm(env, body.query, body.vocabulary);
     const terms = Array.isArray(result) ? result : (result && Array.isArray(result.terms) ? result.terms : []);
+    // v892 两层口径：terms = 词表里已有的（能直接命中）；fresh = 词表里没有符合的时 AI 新造的（≤3，前端单独标「新」）
+    const fresh = result && !Array.isArray(result) && Array.isArray(result.fresh) ? result.fresh : [];
     // v856 英文模式：把 AI 逐词翻译的 中文→英文 映射一并返回（配不上的词由前端词表兜底）
     const termsEn = result && !Array.isArray(result) && result.translations && typeof result.translations === 'object' ? result.translations : {};
-    return json({ success: true, provider: 'glm-4-flash', terms: terms, termsEn: termsEn });
+    return json({ success: true, provider: 'glm-4-flash', terms: terms, fresh: fresh, termsEn: termsEn });
   } catch (error) {
     const message = error.message || '搜索扩展失败。';
     const status = /未配置/.test(message)

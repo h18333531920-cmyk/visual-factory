@@ -2069,6 +2069,19 @@ display: none;
   cursor: default;
 }
 
+/* v892：词表里没有符合的标签时，AI 新造的词单独一组——虚线灰底，提示"还不是库内标签" */
+.library-expansion-chips-label.is-fresh {
+  margin-left: 6px;
+  color: #94a3b8;
+}
+
+.library-expansion-chip.is-fresh {
+  border-style: dashed;
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+}
+
 @media (max-width: 1420px) {
   .library-expansion-chips-label {
     display: none;

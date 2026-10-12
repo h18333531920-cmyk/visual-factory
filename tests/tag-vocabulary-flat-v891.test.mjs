@@ -140,18 +140,26 @@ test('界面残留清理：没有 AI 自动归类按钮、折叠分组、上位�
   assert.match(appSource, /saveTagVocabularyPatch\(row\.id, \{ related: merged, source: 'manual' \}\)/, 'AI 建议并进这一行后落库');
 });
 
-test('AI 建议相关词：只收词表里真实存在的词、不返回自己、最多 8 个', async () => {
+test('AI 建议相关词：先收词表里已有的，词表里没有符合的才给新词（≤3）', async () => {
   const ai = await import('../functions/_ai.js');
   const vocab = ['甜点', '蛋挞', '蛋糕', '冰淇淋', '甜甜圈', '披萨'];
-  assert.deepEqual(ai.parseRelatedTagSuggestions('{"related":["蛋挞","蛋糕","冰淇淋"]}', '甜点', vocab), ['蛋挞', '蛋糕', '冰淇淋']);
-  assert.deepEqual(ai.parseRelatedTagSuggestions('```json\n{"related":["蛋挞","甜甜圈"]}\n```', '甜点', vocab), ['蛋挞', '甜甜圈'], '代码块包裹也能认');
-  assert.deepEqual(ai.parseRelatedTagSuggestions('{"related":["蛋挞","词表里没有的新词"]}', '甜点', vocab), ['蛋挞'], '词表外的词丢掉（搜不到）');
-  assert.deepEqual(ai.parseRelatedTagSuggestions('{"related":["甜点","蛋挞","蛋挞"]}', '甜点', vocab), ['蛋挞'], '不返回自己、不重复');
-  assert.deepEqual(ai.parseRelatedTagSuggestions('{"related":["披萨"]}', '披萨', vocab), [], '只返回自己等于没建议');
-  assert.deepEqual(ai.parseRelatedTagSuggestions('not json', '甜点', vocab), []);
-  assert.deepEqual(ai.parseRelatedTagSuggestions('', '甜点', []), []);
+  // 词表里有 → 只收词表词
+  assert.deepEqual(ai.parseRelatedTagSuggestions('{"related":["蛋挞","蛋糕","冰淇淋"]}', '甜点', vocab), { related: ['蛋挞', '蛋糕', '冰淇淋'], relatedNew: [] });
+  assert.deepEqual(ai.parseRelatedTagSuggestions('```json\n{"related":["蛋挞","甜甜圈"]}\n```', '甜点', vocab).related, ['蛋挞', '甜甜圈'], '代码块包裹也能认');
+  // 词表里没有的 → 落到 relatedNew；但词表里有命中时，新词一律丢掉
+  assert.deepEqual(ai.parseRelatedTagSuggestions('{"related":["蛋挞","马卡龙"]}', '甜点', vocab), { related: ['蛋挞'], relatedNew: [] }, '有词表命中就不要新词');
+  assert.deepEqual(
+    ai.parseRelatedTagSuggestions('{"related":["马卡龙","布丁","舒芙蕾","司康"]}', '甜点', vocab),
+    { related: [], relatedNew: ['马卡龙', '布丁', '舒芙蕾'] },
+    '一个词表词都没命中时，才给新词，最多 3 个'
+  );
+  // 不返回自己、不重复
+  assert.deepEqual(ai.parseRelatedTagSuggestions('{"related":["甜点","蛋挞","蛋挞"]}', '甜点', vocab), { related: ['蛋挞'], relatedNew: [] });
+  assert.deepEqual(ai.parseRelatedTagSuggestions('{"related":["披萨"]}', '披萨', vocab), { related: [], relatedNew: [] }, '只返回自己等于没建议');
+  assert.deepEqual(ai.parseRelatedTagSuggestions('not json', '甜点', vocab), { related: [], relatedNew: [] });
+  assert.deepEqual(ai.parseRelatedTagSuggestions('', '甜点', []), { related: [], relatedNew: [] });
   const many = Array.from({ length: 12 }, (_, i) => '词' + i);
-  assert.equal(ai.parseRelatedTagSuggestions(JSON.stringify({ related: many }), '甜点', many).length, 8, '最多 8 个');
+  assert.equal(ai.parseRelatedTagSuggestions(JSON.stringify({ related: many }), '甜点', many).related.length, 8, '词表命中最多 8 个');
 });
 
 test('相关词建议端点：限管理员、候选词从词表来', () => {

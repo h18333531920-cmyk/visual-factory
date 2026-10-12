@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-flat-v891';
+const TOOL_UI_VERSION = '20261012-ai-vocab-first-v892';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3394,14 +3394,21 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
   // 并加 7 天有效期：词表随素材增长，老缓存到期后自动重新扩展。
   // v839：缓存键升到 v3（v2 里缓存了词表锚定前的无效联想词，如红包→红包礼券，需要重新扩展）
   // v856：缓存键升到 v5（v4 里没有英文翻译 termsEn，英文模式下联想词缺英文显示），沿用 7 天有效期
-  var LIBRARY_EXPANSION_CACHE_PREFIX = 'vf_library_search_expansion_v5:';
+  // v892：缓存键升到 v6（v5 里不分「词表命中」和「AI 新词」，两层口径改了，旧缓存要重来）
+  var LIBRARY_EXPANSION_CACHE_PREFIX = 'vf_library_search_expansion_v6:';
   var LIBRARY_EXPANSION_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-  var libraryExpansionTerms = [];
+  var libraryExpansionTerms = [];          // 第一层：词表里已有的相关词（能直接命中物料）
+  var libraryExpansionFresh = [];          // 第二层：词表里没有符合的时 AI 新造的词（≤3，单独展示）
   var libraryExpansionTermsEn = {};        // v856 英文模式：中文联想词→英文说法（AI 逐词翻译，配不上的走词表兑底）
   var libraryExpansionRefreshing = false;  // v856 手动刷新中：chips 不清空，仅刷新按钮转圈
   var libraryExpansionRequestKey = '';
   var libraryExpansionLastQuery = null;
   var libraryExpansionPendingQuery = '';
+
+  // 参与匹配的词 = 两层合并（新词只在词表一个都没命中时才会出现）
+  function libraryExpansionMatchTerms() {
+    return libraryExpansionTerms.concat(libraryExpansionFresh);
+  }
 
   function librarySearchExactOnly() {
     try { return localStorage.getItem('vf_library_search_exact_only_v1') === '1'; }
@@ -3424,13 +3431,14 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
       if (!list) return null;
       if (typeof parsed.ts === 'number' && Date.now() - parsed.ts > LIBRARY_EXPANSION_CACHE_TTL_MS) return null;
       const terms = list.filter(Boolean);
+      const fresh = !Array.isArray(parsed) && Array.isArray(parsed.fresh) ? parsed.fresh.filter(Boolean) : [];
       const termsEn = !Array.isArray(parsed) && parsed.termsEn && typeof parsed.termsEn === 'object' ? parsed.termsEn : {};
-      return { terms: terms, termsEn: termsEn };
+      return { terms: terms, fresh: fresh, termsEn: termsEn };
     } catch (_error) { return null; }
   }
 
-  function writeLibraryExpansionCache(query, terms, termsEn) {
-    try { localStorage.setItem(LIBRARY_EXPANSION_CACHE_PREFIX + String(query).trim().toLowerCase(), JSON.stringify({ ts: Date.now(), terms: terms || [], termsEn: termsEn || {} })); }
+  function writeLibraryExpansionCache(query, terms, fresh, termsEn) {
+    try { localStorage.setItem(LIBRARY_EXPANSION_CACHE_PREFIX + String(query).trim().toLowerCase(), JSON.stringify({ ts: Date.now(), terms: terms || [], fresh: fresh || [], termsEn: termsEn || {} })); }
     catch (_error) {}
   }
 
@@ -3617,19 +3625,28 @@ chipsHost.hidden = true;
 chipsHost.innerHTML = '';
 return;
 }
-    if (libraryExpansionPendingQuery === q && !libraryExpansionTerms.length) {
+    if (libraryExpansionPendingQuery === q && !libraryExpansionTerms.length && !libraryExpansionFresh.length) {
       chipsHost.hidden = false;
       chipsHost.innerHTML = `<span class="library-expansion-chip is-pending"><span class="library-expansion-spinner" aria-hidden="true"></span>${state.lang === 'zh' ? 'AI 联想中…' : '…AI thinking…'}</span>`;
       return;
     }
-    if (libraryExpansionTerms.length) {
+    if (libraryExpansionTerms.length || libraryExpansionFresh.length) {
       // v839：词条装进裁剪区（chips-clip），开关按钮放裁剪区外——
       // 否则词条多时容器 overflow:hidden 会把「仅精确匹配」切掉一半
       // v856：词条不再只显示前 3 个（裁剪区可横向滚动），尾部加刷新按钮手动追加联想词
+      // v892：两层展示——「库内相关词」= 词表里已有的标签（能直接命中）；
+      //       「AI 新词」= 词表里一个都没符合时 AI 新造的（还没进词表，多半搜不到）
+      const zhUi = state.lang === 'zh';
+      const knownChips = libraryExpansionTerms.map(term => `<span class="library-expansion-chip" title="${zhUi ? '库内已有的标签，命中这个词的物料也会出现在结果里' : 'An existing tag in the library; matching assets also appear in results'}">${escapeHtml(libraryChipDisplayLabel(term))}</span>`).join('');
+      const freshChips = libraryExpansionFresh.length
+        ? `<small class="library-expansion-chips-label is-fresh">${zhUi ? 'AI 新词' : 'AI new words'}</small>`
+          + libraryExpansionFresh.map(term => `<span class="library-expansion-chip is-fresh" title="${zhUi ? '标签词表里没有符合的，这是 AI 新造的词：只有标题/文件名里出现它才命中' : 'Not in the vocabulary yet; only matches titles/file names'}">${escapeHtml(libraryChipDisplayLabel(term))}</span>`).join('')
+        : '';
       chipsHost.hidden = false;
-      chipsHost.innerHTML = `<span class="library-expansion-chips-clip"><small class="library-expansion-chips-label">${state.lang === 'zh' ? 'AI 相关词' : 'AI related terms'}</small>`
-        + libraryExpansionTerms.map(term => `<span class="library-expansion-chip" title="${state.lang === 'zh' ? '命中这个词的物料也会出现在结果里' : 'Matching assets for this term also appear in results'}">${escapeHtml(libraryChipDisplayLabel(term))}</span>`).join('')
-        + `</span><button type="button" class="library-expansion-refresh${libraryExpansionRefreshing ? ' is-busy' : ''}" id="library-expansion-refresh" title="${state.lang === 'zh' ? 'AI 重新联想，追加相关词' : 'Ask AI for more related terms'}" aria-label="${state.lang === 'zh' ? '重新联想' : 'Refresh related terms'}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>`;
+      chipsHost.innerHTML = `<span class="library-expansion-chips-clip"><small class="library-expansion-chips-label">${zhUi ? '库内相关词' : 'Related library tags'}</small>`
+        + knownChips
+        + freshChips
+        + `</span><button type="button" class="library-expansion-refresh${libraryExpansionRefreshing ? ' is-busy' : ''}" id="library-expansion-refresh" title="${zhUi ? 'AI 重新联想，追加相关词' : 'Ask AI for more related terms'}" aria-label="${zhUi ? '重新联想' : 'Refresh related terms'}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>`;
       return;
     }
     chipsHost.hidden = true;
@@ -3640,6 +3657,7 @@ return;
     const q = String(query || '').trim();
     if (!q || librarySearchExactOnly()) {
       libraryExpansionTerms = [];
+      libraryExpansionFresh = [];
       libraryExpansionTermsEn = {};
       libraryExpansionRefreshing = false;
       libraryExpansionPendingQuery = '';
@@ -3651,6 +3669,7 @@ return;
     const cached = readLibraryExpansionCache(q);
     if (cached) {
       libraryExpansionTerms = cached.terms;
+      libraryExpansionFresh = cached.fresh || [];
       libraryExpansionTermsEn = cached.termsEn || {};
       libraryExpansionRefreshing = false;
       libraryExpansionPendingQuery = '';
@@ -3666,6 +3685,7 @@ return;
     libraryExpansionRequestKey = requestKey;
     libraryExpansionRefreshing = false;   // v856 新查询开始，取消进行中的手动刷新态
     libraryExpansionTerms = [];          // 旧查询的词条对新查询无效，清空后才能渲染 pending 态
+    libraryExpansionFresh = [];
     libraryExpansionPendingQuery = q;
     renderLibraryExpansionChips();
     fetch('/api/expand-query', {
@@ -3675,14 +3695,17 @@ return;
     }).then(r => r.json()).then(function(data) {
       if (libraryExpansionRequestKey !== requestKey) return;         // 已换搜索词，旧结果作废
       const terms = data && data.success && Array.isArray(data.terms) ? data.terms.filter(Boolean).slice(0, 8) : [];
+      // v892：词表里一个都没命中时才会有 fresh（AI 新造词，≤3）
+      const fresh = data && data.success && Array.isArray(data.fresh) ? data.fresh.filter(Boolean).slice(0, 3) : [];
       const termsEn = data && data.termsEn && typeof data.termsEn === 'object' ? data.termsEn : {};
       libraryExpansionTermsEn = termsEn;
-      writeLibraryExpansionCache(q, terms, termsEn);
+      writeLibraryExpansionCache(q, terms, fresh, termsEn);
       libraryExpansionTerms = terms;
+      libraryExpansionFresh = fresh;
       libraryExpansionPendingQuery = '';
       renderLibraryExpansionChips();
       const live = document.getElementById('library-search');
-      if (terms.length && live && live.value.trim() === q) filterLibraryCardsInPlace();
+      if ((terms.length || fresh.length) && live && live.value.trim() === q) filterLibraryCardsInPlace();
     }).catch(function() {
       if (libraryExpansionRequestKey !== requestKey) return;
       libraryExpansionPendingQuery = '';
@@ -3710,9 +3733,10 @@ return;
       libraryExpansionRefreshing = false;
       libraryExpansionPendingQuery = '';
       const incoming = data && data.success && Array.isArray(data.terms) ? data.terms.filter(Boolean) : [];
+      const incomingFresh = data && data.success && Array.isArray(data.fresh) ? data.fresh.filter(Boolean) : [];
       const enMap = data && data.termsEn && typeof data.termsEn === 'object' ? data.termsEn : {};
       const normKey = function(value) { return String(value || '').replace(/\s+/g, '').toLowerCase(); };
-      const beforeCount = libraryExpansionTerms.length;
+      const beforeCount = libraryExpansionTerms.length + libraryExpansionFresh.length;
       const merged = libraryExpansionTerms.slice();
       incoming.forEach(function(term) {
         const key = normKey(term);
@@ -3720,13 +3744,26 @@ return;
         if (merged.some(function(existing) { return normKey(existing) === key; })) return;
         merged.push(term);
       });
+      // v892：第一层（库内词）有了就不要新词；第一层本来就空时才把新词补上（上限 3）
+      const mergedFresh = libraryExpansionFresh.slice();
+      if (merged.length) {
+        mergedFresh.length = 0;
+      } else {
+        incomingFresh.forEach(function(term) {
+          const key = normKey(term);
+          if (!key || mergedFresh.length >= 3) return;
+          if (mergedFresh.some(function(existing) { return normKey(existing) === key; })) return;
+          mergedFresh.push(term);
+        });
+      }
       // v857：刷新没挤出任何新词（词库收敛或达到 12 上限）时轻提示，避免误以为按钮失灵
-      if (merged.length === beforeCount) {
+      if (merged.length + mergedFresh.length === beforeCount) {
         showCaseToast(state.lang === 'zh' ? 'AI 暂时没有更多新联想词了' : 'AI has no new related terms for now');
       }
       libraryExpansionTerms = merged;
+      libraryExpansionFresh = mergedFresh;
       libraryExpansionTermsEn = Object.assign({}, libraryExpansionTermsEn, enMap);
-      writeLibraryExpansionCache(q, merged, libraryExpansionTermsEn);
+      writeLibraryExpansionCache(q, merged, mergedFresh, libraryExpansionTermsEn);
       renderLibraryExpansionChips();
       filterLibraryCardsInPlace();
     }).catch(function() {
@@ -6720,7 +6757,7 @@ return;
       .filter(item => { var sel = state.libraryFilters.selectedQuantities || []; return !sel.length || sel.some(function(v) { return librarySourceMatchesFilterValue('quantity', item.source, v); }); })
       .filter(item => {
         if (!state.libraryFilters.query) return true;
-        const rank = libraryItemQueryMatchRank(item, state.libraryFilters.query, libraryExpansionTerms);
+        const rank = libraryItemQueryMatchRank(item, state.libraryFilters.query, libraryExpansionMatchTerms());
         if (rank < 0) return false;
         const prev = queryRankById.get(item.source.id);
         queryRankById.set(item.source.id, prev === undefined ? rank : Math.min(prev, rank));
@@ -16354,19 +16391,23 @@ function libraryTagsForForm(formData, kind) {
         if (timer) clearTimeout(timer);
         if (!data || !data.success) throw new Error((data && data.message) || (zh ? '建议失败' : 'Suggestion failed'));
         const suggested = Array.isArray(data.related) ? data.related : [];
-        if (!suggested.length) {
+        const suggestedNew = Array.isArray(data.relatedNew) ? data.relatedNew : [];
+        // v892 两层口径：先要词表里已有的标签；一个都没有时，才用 AI 新造的词
+        const picked = suggested.length ? suggested : suggestedNew;
+        if (!picked.length) {
           tagVocabularySuggestingId = '';
-          tagVocabularyMessage = zh ? ('AI 没给出「' + row.name_zh + '」的可用相关词（词表里没有合适的词）。') : 'No usable suggestion.';
+          tagVocabularyMessage = zh ? ('AI 觉得「' + row.name_zh + '」暂时没有可用的相关词。') : 'No usable suggestion.';
           renderTagVocabularySection(section);
           return null;
         }
-        const merged = parseRelatedWordsInput((Array.isArray(row.related) ? row.related : []).concat(suggested).join(','));
+        const merged = parseRelatedWordsInput((Array.isArray(row.related) ? row.related : []).concat(picked).join(','));
         tagVocabularyMessage = '';
         return saveTagVocabularyPatch(row.id, { related: merged, source: 'manual' }).then(function() {
           tagVocabularySuggestingId = '';
+          const newNote = suggested.length ? '' : (zh ? '（词表里没有符合条件的现成标签，这几个是 AI 新造的，还没成为库内标签）' : ' (AI-made words, not library tags yet)');
           tagVocabularyMessage = zh
-            ? ('「' + row.name_zh + '」的相关词：' + merged.join('、') + '（AI 建议，可继续删改）')
-            : ('Related words for "' + row.name_zh + '": ' + merged.join(', ') + ' (edit as you like)');
+            ? ('「' + row.name_zh + '」的相关词：' + merged.join('、') + '（AI 建议，可继续删改）' + newNote)
+            : ('Related words for "' + row.name_zh + '": ' + merged.join(', ') + ' (edit as you like)' + newNote);
           renderTagVocabularySection(section);
         });
       })
