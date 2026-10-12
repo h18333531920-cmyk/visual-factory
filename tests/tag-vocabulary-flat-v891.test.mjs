@@ -12,12 +12,13 @@ const appSource = readFileSync(join(here, '..', 'app.js'), 'utf8');
 function loadVocabularyUi(rows, options = {}) {
   const slice = appSource.slice(
     appSource.indexOf('  function tagVocabularyRowMatches('),
-    appSource.indexOf('  function tagVocabularyHtml(')
+    appSource.indexOf('  function renderTagVocabularySection(')
   );
   const context = vm.createContext({
     state: { lang: options.lang || 'zh' },
     tagVocabularyRows: rows,
     tagVocabularyQuery: options.query || '',
+    tagVocabularyMessage: options.message || '',
     tagVocabularySuggestingId: options.suggestingId || '',
     tagVocabularyRelatedReady: options.relatedReady !== false,
     TAG_VOCABULARY_IGNORED: 'ignored',
@@ -52,6 +53,23 @@ test('相关词输入：中英文逗号/顿号/分号都能分隔，去重、去
   assert.deepEqual(parse(''), []);
   assert.deepEqual(parse('a'.repeat(21)), [], '超过 20 字的词不是标签，丢掉');
   assert.deepEqual(parse('1,2,3,4,5,6,7,8,9,10'), ['1', '2', '3', '4', '5', '6', '7', '8'], '最多 8 个');
+});
+
+test('词表区块整段能渲染：四列表头 + 只有「补翻译 / 刷新」两个顶部按钮', () => {
+  const c = loadVocabularyUi([
+    { id: 'el:甜点', name_zh: '甜点', name_en: 'Dessert', kind: 'element', source: 'manual', related: ['蛋挞'] }
+  ]);
+  const html = c.tagVocabularyHtml();
+  assert.equal((html.match(/<th>/g) || []).length, 4, '四列表头');
+  assert.match(html, /<th>中文名<\/th>/);
+  assert.match(html, /<th>英文名（可直接改）<\/th>/);
+  assert.match(html, /<th>相关词（逗号分隔）<\/th>/);
+  assert.match(html, /<th>操作<\/th>/);
+  assert.match(html, /data-tv-translate="1"/, '保留补翻译');
+  assert.match(html, /data-tv-refresh="1"/, '保留刷新');
+  assert.doesNotMatch(html, /data-tv-suggest="1"|AI 自动归类/, 'AI 自动归类按钮已删');
+  assert.match(html, /相关词：搜这个词时这些词也算命中/, '提示里说明相关词怎么用');
+  assert.doesNotMatch(html, /别名|上位词/, '别名/上位词字样不再出现在界面上');
 });
 
 test('词表是一张平表：中文名 | 英文名 | 相关词 | 删除', () => {

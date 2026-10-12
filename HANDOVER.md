@@ -21,7 +21,7 @@
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
 | 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`d193c03` 起）；测试站走**本机 wrangler 直发**（github Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-12 |
-| 自动化测试 | `node --test tests/` → **379/379 通过**（含标签词表平表 / 相关词 11 项） | 实测 2026-10-12 |
+| 自动化测试 | `node --test tests/` → **380/380 通过**（含标签词表平表 / 相关词 12 项） | 实测 2026-10-12 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在） | 实测 2026-10-12 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -402,7 +402,7 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 > - **本轮删掉的东西**（别再找）：`AI 自动归类`按钮、折叠分组/缩进、上位词 `parent_id`、别名浮窗、`/api/tag-vocabulary-suggest` 端点、`_ai.js` 的 `parseVocabularySuggestions` / `suggestVocabularyGroupsWithGlm`、`tagVocabularyDescendantsOf`
 > - 词表删除行 + 词表内搜索都还在；`kind='ignored'`（老「不做标签」）的行**现在直接从表里隐藏**
 >
-> **已验证**：379/379 测试全绿；`select=related` 实测该列存在（假列名对比返回 400）；测试站两处版本号均为 `20261012-tag-flat-v891`、旧端点已 404/405、新端点存在且要登录。
+> **已验证**：380/380 测试全绿；`select=related` 实测该列存在（假列名对比返回 400）；测试站两处版本号均为 `20261012-tag-flat-v891`、旧端点已 405、新端点存在且要登录；本地 `dist/` 起服务用 Admin 预览登录实测能进素材库（app.js 改动没打断启动）。
 > **未验证（要人点一下）**：「AI 建议」真的跑通 AI（要管理员登录 + GLM_API_KEY）；真实库里填了相关词后搜索的实际命中效果。
 >
 > **下一步（候选，按用户优先级）**
