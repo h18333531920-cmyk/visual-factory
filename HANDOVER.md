@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20260924-ai-inline-edit-v871` | 实测 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-tag-i18n-v873`（标签中英双语·第 1 步；**需先执行 `sql/022_tag_vocabulary.sql` 才生效**） | 实测 2026-10-12 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
-| 本地工作区 | 分支 `tmp-deploy-v871`；比 `origin/main` 领先 5 个提交；**含未提交改动**（v872 逐图 AI 标签迁移兜底 + 本次文档整理） | 实测 |
-| 自动化测试 | `node --test tests/` → **365/365 通过**（59 个测试文件） | 实测 2026-10-10 |
+| 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`1787a45` 已全部提交）；测试站走 GitHub Actions 预构建 dist 通道发布 | 实测 2026-10-12 |
+| 自动化测试 | `node --test tests/` → **368/368 通过**（含标签双语 3 项） | 实测 2026-10-12 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在） | 实测 2026-10-10 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
