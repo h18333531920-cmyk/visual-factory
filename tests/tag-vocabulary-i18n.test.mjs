@@ -38,14 +38,15 @@ test('前端：英文界面查词表译名，缺表时永久退回原文', () =>
   assert.match(appSource, /tagTranslateAttempts\.set\(label/, '按词记录尝试次数');
   assert.match(appSource, /data-preview-manual-remove="' \+ escapeAttr\(tag\)/, '按钮动作仍用原始标签，不能被译名污染');
   assert.match(appSource, /escapeHtml\(libraryDisplayLabel\(tag\)\)/, '面板标签按界面语言显示');
+  assert.match(appSource, /data-case-tag-ai-value="' \+ escapeAttr\(value\) \+ '">' \+ escapeHtml\(libraryDisplayLabel\(value\)\)/, 'AI 建议标签按界面语言显示，动作仍用原始值');
   assert.match(appSource, /tagVocabularyByEn\.get\(label\.toLowerCase\(\)\)/, '中文界面能把英文标签反向显示成中文');
   assert.match(appSource, /void ensureTagTranslations\(\)\.then/, '切语言时自动补翻并重绘');
 });
 
 test('新表与新端点：代理白名单已登记、版本号六处同步', () => {
   assert.match(policySource, /'vf_tag_vocabulary'/, '非维护账号要能读词表');
-  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v875/);
-  const refs = indexSource.match(/\?v=20261012-tag-i18n-v875/g) || [];
+  assert.match(indexSource, /app\.js\?v=20261012-tag-i18n-v876/);
+  const refs = indexSource.match(/\?v=20261012-tag-i18n-v876/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v875'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261012-tag-i18n-v876'/);
 });

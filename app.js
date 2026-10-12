@@ -836,7 +836,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v875';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v876';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4432,22 +4432,35 @@ return;
       });
       root._caseTagAiSeen = seen;
       // 主题 chip 在前（蓝色调），元素 chip 在后；两者都是点一下采纳
-      const themeChips = themes.map(function(value) {
-        const added = caseTagSelHas(root._caseTagSel, 'activity', value);
-        const isNew = freshThemes.indexOf(value) >= 0 && themes.length > freshThemes.length;
-        return '<button type="button" class="case-tag-ai-chip case-tag-ai-activity' + (added ? ' is-added' : '') + (isNew ? ' is-new' : '') + '" data-case-tag-ai-activity="' + escapeAttr(value) + '">' + escapeHtml(value) + '</button>';
-      }).join('');
-      const elementChips = seen.map(function(value) {
-        const added = caseTagSelHas(root._caseTagSel, 'element', value);
-        const isNew = fresh.indexOf(value) >= 0 && seen.length > fresh.length;
-        return '<button type="button" class="case-tag-ai-chip' + (added ? ' is-added' : '') + (isNew ? ' is-new' : '') + '" data-case-tag-ai-value="' + escapeAttr(value) + '">' + escapeHtml(value) + '</button>';
-      }).join('');
+      // 显示文本走 libraryDisplayLabel（英文界面显示英文），但 data 属性保留原始标签，动作不受影响
+      const buildSuggestionChips = function () {
+        const themeChips = themes.map(function(value) {
+          const added = caseTagSelHas(root._caseTagSel, 'activity', value);
+          const isNew = freshThemes.indexOf(value) >= 0 && themes.length > freshThemes.length;
+          return '<button type="button" class="case-tag-ai-chip case-tag-ai-activity' + (added ? ' is-added' : '') + (isNew ? ' is-new' : '') + '" data-case-tag-ai-activity="' + escapeAttr(value) + '">' + escapeHtml(libraryDisplayLabel(value)) + '</button>';
+        }).join('');
+        const elementChips = seen.map(function(value) {
+          const added = caseTagSelHas(root._caseTagSel, 'element', value);
+          const isNew = fresh.indexOf(value) >= 0 && seen.length > fresh.length;
+          return '<button type="button" class="case-tag-ai-chip' + (added ? ' is-added' : '') + (isNew ? ' is-new' : '') + '" data-case-tag-ai-value="' + escapeAttr(value) + '">' + escapeHtml(libraryDisplayLabel(value)) + '</button>';
+        }).join('');
+        return themeChips + elementChips;
+      };
       const freshCount = fresh.length + freshThemes.length;
-      chipsBox.innerHTML = themeChips + elementChips + hint(state.lang === 'zh'
-        ? (seen.length + themes.length > freshCount ? '（本次新认出 ' + freshCount + ' 个，点一下采纳）' : '（点一下采纳）')
-        : '(click to add)');
+      const renderSuggestionChips = function () {
+        chipsBox.innerHTML = buildSuggestionChips() + hint(state.lang === 'zh'
+          ? (seen.length + themes.length > freshCount ? '（本次新认出 ' + freshCount + ' 个，点一下采纳）' : '（点一下采纳）')
+          : '(click to add)');
+      };
+      renderSuggestionChips();
       if (actions) actions.hidden = false;
       syncCaseAiSuggestionState(root);
+      // 英文界面：建议词也走同一套翻译，新翻出来的词回来后再画一次
+      if (state.lang === 'en') {
+        void translateMissingTagNames(themes.concat(seen)).then(function (added) {
+          if (added > 0 && root.isConnected && root.dataset.aiElementKey === requestKey) renderSuggestionChips();
+        }).catch(function () {});
+      }
     } catch (error) {
       if (!root.isConnected || root.dataset.aiElementKey !== requestKey) return;
       chipsBox.innerHTML = hint(state.lang === 'zh' ? '识别失败，可重新识别或手动添加' : 'Detection failed');
@@ -5119,11 +5132,11 @@ return;
       suggestPop.innerHTML = '<div class="case-foot-tag-editor-hint">' + (zh() ? '点一下采纳（即时保存），再点取消' : 'Click to adopt (saved instantly); click again to remove') + '</div>'
         + suggestThemes.map(function(value) {
           const added = caseTagSelHas(footSel, 'activity', value);
-          return '<button type="button" class="case-tag-ai-chip case-tag-ai-activity' + (added ? ' is-added' : '') + '" data-foot-ai-activity="' + escapeAttr(value) + '">' + escapeHtml(value) + '</button>';
+          return '<button type="button" class="case-tag-ai-chip case-tag-ai-activity' + (added ? ' is-added' : '') + '" data-foot-ai-activity="' + escapeAttr(value) + '">' + escapeHtml(libraryDisplayLabel(value)) + '</button>';
         }).join('')
         + suggestSeen.map(function(value) {
           const added = caseTagSelHas(footSel, 'element', value);
-          return '<button type="button" class="case-tag-ai-chip' + (added ? ' is-added' : '') + '" data-foot-ai-value="' + escapeAttr(value) + '">' + escapeHtml(value) + '</button>';
+          return '<button type="button" class="case-tag-ai-chip' + (added ? ' is-added' : '') + '" data-foot-ai-value="' + escapeAttr(value) + '">' + escapeHtml(libraryDisplayLabel(value)) + '</button>';
         }).join('')
         + '<div class="case-foot-ai-rerun-row"><button type="button" class="case-tag-ai-bulk" id="case-foot-ai-rerun" title="' + (zh() ? '再识一次：只补充上次没认出的标签' : 'Detect again: only adds previously missed tags') + '">↻ ' + (zh() ? '重新识别' : 'Re-detect') + '</button></div>';
       positionPop(suggestPop, aiBtn);

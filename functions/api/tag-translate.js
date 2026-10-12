@@ -86,6 +86,12 @@ export async function onRequest({ request, env }) {
         const second = await translateTagsWithGlm(env, leftover).catch(() => ({}));
         Object.assign(translations, second);
       }
+      // 极少数词批量时会被反复漏掉（实测「虾」「美食促销」）：最后逐词单独问，最多 3 个词
+      const stubborn = missing.filter(term => !translations[term]).slice(0, 3);
+      for (const term of stubborn) {
+        const single = await translateTagsWithGlm(env, [term]).catch(() => ({}));
+        if (single[term]) translations[term] = single[term];
+      }
     } catch (error) {
       const message = String(error && error.message || '翻译失败');
       const status = /未配置/.test(message) ? 503 : 502;
