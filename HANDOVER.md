@@ -273,7 +273,9 @@ curl -s "https://asset-gallery-test.visual-factory.pages.dev/app.js?cb=$(date +%
 ```
 
 - ⚠️ **发完有 1–3 分钟窗口期**：实测刚发完时 `index.html` 已是新版、`app.js` 还是旧版（`?cb=` 也不一定救回来）。判不定就打开本次部署自己的 URL（`https://<部署 ID 前 8 位>.visual-factory.pages.dev`）验货，或者过一两分钟再测。
+- ⚠️ **已经打开着页面的同事可能看到 `ERR_CONNECTION_RESET`（2026-10-12 实测）**：Pages 换部署时，旧部署上的在途连接会被关掉，页面就报这个错——**不是站点挂了**。判据：`curl` 站点与资源都是 200、健康检查全 true、在浏览器里新开标签页能进。让用户 `Cmd+Shift+R` 硬刷新即可。（这次是我发 v896 时用户在浏览器里遇到的，一度以为发布出事故。）
 - ⚠️ **`dist/functions/api/` 里有文件没进 git**：`tag-translate.js` 从来没有（未跟踪 + `dist` 在 `.gitignore` 里），2026-10-12 新增的 `tag-vocabulary-related.js` 已用 `git add -f` 补进去。GitHub Actions 的 checkout 拿不到未跟踪文件 ⇒ **Actions 那条测试站通道发不出这些端点**，**本机 `wrangler` 直发才是完整通道**。
+- ⚠️ **wrangler 偶发部署失败**：2026-10-12 发 v896 时第一次报错、第二次成功（提示 `Uploaded 0 files (55 already uploaded)`）——资源按内容哈希去重，第一次其实已经传上去了。**遇到报错先重跑一次**，并用「版本号 + 文件字节数」复核，别以为站是半截状态。
 - 部署完记得把**部署 ID / 版本号 / 时间**记进 §0。
 
 ### 8.4 发正式站（**先拿到用户当次授权**）
