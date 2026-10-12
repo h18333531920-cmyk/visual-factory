@@ -92,9 +92,10 @@ export async function onRequest({ request, env }) {
     });
   } catch (error) {
     const message = error.message || '自动归类失败。';
+    const explicit = Number(error && error.status);
     const status = /未配置/.test(message) ? 503
-      : /Unauthorized|Invalid session|Missing bearer|token/i.test(message) ? 401
-        : /admin|权限|Forbidden/i.test(message) ? 403 : 500;
+      : (explicit >= 400 && explicit < 600) ? explicit
+        : /Unauthorized|Invalid session|Missing bearer|token|未登录|登录|admin|管理员|权限|Forbidden|permission/i.test(message) ? 403 : 500;
     return json({ success: false, message }, status);
   }
 }
