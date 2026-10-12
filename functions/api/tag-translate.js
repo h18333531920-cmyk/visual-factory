@@ -79,6 +79,13 @@ export async function onRequest({ request, env }) {
     let translations = {};
     try {
       translations = await translateTagsWithGlm(env, missing);
+      // 模型批量翻译会稳定地漏 1–2 个词（实测 20 个也会漏）：只把漏掉的再问一次，
+      // 列表短、命中率高；两次都拿不到的留给人工在词表维护里补。
+      const leftover = missing.filter(term => !translations[term]);
+      if (leftover.length && leftover.length < missing.length) {
+        const second = await translateTagsWithGlm(env, leftover).catch(() => ({}));
+        Object.assign(translations, second);
+      }
     } catch (error) {
       const message = String(error && error.message || '翻译失败');
       const status = /未配置/.test(message) ? 503 : 502;

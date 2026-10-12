@@ -836,7 +836,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v874';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v875';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -14175,7 +14175,8 @@ function libraryTagsForForm(formData, kind) {
   const TAG_TRANSLATE_MAX_ATTEMPTS = 2;
   let tagVocabularyReady = null;
   let tagVocabularyPromise = null;
-  const tagVocabularyByName = new Map();
+  const tagVocabularyByName = new Map();   // 中文名 → 英文名（英文界面用）
+  const tagVocabularyByEn = new Map();     // 英文名（小写）→ 中文名（中文界面用：标签本身是英文时也能显示中文）
   const tagTranslateAttempts = new Map();
 
   function isMissingTagVocabularyError(error) {
@@ -14199,7 +14200,9 @@ function libraryTagsForForm(formData, kind) {
         (result.data || []).forEach(function (row) {
           const nameZh = String(row && row.name_zh || '').trim();
           const nameEn = String(row && row.name_en || '').trim();
-          if (nameZh && nameEn) tagVocabularyByName.set(nameZh, nameEn);
+          if (!nameZh || !nameEn) return;
+          tagVocabularyByName.set(nameZh, nameEn);
+          if (!tagVocabularyByEn.has(nameEn.toLowerCase())) tagVocabularyByEn.set(nameEn.toLowerCase(), nameZh);
         });
         return true;
       } catch (error) {
@@ -14267,16 +14270,18 @@ function libraryTagsForForm(formData, kind) {
     return added;
   }
 
-  // 英文界面下补齐英文名：先加载词表，再补翻库内还没英文名的词。首次渲染前调用，避免中文闪一下再变英文。
+  // 两种语言都要加载词表：中文界面也要能把「标签本身就是英文」的显示成中文。
+  // 英文界面额外把库内还没有英文名的词补翻一次；首次渲染前调用，避免中文闪一下再变英文。
   async function ensureTagTranslations() {
-    if (state.lang !== 'en') return 0;
     await loadTagVocabulary();
+    if (state.lang !== 'en') return 0;
     return translateMissingTagNames(collectTagLabelsInUse());
   }
 
   function libraryDisplayLabel(value) {
     const label = String(value || '');
-    if (state.lang === 'zh') return label;
+    if (!label) return label;
+    if (state.lang === 'zh') return tagVocabularyByEn.get(label.toLowerCase()) || label;
     return tagVocabularyByName.get(label) || LIBRARY_LABELS_EN[label] || label;
   }
 
@@ -18615,6 +18620,10 @@ function libraryTagsForForm(formData, kind) {
     languageToggleInProgress = true;
     state.lang = state.lang === 'zh' ? 'en' : 'zh';
     localStorage.setItem('vf_lang', state.lang);
+    // 切英文时补齐标签译名：已翻过的词立刻变英文；这次新翻出来的词回来后再重绘一次，省得手动刷新
+    void ensureTagTranslations().then(function (added) {
+      if (added > 0 && (state.route === 'library' || state.route === 'home')) refreshLibraryLoadedUi();
+    }).catch(function () {});
     refreshTranslations();
     renderNav();
     const activeRoute = ROUTES.find(route => route.id === state.route);
