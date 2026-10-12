@@ -447,6 +447,13 @@ html body .library-page:not(.library-page-home) .library-pin-strip::before {
 .tag-vocabulary-section .tv-merge-select { padding: 4px 6px; border: 1px solid #e2e8f0; border-radius: 7px; font-size: 12.5px; margin-right: 6px; max-width: 160px; }
 .tag-vocabulary-section .tv-empty { color: #94a3b8; padding: 14px 8px; }
 .tag-vocabulary-section .tv-message { margin-bottom: 10px; padding: 8px 10px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 12.5px; color: #475569; }
+.tag-vocabulary-section .tv-hint { margin: 10px 0 0; font-size: 11.5px; color: #94a3b8; line-height: 1.6; }
+.tag-vocabulary-section .tv-en-cell { position: relative; }
+.tag-vocabulary-section .tv-mark { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 10.5px; color: #94a3b8; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 999px; padding: 0 6px; pointer-events: none; }
+.tag-vocabulary-section .tv-alias-trigger { cursor: default; border-bottom: 1px dashed #cbd5e1; color: #475569; }
+.tag-vocabulary-section .tv-alias-trigger:hover { color: #0f172a; border-bottom-color: #94a3b8; }
+.tag-vocabulary-section .tv-btn.tv-danger { color: #b91c1c; border-color: #fecaca; }
+.tag-vocabulary-section .tv-btn.tv-danger:hover { background: #fef2f2; border-color: #fca5a5; }
 
 /* ── 团队管理页：物料清单（v707 起；v778 折叠层级：端 → 大类别 → 子类别尺寸）── */
 .material-catalog-section { margin-top: 18px; }
@@ -860,7 +867,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-tag-i18n-v878';
+const TOOL_UI_VERSION = '20261012-tag-i18n-v879';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -16116,7 +16123,6 @@ function libraryTagsForForm(formData, kind) {
   let tagVocabularyRows = null;
   let tagVocabularyMounting = false;
   let tagVocabularyQuery = '';
-  let tagVocabularyOnlyMissing = false;
   let tagVocabularyMergeId = '';
   let tagVocabularyMessage = '';
   const TAG_VOCABULARY_IGNORED = 'ignored';
@@ -16153,12 +16159,7 @@ function libraryTagsForForm(formData, kind) {
 
   function tagVocabularyVisibleRows() {
     const rows = Array.isArray(tagVocabularyRows) ? tagVocabularyRows : [];
-    return rows
-      .filter(function(row) {
-        if (!tagVocabularyOnlyMissing) return true;
-        return row.kind !== TAG_VOCABULARY_IGNORED && !String(row.name_en || '').trim();
-      })
-      .filter(function(row) { return tagVocabularyRowMatches(row, tagVocabularyQuery); });
+    return rows.filter(function(row) { return tagVocabularyRowMatches(row, tagVocabularyQuery); });
   }
 
   function tagVocabularyRowsHtml() {
@@ -16166,10 +16167,10 @@ function libraryTagsForForm(formData, kind) {
     const rows = Array.isArray(tagVocabularyRows) ? tagVocabularyRows : [];
     const visible = tagVocabularyVisibleRows();
     if (!rows.length) {
-      return '<tr><td colspan="5" class="tv-empty">' + (zh ? '还没有词。上传/识别过的标签会自动出现在这里。' : 'No terms yet.') + '</td></tr>';
+      return '<tr><td colspan="4" class="tv-empty">' + (zh ? '还没有词。上传/识别过的标签会自动出现在这里。' : 'No terms yet.') + '</td></tr>';
     }
     if (!visible.length) {
-      return '<tr><td colspan="5" class="tv-empty">' + (zh ? '没有匹配的词。' : 'No matching terms.') + '</td></tr>';
+      return '<tr><td colspan="4" class="tv-empty">' + (zh ? '没有匹配的词。' : 'No matching terms.') + '</td></tr>';
     }
     const others = rows.filter(function(row) { return row.kind !== TAG_VOCABULARY_IGNORED; });
     return visible.map(function(row) {
@@ -16178,21 +16179,25 @@ function libraryTagsForForm(formData, kind) {
       const mergeOpen = tagVocabularyMergeId === row.id;
       const mergeCell = mergeOpen
         ? '<select class="tv-merge-select" data-tv-merge-target="' + escapeAttr(row.id) + '">'
-            + '<option value="">' + (zh ? '选一个主词…' : 'Pick a main term…') + '</option>'
+            + '<option value="">' + (zh ? '并进哪个词…' : 'Merge into…') + '</option>'
             + others.filter(function(other) { return other.id !== row.id; }).map(function(other) {
                 return '<option value="' + escapeAttr(other.id) + '">' + escapeHtml(other.name_zh) + '</option>';
               }).join('')
           + '</select>'
           + '<button type="button" class="tv-btn" data-tv-merge-cancel="1">' + (zh ? '取消' : 'Cancel') + '</button>'
-        : '<button type="button" class="tv-btn" data-tv-merge="' + escapeAttr(row.id) + '">' + (zh ? '合并到…' : 'Merge into…') + '</button>';
+        : '';
       return '<tr class="' + (ignored ? 'is-ignored' : '') + '">'
         + '<td class="tv-zh">' + escapeHtml(row.name_zh) + '</td>'
-        + '<td><input class="tv-en" data-tv-en="' + escapeAttr(row.id) + '" value="' + escapeAttr(row.name_en || '') + '" placeholder="' + (zh ? '点这里填英文' : 'type English') + '"' + (ignored ? ' disabled' : '') + '></td>'
-        + '<td class="tv-alias">' + (aliases.length ? escapeHtml(aliases.join(' / ')) : '<span class="tv-dim">—</span>') + '</td>'
-        + '<td class="tv-src">' + (ignored ? (zh ? '已忽略' : 'ignored') : (row.source === 'manual' ? (zh ? '人工' : 'manual') : 'AI')) + '</td>'
+        + '<td class="tv-en-cell"><input class="tv-en" data-tv-en="' + escapeAttr(row.id) + '" value="' + escapeAttr(row.name_en || '') + '" placeholder="' + (zh ? '点这里填英文' : 'type English') + '"' + (ignored ? ' disabled' : '') + '>'
+          + (row.source === 'manual' ? '<span class="tv-mark">' + (zh ? '人工' : 'manual') + '</span>' : '')
+          + '</td>'
+        + '<td class="tv-alias"><span class="tv-alias-trigger" data-tv-alias="' + escapeAttr(row.id) + '" title="' + escapeAttr(zh ? '鼠标移上来查看 / 添加别名' : 'Hover to view / add aliases') + '">'
+          + (aliases.length ? (zh ? aliases.length + ' 个' : aliases.length + ' aliases') : '<span class="tv-dim">—</span>') + '</span></td>'
         + '<td class="tv-ops">' + mergeCell
-        + '<button type="button" class="tv-btn" data-tv-ignore="' + escapeAttr(row.id) + '" data-tv-ignored="' + (ignored ? '1' : '') + '">' + (ignored ? (zh ? '恢复' : 'Restore') : (zh ? '忽略' : 'Ignore')) + '</button></td>'
-        + '</tr>';
+          + '<button type="button" class="tv-btn" data-tv-merge="' + escapeAttr(row.id) + '" title="' + escapeAttr(zh ? '把这一行并到另一个词（名字进别名）' : 'Merge this row into another term') + '">' + (zh ? '并进…' : 'Merge…') + '</button>'
+          + '<button type="button" class="tv-btn" data-tv-ignore="' + escapeAttr(row.id) + '" data-tv-ignored="' + (ignored ? '1' : '') + '" title="' + escapeAttr(zh ? '只是不显示、不翻译，不等于删除' : 'Hide only, does not delete') + '">' + (ignored ? (zh ? '恢复为标签' : 'Restore') : (zh ? '不做标签' : 'Not a tag')) + '</button>'
+          + '<button type="button" class="tv-btn tv-danger" data-tv-delete="' + escapeAttr(row.id) + '">' + (zh ? '删除' : 'Delete') + '</button>'
+        + '</td></tr>';
     }).join('');
   }
 
@@ -16203,8 +16208,8 @@ function libraryTagsForForm(formData, kind) {
     return ''
       + '<div class="account-panel-head"><div><h3>' + (zh ? '标签词表' : 'Tag vocabulary') + '</h3>'
       + '<p class="tv-sub">' + (zh
-          ? '中文名 / 英文名 / 别名。英文名可由 AI 自动生成，也能手动改；改完即时生效。合并同义词能让搜索更宽容。'
-          : 'Chinese / English names and aliases. English names can be auto-generated or edited by hand; changes apply immediately.') + '</p></div>'
+          ? '中文名 / 英文名 / 别名。英文名可 AI 自动生成、也能手动改，改完即时生效；别名让不同叫法都能被搜到。'
+          : 'Chinese / English names and aliases. English names can be auto-generated or edited by hand; aliases make every wording searchable.') + '</p></div>'
       + '<div class="tv-actions">'
       + '<button type="button" class="tv-btn" data-tv-translate="1"' + (missing.length ? '' : ' disabled') + '>' + (zh ? ('补翻译' + (missing.length ? '（' + missing.length + '）' : '')) : ('Translate missing (' + missing.length + ')')) + '</button>'
       + '<button type="button" class="tv-btn" data-tv-refresh="1">' + (zh ? '刷新' : 'Refresh') + '</button>'
@@ -16213,22 +16218,24 @@ function libraryTagsForForm(formData, kind) {
       + (tagVocabularyMessage ? '<div class="tv-message">' + escapeHtml(tagVocabularyMessage) + '</div>' : '')
       + '<div class="tv-toolbar">'
       + '<input type="search" class="tv-search" id="tv-search" value="' + escapeAttr(tagVocabularyQuery) + '" placeholder="' + (zh ? '搜中文 / 英文 / 别名…' : 'Search Chinese / English / alias…') + '">'
-      + '<label class="tv-filter"><input type="checkbox" id="tv-only-missing"' + (tagVocabularyOnlyMissing ? ' checked' : '') + '> ' + (zh ? '只看未翻译' : 'Untranslated only') + '</label>'
-      + '<span class="tv-count">' + (zh ? ('共 ' + rows.length + ' 个 · 待补英文 ' + missing.length + ' 个') : (rows.length + ' terms · ' + missing.length + ' missing')) + '</span>'
+      + '<span class="tv-count">' + (zh ? ('共 ' + rows.length + ' 个' + (missing.length ? ' · 待补英文 ' + missing.length + ' 个' : '')) : (rows.length + ' terms' + (missing.length ? ' · ' + missing.length + ' missing' : ''))) + '</span>'
       + '</div>'
       + '<table class="tv-table"><thead><tr>'
       + '<th>' + (zh ? '中文名' : 'Chinese') + '</th>'
       + '<th>' + (zh ? '英文名（可直接改）' : 'English (editable)') + '</th>'
       + '<th>' + (zh ? '别名' : 'Aliases') + '</th>'
-      + '<th>' + (zh ? '来源' : 'Source') + '</th>'
       + '<th>' + (zh ? '操作' : 'Actions') + '</th>'
       + '</tr></thead><tbody id="tv-table-body">' + tagVocabularyRowsHtml() + '</tbody></table>'
+      + '<p class="tv-hint">' + (zh
+          ? '别名：鼠标移到「别名」格上可查看和添加（中英分开）。「不做标签」只是不显示、不翻译，不等于删除；「删除」才把这个词从词表移除。'
+          : 'Aliases: hover the cell to view/add (Chinese and English kept apart). "Not a tag" only hides it; "Delete" removes the term.') + '</p>'
       + '</div>';
   }
 
   function renderTagVocabularySection(section) {
     if (!section) return;
     section.innerHTML = tagVocabularyHtml();
+    wireTagVocabularySection(section);
   }
 
   function refreshTagVocabularyBody(section) {
@@ -16318,8 +16325,112 @@ function libraryTagsForForm(formData, kind) {
       }
     });
     section.addEventListener('input', function(event) {
-      if (event.target.id === 'tv-search') { tagVocabularyQuery = event.target.value || ''; rerenderBody(); return; }
-      if (event.target.id === 'tv-only-missing') { tagVocabularyOnlyMissing = !!event.target.checked; rerenderBody(); }
+      if (event.target.id === 'tv-search') { tagVocabularyQuery = event.target.value || ''; rerenderBody(); }
+    });
+
+    // ── 删除（与「不做标签」区分：这是真的从词表移除这一行）──
+    section.addEventListener('click', function(event) {
+      const deleteBtn = event.target.closest('[data-tv-delete]');
+      if (!deleteBtn) return;
+      const id = deleteBtn.getAttribute('data-tv-delete') || '';
+      const row = (tagVocabularyRows || []).find(function(item) { return item.id === id; });
+      if (!row) return;
+      if (!confirm(state.lang === 'zh'
+        ? ('从词表删除「' + row.name_zh + '」？\n已有物料上这个标签仍在，只是英文界面会退回显示原文。')
+        : ('Delete "' + row.name_zh + '" from the vocabulary?'))) return;
+      tagVocabularyMessage = '';
+      state.supabase.from(TAG_VOCABULARY_TABLE).delete().eq('id', id)
+        .then(function(result) { if (result.error) throw result.error; return reloadTagVocabulary(section); })
+        .catch(function(error) { tagVocabularyMessage = state.lang === 'zh' ? ('删除失败：' + (error.message || '').slice(0, 60)) : 'Delete failed.'; renderTagVocabularySection(section); });
+    });
+
+    // ── 别名浮窗：hover 打开，中英分组，可加可删 ──
+    let aliasPop = null;
+    let aliasPopRow = null;
+    const isCjkAlias = function(value) { return /[\u3400-\u9fff]/.test(String(value || '')); };
+    const closeAliasPop = function() {
+      if (aliasPop && aliasPop.parentNode) aliasPop.parentNode.removeChild(aliasPop);
+      aliasPop = null;
+      aliasPopRow = null;
+    };
+    const renderAliasPop = function(row) {
+      if (!aliasPop || !row) return;
+      const zhUi = state.lang === 'zh';
+      const aliases = Array.isArray(row.aliases) ? row.aliases : [];
+      const zhAliases = aliases.filter(isCjkAlias);
+      const enAliases = aliases.filter(function(value) { return !isCjkAlias(value); });
+      const chip = function(value) {
+        return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid #e2e8f0;border-radius:999px;font-size:12px;background:#f8fafc;">'
+          + escapeHtml(value)
+          + '<button type="button" data-tv-alias-remove="' + escapeAttr(value) + '" style="border:0;background:transparent;cursor:pointer;color:#94a3b8;font-size:13px;line-height:1;">×</button></span>';
+      };
+      const group = function(title, list) {
+        return '<div style="font-size:11.5px;color:#94a3b8;margin:0 0 4px;">' + escapeHtml(title) + '</div>'
+          + '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">'
+          + (list.length ? list.map(chip).join('') : '<span style="font-size:12px;color:#cbd5e1;">—</span>') + '</div>';
+      };
+      aliasPop.innerHTML = group(zhUi ? '中文别名' : 'Chinese aliases', zhAliases)
+        + group(zhUi ? '英文别名' : 'English aliases', enAliases)
+        + '<div style="display:flex;gap:6px;">'
+        + '<input type="text" class="tv-alias-input" placeholder="' + (zhUi ? '加别名（中/英都行）' : 'Add alias (zh/en)') + '" style="flex:1;padding:5px 8px;border:1px solid #e2e8f0;border-radius:7px;font-size:12.5px;">'
+        + '<button type="button" class="tv-btn" data-tv-alias-add="' + escapeAttr(row.id) + '">' + (zhUi ? '添加' : 'Add') + '</button>'
+        + '</div>';
+    };
+    const openAliasPop = function(trigger) {
+      const id = trigger.getAttribute('data-tv-alias') || '';
+      const row = (tagVocabularyRows || []).find(function(item) { return item.id === id; });
+      if (!row) return;
+      closeAliasPop();
+      aliasPop = document.createElement('div');
+      aliasPop.className = 'tv-alias-pop';
+      aliasPop.style.cssText = 'position:fixed;z-index:90;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 8px 24px rgba(15,23,42,.14);padding:10px 12px;min-width:250px;max-width:330px;';
+      aliasPopRow = row;
+      renderAliasPop(row);
+      document.body.appendChild(aliasPop);
+      const rect = trigger.getBoundingClientRect();
+      const top = Math.min(rect.bottom + 6, window.innerHeight - aliasPop.offsetHeight - 12);
+      const left = Math.min(rect.left, window.innerWidth - aliasPop.offsetWidth - 12);
+      aliasPop.style.top = Math.max(8, top) + 'px';
+      aliasPop.style.left = Math.max(8, left) + 'px';
+      aliasPop.addEventListener('mouseleave', closeAliasPop);
+      aliasPop.addEventListener('click', function(event) {
+        const row2 = aliasPopRow;
+        if (!row2) return;
+        const removeBtn = event.target.closest('[data-tv-alias-remove]');
+        if (removeBtn) {
+          const value = removeBtn.getAttribute('data-tv-alias-remove') || '';
+          const next = (Array.isArray(row2.aliases) ? row2.aliases : []).filter(function(item) { return item !== value; });
+          saveTagVocabularyPatch(row2.id, { aliases: next, source: 'manual' })
+            .then(function() { renderAliasPop(row2); refreshTagVocabularyBody(section); })
+            .catch(function(error) { tagVocabularyMessage = state.lang === 'zh' ? ('保存失败：' + (error.message || '').slice(0, 60)) : 'Save failed.'; });
+          return;
+        }
+        const addBtn = event.target.closest('[data-tv-alias-add]');
+        if (!addBtn) return;
+        const input = aliasPop.querySelector('.tv-alias-input');
+        const value = String((input && input.value) || '').trim();
+        if (!value) return;
+        const list = Array.isArray(row2.aliases) ? row2.aliases.slice() : [];
+        if (value !== row2.name_zh && list.indexOf(value) < 0) list.push(value);
+        saveTagVocabularyPatch(row2.id, { aliases: list.slice(0, 30), source: 'manual' })
+          .then(function() { if (input) input.value = ''; renderAliasPop(row2); refreshTagVocabularyBody(section); })
+          .catch(function(error) { tagVocabularyMessage = state.lang === 'zh' ? ('保存失败：' + (error.message || '').slice(0, 60)) : 'Save failed.'; });
+      });
+      aliasPop.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') { event.preventDefault(); const btn = aliasPop.querySelector('[data-tv-alias-add]'); if (btn) btn.click(); }
+      });
+    };
+    section.addEventListener('mouseover', function(event) {
+      const trigger = event.target.closest('[data-tv-alias]');
+      if (!trigger) return;
+      if (aliasPop && aliasPopRow && aliasPopRow.id === (trigger.getAttribute('data-tv-alias') || '')) return;
+      openAliasPop(trigger);
+    });
+    document.addEventListener('click', function(event) {
+      if (!aliasPop) return;
+      if (aliasPop.contains(event.target)) return;
+      if (event.target.closest('[data-tv-alias]')) return;
+      closeAliasPop();
     });
   }
 
