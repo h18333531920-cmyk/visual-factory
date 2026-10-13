@@ -232,8 +232,9 @@ test('v904 非案例项目照旧原样透传，不被铺开逻辑吞掉', () => 
 test('v904 点击卡片要把该卡的物料类型传给浮窗（两处点击都传）', () => {
   const clickCalls = source.match(/isCaseProjectCard\) \{ openCaseProjectModal\(/g) || [];
   assert.equal(clickCalls.length, 2, '网格点击 + 键盘 Enter 两处都要传');
-  const typed = source.match(/openCaseProjectModal\((\w+)\.source\.id, \1\.preview && \1\.preview\.material_type\)/g) || [];
-  assert.equal(typed.length, 2, '两处都必须带上该卡片的 preview.material_type');
+  // v910：除物料类型外还要带上「点的那一张」的 preview.id，浮窗大图才落在它身上
+  const typed = source.match(/openCaseProjectModal\((\w+)\.source\.id, \1\.preview && \1\.preview\.material_type, \1\.preview && \1\.preview\.id\)/g) || [];
+  assert.equal(typed.length, 2, '两处都必须带上该卡片的 preview.material_type + preview.id');
   assert.doesNotMatch(source, /openCaseProjectModal\(clickItem\.source\.id\);/, '旧的「不传类型」写法不许留着');
   assert.doesNotMatch(source, /openCaseProjectModal\(projItem\.source\.id\);/, '旧的「不传类型」写法不许留着');
 });

@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261013-material-type-filter-v909';
+const TOOL_UI_VERSION = '20261013-modal-focus-preview-v910';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -8079,7 +8079,12 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       tags.innerHTML = `<span class="case-project-fixed-tags-label">${state.lang === 'zh' ? '项目固定标签' : 'Project tags'}</span>${caseProjectFixedTagsHtml(source)}`;
     }
   }
-  function openCaseProjectModal(sourceId, focusType) {
+  // v910：点某张铺开卡时，浮窗大图要落在**点的那一张**上；只有它不属于本项目才退回类型组封面。
+  function caseModalInitialPreviewId(materials, fallbackId, focusPreviewId) {
+    if (focusPreviewId && materials.some(function(m) { return m.id === focusPreviewId; })) return focusPreviewId;
+    return fallbackId;
+  }
+  function openCaseProjectModal(sourceId, focusType, focusPreviewId) {
     const requestedSource = state.librarySources.find(s => s.id === sourceId);
     if (!requestedSource) return;
     const source = canonicalCaseProjectSource(requestedSource);
@@ -8191,7 +8196,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     backdrop.dataset.sourceId = source.id;
     document.body.append(backdrop);
     document.body.style.overflow = 'hidden';
-    let currentId = pick.cover.id;
+    let currentId = caseModalInitialPreviewId(materials, pick.cover.id, focusPreviewId);
     const current = () => materials.find(m => m.id === currentId) || materials[0];
     const renderStage = function(p) {
       const stage = backdrop.querySelector('#case-stage');
@@ -9452,7 +9457,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         if (!button) {
           var clickItem = libraryItemByPreviewId(card.dataset.previewId);
           if (clickItem && isBookmarkSource(clickItem.source)) { openLibraryBookmarkPopup(clickItem.source.id); return; }
-          if (clickItem && clickItem.isCaseProjectCard) { openCaseProjectModal(clickItem.source.id, clickItem.preview && clickItem.preview.material_type); void logAssetEvent('view', { source: clickItem.source }); return; }
+          if (clickItem && clickItem.isCaseProjectCard) { openCaseProjectModal(clickItem.source.id, clickItem.preview && clickItem.preview.material_type, clickItem.preview && clickItem.preview.id); void logAssetEvent('view', { source: clickItem.source }); return; }
           if (clickItem && libraryKindOfSource(clickItem.source) === 'template') return; // 模版单击不弹窗，双击打开
           selectLibraryItem(card.dataset.previewId);
           return;
@@ -9480,7 +9485,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
           return;
         }
         var projItem = libraryItemByPreviewId(card.dataset.previewId);
-        if (projItem && projItem.isCaseProjectCard) { openCaseProjectModal(projItem.source.id, projItem.preview && projItem.preview.material_type); void logAssetEvent('view', { source: projItem.source }); return; }
+        if (projItem && projItem.isCaseProjectCard) { openCaseProjectModal(projItem.source.id, projItem.preview && projItem.preview.material_type, projItem.preview && projItem.preview.id); void logAssetEvent('view', { source: projItem.source }); return; }
         selectLibraryItem(card.dataset.previewId);
       });
     });
