@@ -10,17 +10,22 @@ export function dataPlan(ctx, path, method, base, headers) {
   const parts=target.pathname.split('/').filter(Boolean);
   const rest=parts[0]==='rest'&&parts[1]==='v1'&&parts.length===3&&tables.has(parts[2]);
   // v901：「按站内标签重算词表」这一个 RPC 放行（前端词表页「同步库内标签」按钮用）。
-  // 只放这一个名字、只允许 POST、且必须维护权限；不带 body 改写（RPC 无参数）。
-  const syncRpc=parts[0]==='rest'&&parts[1]==='v1'&&parts[2]==='rpc'&&parts[3]==='vf_sync_tag_vocabulary'&&parts.length===4;
+  // v912：词表页要能「全库改名 / 删除标签」，所以再加 sql/027 提供的两个 RPC。
+  // 口径一律不变：**只放这几个名字、只允许 POST、必须维护权限**，别的 RPC 依旧 403。
+  const RPC_WHITELIST=new Set(['vf_sync_tag_vocabulary','vf_rename_tag','vf_delete_tag']);
+  const rpcName=parts[0]==='rest'&&parts[1]==='v1'&&parts[2]==='rpc'&&parts.length===4?parts[3]:'';
+  const rpc=RPC_WHITELIST.has(rpcName);
   const special=['sign','list','authenticated','public'].includes(parts[3]);
   const bucketIndex=special?4:3,bucket=parts[bucketIndex];
   const storage=parts[0]==='storage'&&parts[1]==='v1'&&parts[2]==='object'&&['vf-library','vf-projects'].includes(bucket);
-  if(!rest&&!storage&&!syncRpc)throw fail('请求路径无效',403);
+  if(!rest&&!storage&&!rpc)throw fail('请求路径无效',403);
   if(!['GET','HEAD','POST','PATCH','PUT','DELETE'].includes(method))throw fail('请求方法不支持',405);
-  if(syncRpc){
+  if(rpc){
     if(method!=='POST')throw fail('请求方法不支持',405);
     if(!ctx.maintenance)throw fail('此操作需要开发者维护权限',403);
-    return {target,rest:false,storage:false,syncRpc:true,parts,bucket:null,ownerColumn:null,jsonBody:false,read:false,uploadInsert:false,uploadTagPatch:false};
+    // jsonBody:false ⇒ body 原样透传（不改写、不吞掉）。vf_sync_tag_vocabulary 无参数，
+    // vf_rename_tag/vf_delete_tag **有参数**，参数就在这个 JSON body 里，必须原封不动送给 PostgREST。
+    return {target,rest:false,storage:false,rpc:true,rpcName,syncRpc:rpcName==='vf_sync_tag_vocabulary',parts,bucket:null,ownerColumn:null,jsonBody:false,read:false,uploadInsert:false,uploadTagPatch:false};
   }
   const profile=rest&&parts[2]==='vf_profiles';
   if(profile&&method!=='GET')throw fail('请使用账号管理面板',403);
@@ -58,6 +63,17 @@ export function dataPlan(ctx, path, method, base, headers) {
 }
 export function restrictDataBody(ctx,plan,value){
   if(!value||typeof value!=='object')throw fail('请求格式错误');
+  // v912：放行的 RPC（vf_sync_tag_vocabulary / vf_rename_tag / vf_delete_tag）参数原样透传 ——
+  // 改名的 p_old/p_new、删除的 p_name 都在这里，不能改写、更不能丢掉。
+  // 注：这些 plan 的 jsonBody=false（body 直接流式转发、根本不会走到这里），这一段是兜底：
+  // 万一以后把 jsonBody 打开，也只允许「键→短字符串」的参数形状。
+  if(plan.rpc){
+    if(Array.isArray(value))throw fail('请求格式错误');
+    for(const [key,item] of Object.entries(value)){
+      if(!key||typeof item!=='string'||item.length>200)throw fail('请求格式错误');
+    }
+    return value;
+  }
   if(plan.rest&&!ctx.maintenance&&plan.ownerColumn){
     const rows=Array.isArray(value)?value:[value];if(rows.length>100)throw fail('一次最多操作100条记录');
     const next=rows.map(row=>{if(!row||typeof row!=='object'||Array.isArray(row))throw fail('请求格式错误');return {...row,[plan.ownerColumn]:ctx.user.id,...(plan.parts[2]==='vf_asset_events'?{actor_role:'operator'}:{})};});

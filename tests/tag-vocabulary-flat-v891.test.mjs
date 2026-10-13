@@ -21,6 +21,9 @@ function loadVocabularyUi(rows, options = {}) {
     tagVocabularyMessage: options.message || '',
     tagVocabularySuggestingId: options.suggestingId || '',
     tagVocabularyRelatedReady: options.relatedReady !== false,
+    // v912：中文名可改 / 每行可删（维护权限 + sql/027 已执行）；options.canManage=false 时是只读态
+    tagVocabularyManageReady: options.manageReady === false ? false : null,
+    tagVocabularyCanManage: () => options.canManage !== false,
     TAG_VOCABULARY_IGNORED: 'ignored',
     TAG_VOCABULARY_RELATED_MAX: 8,
     TAG_TRANSLATE_MAX_CHARS: 20,
@@ -68,16 +71,16 @@ test('相关词输入：中英文逗号/顿号/分号都能分隔，去重、去
   assert.deepEqual(parse('1,2,3,4,5,6,7,8,9,10'), ['1', '2', '3', '4', '5', '6', '7', '8'], '最多 8 个');
 });
 
-test('词表区块整段能渲染：三列表头 + 顶部「补翻译 / 同步库内标签 / 刷新」', () => {
+test('词表区块整段能渲染：四列表头 + 顶部「补翻译 / 同步库内标签 / 刷新」（v912 加回操作列）', () => {
   const c = loadVocabularyUi([
     { id: 'el:甜点', name_zh: '甜点', name_en: 'Dessert', kind: 'element', source: 'manual', related: ['蛋挞'] }
   ]);
   const html = c.tagVocabularyHtml();
-  assert.equal((html.match(/<th>/g) || []).length, 3, 'v900：只剩三列（中文名 / 英文名 / 相关词）');
-  assert.match(html, /<th>中文名<\/th>/);
+  assert.equal((html.match(/<th[ >]/g) || []).length, 4, 'v912：中文名 / 英文名 / 相关词 / 操作');
+  assert.match(html, /<th>中文名（改名 = 全库改名）<\/th>/);
   assert.match(html, /<th>英文名（可直接改）<\/th>/);
   assert.match(html, /<th>相关词（逗号分隔）<\/th>/);
-  assert.doesNotMatch(html, /<th>操作<\/th>/, '删除按钮撤掉后操作列也去掉了');
+  assert.match(html, /<th class="tv-ops">操作<\/th>/, 'v912：操作列回来了（删除 = 从全库所有物料上摘掉）');
   assert.match(html, /data-tv-translate="1"/, '保留补翻译');
   assert.match(html, /data-tv-sync="1"/, 'v900：新增「同步库内标签」');
   assert.match(html, /data-tv-refresh="1"/, '保留刷新');
@@ -86,7 +89,7 @@ test('词表区块整段能渲染：三列表头 + 顶部「补翻译 / 同步�
   assert.doesNotMatch(html, /别名|上位词/, '别名/上位词字样不再出现在界面上');
 });
 
-test('词表是一张平表：中文名 | 英文名 | 相关词（没有删除按钮）', () => {
+test('词表是一张平表：中文名 | 英文名 | 相关词 | 操作', () => {
   const c = loadVocabularyUi([
     { id: 'el:甜点', name_zh: '甜点', name_en: 'Dessert', kind: 'element', source: 'manual', related: ['蛋挞', '蛋糕'] },
     { id: 'el:披萨', name_zh: '披萨', name_en: 'Pizza', kind: 'element', source: 'ai', related: [] }
@@ -94,10 +97,29 @@ test('词表是一张平表：中文名 | 英文名 | 相关词（没有删除�
   const html = c.tagVocabularyRowsHtml();
   assert.match(html, /data-tv-en="el:甜点"/);
   assert.match(html, /data-tv-related="el:甜点"/);
+  assert.match(html, /data-tv-zh="el:甜点" value="甜点"/, 'v912：中文名是输入框（改 = 全库改名）');
+  assert.match(html, /data-tv-delete="el:甜点"/, 'v912：删除按钮回来了（走 vf_delete_tag，从全库摘掉）');
+  assert.match(html, /class="tv-btn tv-danger"/, '删除是危险色');
   assert.match(html, /value="蛋挞，蛋糕"/, '相关词用中文逗号回填到输入框');
-  assert.doesNotMatch(html, /data-tv-delete/, 'v900：删除按钮撤掉（词表由数据库自动收全/清孤儿）');
   assert.doesNotMatch(html, /data-tv-collapse|data-tv-alias|↳|\bdepth\b/, '不再有折叠/缩进/别名');
   assert.equal((html.match(/<tr>/g) || []).length, 2, '一行一个词，不分组');
+});
+
+test('v912 没有维护权限（或 sql/027 没执行）：中文名是只读文本、删除按钮不显示', () => {
+  const c = loadVocabularyUi([
+    { id: 'el:甜点', name_zh: '甜点', name_en: 'Dessert', kind: 'element', source: 'manual', related: [] }
+  ], { canManage: false });
+  const html = c.tagVocabularyRowsHtml();
+  assert.doesNotMatch(html, /data-tv-zh=/, '只读态没有中文名输入框');
+  assert.match(html, /<span class="tv-zh-text">甜点<\/span>/, '只显示词本身');
+  assert.doesNotMatch(html, /data-tv-delete=/, '只读态没有删除按钮');
+  assert.match(html, /data-tv-en="el:甜点"/, '英文名那一列不受影响');
+});
+
+test('v912 sql/027 没执行：词表页挂一条中文降级提示', () => {
+  const c = loadVocabularyUi([{ id: 'el:甜点', name_zh: '甜点', name_en: '', kind: 'element' }], { manageReady: false });
+  assert.match(c.tagVocabularyHtml(), /改名 \/ 删除不可用：需要先在 Supabase 执行 sql\/027_tag_manage\.sql/);
+  assert.doesNotMatch(loadVocabularyUi([{ id: 'el:甜点', name_zh: '甜点' }]).tagVocabularyHtml(), /sql\/027_tag_manage/, '正常时不该出现这条提示');
 });
 
 test('词表里「不做标签」的行不进表；词表内搜索连相关词一起搜', () => {
@@ -166,17 +188,22 @@ test('界面残留清理：没有 AI 自动归类按钮、折叠分组、上位�
   assert.match(appSource, /saveTagVocabularyPatch\(row\.id, \{ related: merged, source: 'manual' \}\)/, 'AI 建议并进这一行后落库（函数留着备用）');
 });
 
-test('v899/v900 词表只剩「中文名 + 英文名 + 相关词」：新增/删除按钮都没了，靠数据库同步', () => {
+test('v899/v900/v912 词表只剩「中文名 + 英文名 + 相关词 + 操作」：没有新增词入口，标签管理走数据库函数', () => {
   assert.doesNotMatch(appSource, /data-tv-add/, '新增词入口已去掉');
   assert.doesNotMatch(appSource, /tv-add-zh|tv-add-en/, '新增词输入框已去掉');
   assert.doesNotMatch(appSource, /data-tv-suggest-related/, 'AI 建议按钮已从界面撤掉');
-  assert.doesNotMatch(appSource, /data-tv-delete/, 'v900：删除按钮也去掉');
-  assert.doesNotMatch(appSource, /从词表删除/, '手工删除的确认文案一并删掉');
+  // v912：删除按钮回来了，但语义变了 —— 必须走数据库函数（先摘全库物料、再删词表行），
+  // 不是 v899/v900 那种"只删词表一行"（那种会被 sql/025 自动收回来）
+  assert.match(appSource, /data-tv-delete/);
+  assert.match(appSource, /tagManageRpc\('vf_delete_tag', \{ p_name: name \}\)/);
+  assert.match(appSource, /从所有物料上摘掉/, '确认文案写清是"从物料上摘掉"');
+  assert.match(appSource, /tagManageRpc\('vf_rename_tag', \{ p_old: plan\.from, p_new: plan\.to \}\)/);
   assert.match(appSource, /placeholder="' \+ \(zh \? '相关词' : 'related'\) \+ '"/, '相关词列占位文案缩短');
-  // 代替删除按钮：数据库自动同步 + 一个手动同步入口
+  // 数据库自动同步 + 一个手动同步入口仍然在
   assert.match(appSource, /data-tv-sync="1"/);
   assert.match(appSource, /state\.supabase\.rpc\('vf_sync_tag_vocabulary'\)/);
   assert.match(appSource, /先在 Supabase 执行 sql\/025/, '失败提示里指路 sql/025');
+  assert.match(appSource, /需要先在 Supabase 执行 sql\/027_tag_manage\.sql/, 'v912 的失败提示里指路 sql/027');
 });
 
 test('v900 相关词在英文界面显示英文，存库仍写回库内中文标签', () => {

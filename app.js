@@ -437,8 +437,12 @@ html body .library-page:not(.library-page-home) .library-pin-strip::before {
 .tv-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .tv-table th, .tv-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 .tv-table th { color: #94a3b8; font-weight: 600; font-size: 11.5px; }
-.tv-table .tv-en, .tv-table .tv-related { padding: 5px 8px; border: 1px solid #e2e8f0; border-radius: 7px; font-size: 12.5px; width: 100%; }
-.tv-table .tv-en:focus, .tv-table .tv-related:focus { border-color: #94a3b8; outline: none; }
+.tv-table .tv-en, .tv-table .tv-related, .tv-table .tv-zh { padding: 5px 8px; border: 1px solid #e2e8f0; border-radius: 7px; font-size: 12.5px; width: 100%; }
+.tv-table .tv-en:focus, .tv-table .tv-related:focus, .tv-table .tv-zh:focus { border-color: #94a3b8; outline: none; }
+/* v912：中文名可改（改名 = 全库改名）。没维护权限 / sql/027 没执行时是只读态。 */
+.tv-table .tv-zh { min-width: 96px; }
+.tv-table .tv-zh[readonly] { background: #f8fafc; color: #94a3b8; border-color: transparent; cursor: default; }
+.tv-table .tv-zh[readonly]:focus { border-color: transparent; }
 .tv-table .tv-related-cell { display: flex; gap: 6px; align-items: center; }
 .tv-table .tv-related { flex: 1 1 160px; width: auto; }
 .tv-table .tv-related:disabled { background: #f8fafc; color: #cbd5e1; }
@@ -863,7 +867,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261013-modal-focus-preview-v910';
+const TOOL_UI_VERSION = '20261013-tag-manage-v912';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -14741,6 +14745,17 @@ function libraryTagsForForm(formData, kind) {
     return tagVocabularyPromise;
   }
 
+  // v912：词表改名/删除后，整表重读前先把旧索引清掉。
+  // 不清会留下"旧名字 → 旧英文名"的映射（loadTagVocabulary 只往里加、从不删），
+  // 素材卡片上就可能还按旧名字显示。清空后由 loadTagVocabulary() 重新灌满。
+  function resetTagVocabularyIndex() {
+    tagVocabularyPromise = null;
+    tagVocabularyByName.clear();
+    tagVocabularyByEn.clear();
+    tagVocabularyRowsByZh.clear();
+    tagVocabularyRelatedToZh.clear();
+  }
+
   // 当前库内实际用到的标签（去掉 vf: 内部标记），用于补翻译
   function collectTagLabelsInUse() {
     const out = [];
@@ -16632,17 +16647,55 @@ function libraryTagsForForm(formData, kind) {
     return !window.VFAccountAccess?.enabled || !!window.VFAccountAccess.maintenance();
   }
 
-  // ── 团队管理页：标签词表（v878；v891 起是一张平表）──
-  // 中文名 / 英文名 / 相关词。英文名管双语显示和"搜英文命中中文"；相关词管"搜大词带出小词"。
+  // ── 团队管理页：标签词表（v878；v891 起是一张平表；v912 起是标签的统一管理入口）──
+  // 中文名 / 英文名 / 相关词 / 操作。英文名管双语显示和"搜英文命中中文"；相关词管"搜大词带出小词"。
+  // v912：中文名可改、每行可删 —— 但改的删的都是**全库**（物料上的标签才是真身），
+  //       所以走数据库函数 vf_rename_tag / vf_delete_tag（sql/027），不是改词表那一行。
   // 数据在 vf_tag_vocabulary（sql/022 + sql/024）；改动直接写云端，即时生效。
   let tagVocabularyRows = null;
   let tagVocabularyMounting = false;
   let tagVocabularyQuery = '';
   let tagVocabularyMessage = '';
   let tagVocabularySuggestingId = '';   // 正在问 AI 相关词的那一行（防止重复点击）
+  // v912：sql/027 的改名/删除 RPC 可用吗。null = 还没试过；false = 不可用（中文名只读、隐藏删除按钮）
+  let tagVocabularyManageReady = null;
   const TAG_VOCABULARY_IGNORED = 'ignored';
   const TAG_VOCABULARY_RELATED_MAX = 8;                       // 一行最多 8 个相关词（再多会拖慢搜索）
   const TAG_VOCABULARY_RELATED_ENDPOINT = '/api/tag-vocabulary-related';
+
+  // 维护权限判定：与物料清单、「同步库内标签」同一页同一口径（不新造判定）
+  function tagVocabularyCanManage() {
+    return tagVocabularyManageReady !== false && materialCatalogCanEdit();
+  }
+
+  // 「sql/027 还没执行」以及"没放行 / 没权限"这几类错误要能认出来，好给中文降级提示、不崩
+  function isMissingTagManageFunctionError(error) {
+    const message = String(error && error.message || error || '');
+    return /schema cache|Could not find the function|does not exist|请求路径无效|permission denied|not authorized|不存在|权限/i.test(message);
+  }
+
+  function tagManageRpc(name, params) {
+    const rpc = state.supabase && state.supabase.rpc ? state.supabase.rpc(name, params) : null;
+    if (!rpc) return Promise.reject(new Error(state.lang === 'zh' ? '客户端不支持数据库函数调用。' : 'RPC unavailable.'));
+    return Promise.resolve(rpc).then(function(result) {
+      if (result && result.error) throw result.error;
+      return result ? result.data : null;
+    });
+  }
+
+  function tagManageSql027Hint() {
+    return state.lang === 'zh'
+      ? '需要先在 Supabase 执行 sql/027_tag_manage.sql（改名/删除标签的数据库函数在里面），再点「刷新」。'
+      : 'Run sql/027_tag_manage.sql in Supabase first, then hit Refresh.';
+  }
+
+  function tagManageErrorText(error, actionZh, actionEn) {
+    const raw = String(error && error.message || '').slice(0, 80);
+    if (isMissingTagManageFunctionError(error)) {
+      return state.lang === 'zh' ? (actionZh + '：' + tagManageSql027Hint()) : (actionEn + ': ' + tagManageSql027Hint());
+    }
+    return state.lang === 'zh' ? (actionZh + '：' + raw) : (actionEn + ': ' + raw);
+  }
 
   async function fetchTagVocabularyRows() {
     if (!state.supabase) return [];
@@ -16727,19 +16780,30 @@ function libraryTagsForForm(formData, kind) {
 
   function tagVocabularyRowsHtml() {
     const zh = state.lang === 'zh';
+    const editable = tagVocabularyCanManage();
     const all = tagVocabularyTableRows();
     const display = tagVocabularyVisibleRows();
     if (!all.length) {
-      return '<tr><td colspan="3" class="tv-empty">' + (zh ? '还没有词。上传/识别过的标签会自动出现在这里。' : 'No terms yet.') + '</td></tr>';
+      return '<tr><td colspan="4" class="tv-empty">' + (zh ? '还没有词。上传/识别过的标签会自动出现在这里。' : 'No terms yet.') + '</td></tr>';
     }
     if (!display.length) {
-      return '<tr><td colspan="3" class="tv-empty">' + (zh ? '没有匹配的词。' : 'No matching terms.') + '</td></tr>';
+      return '<tr><td colspan="4" class="tv-empty">' + (zh ? '没有匹配的词。' : 'No matching terms.') + '</td></tr>';
     }
     return display.map(function(row) {
       const related = Array.isArray(row.related) ? row.related : [];
       const relatedReady = tagVocabularyRelatedReady === true;
+      // v912：中文名可改（改名 = 全库改名，走 vf_rename_tag）；没维护权限 / sql/027 没执行时是只读文本
+      const zhCell = editable
+        ? '<input class="tv-zh" data-tv-zh="' + escapeAttr(row.id) + '" value="' + escapeAttr(row.name_zh) + '" title="'
+            + escapeAttr(zh ? '改这里 = 全库改名（所有挂了它的物料一起改），不可撤销' : 'Rename everywhere (every asset using it), cannot be undone') + '">'
+        : '<span class="tv-zh-text">' + escapeHtml(row.name_zh) + '</span>';
+      const opsCell = editable
+        ? '<button type="button" class="tv-btn tv-danger" data-tv-delete="' + escapeAttr(row.id) + '" title="'
+            + escapeAttr(zh ? '把这个词从所有物料上摘掉，并从词表移除' : 'Remove this tag from every asset and from the vocabulary') + '">'
+            + (zh ? '删除' : 'Remove') + '</button>'
+        : '';
       return '<tr>'
-        + '<td class="tv-zh">' + escapeHtml(row.name_zh) + '</td>'
+        + '<td class="tv-zh-cell">' + zhCell + '</td>'
         + '<td class="tv-en-cell"><input class="tv-en" data-tv-en="' + escapeAttr(row.id) + '" value="' + escapeAttr(row.name_en || '') + '" placeholder="' + (zh ? '点这里填英文' : 'type English') + '">'
           + (row.source === 'manual' ? '<span class="tv-mark">' + (zh ? '人工' : 'manual') + '</span>' : '')
           + '</td>'
@@ -16747,7 +16811,8 @@ function libraryTagsForForm(formData, kind) {
           + '<input class="tv-related" data-tv-related="' + escapeAttr(row.id) + '" value="' + escapeAttr(tagVocabularyRelatedDisplayText(related)) + '"'
             + (relatedReady ? '' : ' disabled') + ' placeholder="' + (zh ? '相关词' : 'related') + '"'
             + ' title="' + escapeAttr(zh ? '逗号分隔；搜中文名时这些词也算命中（零 AI，改完点一下别处即保存）' : 'Comma separated; searching this term also matches these words (saved when you click away)') + '">'
-        + '</td></tr>';
+        + '</td>'
+        + '<td class="tv-ops">' + opsCell + '</td></tr>';
     }).join('');
   }
 
@@ -16769,18 +16834,20 @@ function libraryTagsForForm(formData, kind) {
       + '<div class="tv-body">'
       + (tagVocabularyMessage ? '<div class="tv-message">' + escapeHtml(tagVocabularyMessage) + '</div>' : '')
       + (tagVocabularyRelatedReady === true ? '' : '<div class="tv-message">' + (zh ? '相关词这一列还读不到：请在 Supabase SQL Editor 执行 sql/024_tag_vocabulary_related.sql，再点「刷新」。' : 'Related words need sql/024_tag_vocabulary_related.sql; run it, then refresh.') + '</div>')
+      + (tagVocabularyManageReady === false ? '<div class="tv-message">' + (zh ? '改名 / 删除不可用：需要先在 Supabase 执行 sql/027_tag_manage.sql，再点「刷新」。' : 'Rename/remove needs sql/027_tag_manage.sql; run it, then refresh.') + '</div>' : '')
       + '<div class="tv-toolbar">'
       + '<input type="search" class="tv-search" id="tv-search" value="' + escapeAttr(tagVocabularyQuery) + '" placeholder="' + (zh ? '搜中文 / 英文 / 相关词…' : 'Search Chinese / English / related…') + '">'
       + '<span class="tv-count">' + (zh ? ('共 ' + termCount + ' 个' + (missing.length ? ' · 待补英文 ' + missing.length + ' 个' : '')) : (termCount + ' terms' + (missing.length ? ' · ' + missing.length + ' missing' : ''))) + '</span>'
       + '</div>'
       + '<table class="tv-table"><thead><tr>'
-      + '<th>' + (zh ? '中文名' : 'Chinese') + '</th>'
+      + '<th>' + (zh ? '中文名（改名 = 全库改名）' : 'Chinese (rename = everywhere)') + '</th>'
       + '<th>' + (zh ? '英文名（可直接改）' : 'English (editable)') + '</th>'
       + '<th>' + (zh ? '相关词（逗号分隔）' : 'Related (comma separated)') + '</th>'
+      + '<th class="tv-ops">' + (zh ? '操作' : 'Actions') + '</th>'
       + '</tr></thead><tbody id="tv-table-body">' + tagVocabularyRowsHtml() + '</tbody></table>'
       + '<p class="tv-hint">' + (zh
-          ? '这张表 = 站内正在用的标签，由数据库自动同步（sql/025：上传/识别出新标签立刻进表；物料删掉后没人用的标签自动移除）。你只需要维护两件事：英文名（管双语显示和「搜英文命中中文」）、相关词（搜这个词时这些词也算命中，例：给「甜点」填 蛋挞、蛋糕，逗号分隔最多 8 个，改完点一下别处即保存）。'
-          : 'This table mirrors the tags in use and is synced by the database (sql/025). You only maintain the English name (bilingual display + English search) and related words (comma separated, up to 8; saved when you click away).') + '</p>'
+          ? '这张表 = 站内正在用的标签，由数据库自动同步（sql/025：上传/识别出新标签立刻进表；物料删掉后没人用的标签自动移除）。你维护三件事：① 中文名（改 = 全库改名，所有挂了这个标签的物料一起改，不可撤销；新名字若已存在，两个标签会合并）② 英文名（管双语显示和「搜英文命中中文」）③ 相关词（搜这个词时这些词也算命中，例：给「甜点」填 蛋挞、蛋糕，逗号分隔最多 8 个）。每行「删除」= 把这个标签从所有物料上摘掉（物料和图片不会被删）并从词表移除，不可撤销。'
+          : 'This table mirrors the tags in use and is synced by the database (sql/025). You maintain three things: the Chinese name (renaming applies to every asset using the tag, and cannot be undone), the English name (bilingual display + English search) and related words (comma separated, up to 8). "Remove" takes the tag off every asset (assets and images are kept) and deletes it from the vocabulary.') + '</p>'
       + '</div>';
   }
 
@@ -16808,6 +16875,92 @@ function libraryTagsForForm(formData, kind) {
     if (result.error) throw result.error;
     const row = (tagVocabularyRows || []).find(function(item) { return item.id === id; });
     if (row) Object.assign(row, patch);
+  }
+
+  // v912：改名/删除落库之后，把"标签变了"这件事同步到三处显示 ——
+  // ① 词表本身重读重绘；② 双语显示/搜索的标签索引重读（不清会留着旧名字）；
+  // ③ 素材库数据重读（物料卡片上的标签显示跟着变）。
+  async function refreshAfterTagManage(section) {
+    resetTagVocabularyIndex();
+    await reloadTagVocabulary(section);
+    try { await loadTagVocabulary(); } catch (_e) { /* 索引重读失败不影响词表页 */ }
+    try { await reloadLibraryData(); } catch (_e) { /* 素材库重读失败不影响词表页 */ }
+  }
+
+  // v912：这次改名会做什么 —— 纯函数（只看传进来的东西），把"撞名就合并"的口径固定下来可测。
+  //   撞名 = 词表里已经有 name_zh 等于新名字的另一行 ⇒ 数据库里两个标签会合并成一行。
+  function tagVocabularyRenamePlan(rows, id, nextName) {
+    const list = Array.isArray(rows) ? rows : [];
+    const row = list.find(function(item) { return String(item && item.id) === String(id); });
+    const from = row ? String(row.name_zh || '') : '';
+    const to = String(nextName == null ? '' : nextName).trim().replace(/\s+/g, ' ');
+    if (!row || !to || to === from) return { ok: false, from: from, to: to, merge: false };
+    const merge = list.some(function(item) {
+      return String(item && item.id) !== String(id) && String(item && item.name_zh || '').trim() === to;
+    });
+    return { ok: true, from: from, to: to, merge: merge };
+  }
+
+  // v912 改名：词表上改中文名 = 全库改名（物料上的标签才是真身，只有数据库能一次改完）
+  function renameTagVocabulary(section, id, nextName) {
+    const zh = state.lang === 'zh';
+    const plan = tagVocabularyRenamePlan(tagVocabularyRows, id, nextName);
+    // 没改 / 清空 / 只差空格：还原这一行，不发请求
+    if (!plan.ok) { refreshTagVocabularyBody(section); return; }
+    const mergeNote = plan.merge
+      ? (zh ? ('词表里已经有「' + plan.to + '」这一行，确认后两个标签会合并成一行。\n\n') : ('"' + plan.to + '" already exists in the vocabulary; the two tags will be merged.\n\n'))
+      : '';
+    const ok = window.confirm(zh
+      ? ('把「' + plan.from + '」改名为「' + plan.to + '」？\n\n' + mergeNote + '全库所有挂了这个标签的物料都会一起改名，不可撤销。新名字若已存在，两个标签会合并。')
+      : ('Rename "' + plan.from + '" to "' + plan.to + '"?\n\n' + mergeNote + 'Every asset using this tag is renamed too. This cannot be undone. If the new name already exists, the two tags are merged.'));
+    if (!ok) { refreshTagVocabularyBody(section); return; }
+    tagVocabularyMessage = zh ? ('正在把「' + plan.from + '」改成「' + plan.to + '」…') : ('Renaming…');
+    refreshTagVocabularyBody(section);
+    tagManageRpc('vf_rename_tag', { p_old: plan.from, p_new: plan.to })
+      .then(function(data) {
+        tagVocabularyManageReady = true;
+        const counts = data && typeof data === 'object' ? data : {};
+        tagVocabularyMessage = zh
+          ? ('已改名：素材 ' + (counts.sources || 0) + ' 条 · 物料 ' + (counts.previews || 0) + ' 条 · 逐图标签 ' + ((counts.aiTags || 0) + (counts.manualTags || 0) + (counts.excludedTags || 0)) + ' 条'
+             + (counts.merged ? '（新名字已存在，两个标签已合并）' : '') + '。')
+          : ('Renamed: ' + (counts.sources || 0) + ' assets, ' + (counts.previews || 0) + ' previews, ' + ((counts.aiTags || 0) + (counts.manualTags || 0) + (counts.excludedTags || 0)) + ' tag rows.');
+        return refreshAfterTagManage(section);
+      })
+      .catch(function(error) {
+        // 函数不存在 / 没放行 → 记下来，中文名这一列转只读并挂提示；其它错误照原样显示
+        if (isMissingTagManageFunctionError(error)) tagVocabularyManageReady = false;
+        tagVocabularyMessage = tagManageErrorText(error, '改名失败', 'Rename failed');
+        return reloadTagVocabulary(section);
+      });
+  }
+
+  // v912 删除：从全库所有物料上摘掉这个标签（物料和图片都不删），并从词表移除
+  function deleteTagVocabulary(section, id) {
+    const zh = state.lang === 'zh';
+    const row = (tagVocabularyRows || []).find(function(item) { return String(item.id) === String(id); });
+    if (!row) return;
+    const name = String(row.name_zh || '');
+    if (!name) return;
+    const ok = window.confirm(zh
+      ? ('把"' + name + '"从所有物料上摘掉（物料和图片不会被删），并从词表移除。不可撤销。')
+      : ('Take "' + name + '" off every asset (assets and images are kept) and remove it from the vocabulary. This cannot be undone.'));
+    if (!ok) return;
+    tagVocabularyMessage = zh ? ('正在摘掉「' + name + '」…') : ('Removing…');
+    refreshTagVocabularyBody(section);
+    tagManageRpc('vf_delete_tag', { p_name: name })
+      .then(function(data) {
+        tagVocabularyManageReady = true;
+        const counts = data && typeof data === 'object' ? data : {};
+        tagVocabularyMessage = zh
+          ? ('已摘掉「' + name + '」：素材 ' + (counts.sources || 0) + ' 条 · 物料 ' + (counts.previews || 0) + ' 条 · 逐图标签 ' + ((counts.aiTags || 0) + (counts.manualTags || 0) + (counts.excludedTags || 0)) + ' 条（没有删除任何物料或图片）。')
+          : ('Removed "' + name + '": ' + (counts.sources || 0) + ' assets, ' + (counts.previews || 0) + ' previews. No assets or images were deleted.');
+        return refreshAfterTagManage(section);
+      })
+      .catch(function(error) {
+        if (isMissingTagManageFunctionError(error)) tagVocabularyManageReady = false;
+        tagVocabularyMessage = tagManageErrorText(error, '删除失败', 'Remove failed');
+        return reloadTagVocabulary(section);
+      });
   }
 
   // 「AI 建议相关词」：让 AI 从这个词的语义出发、从词表里挑一版相关词，并进这一行（不覆盖已填的）。
@@ -16872,7 +17025,12 @@ function libraryTagsForForm(formData, kind) {
     section.dataset.tvWired = '1';
     const rerenderBody = function() { refreshTagVocabularyBody(section); };
     section.addEventListener('click', function(event) {
-      if (event.target.closest('[data-tv-refresh]')) { reloadTagVocabulary(section); return; }
+      if (event.target.closest('[data-tv-refresh]')) {
+        // v912：手动刷新顺便重试一次"改名/删除能不能用"（执行完 sql/027 后点刷新即可恢复可编辑）
+        tagVocabularyManageReady = null;
+        reloadTagVocabulary(section);
+        return;
+      }
       // v900：手动触发一次「按站内标签重算词表」（数据库函数，sql/025 提供）
       if (event.target.closest('[data-tv-sync]')) {
         const zh = state.lang === 'zh';
@@ -16896,6 +17054,13 @@ function libraryTagsForForm(formData, kind) {
         });
         return;
       }
+      // v912：删一行 = 从全库所有物料上摘掉这个标签（物料和图片不删），只走数据库函数
+      if (event.target.closest('[data-tv-delete]')) {
+        const button = event.target.closest('[data-tv-delete]');
+        if (!tagVocabularyCanManage()) return;
+        deleteTagVocabulary(section, button.getAttribute('data-tv-delete') || '');
+        return;
+      }
       if (event.target.closest('[data-tv-translate]')) {
         const missing = (tagVocabularyRows || []).filter(function(row) { return row.kind !== TAG_VOCABULARY_IGNORED && !String(row.name_en || '').trim(); });
         const terms = missing.map(function(row) { return row.name_zh; }).slice(0, TAG_TRANSLATE_BATCH * 2);
@@ -16911,6 +17076,13 @@ function libraryTagsForForm(formData, kind) {
       }
     });
     section.addEventListener('change', function(event) {
+      // v912：中文名（改 = 全库改名，走 vf_rename_tag）。未保存成功前不许再点，避免连点两次改名
+      const zhInput = event.target.closest('[data-tv-zh]');
+      if (zhInput) {
+        if (!tagVocabularyCanManage()) { refreshTagVocabularyBody(section); return; }
+        renameTagVocabulary(section, zhInput.getAttribute('data-tv-zh') || '', zhInput.value);
+        return;
+      }
       const enInput = event.target.closest('[data-tv-en]');
       if (enInput) {
         const id = enInput.getAttribute('data-tv-en') || '';
@@ -16937,11 +17109,12 @@ function libraryTagsForForm(formData, kind) {
       if (event.target.id === 'tv-search') { tagVocabularyQuery = event.target.value || ''; rerenderBody(); }
     });
 
-    // ── v900：删除按钮已去掉 ──
-    // 词表由数据库按「站内正在用的标签」自动同步（sql/025）：某个标签连最后一条物料都没了，
-    // 它自己会被清掉；不再提供"手工删一行"的入口（那只会留下搜不到的死词条、或者让人误以为能删标签）。
+    // ── v912：删除按钮回来了，但语义变了 ──
+    // v900 去掉它是因为"只删词表一行"没有意义（物料上还挂着，sql/025 又会把词条收回来）。
+    // v912 走数据库函数 vf_delete_tag：**先从全库所有物料上摘掉**，再从词表移除，最后对齐一次 ——
+    // 这样删掉的词不会又被自动同步补回来（sql/027）。
 
-    // v899：「新增词」入口同样已去掉 —— 手工新增的词不会成为任何物料的标签（搜不到），
+    // v899：「新增词」入口仍然没有 —— 手工新增的词不会成为任何物料的标签（搜不到），
     // 只会让 AI 候选池混入虚词。词表由 sql/025 自动收全。
   }
 
