@@ -67,9 +67,12 @@ for each statement execute function public.vf_sync_tag_vocabulary_trigger();
 -- ── 3) 立刻对齐一次 + 自检 ───────────────────────────────────────────
 select public.vf_sync_tag_vocabulary();
 
--- 自检：应当看到 9 条 vf_tag_sync_* 触发器（每张表 3 条：_ins/_upd/_del）
+-- 自检：应当看到 9 条 vf_tag_sync_* 触发器（每张表 3 条：_ins/_upd/_del，
+--       _ins/_del 应为 STATEMENT、_upd 应为 ROW）
+-- ⚠️ 粒度判定要用 tgtype 的 bit0（TRIGGER_TYPE_ROW = 1）；**不能用 bit2**（那个是 INSERT 事件位）。
+--    2026-10-13 首版这里误写成 `& 4`，于是 _del 被显示成 ROW（触发器本身没错，只是这列标签错）。
 select c.relname as 表, t.tgname as 触发器,
-       case when (t.tgtype::int & 4) = 4 then 'STATEMENT' else 'ROW' end as 粒度
+       case when (t.tgtype::int & 1) = 1 then 'ROW' else 'STATEMENT' end as 粒度
 from pg_trigger t
 join pg_class c on c.oid = t.tgrelid
 where t.tgname like 'vf_tag_sync_%'

@@ -1382,6 +1382,30 @@ export function elementTagApiKey(env) {
   return env.GLM_API_KEY || env.ZHIPU_API_KEY || '';
 }
 
+// 2026-10-13（v907）：识别结果的**确定性噪音黑名单**。
+// 起因：抽检实验项目 28 行实测发现，提示词早就写了「不要文字、不要颜色」，但模型在**几乎没有实体**的
+// 图上（会场楼层长条、腰封、纯色横幅）仍会吐「文字 / 数字3 / 阿拉伯文 / 绿色横幅 / 绿色背景 / 3KD券」
+// 这类**版式信息**。它们不是素材元素，搜出来只会误导人。
+// 所以除了收紧提示词，这里再加一道代码兜底：命中就丢，不依赖模型听话，并且能被测试锁住。
+export const ELEMENT_TAG_NOISE_WORDS = new Set([
+  '文字', '文字内容', '文本', '文案', '标题', '标语', '口号', '价格', '金额', '折扣', '数字', '水印',
+  '阿拉伯文', '阿文', '阿拉伯语', '英文', '中文', '语言',
+  '品牌', '标志', 'logo',
+  '背景', '纯色', '色块', '底色', '底纹', '背景图', '横幅', '图形', '形状'
+]);
+const ELEMENT_TAG_NOISE_PATTERNS = [
+  /^数字\d*$/,                                                                              // 数字 / 数字3
+  /^(红|橙|黄|绿|青|蓝|紫|粉|黑|白|灰|棕|金|银)色?$/,                                           // 绿色 / 红
+  /^(红|橙|黄|绿|青|蓝|紫|粉|黑|白|灰|棕|金|银)色?(背景|横幅|底色|底纹|色块|底图|背景图)$/,           // 绿色背景
+  /^\d{1,4}[A-Za-z]{0,3}(券|卡|币|元)$/                                                      // 3KD券 / 100元
+];
+export function isNoiseElementTag(word) {
+  const value = String(word == null ? '' : word).trim();
+  if (!value) return true;
+  if (ELEMENT_TAG_NOISE_WORDS.has(value) || ELEMENT_TAG_NOISE_WORDS.has(value.toLowerCase())) return true;
+  return ELEMENT_TAG_NOISE_PATTERNS.some(pattern => pattern.test(value));
+}
+
 // 模型输出容忍度：可能有代码块、前后解释、数组而不是对象、甚至纯文本列表
 export function parseElementSuggestions(text, vocabulary = []) {
   const raw = String(text || '');
@@ -1440,6 +1464,7 @@ export function parseElementSuggestions(text, vocabulary = []) {
     if (!word || word.length > ELEMENT_TAG_MAX_CHARS) continue; // 词条上限 5 字
     const exact = byCompact.get(compact(word));
     const finalWord = exact || containedIn(word) || word;
+    if (isNoiseElementTag(finalWord)) continue;   // v907：版式/文字类噪音（文字、阿拉伯文、数字3、绿色背景…）直接丢
     if (seen.has(finalWord)) continue;
     seen.add(finalWord);
     out.push(finalWord);
@@ -1477,7 +1502,8 @@ export async function analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, activ
     words.includes('kiki') ? '如果画面中的老虎角色是 Keeta 的黄色品牌吉祥物，必须标为 kiki，不要写卡通老虎、老虎吉祥物或黄色老虎；普通真实老虎仍标为老虎。' : '',
     words.length ? `优先使用这份现有词表的写法（命中就必须原样使用）：${words.join('、')}。` : '',
     activities.length ? `同时推断这张物料的核心活动主题：从画面内容和文字信息（节日祝福语、活动名等）自由归纳一个词，2-8 个字，例如：开学、世界杯、夏日、开斋节、宰牲节、聚餐、新年、国庆节、游戏、生日、万圣节、圣诞、情人节等，不限于以上例子；主题词要简短通用。画面和文字都推不出主题时才返回空字符串。` : '',
-    `每条 1-${ELEMENT_TAG_MAX_CHARS} 个汉字，按「主体优先、再补场景与次要物体」尽量列满，最多 ${ELEMENT_TAG_MAX_COUNT} 条；不要颜色、风格、形容词，不要解释、不要重复。`,
+    '画面里没有可辨认的实体时（整张只有文字/色块/图形/纯背景/版式装饰），elements 必须返回空数组，宁可为空也不要凑数。',
+    `每条 1-${ELEMENT_TAG_MAX_CHARS} 个汉字，按「主体优先、再补场景与次要物体」尽量列满，最多 ${ELEMENT_TAG_MAX_COUNT} 条；不要颜色、风格、形容词，不要解释、不要重复；也不要把「文字」「阿拉伯文」「数字3」「绿色背景」「横幅」这类版式/文字类词当作元素。`,
     '只输出 JSON，不要代码块：{"elements":["汉堡","餐桌"],"activity":"聚餐"}'
   ].filter(Boolean);
   const data = await postJson(GLM_VISION_URL, {
@@ -1548,7 +1574,8 @@ export async function analyzeCaseTagGroupsWithGlm(env, images, vocabulary, activ
     words.includes('kiki') ? '如果画面中的老虎角色是 Keeta 的黄色品牌吉祥物，必须标为 kiki，不要写卡通老虎、老虎吉祥物或黄色老虎；普通真实老虎仍标为老虎。' : '',
     words.length ? `优先使用这份现有词表的写法（命中就必须原样使用）：${words.join('、')}。` : '',
     activities.length ? `同时推断这组物料的核心活动主题：从画面内容和文字信息（节日祝福语、活动名等）自由归纳一个词，2-8 个字，例如：开学、世界杯、夏日、开斋节、宰牲节、聚餐、新年、国庆节、游戏、生日、万圣节、圣诞、情人节等，不限于以上例子；主题词要简短通用。画面和文字都推不出主题时才返回空字符串。` : '',
-    `每条 1-${ELEMENT_TAG_MAX_CHARS} 个汉字，按「主体优先、再补场景与次要物体」尽量列满，最多 ${ELEMENT_TAG_MAX_COUNT} 条；不要颜色、风格、形容词，不要解释、不要重复。`,
+    '画面里没有可辨认的实体时（整张只有文字/色块/图形/纯背景/版式装饰），elements 必须返回空数组，宁可为空也不要凑数。',
+    `每条 1-${ELEMENT_TAG_MAX_CHARS} 个汉字，按「主体优先、再补场景与次要物体」尽量列满，最多 ${ELEMENT_TAG_MAX_COUNT} 条；不要颜色、风格、形容词，不要解释、不要重复；也不要把「文字」「阿拉伯文」「数字3」「绿色背景」「横幅」这类版式/文字类词当作元素。`,
     '只输出 JSON，不要代码块：{"sameDesign":true,"elements":["餐桌","牛排"],"activity":"聚餐"}'
   ].filter(Boolean);
   const content = list.map(item => ({ type: 'image_url', image_url: { url: String(item.url) } }));
