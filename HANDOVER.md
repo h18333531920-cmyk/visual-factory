@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261013-tag-noise-v907`（**识别噪音黑名单**：文字/颜色/数字类版式词不再进标签，提示词加「没有实体就返回空数组」；沿用 v906 的**按组识别**+**按组占位**）；部署 `c326f698`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261013-write-scope-v908`（**写入范围全开**：逐图 AI 标签/「一键识别」对**所有案例项目**可用，元素筛选 chips 也吃逐图标签；往上叠 v907 的**识别噪音黑名单**、v906 的**按组识别**+**按组占位**）；部署 `22ae9214`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
-| 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`7c75477`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-13 |
-| 自动化测试 | `node --test tests/` → **467/467 通过**（v907 噪音黑名单 6 条；v906 组识别 30 条 + 2026-10-13 本机批量识别脚本 16 条） | 实测 2026-10-13 |
+| 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`2aba1c4`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-13 |
+| 自动化测试 | `node --test tests/` → **480/480 通过**（v908 写入范围/筛选 13 条；v907 噪音黑名单 6 条；v906 组识别 30 条 + 2026-10-13 本机批量识别脚本 16 条） | 实测 2026-10-13 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表四件 `sql/022` / `023` / `024` / **`025`** 均**已执行**；**`sql/026_tag_vocabulary_trigger_tuning.sql` 也已执行**（2026-10-13，自检返回 9 条 `vf_tag_sync_*` 触发器：`_ins`/`_del` = STATEMENT、`_upd` = ROW ⇒ 状态写不再触发词表全量重算） | 实测 2026-10-13 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -547,6 +547,13 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
     - 测试 **467/467**（新增 `tests/case-tag-noise-v907.test.mjs` 6 条；`tests/tag-vocabulary-i18n.test.mjs` 的版本号断言随 v907）。
     - 🚧 **没做/没验**：① 存量 28 行的噪音标签**不会自动清**（要重跑那 28 张才生效，属"写库"动作）；② 「窄条横幅（宽高比 > 6:1，如 6250×437）直接跳过识别」这轮没做；③ 「同款多语言版标签漂移」仍只靠 v906 的按组识别缓解，**配对口径本身还 park 着**。
     - **抽检的另外两条结论（未修，供下一步参考）**：**同款多语言版各识别一次 ⇒ 标签漂移**（`05-EN` 有「咖啡杯」没「卷饼」、`05-AR` 有「三明治」没「咖啡杯」；「画板 1」四版四套标签，`牛排`/`烤肉` 各说各话 —— 这正是用户「搜牛排出英文版、搜烤肉出阿语版」的根因）；**缩略图在实验项目 28 张里 6/6 全缺**，脚本会退回原图（更慢更贵）。
+  - **✅ v908（2026-10-13，已发测试站，部署 `22ae9214`）—— 步 2：写入范围全开 + 元素筛选吃逐图标签**。这是正本里挂了很久的「步 2」。
+    - **写入范围**：`app.js` 的 `casePreviewAiEnabledFor(source)` 从 `isCasePreviewAiExperimentSource(source)` 改成 **`isCaseProject(source)`** —— 一处门禁同时放开了「一键识别」按钮、逐图 AI 标签面板、以及面板里的采纳/排除/撤销。服务端 `functions/api/case-preview-ai-tags.js` 的 `previewFor()` **删掉 `source_file_id=eq.<实验项目>` 那道锁**，改成只按请求里带的 `preview_id` 查、且**必须唯一命中一行**（查不到/查出多条 → 404，不写库）；请求体里塞 `source_file_id` / `experiment_key` 一律不认（服务端自己定）。
+    - **`EXPERIMENT_KEY = 'augpicks-v1'` 一字未改**：已有 28 行挂在这个 key 下，改名就读不到；新项目的行也写这里，它现在只是个分区名。
+    - **元素筛选吃逐图标签**：`librarySourceMatchesFilterValue()` 在 `dim === 'element'` 时，除项目级 `visibleLibraryTags` 外，再匹配 `caseProjectElementTagsFor(source)`（与搜索用的 `caseProjectElementTags` 同一份「全项目物料逐图标签」）。**其它维度、非案例项目、空值、未选中筛选时行为逐字不变。** 结果按 `source.id` 缓存，物料/逐图标签行有变动时整表失效，只有「选中了元素 chip」的路径才会算。
+    - 测试 **480/480**：新增 `tests/case-ai-write-scope-v908.test.mjs`（7 条）+ `tests/element-filter-preview-tags-v908.test.mjs`（6 条）；`tests/case-preview-ai-experiment-v870.test.mjs` 的门禁断言随步 2 更新。
+    - ⚠️ **边界（前三条有意为之，第四条要注意）**：① **服务端去锁后边界变宽** —— 任何管理员只要知道一个 `preview_id` 就能给它写标签，即使那张属于图库单图素材（前端不显示入口）；要收紧得在服务端再查一次 `vf_source_files` 判定"是不是案例项目物料"，**本轮没加**。② 筛选 chip 的**候选列表没动**，仍只有 `FILTER_SECTIONS_CONFIG.element.values` 那 8 个静态词（银行卡/券/kiki/骑手/国旗/手机/耳机/PS5）—— 逐图识别出的**新词**（如「餐桌」）目前没有 chip 可点、只能靠搜索框；本轮修的是"选中已有 chip 却匹配不到"这一半，**要不要把库内出现过的元素变成动态 chip 等用户定**。③ 性能只做了结构性验证（缓存命中/失效有测试锁），**"全量识别后元素筛选首屏重算耗时"没在浏览器里量过**。④ `isCasePreviewAiExperimentSource()` 与 `CASE_PREVIEW_AI_EXPERIMENT_*` 常量前端已无调用点（只被测试当历史锚点），保留未删。
+    - 🚧 **还没验**：非实验项目上真机点一次「一键识别」的端到端（本轮只做到"假 Supabase 跑真实 handler"级别）。
   - **🚧 用户 2026-10-13 追加的核心痛点：同款的英/阿版本在结果里重复占位**（搜「牛排」出英文版那张、搜「烤肉」出**同一设计的**阿语版那张；根因是逐图各识别一次，同款两版的标签不一致）。规划稿早有对应章节：**§3 设计分组**（分组证据与防连锁误合并）+ **§5 逐图识别如何支持语言版本去重**。
     - **口径（按规划稿，不要改成"硬统一标签"）**：① **结果按"设计组"占位** —— 同款多语言版在结果里只占一个位置（默认展示有证据的 EN 版），组内可展开看其他版本；② **证据分层** —— 其他版本标"同组待核验"，人工确认后才进直接命中。规划稿 §5 明确「**不能让已完成的 EN 标签自动替代失败的 AR 结果**」；硬复制标签会造成假命中（搜烤肉结果里那张其实是牛排版）。
     - **配对证据（按可靠性）**：`vf_asset_previews.language`（en/ar/none/空，AI 识别或手改，空则按文件名兜底）互补 + 同项目 + 同 `material_type`/同尺寸 + 文件名结构（**编号必须保留**，规划稿禁止"删掉数字强行合并"）+ **画面相似度**（要用算法如感知哈希，规划稿明说"模型说很相似不能当可靠概率"）；AI 只作疑难项兜底。防连锁误合并：新成员要跟**组内整体**比（A像B、B像C ≠ A像C）。
