@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {handleCasePreviewAiTags} from '../functions/api/case-preview-ai-tags.js';
 
 const appSource = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const serverSource = readFileSync(new URL('../functions/api/case-preview-ai-tags.js', import.meta.url), 'utf8');
 const sql = readFileSync(new URL('../sql/021_preview_ai_tags_experiment.sql', import.meta.url), 'utf8');
 const sourceId = 'bfa82ce5-fca0-403b-8f7e-c6b6eafaf4c5';
 const previewId = '11111111-1111-4111-8111-111111111111';
@@ -106,8 +107,28 @@ test('服务端：不能给实验项目以外的物料写标签',async t=>{
   assert.equal(response.status,404);assert.equal(mock.writes.length,0);
 });
 
-test('前端：仅实验项目显示一键识别、固定标签顶部、当前图片标签底部',()=>{
+test('服务端：写入分区键锁死 augpicks-v1（改名 = 现有 28 行读不到）',()=>{
+  assert.match(serverSource,/const EXPERIMENT_KEY = 'augpicks-v1';/);
+  assert.match(serverSource,/EXPERIMENT_KEY 现在只是分区名/,'要留注释说明它只是分区名，新项目的行也写这里');
+  assert.match(serverSource,/新项目的行也写这里/);
+});
+
+// 注意（v903 步1）：**读**已经对全部案例项目开放（`loadAllPreviewAiTags()` + `caseProjectElementTags()`），
+// 但**写**（一键识别、逐图标签面板里的采纳/排除）仍只放开实验项目——服务端 `previewFor()` 锁着实验来源，
+// 放开属于步 2（写共享库，需用户当次授权）。所以面板仍按"可写"开关，避免点了逐张 404。
+test('前端：读全部项目、写仍只放开实验项目（v903 步1）',()=>{
   assert.match(appSource,/CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID = 'bfa82ce5-fca0-403b-8f7e-c6b6eafaf4c5'/);
+  // 门禁函数：现在明确分成「读写是否放开」，写这一侧仍是实验项目
+  assert.match(appSource,/function isCasePreviewAiExperimentSource\(source\) \{/);
+  assert.match(appSource,/function casePreviewAiEnabledFor\(source\) \{\s*\n\s*return isCasePreviewAiExperimentSource\(source\);/);
+  assert.match(appSource,/if \(!casePreviewAiEnabledFor\(source\)\) return;/,'一键识别的门禁仍按可写范围');
+  assert.match(appSource,/const previewAiEnabled = casePreviewAiEnabledFor\(source\);/);
+  // 读数据不再认实验项目：启动读全表、单项目读只按 source_file_id、全库不按 experiment_key 过滤
+  assert.match(appSource,/loadAllPreviewAiTags\(\)/);
+  assert.match(appSource,/async function loadAllPreviewAiTags\(\) \{/);
+  assert.match(appSource,/async function loadPreviewAiTagsForSource\(sourceId\) \{\s*\n\s*if \(!state\.supabase \|\| !sourceId\) return \[\];/);
+  assert.doesNotMatch(appSource,/\.eq\('experiment_key'/,'前端读库不再按 experiment_key 过滤');
+  assert.match(appSource,/state\.previewAiTagsByPreviewId\.set\(row\.preview_id, row\)/);
   assert.match(appSource,/id="case-ai-recognize-all"/);
   assert.match(appSource,/case-project-fixed-tags/);
   assert.match(appSource,/id="case-preview-ai-panel"/);

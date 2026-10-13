@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-elem-vocab-first-v902`（元素识别优先用库内现有标签；词表匹配不区分大小写）；部署 `2cccc886-fe91-4154-819a-852d285245f6`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261013-case-tags-wide-v903`（逐图标签读全库 + 项目卡搜索聚合所有物料标签）；部署 `7de9e92d-788f-4d86-97f3-d794e4cee7fb`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
 | 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`b511c3f`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-13 |
-| 自动化测试 | `node --test tests/` → **399/399 通过** | 实测 2026-10-13 |
+| 自动化测试 | `node --test tests/` → **404/404 通过** | 实测 2026-10-13 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在）；**`sql/025_tag_vocabulary_auto_sync.sql` 已由用户执行**（2026-10-13，SQL Editor 跑完无报错、结果面板 `1 row` = 末尾那句 `select vf_sync_tag_vocabulary()` 跑通） | 实测 2026-10-13 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -498,10 +498,11 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
   3. **词表/中英这一层已经打通**：`sql/025` 之后标签由数据库自动收全（含逐图 AI 标签），英文名靠「补翻译」或页面加载时后台补；新标签进词表后双语显示和"搜英文命中中文"自动生效。⇒ 中英适配基本是"跑一次批量补翻"，不是从零做。
   另外两条约束：**识别是写共享库**（`vf_preview_ai_tags`，真实数据）⇒ 需用户当次授权；**必须分批 + 可断点续跑 + 失败重试 + 限流**（规划稿 §6/§13 已列，项目也踩过"AI 一次喂太多会挂"的坑）。
   **建议的切法（不是现在做，是记住顺序）**：
-  - 先量规模：一条只读 SQL 数出 99 个项目共多少张预览图、其中多少张已经有逐图标签 → 决定"全量重跑"还是"只补没跑的"、以及预算。
-  - 第 1 步（不依赖识别）：**搜索聚合**（项目卡吃全项目逐图标签）+ **展示**（物料网格/浮窗显示逐图标签）+ 数据模型泛化，用现有那 1 个实验项目的数据就能验证。
-  - 第 2 步：挑 1 个非实验项目做全量识别闭环（验证质量/耗时/失败重试），再分批铺开。
-  - 第 3 步：覆盖够高之后再谈规划稿里的"设计分组/分层次搜索"（那是另一大块，见规划稿 §11 阶段 2–4）。
+  - **规模已实测（2026-10-13 用户跑只读 SQL）**：案例项目 **99** 个、案例库图片 **1953** 张、`vf_preview_ai_tags` 已有 **28** 行（全在实验项目、`experiment_key` 只有 `augpicks-v1` 一种）、预览图总数 2165。⇒ 要铺满需再识别 **1925** 张，量级是**小时级**（不是天级）。
+  - **✅ 步 1 已落地（v903）**：① **读**全部项目的逐图标签 —— 新增 `loadAllPreviewAiTags()`（`vf_preview_ai_tags` 全表、1000 行/页 `.range()` 分页、硬上限 20 页=2 万行、**不带 experiment_key 过滤**，`manual_tags` 列缺失与表不可用两条降级原样保留），启动时替换掉原来"只读实验项目"的调用；`loadPreviewAiTagsForSource()` 也去掉实验项目早退。② **搜索聚合** —— 新增 `caseProjectElementTags(materials)`，`libraryItemSearchText()` 里案例项目改成吃**整理项目所有物料**的逐图标签（单图素材仍只看自己那张）。③ **写入仍只放开实验项目**：`casePreviewAiEnabledFor(source)` 目前 = `isCasePreviewAiExperimentSource(source)`，服务端 `previewFor()` 也锁着实验来源 ⇒ 非实验项目**不显示**「一键识别」与逐图面板（否则点了逐张 404）。
+  - **步 2（下一轮，需用户授权）**：放开写入范围 —— 去掉 `functions/api/case-preview-ai-tags.js` 里 `previewFor()` 的 `source_file_id=eq.EXPERIMENT_SOURCE_ID`，并把 `casePreviewAiEnabledFor` 换成 `isCaseProject(source)`。**`EXPERIMENT_KEY = 'augpicks-v1'` 不许改**（现有 28 行挂在这个 key 下，改名就读不到）。
+  - **还没通的两处（步 2 之后/并行）**：① **元素筛选维度**没吃逐图标签 —— `librarySourceMatchesFilterValue()` 只查项目级 `visibleLibraryTags`，所以"搜索框能搜到、元素筛选 chips 搜不到"；② `collectTagLabelsInUse()` 现在会收全部项目的逐图标签 ⇒ 英文界面首屏补翻的候选词变多（1953 张量级，上线后留意首屏耗时）。
+  - **步 2 之后**：分批铺开识别（每批几十张，跑完抽查）→ 覆盖够了再谈规划稿里的"设计分组/分层次搜索"（阶段 2–4）。
 
 ---
 

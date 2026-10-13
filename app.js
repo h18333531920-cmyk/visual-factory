@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-elem-vocab-first-v902';
+const TOOL_UI_VERSION = '20261013-case-tags-wide-v903';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3334,6 +3334,18 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
   // 统一的检索匹配（v663，全站只有这一份）：
   // 查询按空白分词，所有词都要命中（AND），每个词在同一段候选文本里做子串匹配（大小写不敏感）。
   // 候选文本包含卡上看不见的字段（所有者/国家/活动/分类/文件名/库类型），命中结果未必在卡片上显式可见。
+  // v903 逐图元素标签聚合：案例项目卡吃「整个项目所有物料」的逐图 AI 标签（一张图识别出的元素，
+  // 整个项目卡都能搜到），不再只看封面那张；单图素材仍只看自己那张。
+  function caseProjectElementTags(materials) {
+    const out = [];
+    (materials || []).forEach(function(material) {
+      casePreviewAiTags(material && material.id).forEach(function(tag) {
+        if (out.indexOf(tag) < 0) out.push(tag);
+      });
+    });
+    return out;
+  }
+
   function libraryItemSearchText(item) {
     const source = item.source;
     const preview = item.preview;
@@ -3343,13 +3355,15 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
     const materialTypes = projectMaterials
       ? projectMaterials.map(function(p) { return p.material_type || ''; })
       : [preview.material_type || ''];
-    const previewElementTags = casePreviewAiTags(preview.id);
+    const elementTags = projectMaterials
+      ? caseProjectElementTags(projectMaterials)
+      : casePreviewAiTags(preview.id);
     const vocab = [
       libraryKindLabel(libraryKindOfSource(source)),
       optionNameById(source.country_id),
       optionNameById(source.activity_id),
       optionNameById(source.category_id),
-    ].concat(materialTypes, visibleLibraryTags(source), previewElementTags);
+    ].concat(materialTypes, visibleLibraryTags(source), elementTags);
     const parts = [
       source.title,
       source.owner_name,
@@ -4285,8 +4299,19 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     });
   }
 
+  // v903：逐图 AI 标签不再只对 1 个实验项目生效 —— 这个项目的物料能不能用逐图标签，
+  // 判定 = 「它是不是案例项目」（isCaseProject）。CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID /
+  // CASE_PREVIEW_AI_EXPERIMENT_TITLE 只留给文案与历史数据对照，不再当门禁用。
   function isCasePreviewAiExperimentSource(source) {
     return !!source && source.id === CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID;
+  }
+
+  // v903：读/展示/搜索已经对**所有案例项目**开放（`loadAllPreviewAiTags()` + `caseProjectElementTags()`），
+  // 但**写入仍只允许实验项目**——服务端 `previewFor()` 里锁着 EXPERIMENT_SOURCE_ID，
+  // 放开它属于「步 2：往共享库写逐图标签」，需要用户当次授权。
+  // 所以面板/一键识别先按"可写"来开关（否则用户点了必然逐张 404）；步 2 把这里换成 isCaseProject(source) 即可。
+  function casePreviewAiEnabledFor(source) {
+    return isCasePreviewAiExperimentSource(source);
   }
 
   function casePreviewAiRow(previewId) {
@@ -4326,35 +4351,69 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return /manual_tags/i.test(message) && /column|does not exist|schema cache/i.test(message);
   }
 
-  async function loadPreviewAiTagsForSource(sourceId) {
-    if (!state.supabase || sourceId !== CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID) return [];
-    let result = await state.supabase.from(CASE_PREVIEW_AI_TABLE)
-      .select('experiment_key,preview_id,source_file_id,ai_tags,manual_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at')
-      .eq('experiment_key', 'augpicks-v1')
-      .eq('source_file_id', sourceId);
+  // 逐图标签的字段清单（单项目读与分页读共用）；旧库里没有 manual_tags 列时退回第二份。
+  const PREVIEW_AI_TAGS_SELECT = 'experiment_key,preview_id,source_file_id,ai_tags,manual_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at';
+  const PREVIEW_AI_TAGS_SELECT_LEGACY = 'experiment_key,preview_id,source_file_id,ai_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at';
+  const PREVIEW_AI_TAGS_PAGE_SIZE = 1000;
+  const PREVIEW_AI_TAGS_MAX_PAGES = 20;   // 硬上限 2 万行，防异常时分页死循环
+
+  // 两条降级必须保留：① `manual_tags` 列缺失 → 退回不带该列的读法（并标记需补执行 sql/021）；
+  // ② 表不可用 → previewAiTagsTableReady = false 并返回空，页面其余部分照常。
+  async function readPreviewAiTagsRows(buildQuery, applyRange) {
+    const runQuery = function(select) {
+      const query = buildQuery(select);
+      return applyRange ? applyRange(query) : query;
+    };
+    let result = await runQuery(PREVIEW_AI_TAGS_SELECT);
     if (result.error && isMissingPreviewManualTagsColumn(result.error)) {
-      result = await state.supabase.from(CASE_PREVIEW_AI_TABLE)
-        .select('experiment_key,preview_id,source_file_id,ai_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at')
-        .eq('experiment_key', 'augpicks-v1')
-        .eq('source_file_id', sourceId);
+      result = await runQuery(PREVIEW_AI_TAGS_SELECT_LEGACY);
       if (!result.error) {
         previewAiTagsTableReady = 'needs-manual-tags-column';
-        (result.data || []).forEach(function(row) {
-          state.previewAiTagsByPreviewId.set(row.preview_id, Object.assign({manual_tags: []}, row));
-        });
-        return result.data || [];
+        return { rows: (result.data || []).map(function(row) { return Object.assign({manual_tags: []}, row); }) };
       }
     }
     if (result.error) {
       if (isPreviewAiTagsUnavailableError(result.error)) {
         previewAiTagsTableReady = false;
-        return [];
+        return { rows: [] };
       }
       throw result.error;
     }
     previewAiTagsTableReady = true;
-    (result.data || []).forEach(function(row) { state.previewAiTagsByPreviewId.set(row.preview_id, row); });
-    return result.data || [];
+    return { rows: result.data || [] };
+  }
+
+  // 单个项目的逐图标签（打开浮窗/开始识别时刷新这个项目用）。
+  // 不按 experiment_key 过滤：那个 key 只是分区名，换 key 也不会漏读。
+  async function loadPreviewAiTagsForSource(sourceId) {
+    if (!state.supabase || !sourceId) return [];
+    const result = await readPreviewAiTagsRows(function(select) {
+      return state.supabase.from(CASE_PREVIEW_AI_TABLE).select(select).eq('source_file_id', sourceId);
+    });
+    result.rows.forEach(function(row) { state.previewAiTagsByPreviewId.set(row.preview_id, row); });
+    return result.rows;
+  }
+
+  // 全部逐图标签：分页读整张表（不按 experiment_key / source_file_id 过滤），启动时读满一次，
+  // 所有案例项目共用 state.previewAiTagsByPreviewId（key = preview_id）。
+  // Supabase 单次请求会限制行数，所以每页 1000 行、用 .range() 循环到取不满一页为止。
+  async function loadAllPreviewAiTags() {
+    if (!state.supabase) return [];
+    const rows = [];
+    for (let page = 0; page < PREVIEW_AI_TAGS_MAX_PAGES; page += 1) {
+      const from = page * PREVIEW_AI_TAGS_PAGE_SIZE;
+      const to = from + PREVIEW_AI_TAGS_PAGE_SIZE - 1;
+      const result = await readPreviewAiTagsRows(function(select) {
+        return state.supabase.from(CASE_PREVIEW_AI_TABLE).select(select).order('preview_id', {ascending: true});
+      }, function(query) { return query.range(from, to); });
+      result.rows.forEach(function(row) {
+        rows.push(row);
+        state.previewAiTagsByPreviewId.set(row.preview_id, row);
+      });
+      if (result.rows.length < PREVIEW_AI_TAGS_PAGE_SIZE) return rows;
+    }
+    console.warn('逐图 AI 标签已读到分页上限（' + (PREVIEW_AI_TAGS_PAGE_SIZE * PREVIEW_AI_TAGS_MAX_PAGES) + ' 行），后面的行没有加载。');
+    return rows;
   }
 
   async function postCasePreviewAiTagAction(payload) {
@@ -4523,7 +4582,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   }
 
   async function startCasePreviewAiRun(source, materials, onlyIds) {
-    if (!isCasePreviewAiExperimentSource(source)) return;
+    if (!casePreviewAiEnabledFor(source)) return;
     if (previewAiTagsTableReady !== true) {
       await loadPreviewAiTagsForSource(source.id);
       if (previewAiTagsTableReady !== true) throw new Error(state.lang === 'zh' ? '请先执行 sql/021_preview_ai_tags_experiment.sql。' : 'Run sql/021_preview_ai_tags_experiment.sql first.');
@@ -5655,7 +5714,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         await Promise.all([
           loadLibraryPreviews(),
           loadLibraryBookmarkGroups(),
-          loadPreviewAiTagsForSource(CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID)
+          loadAllPreviewAiTags()
         ]);
         state.libraryDataLoaded = true;
       })();
@@ -7915,7 +7974,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const tabValue = focusType || (caseMaterialTypeSet(state.libraryFilters.tag2 || 'all') ? state.libraryFilters.tag2 : 'all');
     const pick = caseCoverFor(source, tabValue) || { cover: materials[0], group: materials };
     const canManage = canManageSource(source);
-    const aiExperiment = isCasePreviewAiExperimentSource(source);
+    const previewAiEnabled = casePreviewAiEnabledFor(source);
     // 预热使用者名单：老素材可能只存了姓名/或把编号当姓名存，联系时要靠名单解析出真正的大象编号
     void loadTeamMembers().catch(function() {});
     const owner = source.owner_name || '';
@@ -7953,11 +8012,11 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
                 ${source.project_note ? `<span class="case-dot">·</span><a class="case-project-link" href="${escapeAttr(source.project_note)}" target="_blank" rel="noopener">${state.lang === 'zh' ? '项目链接' : 'Project Link'} ↗</a>` : ''}
               </div>
               <div class="case-owner-line">${owner ? `${state.lang === 'zh' ? '源文件请联系' : 'For the source file, contact'} <b>${escapeHtml(owner)}</b>${ownerContact ? (state.lang === 'zh' ? `（大象 ${escapeHtml(ownerContact)}）` : ` (Daxiang ${escapeHtml(ownerContact)})`) : ''}` : (state.lang === 'zh' ? '源文件未上传' : 'Source file not uploaded')}</div>
-              ${aiExperiment ? `<div class="case-project-fixed-tags"><span class="case-project-fixed-tags-label">${state.lang === 'zh' ? '项目固定标签' : 'Project tags'}</span>${caseProjectFixedTagsHtml(source)}</div>` : ''}
+              ${previewAiEnabled ? `<div class="case-project-fixed-tags"><span class="case-project-fixed-tags-label">${state.lang === 'zh' ? '项目固定标签' : 'Project tags'}</span>${caseProjectFixedTagsHtml(source)}</div>` : ''}
             </div>
           </div>
           <div class="case-head-actions">
-            ${aiExperiment && canManage ? `<button type="button" class="case-ai-scan-btn" id="case-ai-recognize-all">${state.lang === 'zh' ? '一键识别' : 'Analyze all'}</button><span class="case-ai-run-progress" id="case-ai-run-progress" hidden></span>` : ''}
+            ${previewAiEnabled && canManage ? `<button type="button" class="case-ai-scan-btn" id="case-ai-recognize-all">${state.lang === 'zh' ? '一键识别' : 'Analyze all'}</button><span class="case-ai-run-progress" id="case-ai-run-progress" hidden></span>` : ''}
             ${canManage ? `<button type="button" class="icon-btn" id="case-more-btn" aria-label="${state.lang === 'zh' ? '更多操作' : 'More actions'}">⋯</button>` : ''}
             <button type="button" class="icon-btn case-project-close" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}"><svg viewBox="0 0 16 16" width="15" height="15"><path d="m4 4 8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
           </div>
@@ -7992,7 +8051,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
           </aside>
         </div>
         <footer class="case-project-foot">
-          ${aiExperiment ? `<div class="case-preview-ai-panel" id="case-preview-ai-panel"></div>` : `<div class="case-foot-line">
+          ${previewAiEnabled ? `<div class="case-preview-ai-panel" id="case-preview-ai-panel"></div>` : `<div class="case-foot-line">
             <div class="case-foot-tags" id="case-foot-tags">${caseFootTagsHtml(source)}</div>
             ${canManage ? `<div class="case-foot-tools"><button type="button" class="case-foot-tool-btn" id="case-foot-add-tag" title="${state.lang === 'zh' ? '点击标签即时保存到云端' : 'Click a tag to save instantly'}">＋ ${state.lang === 'zh' ? '标签' : 'Tags'}</button><button type="button" class="case-foot-tool-btn" id="case-foot-ai-tag" title="${state.lang === 'zh' ? 'AI 识别画面元素并建议标签' : 'AI suggests tags from the cover'}">${state.lang === 'zh' ? 'AI 识别' : 'AI Tags'}</button></div>` : ''}
           </div>`}
@@ -8033,7 +8092,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       currentId = p.id;
       backdrop.dataset.currentPreviewId = p.id;
       renderStage(p);
-      if (aiExperiment) renderCasePreviewAiPanel(backdrop, p, canManage);
+      if (previewAiEnabled) renderCasePreviewAiPanel(backdrop, p, canManage);
       const stageInfo = backdrop.querySelector('#case-stage-info');
       if (stageInfo) {
         stageInfo.textContent = [
@@ -8057,7 +8116,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       renderStage(current());
       renderSideGrid();
     });
-    if (aiExperiment) {
+    if (previewAiEnabled) {
       void loadPreviewAiTagsForSource(source.id).then(function() {
         if (!backdrop.isConnected) return;
         show(currentId);
@@ -12357,7 +12416,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (!isCaseProject(item.source)) { out.push(item); return; }
       if (seen.has(item.source.id)) return;
       seen.add(item.source.id);
-      // 单项目逐图标签实验：关键词直接命中某张物料的 AI 标签时，项目卡临时使用
+      // 逐图标签：关键词直接命中某张物料的 AI 标签时，项目卡临时使用
       // 这张真实命中图。只影响搜索封面，不改项目默认封面。
       const previewAiMatch = state.libraryFilters.query
         ? items.find(function(candidate) {

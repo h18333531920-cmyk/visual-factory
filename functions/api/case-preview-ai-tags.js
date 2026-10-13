@@ -1,5 +1,8 @@
 import {json, requireAdmin, supabaseFetch} from '../_shared.js';
 
+// 逐图 AI 标签已经是所有案例项目共用的功能（前端门禁 = isCaseProject）。
+// EXPERIMENT_KEY 现在只是分区名：库里已有的行都挂在这个 key 下，新项目的行也写这里，
+// 改名 = 现有数据全部读不到，所以不要动它。
 const EXPERIMENT_SOURCE_ID = 'bfa82ce5-fca0-403b-8f7e-c6b6eafaf4c5';
 const EXPERIMENT_KEY = 'augpicks-v1';
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[1-5][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
