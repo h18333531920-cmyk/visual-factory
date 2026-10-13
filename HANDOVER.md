@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-vocab-sync-rpc-v901`（词表 3 列 + 数据库自动同步；代理放行「同步库内标签」这一个 RPC）；部署 `652351e1-ba6f-4add-875f-1e6f0f786e63`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-elem-vocab-first-v902`（元素识别优先用库内现有标签；词表匹配不区分大小写）；部署 `2cccc886-fe91-4154-819a-852d285245f6`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
 | 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`717ad94`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-13 |
-| 自动化测试 | `node --test tests/` → **398/398 通过** | 实测 2026-10-13 |
+| 自动化测试 | `node --test tests/` → **399/399 通过** | 实测 2026-10-13 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在）；**`sql/025_tag_vocabulary_auto_sync.sql` 已由用户执行**（2026-10-13，SQL Editor 跑完无报错、结果面板 `1 row` = 末尾那句 `select vf_sync_tag_vocabulary()` 跑通） | 实测 2026-10-13 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -439,6 +439,12 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 >   - ⚠️ 执行前的降级（现已是历史）：不执行 sql/025 时一切照旧（前端补翻 + 手动改英文名/相关词），只是不会自动收全/清孤儿。
 >   - **v901 修「同步库内标签按钮点不动」**：报「请求路径无效」**不是** sql/025 的问题，而是**客户端所有 Supabase 请求都走服务端代理** `/api/account-data`（公司网络封 supabase.co 直连），那份白名单只放行 `rest/v1/<表>` 与 storage，`rest/v1/rpc/*` 一律 403。修法：在 `functions/_account-data-policy.js` 里**只放行 `vf_sync_tag_vocabulary` 这一个 RPC**（仅 POST、必须维护权限，别的一律照旧 403），并加了单元测试锁死。⚠️ **数据库触发器不受这个影响**——自动同步是在库里跑的，上传/删除物料照旧实时更新词表，这个按钮只是"手动重算一次"的入口。
 >   - 🚧 **还没验的**：界面上点「同步库内标签」按钮是否正常提示（v901 之后需要用户再点一次；没验 = 未核实）；触发器在真实上传/删除时就地生效也还没实测过。
+> - **⭐ v902 修「元素识别不认现有标签 / kiki 与 KIKI 分裂成两行」**（用户实测反馈）：
+>   - 原因一：识别请求只带了**静态 8 个元素词**（`FILTER_SECTIONS_CONFIG.element.values` = 银行卡/券/kiki/骑手/国旗/手机/耳机/PS5），**库内真实标签模型根本看不到**，所以它只能按自己的说法造新词。改成带「库内正在用的标签（`source='manual'` 的排前面）+ 静态元素词」（新函数 `caseElementVocabulary()`，上限 160；服务端 `analyzeCaseTagsWithGlm` 的截断也从 100 放到 160）。
+>   - 原因二：词表匹配**区分大小写** —— AI 回「KIKI」而库里是「kiki」时判成新词，同一个东西就裂成两行（词表里 kiki / KIKI 并存就是这么来的）。现在 `parseElementSuggestions` 统一按「**去空格 + 小写**」比较，并且**返回词表自己的写法**；一个词命中多个词表项时取最长的（「炸薯条」→「薯条」，不是「条」）。
+>   - 送词表时也按同一规则去重（大小写/空格不同但同一个词的只留一个，优先人工维护的），免得 AI 在 kiki / KIKI 里随便挑。
+>   - 🚧 **存量数据没动**：库里**已经存在**的 kiki / KIKI 两行、以及物料上两种写法**不会自动合并**（代码只保证以后不再产生新的分裂）。要合并得跑一次数据迁移（会重写 `vf_source_files.tags` / `vf_asset_previews.material_type` / `vf_preview_ai_tags.ai_tags|manual_tags`），属"改真实数据"，**需用户明确授权、由用户执行**。
+>   - 未核实：识别效果（要真实上传一张带老虎的图点「AI 识别」，看建议里是否只出现 kiki）。
 >   - 🚧 **已知未做**：`vf_library_options`（国家/活动/类别）里的词不进词表（它们是选项、有自己的双语字段）；`vf_preview_ai_tags.excluded_tags` 也不算"在用标签"。
 >
 > **词表的三条事实（2026-10-12 逐条查代码核实，回答用户提问）**

@@ -41,6 +41,16 @@ test('词表归一：命中现有元素词表时用词表写法（避免同义�
   assert.deepEqual(parseElementSuggestions('{"elements":["汉堡"]}', VOCAB), ['汉堡'], '词表外的新词照常保留');
 });
 
+test('v902 词表写法归一不区分大小写／空格，且返回词表自己的写法', () => {
+  const vocab = ['kiki', 'PS5', '薯条', '条'];
+  assert.deepEqual(parseElementSuggestions('{"elements":["KIKI"]}', vocab), ['kiki'], 'AI 回大写也要归到库内的写法 kiki');
+  assert.deepEqual(parseElementSuggestions('{"elements":["ps5"]}', vocab), ['PS5']);
+  assert.deepEqual(parseElementSuggestions('{"elements":["PS5"]}', ['PS 5']), ['PS 5'], '词表写法带空格也能命中');
+  assert.deepEqual(parseElementSuggestions('{"elements":["炸薯条"]}', vocab), ['薯条'], '命中多个时取最长的那个');
+  assert.deepEqual(parseElementSuggestions('{"elements":["KIKI","kiki"]}', vocab), ['kiki'], '归一后要去重');
+  assert.deepEqual(parseElementSuggestions('{"elements":["Sushi"]}', vocab), ['Sushi'], '词表里确实没有的照常保留');
+});
+
 test('Keeta 老虎吉祥物统一归一为 kiki，普通老虎不误改', () => {
   assert.deepEqual(parseElementSuggestions('{"elements":["卡通老虎","老虎吉祥物","黄色老虎","kiki"]}', VOCAB), ['kiki']);
   assert.deepEqual(parseElementSuggestions('{"elements":["老虎"]}', VOCAB), ['老虎']);
@@ -63,7 +73,7 @@ test('前端：AI 建议只在点采纳后才进元素标签，且只建议图�
   assert.match(accept, /caseTagSelToggle\(root\._caseTagSel, 'element', value\)/, '点采纳才写入元素选择');
   assert.match(appSource, /fetch\('\/api\/analyze-elements'/, '前端要调用元素识别接口');
   assert.match(appSource, /Authorization: 'Bearer ' \+ token/, '接口要带登录态');
-  assert.match(appSource, /vocabulary: FILTER_SECTIONS_CONFIG\.element\.values/, '要把现有元素词表带给模型');
+  assert.match(appSource, /vocabulary: caseElementVocabulary\(\)/, '要把现有元素词表（含库内在用标签）带给模型');
   assert.match(appSource, /activities: FILTER_SECTIONS_CONFIG\.activity\.values/, '把活动词表一并带给模型（提示词参考用，不再强制限词表）');
   const trigger = appSource.slice(appSource.indexOf('多图时优先让 AI 识别开屏'), appSource.indexOf('// 图库预览：与案例库同一套卡片'));
   assert.match(trigger, /\^image\\\//, '只有图片才识别（视频跳过）');

@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-vocab-sync-rpc-v901';
+const TOOL_UI_VERSION = '20261012-elem-vocab-first-v902';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4082,6 +4082,28 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     }).catch(function() {});
   }
 
+  // v902：给「元素识别」的现有词表 = 库内正在用的标签（人工维护的排前面）+ 静态元素词表。
+  // 目的：让 AI 优先用库内已有的写法（例：kiki），词表里真没有的东西才造新词。
+  // 大小写/空格不同但其实是同一个词的写法只留一个（优先留人工维护过的那个），
+  // 否则 AI 会在 kiki / KIKI 之间随便挑，词表就裂成两行。
+  function caseElementVocabulary() {
+    const out = [];
+    const seen = {};
+    const push = function(value) {
+      const word = String(value == null ? '' : value).trim();
+      const key = word.replace(/\s+/g, '').toLowerCase();
+      if (!word || !key || seen[key]) return;
+      seen[key] = true;
+      out.push(word);
+    };
+    const rows = [];
+    tagVocabularyRowsByZh.forEach(function(row) { if (row) rows.push(row); });
+    rows.filter(function(row) { return row.source === 'manual'; }).forEach(function(row) { push(row.name_zh); });
+    rows.forEach(function(row) { push(row.name_zh); });
+    ((FILTER_SECTIONS_CONFIG.element || {}).values || []).forEach(push);
+    return out.slice(0, 160);
+  }
+
   function caseElementValuesOf(source) {
     const tags = Array.isArray(source && source.tags) ? source.tags : [];
     const known = FILTER_SECTIONS_CONFIG.element.values.filter(value => tags.includes(value));
@@ -4483,7 +4505,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       const response = await fetch('/api/analyze-elements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({image: image, vocabulary: FILTER_SECTIONS_CONFIG.element.values, activities: []})
+        body: JSON.stringify({image: image, vocabulary: caseElementVocabulary(), activities: []})
       });
       const data = await response.json().catch(function() { return {}; });
       if (!response.ok || !data.success) throw new Error(translateServerError(data.message) || ('HTTP ' + response.status));
@@ -4570,7 +4592,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       const response = await fetch('/api/analyze-elements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ image: image, vocabulary: FILTER_SECTIONS_CONFIG.element.values, activities: FILTER_SECTIONS_CONFIG.activity.values })
+        body: JSON.stringify({ image: image, vocabulary: caseElementVocabulary(), activities: FILTER_SECTIONS_CONFIG.activity.values })
       });
       const data = await response.json().catch(function() { return {}; });
       if (!response.ok || !data.success) throw new Error(translateServerError(data.message) || ('HTTP ' + response.status));
@@ -5269,7 +5291,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
           return fetch('/api/analyze-elements', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-            body: JSON.stringify({ image: image, vocabulary: FILTER_SECTIONS_CONFIG.element.values, activities: FILTER_SECTIONS_CONFIG.activity.values })
+            body: JSON.stringify({ image: image, vocabulary: caseElementVocabulary(), activities: FILTER_SECTIONS_CONFIG.activity.values })
           });
         })
         .then(r => r.json())

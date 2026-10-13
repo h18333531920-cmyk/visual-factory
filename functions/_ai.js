@@ -1409,6 +1409,26 @@ export function parseElementSuggestions(text, vocabulary = []) {
       .filter(Boolean);
   }
   const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean);
+  // v902：词表匹配统一按「去空格 + 小写」比较，且优先返回**词表自己的写法**。
+  // 起因：AI 回「KIKI」而库里是「kiki」，原来做的是区分大小写的精确比较 → 判成新词，
+  // 于是同一个东西在词表里裂成 kiki / KIKI 两行。
+  const compact = (value) => String(value == null ? '' : value).replace(/\s+/g, '').toLowerCase();
+  const byCompact = new Map();
+  for (const word of words) {
+    const key = compact(word);
+    if (key && !byCompact.has(key)) byCompact.set(key, word);
+  }
+  const containedIn = (word) => {
+    const key = compact(word);
+    let best = '';
+    for (const candidate of words) {
+      const candidateKey = compact(candidate);
+      if (candidateKey.length < 2 || candidateKey === key) continue;
+      if (!key.includes(candidateKey)) continue;
+      if (candidateKey.length > compact(best).length) best = candidate;   // 命中多个时取最长的那个
+    }
+    return best;
+  };
   const seen = new Set();
   const out = [];
   for (const item of list) {
@@ -1416,11 +1436,10 @@ export function parseElementSuggestions(text, vocabulary = []) {
     if (!word || word === 'elements') continue;
     word = word.replace(/[（(].*?[)）]/g, '').trim();          // 「汉堡（食物）」→「汉堡」
     // Keeta 案例库里的品牌老虎统一为现有标准词 kiki，避免搜索被「卡通老虎」分裂。
-    if (words.includes('kiki') && KIKI_ELEMENT_ALIASES.has(word)) word = 'kiki';
+    if (words.some(w => compact(w) === 'kiki') && KIKI_ELEMENT_ALIASES.has(word)) word = 'kiki';
     if (!word || word.length > ELEMENT_TAG_MAX_CHARS) continue; // 词条上限 5 字
-    const exact = words.find(w => w === word);
-    const contained = exact || words.find(w => w.length > 1 && word.includes(w));
-    const finalWord = contained || word;
+    const exact = byCompact.get(compact(word));
+    const finalWord = exact || containedIn(word) || word;
     if (seen.has(finalWord)) continue;
     seen.add(finalWord);
     out.push(finalWord);
@@ -1450,7 +1469,7 @@ export async function analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, activ
   const base64 = raw.replace(/^data:image\/[a-z0-9.+-]+;base64,/i, '');
   if (!base64) throw new Error('缺少待识别的图片。');
   if (base64.length > 6 * 1024 * 1024) throw new Error('图片过大，请改用缩略图识别。');
-  const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean).slice(0, 100);
+  const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean).slice(0, 160);
   const activities = (Array.isArray(activityVocabulary) ? activityVocabulary : []).filter(Boolean).slice(0, 30);
   const lines = [
     '你在帮案例库物料打搜索标签。看图，只描述画面里看得见的实体：食物、饮品、动物、人物、角色或吉祥物、餐具与道具、餐桌桌面、背景场景与节日布置（挂旗、气球、桌布等）。',
