@@ -641,6 +641,16 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-tag-ai-bulk { border: 0; background: transparent; color: #7c3aed; font-size: 11.5px; line-height: 1; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
 .case-tag-ai-bulk:hover { background: #f3e8ff; }
 .case-tag-ai-bulk:disabled { color: #c4b5d9; background: transparent; cursor: default; }
+/* v914 后台识别进度条：素材库页最顶上的一条细带，占位（非 fixed 覆盖），不挡检索栏 */
+.recognize-progress { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 6px 10px; border: 1px solid #bae6fd; background: #f0f9ff; border-radius: 10px; font-size: 12px; line-height: 1.3; color: #075985; }
+.recognize-progress[hidden] { display: none !important; }
+.recognize-progress-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 999px; background: #0ea5e9; }
+.recognize-progress[data-kind="running"] .recognize-progress-dot { animation: recognize-progress-pulse 1.2s ease-in-out infinite; }
+.recognize-progress-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recognize-progress-close { flex: 0 0 auto; border: 0; background: transparent; color: #0369a1; font-size: 14px; line-height: 1; padding: 2px 5px; border-radius: 6px; cursor: pointer; }
+.recognize-progress-close:hover { background: #e0f2fe; }
+@keyframes recognize-progress-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .recognize-progress[data-kind="running"] .recognize-progress-dot { animation: none; } }
 .case-tag-bubble { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #86efac; background: #dcfce7; color: #166534; font-size: 12px; line-height: 1; padding: 6px 10px; border-radius: 999px; cursor: pointer; }
 .case-tag-bubble span { color: #16a34a; }
 .case-tag-bubble:hover { border-color: #22c55e; }
@@ -869,7 +879,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261013-tag-manage-instant-v913';
+const TOOL_UI_VERSION = '20261013-upload-autotag-v914';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -1746,6 +1756,8 @@ let chartLibraryPromise = null;
   async function signOut() {
     if (window.VFAccountAccess?.enabled) { await window.VFAccountAccess.lock().catch(() => {}); window.VFAccountAccess.clear(); }
     window.VFAccountAccess?.saveToken('');
+    // v914：登出后不再有会话，识别进度条的轮询必须停掉
+    stopRecognizeProgressPolling();
     state.session = null;
     state.profile = null;
     state.localPreview = false;
@@ -2128,6 +2140,8 @@ let chartLibraryPromise = null;
     if (state.route === 'request') renderRequestFlow();
     if (state.route === 'admin') renderAdmin();
     if (state.route === 'analytics') renderAnalyticsPage();
+    // v914：识别进度条的轮询只在素材库页跑，换页就停（别留定时器）
+    if (state.route !== 'library') stopRecognizeProgressPolling();
   }
 
   function setRestrictedLibraryDefault() {
@@ -2539,6 +2553,7 @@ let chartLibraryPromise = null;
           </div>
         </section>`}
 
+        ${homeMode ? '' : '<div id="recognize-progress" class="recognize-progress" hidden></div>'}
         <div class="library-pin-strip" id="library-pin-strip">
         <section class="library-control-strip" style="margin-left:0!important;margin-inline:0!important;padding-left:0!important;padding-right:0!important;background:transparent!important;border:none!important;border-radius:0!important;width:100%!important">
           <div class="library-kind-tabs" role="tablist" style="position:relative;">
@@ -2641,6 +2656,9 @@ let chartLibraryPromise = null;
       });
     }
     await finishLibrarySourceLocation();
+    // v914 顶部识别进度条：素材库页才渲染/轮询（首页模式没有这条），数据已在内存里，直接算一次。
+    syncRecognizeProgressPolling();
+    renderRecognizeProgress();
   }
 
   function refreshKindTabCounts() {
@@ -4278,11 +4296,12 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     }).join('');
   }
 
+  // v914：标签条不再渲染 AI 建议（元素识别改由后台无人值守逐图跑，进度看顶部状态条）。
+  // 只留气泡条 + 「添加标签」入口；请求/渲染建议的那几个函数保留备用，不在这里接线。
   function renderCaseTagBar(selected) {
     const sel = selected || {};
     return `
       <div class="case-tag-bubbles" data-case-tag-bubbles>${caseTagBubblesHtml(sel)}</div>
-      <div class="case-tag-ai" data-case-tag-ai hidden><span class="case-tag-ai-title">${state.lang === 'zh' ? 'AI 建议' : 'AI suggests'}</span><span class="case-tag-ai-chips" data-case-tag-ai-chips></span><span class="case-tag-ai-actions" data-case-tag-ai-actions hidden><button type="button" class="case-tag-ai-bulk" data-case-tag-ai-bulk="accept">${state.lang === 'zh' ? '全部采纳' : 'Accept all'}</button><button type="button" class="case-tag-ai-bulk" data-case-tag-ai-bulk="clear">${state.lang === 'zh' ? '取消采纳' : 'Clear accepted'}</button></span><button type="button" class="case-tag-ai-bulk" data-case-tag-ai-rerun hidden title="${state.lang === 'zh' ? '再识一次：只补充上次没认出的标签，已认过的保留' : 'Detect again: only adds previously missed tags'}">${state.lang === 'zh' ? '↻ 重新识别' : '↻ Re-detect'}</button></div>
       <button type="button" class="case-tag-add" data-case-tag-add>＋ ${state.lang === 'zh' ? '添加标签' : 'Add tags'}</button>`;
   }
 
@@ -4451,6 +4470,194 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       tags: tags
     });
     return tags;
+  }
+
+  /* ── v914 后台识别进度条（素材库页顶部细条）─────────────────────────────
+     腾讯云服务器上每 5 分钟跑一批（就是 scripts/recognize-case-tags.mjs 挂在服务器上），
+     一批十几秒就结束 ⇒ 只认 running 的话绝大多数时间条是空的，看不出"还有多少活"。
+     所以三种状态：① running（库里有 status='running' 的行，带项目名）
+     ② queued（没有 running，但还有物料没有 status='success' 的逐图标签行，带剩余张数）
+     ③ 其余 → 整条隐藏。
+     状态只能来自数据库：数据复用素材库已经加载的那两份（state.libraryPreviews /
+     state.previewAiTagsByPreviewId），轮询时重读逐图标签行（loadAllPreviewAiTags()，不新增端点）。 */
+  const RECOGNIZE_PROGRESS_POLL_MS = 20000;   // ≥15 秒；只在素材库页跑，不做全站轮询
+  const RECOGNIZE_PROGRESS_HIDDEN_KEY = 'vf_recognize_progress_hidden_v1';
+  // 与 scripts/recognize-case-tags.mjs 的 NON_IMAGE_EXTENSIONS 同口径：
+  // 这些后缀脚本直接跳过，不算"待识别"，否则"还剩 N 张"永远清不到零。
+  const RECOGNIZE_PROGRESS_SKIP_EXT = ['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv', 'pdf', 'psd', 'psb', 'ai', 'eps', 'svg', 'json', 'zip', 'rar', 'ttf', 'otf', 'woff', 'woff2'];
+
+  function recognizeProgressSkipExtension(preview) {
+    const match = String((preview && preview.preview_path) || '').match(/\.([a-z0-9]+)$/i);
+    return !!match && RECOGNIZE_PROGRESS_SKIP_EXT.includes(match[1].toLowerCase());
+  }
+
+  // 纯逻辑：只吃「库里读到的数据」，同一份数据必须算出同一个结果（刷新后重算要一致）。
+  // 案例项目 = source_path 为空（与脚本 isCaseLibrarySource / app.js isCaseProject 同口径）。
+  function recognizeProgressState(input) {
+    const opts = input || {};
+    const previews = Array.isArray(opts.previews) ? opts.previews : [];
+    // tagRows 允许传数组或 Map（state.previewAiTagsByPreviewId 就是 Map）；
+    // 用鸭子类型判断而不是 instanceof —— 测试里会把另一 realm 的 Map 传进来。
+    const rawRows = opts.tagRows;
+    const rows = Array.isArray(rawRows) ? rawRows
+      : (rawRows && typeof rawRows.values === 'function' ? Array.from(rawRows.values()) : []);
+    const sources = Array.isArray(opts.sources) ? opts.sources : [];
+    const idle = {visible: false, kind: 'idle', projectTitle: '', remaining: 0};
+    const titleById = new Map();
+    sources.forEach(function(source) {
+      if (!source || source.id == null) return;
+      if (String(source.source_path || '') !== '') return;
+      titleById.set(String(source.id), String(source.title || '').trim());
+    });
+    if (!titleById.size) return idle;
+    const statusByPreview = new Map();
+    rows.forEach(function(row) {
+      if (!row || row.preview_id == null) return;
+      statusByPreview.set(String(row.preview_id), String(row.status || ''));
+    });
+    // ① 正在识别：库里存在 running 行（判定只看这一列本身；项目名能查到就带上，查不到就匿名显示）
+    const runningRow = rows.find(function(candidate) {
+      return !!candidate && String(candidate.status) === 'running';
+    });
+    if (runningRow) {
+      let title = titleById.get(String(runningRow.source_file_id || '')) || '';
+      if (!title) {
+        const preview = previews.find(function(item) { return item && String(item.id) === String(runningRow.preview_id || ''); });
+        if (preview) title = titleById.get(String(preview.source_file_id || '')) || '';
+      }
+      return {visible: true, kind: 'running', projectTitle: title, remaining: 0};
+    }
+    // ② 排队中：还没有 status='success' 的物料还剩几张（失败 / 没跑过都算）
+    let remaining = 0;
+    previews.forEach(function(preview) {
+      if (!preview || preview.id == null) return;
+      if (!titleById.has(String(preview.source_file_id || ''))) return;
+      if (!String(preview.preview_path || '')) return;      // 字体卡之类的虚拟预览不算物料
+      if (recognizeProgressSkipExtension(preview)) return;  // 视频/源文件：脚本直接跳过
+      if (statusByPreview.get(String(preview.id)) === 'success') return;
+      remaining += 1;
+    });
+    if (remaining > 0) return {visible: true, kind: 'queued', projectTitle: '', remaining};
+    return idle;
+  }
+
+  function recognizeProgressText(info, lang) {
+    const en = lang === 'en';
+    if (!info || !info.visible) return '';
+    if (info.kind === 'running') {
+      if (!info.projectTitle) return en ? 'Background analysis in progress…' : '后台识别中 · 正在分析物料…';
+      return en
+        ? ('Background analysis in progress · "' + info.projectTitle + '"')
+        : ('后台识别中 ·「' + info.projectTitle + '」');
+    }
+    return en
+      ? ('Background analysis queued · ' + info.remaining + ' left')
+      : ('后台识别排队中 · 还剩 ' + info.remaining + ' 张');
+  }
+
+  function recognizeProgressInfo() {
+    return recognizeProgressState({
+      previews: state.libraryPreviews,
+      tagRows: state.previewAiTagsByPreviewId,
+      sources: state.librarySources,
+      lang: state.lang
+    });
+  }
+
+  // 「× 收起」：记的是"收起时是哪种状态"，状态换了一种（开始识别 / 又排上队）就重新出现，
+  // 免得收起一次以后再也看不到。
+  function recognizeProgressHiddenKind() {
+    try { return localStorage.getItem(RECOGNIZE_PROGRESS_HIDDEN_KEY) || ''; } catch (_error) { return ''; }
+  }
+  function rememberRecognizeProgressHidden(kind) {
+    try {
+      if (kind) localStorage.setItem(RECOGNIZE_PROGRESS_HIDDEN_KEY, kind);
+      else localStorage.removeItem(RECOGNIZE_PROGRESS_HIDDEN_KEY);
+    } catch (_error) {}
+  }
+
+  // 画到顶部细条上；条不在 DOM（首页 / 别的页）就什么都不做。
+  function renderRecognizeProgress() {
+    const bar = document.getElementById('recognize-progress');
+    if (!bar) return null;
+    const info = recognizeProgressInfo();
+    const hiddenKind = recognizeProgressHiddenKind();
+    if (!info.visible) {
+      if (hiddenKind) rememberRecognizeProgressHidden('');
+      bar.hidden = true;
+      bar.innerHTML = '';
+      return info;
+    }
+    if (hiddenKind === info.kind) {
+      bar.hidden = true;
+      bar.innerHTML = '';
+      return info;
+    }
+    bar.hidden = false;
+    bar.dataset.kind = info.kind;
+    bar.innerHTML = '<span class="recognize-progress-dot" aria-hidden="true"></span>'
+      + '<span class="recognize-progress-text">' + escapeHtml(recognizeProgressText(info, state.lang)) + '</span>'
+      + '<button type="button" class="recognize-progress-close" data-recognize-progress-close title="' + escapeAttr(state.lang === 'zh' ? '收起' : 'Hide') + '" aria-label="' + escapeAttr(state.lang === 'zh' ? '收起' : 'Hide') + '">×</button>';
+    return info;
+  }
+
+  let recognizeProgressCloseBound = false;
+  function bindRecognizeProgressClose() {
+    if (recognizeProgressCloseBound) return;
+    recognizeProgressCloseBound = true;
+    document.addEventListener('click', function(event) {
+      const target = event.target;
+      if (!target || typeof target.closest !== 'function') return;
+      if (!target.closest('[data-recognize-progress-close]')) return;
+      event.preventDefault();
+      const bar = document.getElementById('recognize-progress');
+      rememberRecognizeProgressHidden(bar ? String(bar.dataset.kind || '') : '');
+      if (bar) { bar.hidden = true; bar.innerHTML = ''; }
+    });
+  }
+
+  let recognizeProgressTimer = 0;
+  let recognizeProgressRefreshing = false;
+
+  // 只在素材库页、且确实有登录态时轮询；离开页面 / 登出 / 无会话都要停掉，别留定时器。
+  function recognizeProgressCanPoll() {
+    return state.route === 'library'
+      && !!state.supabase
+      && !state.localPreview
+      && !!((state.session && state.session.access_token));
+  }
+
+  async function refreshRecognizeProgress() {
+    if (recognizeProgressRefreshing) return;
+    recognizeProgressRefreshing = true;
+    try {
+      await loadAllPreviewAiTags();
+      renderRecognizeProgress();
+    } catch (error) {
+      console.warn('[recognize-progress] 刷新失败：' + ((error && error.message) || error));
+    } finally {
+      recognizeProgressRefreshing = false;
+    }
+  }
+
+  function startRecognizeProgressPolling() {
+    if (recognizeProgressTimer || !recognizeProgressCanPoll()) return;
+    recognizeProgressTimer = setInterval(function() {
+      if (!recognizeProgressCanPoll()) { stopRecognizeProgressPolling(); return; }
+      void refreshRecognizeProgress();
+    }, RECOGNIZE_PROGRESS_POLL_MS);
+  }
+
+  function stopRecognizeProgressPolling() {
+    if (!recognizeProgressTimer) return;
+    clearInterval(recognizeProgressTimer);
+    recognizeProgressTimer = 0;
+  }
+
+  function syncRecognizeProgressPolling() {
+    if (!recognizeProgressCanPoll()) { stopRecognizeProgressPolling(); return; }
+    bindRecognizeProgressClose();
+    startRecognizeProgressPolling();
   }
 
   async function postCasePreviewAiTagAction(payload) {
@@ -4749,6 +4956,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
 
   // 上传时请求 AI 元素建议（只建议，不自动写入；用户点一下才进标签）。
   // 「重新识别」：结果与上一轮合并去重（只补新不覆盖），已采纳状态保持不变 —— 识别遗漏的保底机制。
+  // v914：**上传表单已不再调用它**（标签条也不再渲染 AI 区块），函数与解析逻辑保留备用，
+  // 元素识别改由后台无人值守逐图跑（进度见顶部状态条）。
   async function requestCaseElementSuggestions(root, file) {
     const ai = root ? root.querySelector('[data-case-tag-ai]') : null;
     const chipsBox = root ? root.querySelector('[data-case-tag-ai-chips]') : null;
@@ -4837,6 +5046,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     }
   }
 
+  // 多图上传时挑一张（优先开屏）去识别。v914 起上传表单不再走这条路，
+  // 函数保留备用（挑图口径本身没变）。
   async function selectCaseElementSuggestionFile(files) {
     const images = Array.from(files || []).filter(function(file) {
       return file && /^image\//.test(file.type || '') && !isCaseVideoFile(file);
@@ -10751,11 +10962,6 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     wireUploadTagPickers();
     wireUploadTagHover();
     document.querySelectorAll('.library-drop-zone').forEach(zone => updateDropZoneSummary(zone, []));
-    // 清掉上一次的 AI 元素建议与去重键，避免带进新一次上传
-    var uploadTagBarForAi = document.getElementById('upload-case-tag-bar');
-    if (uploadTagBarForAi) {
-      clearCaseElementSuggestions(uploadTagBarForAi);
-    }
     // 如有拖入的文件，填入对应的 drop zone
     if (opts.files && opts.files.length) {
       populateDropZoneWithFiles(defaultKind, opts.files);
@@ -11166,7 +11372,6 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     if (head) head.style.display = has ? 'none' : '';
     if (summary) summary.style.display = has ? 'none' : '';
     if (!has) {
-      clearCaseElementSuggestions(document.getElementById('upload-case-tag-bar'));
       clearCaseAutoQuantity(document.getElementById('upload-case-tag-bar'));
       zone.style.removeProperty('display');
       grid.hidden = true;
@@ -11317,20 +11522,6 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (dimensions.some(function(dims) { return !dims; })) return;
       applyCaseAutoQuantity(autoTagBar, dimensions);
     });
-    // 多图时优先让 AI 识别开屏；没有开屏才回退第一张图片。同一批/同一优先图只跑一次。
-    const aiImages = files.filter(function(file) { return file && /^image\//.test(file.type || '') && !isCaseVideoFile(file); });
-    const tagBar = document.getElementById('upload-case-tag-bar');
-    if (aiImages.length && tagBar && !tagBar.hidden) {
-      const batchKey = aiImages.map(function(file) { return file.name + '|' + file.size + '|' + file.lastModified; }).join('||');
-      tagBar.dataset.aiElementBatchKey = batchKey;
-      void selectCaseElementSuggestionFile(aiImages).then(function(priorityImage) {
-        if (!priorityImage || !tagBar.isConnected || tagBar.dataset.aiElementBatchKey !== batchKey) return;
-        const aiKey = priorityImage.name + '|' + priorityImage.size + '|' + priorityImage.lastModified;
-        if (tagBar.dataset.aiElementKey === aiKey) return;
-        tagBar.dataset.aiElementKey = aiKey;
-        void requestCaseElementSuggestions(tagBar, priorityImage);
-      });
-    }
   }
 
   // 图库预览：与案例库同一套卡片（固定容器 / 原比例 / hover 删除 / 有图隐藏提示），仅无分类标签
@@ -12252,19 +12443,27 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     previewFiles.forEach(file => {
       if (!isCasePreviewFile(file)) throw new Error(zh ? '物料预览图仅支持 JPG / PNG / WEBP / GIF / MP4。' : 'Preview must be JPG / PNG / WEBP / GIF / MP4.');
     });
-    // 平台和国家是必填：缺了就标红标签面板对应行 + 弹提醒，不上传
+    // v914：平台 / 国家 / 活动主题三个都必填：缺了就标红标签面板对应行 + 弹提醒，不上传。
+    // 只在上传新项目时拦（编辑已有项目走别的保存路径，不受这条约束）。
     const missing = [];
     if (!caseTagSelFirst(chipSel, 'tag1')) missing.push('tag1');
     if (!caseTagSelFirst(chipSel, 'country')) missing.push('country');
+    if (!caseTagSelFirst(chipSel, 'activity')) missing.push('activity');
     flagMissingCaseTagRows(document.getElementById('upload-case-tag-bar'), missing);
     if (missing.length) {
       const labels = missing.map(function(key) {
         if (key === 'tag1') return zh ? '平台' : 'Platform';
-        return zh ? '国家' : 'Country';
+        if (key === 'country') return zh ? '国家' : 'Country';
+        return zh ? '活动主题' : 'Theme';
       });
+      // 两项仍读作「平台和国家」（v809 原样）；三项一起缺时读作「平台、国家和活动主题」
+      const joined = labels.length > 2
+        ? (zh ? labels.slice(0, -1).join('、') + '和' + labels[labels.length - 1]
+          : labels.slice(0, -1).join(', ') + ' and ' + labels[labels.length - 1])
+        : labels.join(zh ? '和' : ' and ');
       throw new Error(zh
-        ? '请先选择' + labels.join('和') + '，再上传。'
-        : 'Select ' + labels.join(' and ') + ' before uploading.');
+        ? '请先选择' + joined + '，再上传。'
+        : 'Select ' + joined + ' before uploading.');
     }
   }
 

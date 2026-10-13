@@ -90,8 +90,11 @@ export async function handleCasePreviewAiTags(request, env) {
     if (action === 'save') {
       const contentKey = String(body.contentKey || '').slice(0, 500);
       if (contentKey !== expectedContentKey) return json({success: false, message: '物料内容已变化，请刷新后重试'}, 409);
+      // v914 去重：人工标签（manual_tags）不再作为 AI 标签存第二份 —— 同一个词只留在 manual_tags。
+      // manual_tags / excluded_tags 本身照旧原样保留、绝不覆盖。
       const excluded = new Set(base.excluded_tags);
-      base.ai_tags = cleanTags(body.tags).filter(tag => !excluded.has(tag));
+      const manual = new Set(base.manual_tags);
+      base.ai_tags = cleanTags(body.tags).filter(tag => !excluded.has(tag) && !manual.has(tag));
       base.status = 'success';
       base.model = String(body.model || 'glm-4v-flash').slice(0, 80);
       base.content_key = contentKey;

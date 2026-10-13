@@ -67,24 +67,23 @@ test('v828 活动主题自由识别：不再限词表、限 8 字，并从元素
   assert.deepEqual(parseCaseTagSuggestions('{"elements":[],"activity":"斋月开斋节促销活动"}', VOCAB, activities).activity, '斋月开斋节促销活');
 });
 
-test('前端：AI 建议只在点采纳后才进元素标签，且只建议图片', () => {
-  assert.match(appSource, /data-case-tag-ai-value/, '要有可点击的 AI 建议 chip');
+test('前端：AI 建议只在点采纳后才进元素标签（v914 起上传表单不再走这条路）', () => {
+  assert.match(appSource, /data-case-tag-ai-value/, '采纳链路函数保留备用（不再渲染到上传表单里）');
   const accept = appSource.slice(appSource.indexOf('采纳 AI 建议的元素'), appSource.indexOf('// 点浮窗外关闭；已选内容保留在气泡条上'));
   assert.match(accept, /caseTagSelToggle\(root\._caseTagSel, 'element', value\)/, '点采纳才写入元素选择');
-  assert.match(appSource, /fetch\('\/api\/analyze-elements'/, '前端要调用元素识别接口');
+  assert.match(appSource, /fetch\('\/api\/analyze-elements'/, '逐图/按组识别仍要调用元素识别接口');
   assert.match(appSource, /Authorization: 'Bearer ' \+ token/, '接口要带登录态');
   assert.match(appSource, /vocabulary: caseElementVocabulary\(\)/, '要把现有元素词表（含库内在用标签）带给模型');
   assert.match(appSource, /activities: FILTER_SECTIONS_CONFIG\.activity\.values/, '把活动词表一并带给模型（提示词参考用，不再强制限词表）');
-  const trigger = appSource.slice(appSource.indexOf('多图时优先让 AI 识别开屏'), appSource.indexOf('// 图库预览：与案例库同一套卡片'));
-  assert.match(trigger, /\^image\\\//, '只有图片才识别（视频跳过）');
-  assert.match(trigger, /dataset\.aiElementKey === aiKey/, '同一优先图只识别一次');
-  assert.match(trigger, /selectCaseElementSuggestionFile\(aiImages\)/, '多图要先选择开屏再识别');
-  assert.match(trigger, /dataset\.aiElementBatchKey !== batchKey/, '异步选图完成前若文件批次改变，旧结果必须失效');
-  assert.match(appSource, /dataset\.aiElementKey !== requestKey/, '新优先图开始识别后，旧请求不得覆盖建议');
-  assert.match(appSource, /1024 \/ Math\.max/, '上传前缩到长边 1024 再识别（太小会漏小物体）');
+  // v914：上传表单那条路整块摘掉了（渲染 + 调用都摘），所以按「上传拖图」切出来的片段里不许再出现它
+  const trigger = appSource.slice(appSource.indexOf('  function renderCaseDropGrid(zone, fileList) {'), appSource.indexOf('// 图库预览：与案例库同一套卡片'));
+  assert.doesNotMatch(trigger, /analyze-elements|requestCaseElementSuggestions|selectCaseElementSuggestionFile/,
+    '上传表单不再做 AI 元素识别');
+  assert.match(appSource, /dataset\.aiElementKey !== requestKey/, '函数本体保留（含只认同一张图的防串扰逻辑）');
+  assert.match(appSource, /1024 \/ Math\.max/, '缩到长边 1024 的预处理照旧（逐图识别还在用）');
 });
 
-test('多图 AI 识别优先开屏：清单里的开屏类别 > 第一张图片，视频跳过', async () => {
+test('多图 AI 识别优先开屏：清单里的开屏类别 > 第一张图片，视频跳过（v914 起上传不再调它，函数保留）', async () => {
   const body = appSource.slice(appSource.indexOf('  async function selectCaseElementSuggestionFile('), appSource.indexOf('  function clearCaseElementSuggestions('));
   const dimensions = new Map([
     ['first.jpg', { width: 1372, height: 416 }],

@@ -7,7 +7,8 @@
 //
 // 三条口径必须与线上一致，改这里等于改线上行为：
 //   ① 写库语义照抄 functions/api/case-preview-ai-tags.js 的 save 动作 ——
-//      ai_tags = 模型新标签 去掉 excluded_tags 里已有的；manual_tags / excluded_tags 原样保留不许覆盖；
+//      ai_tags = 模型新标签 去掉 excluded_tags 与 manual_tags 里已有的（v914 起同口径：同一个词不存两份）；
+//      manual_tags / excluded_tags 原样保留不许覆盖；
 //      status='success' + model + content_key + error_message=''。
 //   ② content_key 照抄端点 previewContentKey()（preview_path | preview_size_bytes | updated_at）——
 //      对不上就说明画面变过，那张得重跑，这也是断点续跑判断「已完成」的唯一依据。
@@ -122,17 +123,20 @@ export function cleanTags(values) {
   return out;
 }
 
-// 成功行：ai_tags 里刨掉 excluded_tags（端点的 save 就是这个顺序），人工两列原样带回。
+// 成功行：ai_tags 里刨掉 excluded_tags **和 manual_tags**（端点的 save 就是这个顺序，v914 起两边同口径），
+// 人工两列原样带回。同一个词不再 AI 一份、人工一份。
 // `current` 必须是**写之前刚读到的**那一行，绝不拿空数组起底（v864 那次的教训）。
 export function buildSuccessRow({preview, tags, model = MODEL, runId = null, current = null, experimentKey = EXPERIMENT_KEY}) {
   const excluded = cleanTags(current?.excluded_tags);
   const excludedSet = new Set(excluded);
+  const manualTags = cleanTags(current?.manual_tags);
+  const manualSet = new Set(manualTags);
   return {
     experiment_key: experimentKey,
     preview_id: preview.id,
     source_file_id: preview.source_file_id,
-    ai_tags: cleanTags(tags).filter(tag => !excludedSet.has(tag)),
-    manual_tags: cleanTags(current?.manual_tags),
+    ai_tags: cleanTags(tags).filter(tag => !excludedSet.has(tag) && !manualSet.has(tag)),
+    manual_tags: manualTags,
     excluded_tags: excluded,
     status: 'success',
     model: String(model || MODEL).slice(0, 80),
