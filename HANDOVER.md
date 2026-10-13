@@ -23,7 +23,7 @@
 | 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`084ba71`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-12 |
 | 自动化测试 | `node --test tests/` → **397/397 通过**（含标签词表平表 / 相关词 / 库内标签口径 / 浮窗分源 / 缓存重问 / 词表自动同步 18 项） | 实测 2026-10-12 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
-| 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在）；**`sql/025_tag_vocabulary_auto_sync.sql` 待用户执行**（词表自动同步，见 §11 v900） | 实测 2026-10-12 |
+| 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在）；**`sql/025_tag_vocabulary_auto_sync.sql` 已由用户执行**（2026-10-13，SQL Editor 跑完无报错、结果面板 `1 row` = 末尾那句 `select vf_sync_tag_vocabulary()` 跑通） | 实测 2026-10-13 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
 
 **当前需要人决定/处理的事** → §11；**风险和安全边界** → §12。
@@ -435,7 +435,9 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 >     ④ 只在词条不存在时插入（`on conflict (name_zh) do nothing`），**不覆盖**人工写的 `name_en` / `related`；函数末尾会立刻回填一次。
 >   - 界面配套：**删掉「删除」按钮 + 「新增词」入口**（都交给自动同步），顶部加「**同步库内标签**」按钮（调 `supabase.rpc('vf_sync_tag_vocabulary')`）；表格从 4 列变 **3 列：中文名 / 英文名 / 相关词**。
 >   - 相关词列**英文界面显示英文**（`tagVocabularyRelatedDisplayText` 走 `libraryDisplayLabel`），**保存时用词表反查换回库内中文标签**（`tagVocabularyRelatedStorageWords` → `libraryExpansionCanonicalTerm`）——存库仍是中文，匹配链路不变。
->   - ⚠️ **没执行 sql/025 时的降级**：一切照旧（前端补翻 + 手动改英文名/相关词），只是不会自动收全/清孤儿；点「同步库内标签」会报"函数不存在"并提示去执行 SQL。
+>   - ✅ **2026-10-13 用户已执行 sql/025**（SQL Editor 返回 `1 row`、无报错）⇒ 词表自动同步**已生效**：函数 `vf_sync_tag_vocabulary()`、三张源表的触发器、以及一次存量回填都已在真实库里落地。
+>   - ⚠️ 执行前的降级（现已是历史）：不执行 sql/025 时一切照旧（前端补翻 + 手动改英文名/相关词），只是不会自动收全/清孤儿。
+>   - 🚧 **还没验的**：界面上点「同步库内标签」按钮是否正常提示（没验 = 未核实）；触发器在真实上传时就地生效也还没实测过。以后上传/删除物料时留意一下词表行数变化即可。
 >   - 🚧 **已知未做**：`vf_library_options`（国家/活动/类别）里的词不进词表（它们是选项、有自己的双语字段）；`vf_preview_ai_tags.excluded_tags` 也不算"在用标签"。
 >
 > **词表的三条事实（2026-10-12 逐条查代码核实，回答用户提问）**
