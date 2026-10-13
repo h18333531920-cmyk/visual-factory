@@ -878,7 +878,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261013-skip-gif-v916';
+const TOOL_UI_VERSION = '20261013-frame-recognize-v917';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4482,20 +4482,20 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   const RECOGNIZE_PROGRESS_POLL_MS = 20000;   // ≥15 秒；只在素材库页跑，不做全站轮询
   const RECOGNIZE_PROGRESS_HIDDEN_KEY = 'vf_recognize_progress_hidden_v1';
   // 与 scripts/recognize-case-tags.mjs 的 NON_IMAGE_EXTENSIONS 同口径：
-  // 这些后缀脚本直接跳过，不算"待识别"，否则"还剩 N 张"永远清不到零。
-  const RECOGNIZE_PROGRESS_SKIP_EXT = ['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv', 'pdf', 'psd', 'psb', 'ai', 'eps', 'svg', 'json', 'zip', 'rar', 'ttf', 'otf', 'woff', 'woff2'];
-  // v916：与 scripts/recognize-case-tags.mjs 的 ANIMATED_EXTENSIONS 同口径 —— .gif 默认也不进识别队列。
-  // GLM 视觉通道吃不下动图（2026-10-13 全量实测：93 张 gif 只成功 6 张 / 失败 87 张），
-  // 脚本默认跳过、另开了 --include-gif 逃生开关；网站没人传那个参数，所以这里按"默认跳过"算，
-  // 否则库里那 87 张会让进度条永远显示"还剩 87 张"。
-  // ⚠️ 改一边要改另一边（tests/recognize-skip-gif-v916.test.mjs 逐字锁两边一致）。
-  const RECOGNIZE_PROGRESS_ANIMATED_EXT = ['gif'];
+  // 这些后缀脚本一律跳过（源文件 / 矢量图 / 压缩包 / 字体，以及 m4v/avi/mkv 这几种本轮不抽帧的容器），
+  // 不算"待识别"，否则"还剩 N 张"永远清不到零。
+  // ⚠️ 改一边要改另一边（tests/recognize-dynamic-frames-v917.test.mjs 逐字锁两边一致）。
+  const RECOGNIZE_PROGRESS_SKIP_EXT = ['m4v', 'avi', 'mkv', 'pdf', 'psd', 'psb', 'ai', 'eps', 'svg', 'json', 'zip', 'rar', 'ttf', 'otf', 'woff', 'woff2'];
+  // v917：.gif / .mp4 / .mov / .webm 现在是**抽帧后送**（脚本用 ffmpeg 抽「中间帧 + 最后一帧」两张 PNG），
+  // 所以它们**必须算进"还剩 N 张"** —— v916 那个专门把它们排除在外的 RECOGNIZE_PROGRESS_ANIMATED_EXT
+  // 已经删掉：现在唯一的跳过口径就是上面这张"非图片"名单 + 没有 preview_path（口径与脚本逐字一致，
+  // 否则进度条会低估剩余，或者反过来永远清不到零）。
+  // 副作用（已知）：动态物料抽帧失败会被记成 failed 行，而 failed 仍计入剩余 ⇒ 那种图会让进度条亮着，等它下一轮重跑。
 
   function recognizeProgressSkipExtension(preview) {
     const match = String((preview && preview.preview_path) || '').match(/\.([a-z0-9]+)$/i);
     if (!match) return false;
-    const ext = match[1].toLowerCase();
-    return RECOGNIZE_PROGRESS_SKIP_EXT.includes(ext) || RECOGNIZE_PROGRESS_ANIMATED_EXT.includes(ext);
+    return RECOGNIZE_PROGRESS_SKIP_EXT.includes(match[1].toLowerCase());
   }
 
   // 纯逻辑：只吃「库里读到的数据」，同一份数据必须算出同一个结果（刷新后重算要一致）。
@@ -4540,7 +4540,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (!preview || preview.id == null) return;
       if (!titleById.has(String(preview.source_file_id || ''))) return;
       if (!String(preview.preview_path || '')) return;      // 字体卡之类的虚拟预览不算物料
-      if (recognizeProgressSkipExtension(preview)) return;  // 视频/源文件/gif：脚本直接跳过（v916 起含 .gif）
+      if (recognizeProgressSkipExtension(preview)) return;  // 源文件/矢量图：脚本直接跳过（v917 起 gif/mp4/mov/webm 会抽帧识别 ⇒ 算剩余）
       if (statusByPreview.get(String(preview.id)) === 'success') return;
       remaining += 1;
     });

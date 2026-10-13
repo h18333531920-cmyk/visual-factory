@@ -245,7 +245,7 @@ test('v914 剩余张数：没有 success 行的物料都算（没跑过 / 失败
   assert.equal(info.remaining, 3, 'p2 失败 / p3 闲置 / p5 没跑过 都算剩余');
 });
 
-test('v914 剩余张数：脚本会跳过的物料不算（视频 / 源文件 / 没有预览路径的虚拟卡）', () => {
+test('v914 剩余张数：脚本会跳过的物料不算（源文件 / 没有预览路径的虚拟卡）', () => {
   const {recognizeProgressState} = loadPure();
   const previews = [
     preview('p-ok', 'src-a'),
@@ -255,7 +255,7 @@ test('v914 剩余张数：脚本会跳过的物料不算（视频 / 源文件 / 
   ];
   const info = plain(recognizeProgressState({previews, tagRows: [], sources: SOURCES}));
   assert.equal(info.kind, 'queued');
-  assert.equal(info.remaining, 1, '只有真正会送模型的图片算数（否则永远清不到零）');
+  assert.equal(info.remaining, 2, 'p-ok 与 p-mp4 都算（v917 起 mp4 会被抽帧识别，见 recognize-dynamic-frames-v917）');
 });
 
 test('v914 剩余张数：只看案例项目 —— 图库单图素材的物料不计入', () => {
@@ -391,6 +391,6 @@ test('v914 别搞混：#library-status（列表上方那行计数）不许被这
 });
 
 test('v914 版本号（index.html 5 处 + app.js 1 处）', () => {
-  assert.equal((indexSource.match(/\?v=20261013-skip-gif-v916/g) || []).length, 5);
-  assert.match(source, /const TOOL_UI_VERSION = '20261013-skip-gif-v916'/);
+  assert.equal((indexSource.match(/\?v=20261013-frame-recognize-v917/g) || []).length, 5);
+  assert.match(source, /const TOOL_UI_VERSION = '20261013-frame-recognize-v917'/);
 });

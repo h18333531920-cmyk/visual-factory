@@ -12,18 +12,24 @@ import {
   CONCURRENCY_MAX,
   DEFAULT_CONCURRENCY,
   NON_IMAGE_EXTENSIONS,
-  ANIMATED_EXTENSIONS,
-  SKIP_ANIMATED,
+  DYNAMIC_EXTENSIONS,
+  KIND_NON_IMAGE,
+  KIND_DYNAMIC,
   SKIP_NON_IMAGE,
   SKIP_NO_PATH,
+  SKIP_DYNAMIC,
+  FRAMES_MODEL,
   previewContentKey,
   thumbPathForPreview,
   thumbnailCandidatesForPreview,
+  sourceCandidatesForPreview,
   isRecognizablePreview,
+  previewKind,
   previewSkipReason,
   selectRecognizablePreviews,
   skipSummary,
-  formatSkipSummary,
+  formatQueueComposition,
+  pendingKindCounts,
   mimeForImagePath,
   cleanTags,
   buildSuccessRow,
@@ -81,89 +87,107 @@ test('缩略图路径推导：同级 _thumb.jpg，无目录/无路径都不炸',
   assert.deepEqual(thumbnailCandidatesForPreview({preview_path: 'u1/s1/a.png'}), ['u1/s1/_thumb.jpg', 'u1/s1/a.png']);
   assert.deepEqual(thumbnailCandidatesForPreview({id: 'p1', preview_path: 'a.png'}), ['a.png']);
   assert.deepEqual(thumbnailCandidatesForPreview({}), []);
+  // v917 动态物料只能取**原片**：缩略图是静态首帧，拿它抽帧等于又回到"只认首帧"
+  assert.deepEqual(sourceCandidatesForPreview({id: 'p1', preview_path: 'u1/s1/a.gif'}, {preferThumbnail: false}), ['u1/s1/a.gif']);
+  assert.deepEqual(sourceCandidatesForPreview({id: 'p1', preview_path: 'u1/s1/a.mp4'}, {preferThumbnail: false}), ['u1/s1/a.mp4']);
+  assert.deepEqual(sourceCandidatesForPreview({preview_path: ''}, {preferThumbnail: false}), []);
+  // 静态图那条路与 v916 逐字一致（优先缩略图，缺失才退原图）
+  assert.deepEqual(sourceCandidatesForPreview({id: 'p1', preview_path: 'u1/s1/a.png'}),
+    ['u1/s1/_thumb.jpg', 'u1/s1/_thumb-p1.jpg', 'u1/s1/a.png']);
 });
 
-test('非图片物料先跳过（视频/源文件/矢量图喂模型没意义）', () => {
+test('非图片物料先跳过（源文件 / 矢量图 / 字体 / 本轮不抽帧的容器）', () => {
   assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.jpg'}), true);
   assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.PNG'}), true);
   assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.webp'}), true);
-  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.mp4'}), false);
+  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.m4v'}), false);
+  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.avi'}), false);
   assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.psd'}), false);
   assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.svg'}), false);
   assert.equal(isRecognizablePreview({preview_path: ''}), false);
-  // 非图片那组不受 --include-gif 影响（逃生开关只针对动态图）
-  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.mp4'}, {includeGif: true}), false);
-  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.psd'}, {includeGif: true}), false);
+  // 非图片那组不受任何开关影响（--skip-dynamic 只针对动态物料）
+  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.m4v'}, {skipDynamic: true}), false);
+  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.psd'}, {skipDynamic: true}), false);
   assert.equal(mimeForImagePath('u1/s1/a.png'), 'image/png');
   assert.equal(mimeForImagePath('u1/s1/a.webp'), 'image/webp');
   assert.equal(mimeForImagePath('u1/s1/a'), 'image/jpeg');
 });
 
-test('v916 动态图（.gif）默认不进队列：GLM 视觉通道吃不下动图', () => {
+test('v917 动态物料（gif/mp4/mov/webm）默认进队列：抽帧识别', () => {
   // 2026-10-13 全量实测：93 张 gif 只成功 6 张（失败的 87 张全是 gif），原因是
-  // `图片输入格式/解析错误` 与 `图片过大` ⇒ 重试多少次都是白烧额度，还会把队首堵死。
-  assert.equal(ANIMATED_EXTENSIONS.has('gif'), true);
-  assert.equal(NON_IMAGE_EXTENSIONS.has('gif'), false, 'gif 是"模型吃不下"，不是"喂了没意义"，两组别混');
-  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.gif'}), false);
-  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.GIF'}), false, '大小写都要挡住');
-  assert.equal(previewSkipReason({preview_path: 'u1/s1/a.gif'}), SKIP_ANIMATED);
-  assert.equal(previewSkipReason({preview_path: 'u1/s1/a.mp4'}), SKIP_NON_IMAGE);
+  // `图片输入格式/解析错误` 与 `图片过大` —— 直接把整段 GIF 字节喂给 GLM 是行不通的。
+  // v917 的解法不是"跳过"，而是先用 ffmpeg 抽「中间帧 + 最后一帧」两张静态 PNG 再送（详见
+  // tests/recognize-frame-extract-v917.test.mjs）。这里只锁分类与开关。
+  assert.equal(DYNAMIC_EXTENSIONS.has('gif'), true);
+  assert.equal(DYNAMIC_EXTENSIONS.has('mp4'), true);
+  assert.equal(NON_IMAGE_EXTENSIONS.has('gif'), false, 'gif 是"抽帧后送"，不是"喂了没意义"，两组别混');
+  assert.equal(NON_IMAGE_EXTENSIONS.has('mp4'), false);
+  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.gif'}), true);
+  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.GIF'}), true, '大小写都认');
+  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.mp4'}), true);
+  assert.equal(previewKind({preview_path: 'u1/s1/a.gif'}), KIND_DYNAMIC);
+  assert.equal(previewKind({preview_path: 'u1/s1/a.psd'}), KIND_NON_IMAGE);
+  assert.equal(previewSkipReason({preview_path: 'u1/s1/a.gif'}), '');
+  assert.equal(previewSkipReason({preview_path: 'u1/s1/a.m4v'}), SKIP_NON_IMAGE);
   assert.equal(previewSkipReason({preview_path: ''}), SKIP_NO_PATH);
   assert.equal(previewSkipReason({preview_path: 'u1/s1/a.png'}), '');
 
-  // --include-gif：照旧送（等"抽静态帧"落地后重新启用）
-  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.gif'}, {includeGif: true}), true);
-  assert.equal(previewSkipReason({preview_path: 'u1/s1/a.gif'}, {includeGif: true}), '');
-  assert.equal(previewSkipReason({preview_path: 'u1/s1/a.GIF'}, {includeGif: true}), '');
+  // --skip-dynamic：退回 v916 行为 —— 动态物料一律跳过，不抽帧
+  assert.equal(isRecognizablePreview({preview_path: 'u1/s1/a.gif'}, {skipDynamic: true}), false);
+  assert.equal(previewSkipReason({preview_path: 'u1/s1/a.gif'}, {skipDynamic: true}), SKIP_DYNAMIC);
+  assert.equal(previewSkipReason({preview_path: 'u1/s1/a.MOV'}, {skipDynamic: true}), SKIP_DYNAMIC);
 
-  // 筛选入口（main 用的就是这个）与 planWorkItems 串起来跑一遍：gif 不进待处理清单
+  // 筛选入口（main 用的就是这个）与 planWorkItems 串起来跑一遍：gif/mp4 都在待处理里
   const previews = [
     previewOf('p-jpg', {path: 'u1/s1/a.jpg'}),
     previewOf('p-gif', {path: 'u1/s1/a.gif'}),
     previewOf('p-mp4', {path: 'u1/s1/a.mp4'})
   ];
   const selected = selectRecognizablePreviews(previews);
-  assert.deepEqual(selected.map(item => item.id), ['p-jpg']);
+  assert.deepEqual(selected.map(item => item.id), ['p-jpg', 'p-gif', 'p-mp4']);
   const plan = planWorkItems({previews: selected, existingRows: []});
-  assert.deepEqual(plan.pending.map(item => item.preview.id), ['p-jpg'], '库里的 87 张 gif 不许再占队首（--limit 会把新图全挤到队尾）');
-  assert.equal(selectRecognizablePreviews(previews, {includeGif: true}).map(item => item.id).join(','), 'p-jpg,p-gif');
+  assert.deepEqual(plan.pending.map(item => item.preview.id), ['p-jpg', 'p-gif', 'p-mp4']);
+  assert.deepEqual(pendingKindCounts(plan.pending), {direct: 1, dynamic: 2});
+  assert.deepEqual(selectRecognizablePreviews(previews, {skipDynamic: true}).map(item => item.id), ['p-jpg']);
 });
 
-test('v916 dry-run 的跳过计数：多少张、为什么，一眼看懂', () => {
+test('v917 dry-run 的队列构成：三类各多少张、为什么，一眼看懂', () => {
   const previews = [
     previewOf('p-jpg', {path: 'u1/s1/a.jpg'}),
     previewOf('p-gif1', {path: 'u1/s1/a.gif'}),
     previewOf('p-gif2', {path: 'u1/s1/b.gif'}),
     previewOf('p-mp4', {path: 'u1/s1/v.mp4'}),
+    previewOf('p-psd', {path: 'u1/s1/design.psd'}),
     {id: 'font-preview-src-1', source_file_id: 'src-1', preview_path: ''}
   ];
   const summary = skipSummary(previews);
-  assert.deepEqual(summary, {total: 5, recognized: 1, noPath: 1, nonImage: 1, animated: 2});
+  assert.deepEqual(summary, {total: 6, direct: 1, dynamic: 3, noPath: 1, nonImage: 1, dynamicSkipped: 0});
 
-  const text = formatSkipSummary(summary);
-  assert.match(text, /^非图片 1 张（视频 \/ 源文件 \/ 矢量图）/);
-  assert.match(text, /动态图 2 张/);
-  assert.match(text, /gif 不支持：GLM 视觉通道吃不下动图/);
-  assert.match(text, /--include-gif/, '要告诉人这个开关存在');
-  assert.match(text, /无预览路径 1 张/);
+  const text = formatQueueComposition(summary);
+  assert.match(text, /直接送图 1 张 · 抽帧送 3 张/, '用户要拿"抽帧"这一类判断 ffmpeg 有没有生效');
+  assert.match(text, /gif\/mp4\/mov\/webm/);
+  assert.match(text, /跳过 2 张/, '跳过 = 非图片 + 无预览路径');
+  assert.match(text, /非图片 1/);
+  assert.match(text, /无预览路径 1/);
 
-  // 加了 --include-gif：gif 不再算跳过（计数归零 + 文案改口径）
-  const withGif = skipSummary(previews, {includeGif: true});
-  assert.deepEqual(withGif, {total: 5, recognized: 3, noPath: 1, nonImage: 1, animated: 0});
-  const withGifText = formatSkipSummary(withGif, {includeGif: true});
-  assert.match(withGifText, /动态图 0 张（--include-gif：gif 照旧送模型）/);
-  assert.doesNotMatch(withGifText, /gif 不支持/);
+  // --skip-dynamic：动态物料改口算"跳过"，抽帧那一类归零
+  const withSkip = skipSummary(previews, {skipDynamic: true});
+  assert.deepEqual(withSkip, {total: 6, direct: 1, dynamic: 0, noPath: 1, nonImage: 1, dynamicSkipped: 3});
+  const skipText = formatQueueComposition(withSkip, {skipDynamic: true});
+  assert.match(skipText, /抽帧送 0 张（--skip-dynamic/);
+  assert.match(skipText, /动态 3（--skip-dynamic）/);
 
   // 一张都不可识别时也要照打（计数为 0 的行就是"凭什么是这条规则"的说明）
-  const emptyText = formatSkipSummary(skipSummary([]));
-  assert.match(emptyText, /^非图片 0 张/);
-  assert.match(emptyText, /动态图 0 张/);
+  const emptyText = formatQueueComposition(skipSummary([]));
+  assert.match(emptyText, /^队列构成：直接送图 0 张/);
+  assert.match(emptyText, /跳过 0 张（非图片 0 · 无预览路径 0）/);
   assert.equal(skipSummary(null).total, 0, '空输入不许炸');
 
   // 脚本源码里必须留着实测数据与开关，免得以后有人以为这是"随手加的过滤"
-  assert.match(scriptSource, /93 张 gif 只有 6 张成功|93 张只成功 6 张/);
-  assert.match(scriptSource, /--include-gif/);
+  assert.match(scriptSource, /93 张 gif 只成功 6 张/);
+  assert.match(scriptSource, /--skip-dynamic/);
   assert.match(scriptSource, /GLM 视觉通道吃不下动图/);
+  assert.match(scriptSource, /第一帧往往还没弹出来/, '为什么要中间帧+末帧（用户实测反馈）必须写在源码里');
 });
 
 test('待处理清单：没行要跑、成功且内容没变跳过、内容变了要跑、--force 全跑', () => {
@@ -375,10 +399,13 @@ test('CLI 解析：--project/--limit/--concurrency/--force/--dry-run/--yes，并
   assert.equal(parseArgs(['--no-fail-mark']).markFailed, false);
   assert.equal(parseArgs(['-y']).yes, true);
   assert.equal(parseArgs(['--help']).help, true);
-  // v916 逃生开关：默认关（gif 不进队列），传了才照旧送
-  assert.equal(defaults.includeGif, false, '--include-gif 默认必须是关的');
-  assert.equal(parseArgs(['--include-gif']).includeGif, true);
-  assert.equal(parseArgs(['--dry-run', '--include-gif']).includeGif, true);
+  // v917 逃生开关：默认关（动态物料真的去抽帧），传了才退回"一律跳过"
+  assert.equal(defaults.skipDynamic, false, '--skip-dynamic 默认必须是关的');
+  assert.equal(parseArgs(['--skip-dynamic']).skipDynamic, true);
+  assert.equal(parseArgs(['--dry-run', '--skip-dynamic']).skipDynamic, true);
+  // v916 的 --include-gif 已退场：gif 现在默认走抽帧，报错里要指向新开关（不然用户以为是自己打错了）
+  assert.throws(() => parseArgs(['--include-gif']), /已废弃/);
+  assert.throws(() => parseArgs(['--include-gif']), /--skip-dynamic/);
 
   assert.throws(() => parseArgs(['--concurrency', 'abc']), /并发/);
   assert.throws(() => parseArgs(['--limit']), /--limit/);
@@ -390,17 +417,21 @@ test('进度行与失败清单文件名', () => {
   assert.match(failuresFilePath('/tmp/out', new Date('2026-10-13T04:05:06Z')), /\/tmp\/out\/recognize-failures-2026-10-13-04-05-06\.json$/);
 });
 
-test('v916 接线：main 的筛选、计数、跳过文案都走同一处判据；写库语义一行没动', () => {
-  assert.match(scriptSource, /const previews = selectRecognizablePreviews\(casePreviews, \{includeGif: options\.includeGif\}\)/);
-  assert.match(scriptSource, /const skipped = skipSummary\(casePreviews, \{includeGif: options\.includeGif\}\)/);
-  assert.match(scriptSource, /formatSkipSummary\(skipped, \{includeGif: options\.includeGif\}\)/);
-  assert.match(scriptSource, /if \(arg === '--include-gif'\) \{ options\.includeGif = true; continue; \}/);
-  assert.match(scriptSource, /--include-gif\s+把 \.gif 也送进模型/);
-  assert.match(scriptSource, /动态图 gif : /, '跑起来先让人看见 gif 是不是跳过');
-  assert.match(scriptSource, /不进识别队列（物料 ' \+ casePreviews\.length \+ ' 张里跳过 '/, '分母也要给出来，否则"跳过 99 张"看不出占多少');
+test('v917 接线：main 的筛选、计数、跳过文案都走同一处判据；写库语义一行没动', () => {
+  assert.match(scriptSource, /const previews = selectRecognizablePreviews\(casePreviews, queueOptions\)/);
+  assert.match(scriptSource, /const skipped = skipSummary\(casePreviews, queueOptions\)/);
+  assert.match(scriptSource, /console\.log\(formatQueueComposition\(skipped, queueOptions\)\)/);
+  assert.match(scriptSource, /if \(arg === '--skip-dynamic'\) \{ options\.skipDynamic = true; continue; \}/);
+  assert.match(scriptSource, /--skip-dynamic\s+动态物料（gif\/mp4\/mov\/webm）一律跳过/, 'USAGE 里要写清新开关的意思');
+  assert.match(scriptSource, /动态物料   : /, '跑起来先让人看见动态物料会不会被抽帧');
+  assert.match(scriptSource, /队列构成：直接送图 /, 'dry-run 三类都要报，抽帧那一类必须看得见');
   // 写库口径（v914 统一的去重）不许被这次改动碰：仍然是"只 POST 一次 + ai_tags 刨掉 excluded 与 manual"
   assert.match(scriptSource, /\.filter\(tag => !excludedSet\.has\(tag\) && !manualSet\.has\(tag\)\)/);
   assert.equal(scriptSource.split("method: 'POST'").length - 1, 1);
+  // model 字段要能区分来源：抽帧那批写成 -frames，别写成 -group（那是浏览器按组那条路的标记）
+  assert.equal(FRAMES_MODEL, 'glm-4v-flash-frames');
+  assert.doesNotMatch(FRAMES_MODEL, /-group/);
+  assert.match(scriptSource, /buildSuccessRow\(\{preview: item\.preview, tags, model, runId, current: fresh\}\)/);
 });
 
 test('项目筛选：认 uuid 也认标题片段；案例项目 = source_path 为空', () => {

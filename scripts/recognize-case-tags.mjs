@@ -13,19 +13,30 @@
 //   ② content_key 照抄端点 previewContentKey()（preview_path | preview_size_bytes | updated_at）——
 //      对不上就说明画面变过，那张得重跑，这也是断点续跑判断「已完成」的唯一依据。
 //   ③ 识别口径复用 functions/_ai.js 的 analyzeCaseTagsWithGlm()（提示词、≤5 字 / ≤12 条、词表归一、
-//      KIKI 别名都在那边），这里绝不重写提示词。
-//   ④ 哪些物料"能识别"只有一处判据：previewSkipReason()（见下）。v916 起 **.gif 默认不算待处理**
-//      —— GLM 视觉通道吃不下动图（2026-10-13 全量实测：93 张 gif 只成功 6 张）。要照旧送 gif 加 --include-gif。
-// 本轮只做**逐图**识别；按组（多图）识别那条路先不碰 —— 分组口径还 park 着（见 HANDOVER §11）。
+//      KIKI 别名都在那边），这里绝不重写提示词；动态物料的一两组帧走同一个文件里的
+//      analyzeCaseTagGroupsWithGlm()（一条消息看多张），提示词同样在那边、这里也不改。
+//   ④ 哪些物料"能识别"只有一处判据：previewSkipReason()（见下），物料分三类 ——
+//      ① 直接送（静态图，行为不变）② 抽帧后送（gif/mp4/mov/webm，v917）③ 跳过（源文件/无预览路径）。
+//      **抽帧**是 v917 的核心：GLM 视觉通道吃不下动图（2026-10-13 全量实测：93 张 gif 只成功 6 张），
+//      所以先用 ffmpeg 把动态物料抽成「中间帧 + 最后一帧」两张静态 PNG 再送模型。
+//      取自中间帧和末帧而不是首帧，是因为**用户实测反馈**：动态弹窗的第一帧往往还没弹出来（空状态）。
+//      两张当"一组"送给 analyzeCaseTagGroupsWithGlm()，拿回**一套统一标签**（实测：两张
+//      1000×2168 竖版图一起送，4.9 秒返回 {"elements":[...],"activity":"..."}）—— 不用调两次、不用自己合并。
+//      要退回老行为（动态物料一律跳过、连抽帧都不试）加 --skip-dynamic。
+// 本轮仍只做**逐图**识别（一张静态图 = 一次调用；一个动态物料的 1–2 张帧 = 一次多图调用）；
+// 按组（多张不同物料共用一个标签集）那条路先不碰 —— 分组口径还 park 着（见 HANDOVER §11）。
 //
 // 安全：只写 vf_preview_ai_tags，不碰 vf_source_files / vf_asset_previews；
 // 凭证只从环境变量或 .local/recognize.env 读，源码里绝不落任何密钥，日志里也不打印完整 key。
 
-import {readFileSync, writeFileSync, mkdirSync} from 'node:fs';
+import {readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync} from 'node:fs';
 import {createInterface} from 'node:readline';
+import {execFile as execFileCallback} from 'node:child_process';
+import {promisify} from 'node:util';
+import {tmpdir} from 'node:os';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {dirname, join} from 'node:path';
-import {analyzeCaseTagsWithGlm} from '../functions/_ai.js';
+import {analyzeCaseTagsWithGlm, analyzeCaseTagGroupsWithGlm} from '../functions/_ai.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
@@ -36,6 +47,9 @@ const BUCKET = 'vf-library';
 // 分区名而已，别改：库里已有的行都挂在 'augpicks-v1' 下，改名 = 现有数据全部读不到。
 export const EXPERIMENT_KEY = 'augpicks-v1';
 export const MODEL = 'glm-4v-flash';
+// 抽帧识别（gif/mp4/mov/webm）的行写这个模型名 —— 好把三条路子区分开：
+// 逐图 = 纯模型名 · 抽帧 = `-frames` · 浏览器里的按组识别 = `-group` / `-group-fallback`（见 v906）。
+export const FRAMES_MODEL = 'glm-4v-flash-frames';
 export const DEFAULT_CONCURRENCY = 4;
 export const CONCURRENCY_MAX = 8;          // 免费档限流未知（HANDOVER 没实测过），并发不许再往上加
 export const DEFAULT_RATE = 2;             // 每秒最多发起几次模型调用；模型本身几秒一张，这个默认基本不会卡住谁
@@ -47,32 +61,58 @@ export const PAGE_SIZE = 1000;
 export const MAX_PAGES = 50;               // 5 万行的保险丝，防查询写错时无限翻页
 export const VOCABULARY_MAX = 160;         // 与 app.js caseElementVocabulary() / _ai.js 的截断一致
 
+// ── 抽帧（ffmpeg）参数（v917）──────────────────────────────────────────────
+// 服务器上实测已装好 `/usr/bin/ffmpeg` + `/usr/bin/ffprobe`（ffmpeg 6.1.1）；本机 Mac 上没有，
+// 所以**抽帧能力先探测、再决定动态物料怎么处理**：探测/抽帧失败一律退回"跳过/记原因"，绝不让整轮跑挂掉。
+// 路径可用环境变量 FFMPEG_PATH / FFPROBE_PATH 覆盖；默认就调 PATH 里的 ffmpeg / ffprobe
+// （worker 的 cron PATH 是 /usr/bin:/bin，够用）。
+export const FFMPEG_TIMEOUT_MS = 30000;    // 单条 ffmpeg 命令上限：从 mp4 抽一帧正常是亚秒级，30s 就是"卡住了"
+export const FFPROBE_TIMEOUT_MS = 15000;   // gif 的 -count_frames 要解全片，给宽一点
+export const FRAME_TAIL_SEC = 0.15;        // "最后一帧" = 结尾前 0.15 秒（-sseof 兜底用同一个数）
+export const FFMPEG_MAX_BUFFER = 8 * 1024 * 1024;
+export const FRAMES_MAX_INPUT_BYTES = 300 * 1024 * 1024;   // 下载原片的上限：抽帧只出两张 PNG，别把 GB 级视频拖下来
+                                                          // （processOne 先用 preview_size_bytes 提前拦，这里再按真实字节数兜底）
+export const FRAME_LABEL_MIDDLE = '中间帧';
+export const FRAME_LABEL_LAST = '最后一帧';
+export const FRAME_MIDDLE = 'middle';
+export const FRAME_LAST = 'last';
+
 // 与 app.js 的 FILTER_SECTIONS_CONFIG.element.values 保持一致（静态元素词，排在库内标签之后兜底）
 export const CASE_ELEMENT_STATIC_VALUES = ['银行卡', '券', 'kiki', '骑手', '国旗', '手机', '耳机', 'PS5'];
 // 与 app.js 的 FILTER_SECTIONS_CONFIG.activity.values 保持一致（活动词表只进提示词，不入库）
 export const CASE_ACTIVITY_VALUES = ['聚餐', '足球', '夏日', '新年', '世界杯', '游戏', '开学', '开斋节', '宰牲节', '国庆节'];
 
-// 这些后缀喂给视觉模型没有意义（视频 / 源文件 / 矢量图），直接跳过并记数，
-// 不然每跑一次就白攒一堆失败记录。
+// 物料后缀三分类（v917），**唯一判据是 previewKind()**（在下面）：
+//   ① 直接送（静态图）：不在下面两个名单里的都算，v916 之前的行为逐字不变（含 bmp/avif/没后缀的老数据）。
+//   ② 抽帧后送（gif/mp4/mov/webm）：用 ffmpeg 抽「中间帧 + 最后一帧」两张静态 PNG 再送模型。
+//      为什么必须抽帧（2026-10-13 全量识别实测）：失败 87 张**全是 .gif**（全库 93 张 gif 只成功 6 张），
+//      因为旧脚本把**整个 GIF 字节**当一张图（data:image/gif;base64,…）塞给 GLM，而模型只吃静态图格式；
+//      mp4 之类更惨，被当"非图片"直接跳过、一张都没识别过。
+//      为什么是「中间帧 + 最后一帧」而不是首帧（用户实测反馈）：动态弹窗的**第一帧往往还没弹出来**，
+//      是空状态 —— 只取首帧等于没识别。
+//   ③ 跳过（记原因，不占队列）：其它视频容器（本轮只做 gif/mp4/mov/webm）+ 源文件 / 矢量图 / 压缩包 / 字体。
+//      注意这组**和 v916 那组不是一回事**：那时 gif 是"模型吃不下"、现在归②真的去抽帧了。
 export const NON_IMAGE_EXTENSIONS = new Set([
-  'mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv',
+  'm4v', 'avi', 'mkv',
   'pdf', 'psd', 'psb', 'ai', 'eps', 'svg', 'json', 'zip', 'rar',
   'ttf', 'otf', 'woff', 'woff2'
 ]);
 
-// 动态图默认也不进队列（v916），但**它和上面那组不是一回事**：上面是"喂给模型没意义"，
-// gif 是"模型吃不下" —— 2026-10-13 全量识别实测：全库 93 张 gif 只有 6 张成功（那 6 张是压缩过的小 gif），
-// 失败 87 张，原因两类：`图片输入格式/解析错误` 52 张 + `图片过大，请改用缩略图识别` 35 张
-// ⇒ GLM 视觉通道吃不下动图，是结构性限制，重试多少次都是白烧额度。
-// 不跳过的话还有个更烦的后果：脚本按顺序取物料，队首那批 gif 永远跑不过，
-// `--limit 8` 就永远只取到 gif，把新上传的图全挤到队尾（worker 空转）。
-// 将来做了「抽静态帧」再用 --include-gif 把它们放回来。
-export const ANIMATED_EXTENSIONS = new Set(['gif']);
+// 抽帧名单：与 app.js 的进度条口径必须同一条（那边是"除了 NON_IMAGE + 无预览路径，其余都算"）。
+// ffmpeg 其实还能吃 m4v/avi/mkv，本轮按任务书只做这四种，其余保持"非图片"不动。
+export const DYNAMIC_EXTENSIONS = new Set(['gif', 'mp4', 'mov', 'webm']);
 
 // 跳过原因（给计数与文案用，别在打印的地方硬编码字符串）
 export const SKIP_NO_PATH = 'no-path';       // 没有 preview_path（字体卡之类的虚拟预览）
-export const SKIP_NON_IMAGE = 'non-image';   // 视频 / 源文件 / 矢量图
-export const SKIP_ANIMATED = 'animated';     // 动态图（gif），GLM 吃不下
+export const SKIP_NON_IMAGE = 'non-image';   // 其它视频容器 / 源文件 / 矢量图 / 字体
+export const SKIP_DYNAMIC = 'dynamic';       // --skip-dynamic：动态物料一律跳过（连抽帧都不试）
+export const SKIP_NO_FFMPEG = 'no-ffmpeg';   // 机器上没有可用的 ffmpeg/ffprobe ⇒ 动态物料退回跳过
+
+// 物料种类（previewKind 的返回值；筛选、计数、文案都走它，别在各处自己判后缀）
+export const KIND_NONE = 'none';             // 没有 preview_path
+export const KIND_DIRECT = 'direct';         // 静态图，直接送
+export const KIND_DYNAMIC = 'dynamic';       // gif/mp4/mov/webm，抽帧后送
+export const KIND_NON_IMAGE = 'non-image';   // 跳过
 
 const MIME_BY_EXT = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg',
@@ -114,16 +154,31 @@ export function previewExtension(preview) {
   return match ? match[1].toLowerCase() : '';
 }
 
-// 「这张能不能送模型」的**唯一判据**：返回 '' = 送，否则返回跳过原因。
-// main 的筛选、dry-run 的计数都走它；网站那条进度条的「还剩 N 张」是同一条口径
-// （app.js 的 recognizeProgressSkipExtension / RECOGNIZE_PROGRESS_SKIP_EXT + _ANIMATED_EXT，
-// 改一边必须改另一边 —— tests/recognize-skip-gif-v916.test.mjs 锁两边逐字一致）。
-export function previewSkipReason(preview, {includeGif = false} = {}) {
-  if (!String(preview?.preview_path || '')) return SKIP_NO_PATH;
+// 物料种类：'none' | 'direct' | 'dynamic' | 'non-image'。**全脚本只有这一处判后缀**
+// （main 的筛选、dry-run 的计数、抽帧分流都走它）。
+// 网站那条进度条的「还剩 N 张」是同一条口径（app.js 的 recognizeProgressSkipExtension /
+// RECOGNIZE_PROGRESS_SKIP_EXT，判据 = "除了非图片 + 无预览路径，其余都算"，
+// 改一边必须改另一边 —— tests/recognize-dynamic-frames-v917.test.mjs 锁两边逐字一致）。
+export function previewKind(preview) {
+  if (!String(preview?.preview_path || '')) return KIND_NONE;
   const ext = previewExtension(preview);
-  if (!ext) return '';                                       // 没有后缀的老数据当图片试一把
-  if (NON_IMAGE_EXTENSIONS.has(ext)) return SKIP_NON_IMAGE;
-  if (!includeGif && ANIMATED_EXTENSIONS.has(ext)) return SKIP_ANIMATED;
+  if (!ext) return KIND_DIRECT;                              // 没有后缀的老数据当图片试一把
+  if (NON_IMAGE_EXTENSIONS.has(ext)) return KIND_NON_IMAGE;
+  if (DYNAMIC_EXTENSIONS.has(ext)) return KIND_DYNAMIC;
+  return KIND_DIRECT;
+}
+
+// 「这张能不能送模型」的**唯一判据**：返回 '' = 送（静态图直接送 / 动态物料抽帧后送），否则返回跳过原因。
+// options.skipDynamic = --skip-dynamic（动态物料退回 v916 行为：一律跳过，不抽帧）；
+// options.ffmpegAvailable = 抽帧能力探测结果（false ⇒ 动态物料退回跳过并记原因，静态图照常跑）。
+export function previewSkipReason(preview, {skipDynamic = false, ffmpegAvailable = true} = {}) {
+  const kind = previewKind(preview);
+  if (kind === KIND_NONE) return SKIP_NO_PATH;
+  if (kind === KIND_NON_IMAGE) return SKIP_NON_IMAGE;
+  if (kind === KIND_DYNAMIC) {
+    if (skipDynamic) return SKIP_DYNAMIC;
+    if (!ffmpegAvailable) return SKIP_NO_FFMPEG;
+  }
   return '';
 }
 
@@ -135,30 +190,53 @@ export function selectRecognizablePreviews(previews, options = {}) {
   return (Array.isArray(previews) ? previews : []).filter(preview => isRecognizablePreview(preview, options));
 }
 
-// 「不进队列的有多少张、为什么」：dry-run 与正式跑共用这一份计数，别在两处各算一遍。
+// 「队列构成」：dry-run 与正式跑共用这一份计数，别在两处各算一遍。
 export function skipSummary(previews, options = {}) {
-  const summary = {total: 0, recognized: 0, noPath: 0, nonImage: 0, animated: 0};
+  const summary = {total: 0, direct: 0, dynamic: 0, noPath: 0, nonImage: 0, dynamicSkipped: 0};
   for (const preview of Array.isArray(previews) ? previews : []) {
     summary.total += 1;
     const reason = previewSkipReason(preview, options);
     if (reason === SKIP_NO_PATH) summary.noPath += 1;
     else if (reason === SKIP_NON_IMAGE) summary.nonImage += 1;
-    else if (reason === SKIP_ANIMATED) summary.animated += 1;
-    else summary.recognized += 1;
+    else if (reason === SKIP_DYNAMIC || reason === SKIP_NO_FFMPEG) summary.dynamicSkipped += 1;
+    else if (previewKind(preview) === KIND_DYNAMIC) summary.dynamic += 1;
+    else summary.direct += 1;
   }
   return summary;
 }
 
-// 计数为 0 的也照打：这段的意义就是让人一眼看懂"哪些被跳过、凭什么"。
-export function formatSkipSummary(summary, {includeGif = false} = {}) {
+// 三行合一，一眼看懂队列怎么构成的（用户要拿「抽帧送 N 张」判断 ffmpeg 到底有没有生效）。
+// 计数为 0 的也照打：这段的意义就是让人看懂"哪些被跳过、凭什么"。
+export function formatQueueComposition(summary, {skipDynamic = false, ffmpegAvailable = true} = {}) {
   const counts = summary || {};
-  return [
-    '非图片 ' + (counts.nonImage || 0) + ' 张（视频 / 源文件 / 矢量图）',
-    '动态图 ' + (counts.animated || 0) + ' 张' + (includeGif
-      ? '（--include-gif：gif 照旧送模型）'
-      : '（gif 不支持：GLM 视觉通道吃不下动图，2026-10-13 实测 93 张只成功 6 张；要照旧送 gif 加 --include-gif）'),
-    '无预览路径 ' + (counts.noPath || 0) + ' 张（字体卡之类的虚拟预览）'
-  ].join(' · ');
+  const dynamicSkipped = counts.dynamicSkipped || 0;
+  const skipped = (counts.noPath || 0) + (counts.nonImage || 0) + dynamicSkipped;
+  const skipDetail = [
+    '非图片 ' + (counts.nonImage || 0),
+    '无预览路径 ' + (counts.noPath || 0)
+  ];
+  // 动态物料被跳过时才列出来（正常跑它是 0，列了反而让人以为有问题）
+  if (dynamicSkipped > 0) {
+    const why = skipDynamic ? '（--skip-dynamic）' : (!ffmpegAvailable ? '（没有可用的 ffmpeg/ffprobe）' : '');
+    skipDetail.push('动态 ' + dynamicSkipped + why);
+  }
+  const dynamicNote = skipDynamic
+    ? '（--skip-dynamic：gif/mp4/mov/webm 一律跳过，不抽帧）'
+    : ffmpegAvailable
+      ? '（gif/mp4/mov/webm：ffmpeg 抽「中间帧 + 最后一帧」再送）'
+      : '（没有可用的 ffmpeg/ffprobe ⇒ 动态物料退回跳过）';
+  return '队列构成：直接送图 ' + (counts.direct || 0) + ' 张 · 抽帧送 ' + (counts.dynamic || 0) + ' 张'
+    + dynamicNote + ' · 跳过 ' + skipped + ' 张（' + skipDetail.join(' · ') + '）';
+}
+
+// 待处理清单里两类各多少（dry-run 也要能一眼看出"抽帧"这一类有多少）。
+export function pendingKindCounts(items) {
+  const out = {direct: 0, dynamic: 0};
+  for (const item of Array.isArray(items) ? items : []) {
+    if (previewKind(item?.preview) === KIND_DYNAMIC) out.dynamic += 1;
+    else out.direct += 1;
+  }
+  return out;
 }
 
 export function mimeForImagePath(path) {
@@ -369,6 +447,9 @@ export function credentialsHelpMessage(missing = []) {
 export function classifyError(error) {
   const status = Number(error?.status) || 0;
   const message = String(error?.message || error || '');
+  // 抽帧失败（ffmpeg 解不开这个文件 / 探测和兜底全试过都没拿到帧）：单独一类，
+  // 既不是限流也不是网络问题，重试同一份文件也是白搭 ⇒ 不进 RETRYABLE_KINDS。
+  if (error?.kind === 'frame-extract' || /^抽帧失败|动态物料超过抽帧上限/.test(message)) return 'frame-extract';
   if (error?.kind === 'timeout' || status === 408 || /超时|timed?\s?out|timeout/i.test(message)) return 'timeout';
   if (status === 429 || /(^|\D)429(\D|$)|rate.?limit|too many requests|限流|速率|频率|过于频繁|访问频繁|quota|余额不足/i.test(message)) return 'rate-limit';
   if (status >= 500 || (status === 0 && /\b5\d\d\b|服务(器)?(错误|繁忙|不可用)|bad gateway|service unavailable|gateway time-?out/i.test(message))) return 'server';
@@ -456,7 +537,7 @@ export function createOptions() {
     dryRun: false,
     yes: false,
     markFailed: true,
-    includeGif: false,
+    skipDynamic: false,
     help: false
   };
 }
@@ -502,7 +583,11 @@ export function parseArgs(argv = process.argv.slice(2)) {
     }
     if (arg === '--force') { options.force = true; continue; }
     if (arg === '--dry-run') { options.dryRun = true; continue; }
-    if (arg === '--include-gif') { options.includeGif = true; continue; }
+    if (arg === '--skip-dynamic') { options.skipDynamic = true; continue; }
+    if (arg === '--include-gif') {
+      throw new Error('--include-gif 已废弃（v917：gif/mp4/mov/webm 默认走抽帧识别）。'
+        + '要退回老行为（动态物料一律跳过、连抽帧都不试）请改用 --skip-dynamic。');
+    }
     if (arg === '--yes' || arg === '-y') { options.yes = true; continue; }
     if (arg === '--no-fail-mark') { options.markFailed = false; continue; }
     throw new Error('未知参数：' + arg + '（--help 看用法）');
@@ -559,11 +644,19 @@ const USAGE = `案例库逐图 AI 标签 · 本机批量识别
   --concurrency <N>           同时几张，默认 ${DEFAULT_CONCURRENCY}，上限 ${CONCURRENCY_MAX}
   --rate <N>                  每秒最多发起几次模型调用，默认 ${DEFAULT_RATE}（免费档限流未知，先保守）
   --force                     连「已成功且内容没变」的行也重跑（默认跳过它们）
-  --dry-run                   只列将处理多少张、分布在哪些项目，不调模型、不写库
-  --include-gif               把 .gif 也送进模型（默认跳过：GLM 视觉通道吃不下动图，实测 93 张只成功 6 张）
+  --dry-run                   只列队列构成（直接送 / 抽帧送 / 跳过各多少张）与待处理分布，不调模型、不写库
+  --skip-dynamic              动态物料（gif/mp4/mov/webm）一律跳过，不抽帧（退回 v916 的老行为）
   --yes                       跳过开始前的确认（非 dry-run 且无 TTY 时必须加）
   --no-fail-mark              失败时不在库里写 status='failed'（默认写，便于 app 里看到失败标记）
   --help                      看这段
+
+动态物料（gif/mp4/mov/webm）的识别方式：
+  用 ffmpeg 抽「中间帧 + 最后一帧」两张静态 PNG，再当一组送视觉模型（一条消息看两张，拿回一套统一标签）。
+  取中间帧和末帧而不是首帧：动态弹窗的第一帧往往还没弹出来（空状态），只取首帧等于没识别。
+  为什么不能直接送动图：GLM 视觉通道吃不下 —— 2026-10-13 全量实测，93 张 gif 只成功 6 张。
+  ffmpeg / ffprobe 默认取 PATH 里的；可用环境变量 FFMPEG_PATH / FFPROBE_PATH 覆盖。
+  **机器上没有可用的 ffmpeg/ffprobe、或某个文件抽帧失败时，只影响这些动态物料**（跳过并记原因 / 记失败），
+  静态图照常跑，脚本不会整轮挂掉。抽帧的临时 PNG 放在系统临时目录，用完即删。
 
 凭证（缺了会提示；二选一，别写进代码）：
   环境变量：SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / GLM_API_KEY（ZHIPU_API_KEY 也认）
@@ -704,9 +797,18 @@ function looksLikeMissingObject(status, text) {
   return false;
 }
 
-// 优先缩略图（几 KB，省流量也省模型时间）；缩略图 404 就退原图，并记一行日志说明用了哪个。
-async function loadPreviewImage(creds, preview) {
-  const candidates = thumbnailCandidatesForPreview(preview);
+// 取哪几个对象：静态图优先缩略图（几 KB，省流量也省模型时间），动态物料**只能取原片**
+// —— 缩略图是 `_thumb.jpg`（静态首帧），拿它去抽帧等于又回到"只认首帧"，白费这一轮。
+export function sourceCandidatesForPreview(preview, {preferThumbnail = true} = {}) {
+  if (preferThumbnail) return thumbnailCandidatesForPreview(preview);
+  const path = String(preview?.preview_path || '');
+  return path ? [path] : [];
+}
+
+// 按候选顺序取第一个拿得到的对象（404 就试下一个），返回原始字节。
+// usedFallback 表示"没用第一个候选"（静态图那条路等于"缩略图缺失、退回原图"）。
+async function loadPreviewObject(creds, preview, {preferThumbnail = true} = {}) {
+  const candidates = sourceCandidatesForPreview(preview, {preferThumbnail});
   const tried = [];
   for (const path of candidates) {
     const response = await withTimeout(
@@ -727,18 +829,281 @@ async function loadPreviewImage(creds, preview) {
     const buffer = Buffer.from(await response.arrayBuffer());
     if (!buffer.length) throw new Error('图片内容为空：' + path);
     tried.push(path + ' (' + buffer.length + 'B)');
-    return {
-      dataUrl: 'data:' + mimeForImagePath(path) + ';base64,' + buffer.toString('base64'),
-      path,
-      bytes: buffer.length,
-      usedFallback: path !== candidates[0],
-      tried
-    };
+    return {buffer, path, bytes: buffer.length, usedFallback: path !== candidates[0], tried};
   }
-  const error = new Error('缩略图和原图都取不到：' + tried.join(' → '));
+  const error = new Error((candidates.length > 1 ? '缩略图和原图都取不到：' : '取不到物料文件：') + tried.join(' → '));
   error.status = 404;
   error.kind = 'missing-image';
   throw error;
+}
+
+function dataUrlForImage(buffer, path, fallbackMime = 'image/png') {
+  return 'data:' + (mimeForImagePath(path) || fallbackMime) + ';base64,' + buffer.toString('base64');
+}
+
+/* ───────────────────────── 抽帧（ffmpeg）───────────────────────── */
+//
+// 目标：把动态物料（gif/mp4/mov/webm）变成「中间帧 + 最后一帧」两张静态 PNG。
+// 三条硬要求：① 命令能**注入**（本机没有 ffmpeg，测试用假执行器把参数与降级逻辑测穿）；
+// ② 探测/抽帧失败一律**降级**，不许把整轮跑挂掉；③ 临时文件必须删干净（放 os.tmpdir()，不污染 /opt/case-tags）。
+
+const execFileAsync = promisify(execFileCallback);
+
+// 默认执行器：真的 spawn 子进程。exit≠0 抛错（带 code/stderr），找不到命令（ENOENT）也抛错。
+// 测试里换成假的：只记录 command/args，需要"真的产出帧"时自己按 args 里的输出路径写一个 PNG。
+export async function defaultCommandRunner(command, args, {timeoutMs = FFMPEG_TIMEOUT_MS} = {}) {
+  try {
+    const {stdout, stderr} = await execFileAsync(command, args, {
+      timeout: timeoutMs,
+      maxBuffer: FFMPEG_MAX_BUFFER,
+      encoding: 'utf8',
+      windowsHide: true
+    });
+    return {stdout: String(stdout || ''), stderr: String(stderr || ''), code: 0};
+  } catch (error) {
+    const exitCode = typeof error?.code === 'number' ? error.code : null;
+    const stderr = String(error?.stderr || '').trim();
+    const detail = error?.killed || error?.signal
+      ? ('超过 ' + timeoutMs + 'ms 未返回')
+      : String(error?.message || error);
+    throw Object.assign(new Error(command + ' 执行失败：' + detail.slice(0, 200)
+      + (stderr ? '｜' + stderr.slice(0, 200) : '')), {
+      command, args, code: exitCode, stderr
+    });
+  }
+}
+
+// ffmpeg / ffprobe 从哪来：环境变量优先，默认 PATH 里的同名命令。
+export function resolveMediaTools(env = process.env) {
+  const pick = (name, fallback) => {
+    const value = String((env || {})[name] || '').trim();
+    return {command: value || fallback, from: value ? '环境变量 ' + name : 'PATH'};
+  };
+  return {ffmpeg: pick('FFMPEG_PATH', 'ffmpeg'), ffprobe: pick('FFPROBE_PATH', 'ffprobe')};
+}
+
+// 开机探测一次：`ffmpeg -version` / `ffprobe -version`（只读、无副作用、毫秒级）。
+// 两个都可用才认为"能抽帧"；否则动态物料退回"跳过并记原因"，静态图照跑。
+export async function probeMediaTools({env = process.env, runner = defaultCommandRunner, timeoutMs = FFPROBE_TIMEOUT_MS} = {}) {
+  const tools = resolveMediaTools(env);
+  const check = async (command) => {
+    try { await runner(command, ['-version'], {timeoutMs}); return {ok: true, error: ''}; }
+    catch (error) { return {ok: false, error: String(error?.message || error).slice(0, 200)}; }
+  };
+  const ffmpeg = await check(tools.ffmpeg.command);
+  const ffprobe = await check(tools.ffprobe.command);
+  return {
+    ffmpegPath: tools.ffmpeg.command,
+    ffprobePath: tools.ffprobe.command,
+    ffmpegFrom: tools.ffmpeg.from,
+    ffprobeFrom: tools.ffprobe.from,
+    ffmpegOk: ffmpeg.ok,
+    ffprobeOk: ffprobe.ok,
+    available: ffmpeg.ok && ffprobe.ok,
+    errors: [ffmpeg, ffprobe].filter(item => !item.ok).map(item => item.error).filter(Boolean)
+  };
+}
+
+export function ffprobeArgs(file, {frames = false} = {}) {
+  return frames
+    ? ['-v', 'error', '-count_frames', '-select_streams', 'v:0', '-show_entries', 'stream=nb_read_frames', '-of', 'default=nw=1:nk=1', file]
+    : ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', file];
+}
+
+// ffprobe 对有些文件会吐 "N/A"（或干脆不吐），一律当 0 = 不知道 ⇒ 走不依赖探测的兜底命令。
+export function parseProbeNumber(text) {
+  const match = String(text == null ? '' : text).match(/-?\d+(?:\.\d+)?/);
+  const value = match ? Number(match[0]) : 0;
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+export async function probeMedia({file, runner = defaultCommandRunner, ffprobePath = 'ffprobe', timeoutMs = FFPROBE_TIMEOUT_MS, wantFrameCount = false}) {
+  const out = {durationSec: 0, frameCount: 0, errors: []};
+  try {
+    const result = await runner(ffprobePath, ffprobeArgs(file), {timeoutMs});
+    out.durationSec = parseProbeNumber(result?.stdout);
+  } catch (error) { out.errors.push('时长探测失败：' + String(error?.message || error).slice(0, 120)); }
+  // `-count_frames` 要把整片解一遍（大 mp4 就是几秒到几十秒），所以只在真的用得上时才跑：
+  // ① 调用方明确要（gif 小、按帧号那条兜底更靠谱）② 时长没探出来（那就只剩帧号这条路能用）。
+  if (wantFrameCount || out.durationSec === 0) {
+    try {
+      const result = await runner(ffprobePath, ffprobeArgs(file, {frames: true}), {timeoutMs});
+      const frames = parseProbeNumber(result?.stdout);
+      out.frameCount = frames > 0 ? Math.round(frames) : 0;
+    } catch (error) { out.errors.push('帧数探测失败：' + String(error?.message || error).slice(0, 120)); }
+  }
+  return out;
+}
+
+function roundSeconds(value) {
+  return Number(Math.max(0, Number(value) || 0).toFixed(3));
+}
+
+// 时间法（主路径）：`-ss <t>` 放在 `-i` 前面 = input seek，快；`-frames:v 1 -an` 只要一帧、不要音轨
+// （不写 -an 的话，从 mp4 抽帧时 ffmpeg 会试着把音轨也塞进 image2，直接报错）。
+export function ffmpegSeekArgs({input, output, time = null, sseof = null}) {
+  const args = ['-nostdin', '-loglevel', 'error', '-y'];
+  if (sseof != null) args.push('-sseof', String(sseof));
+  else if (time != null) args.push('-ss', String(time));
+  args.push('-i', input, '-frames:v', '1', '-an', output);
+  return args;
+}
+
+// 按帧号 / 过滤器取帧（兜底路径）。`select=eq(n\,M)` 里的反斜杠是 ffmpeg filtergraph 的转义
+// （逗号分隔多个 filter，必须转义），我们是 execFile 直传 argv、不过 shell，所以反斜杠原样到达 ffmpeg。
+export function ffmpegSelectArgs({input, output, index = 0, filter = ''}) {
+  return ['-nostdin', '-loglevel', 'error', '-y', '-i', input,
+    '-vf', filter || ('select=eq(n\\,' + index + ')'), '-frames:v', '1', '-an', output];
+}
+
+// 两张帧各自的候选命令，**按顺序试，第一个真的产出非空文件就赢**。
+// middle（中间帧）：① 按时长 dur/2 ② 按帧号 (帧数-1)/2 ③ `thumbnail` 过滤器自选代表帧（不依赖探测）
+// last（最后一帧）：  ① 按时长 dur-0.15 ② `-sseof -0.15`（不依赖探测，直接从结尾回退）③ 按帧号 帧数-1
+// 兜底全保留的意义：ffprobe 对某些 gif/mp4 会返回 N/A，主路径就废了 —— 那时全靠 ②③ 兜住。
+export function frameExtractionPlan({input, outputDir, durationSec = 0, frameCount = 0, tailSec = FRAME_TAIL_SEC}) {
+  const outputFor = (name) => join(outputDir, name + '.png');
+  const middleOutput = outputFor(FRAME_MIDDLE);
+  const lastOutput = outputFor(FRAME_LAST);
+  const middle = [];
+  const last = [];
+  if (durationSec > 0) {
+    middle.push({id: 'time-mid', args: ffmpegSeekArgs({input, output: middleOutput, time: roundSeconds(durationSec / 2)})});
+    last.push({id: 'time-last', args: ffmpegSeekArgs({input, output: lastOutput, time: roundSeconds(Math.max(0, durationSec - tailSec))})});
+  }
+  if (frameCount > 0) {
+    middle.push({id: 'index-mid', args: ffmpegSelectArgs({input, output: middleOutput, index: Math.floor((frameCount - 1) / 2)})});
+    last.push({id: 'index-last', args: ffmpegSelectArgs({input, output: lastOutput, index: frameCount - 1})});
+  }
+  // 不依赖 ffprobe 的两条兜底放在最后：thumbnail 要解全片（慢），-sseof 靠谱但拿到的未必是"最后一帧"
+  last.push({id: 'sseof-last', args: ffmpegSeekArgs({input, output: lastOutput, sseof: -roundSeconds(tailSec)})});
+  middle.push({id: 'thumbnail-mid', args: ffmpegSelectArgs({input, output: middleOutput, filter: 'thumbnail=100'})});
+  return [
+    {name: FRAME_MIDDLE, label: FRAME_LABEL_MIDDLE, output: middleOutput, attempts: middle},
+    {name: FRAME_LAST, label: FRAME_LABEL_LAST, output: lastOutput, attempts: last}
+  ];
+}
+
+// 临时工作目录：一律放系统临时目录（worker 上是 /tmp），不污染 /opt/case-tags。
+export function createTempWorkDir(prefix = 'vf-recognize-') {
+  return mkdtempSync(join(tmpdir(), prefix));
+}
+
+export function cleanupTempDir(dir) {
+  if (!dir) return;
+  try { rmSync(dir, {recursive: true, force: true}); } catch { /* 删不掉就算了，别让它把整轮弄挂 */ }
+}
+
+// 把下载到的原片落盘：ffmpeg 靠**后缀**猜容器（gif/mp4 都是），所以后缀必须跟着 preview_path 走。
+export function writeDynamicSource(dir, preview, buffer) {
+  const ext = previewExtension(preview) || 'bin';
+  const file = join(dir, 'source.' + ext);
+  writeFileSync(file, buffer);
+  return file;
+}
+
+// 跑一帧的所有候选命令。返回 {ok, buffer, command} 或 {ok:false, error, tried:[命令 id]}。
+async function extractOneFrame(frame, {runner, ffmpegPath, timeoutMs, commands}) {
+  const failures = [];
+  for (const attempt of frame.attempts) {
+    commands.push({frame: frame.name, id: attempt.id, args: attempt.args});
+    try {
+      await runner(ffmpegPath, attempt.args, {timeoutMs});
+    } catch (error) {
+      failures.push(attempt.id + '：' + String(error?.message || error).slice(0, 160));
+      continue;
+    }
+    // ffmpeg 偶尔 exit 0 却没写文件（或写了 0 字节）—— 必须真的读回来看，不能信退出码。
+    let buffer = null;
+    try { buffer = readFileSync(frame.output); } catch { buffer = null; }
+    if (buffer && buffer.length) return {ok: true, buffer, command: attempt.id, failures};
+    failures.push(attempt.id + '：ffmpeg 没有写出帧');
+  }
+  return {ok: false, error: failures.join(' → ') || '没有可用的抽帧命令', failures, tried: frame.attempts.map(item => item.id)};
+}
+
+// 抽帧总入口：返回 {frames:[{name,label,buffer,dataUrl,command}], probe, commands, errors}。
+// frames.length === 0 ⇒ 抽帧失败（调用方按失败处理，写清原因）；1 张 ⇒ 走单图接口；2 张 ⇒ 走多图接口。
+export async function extractDynamicFrames({
+  input, outputDir, runner = defaultCommandRunner, ffmpegPath = 'ffmpeg', ffprobePath = 'ffprobe',
+  ffmpegTimeoutMs = FFMPEG_TIMEOUT_MS, ffprobeTimeoutMs = FFPROBE_TIMEOUT_MS, wantFrameCount = false, onLog = () => {}
+}) {
+  const probe = await probeMedia({file: input, runner, ffprobePath, timeoutMs: ffprobeTimeoutMs, wantFrameCount});
+  probe.errors.forEach(message => onLog('· 探测降级：' + message));
+  const plan = frameExtractionPlan({input, outputDir, durationSec: probe.durationSec, frameCount: probe.frameCount});
+  const commands = [];
+  const frames = [];
+  const errors = [];
+  for (const frame of plan) {
+    const result = await extractOneFrame(frame, {runner, ffmpegPath, timeoutMs: ffmpegTimeoutMs, commands});
+    if (!result.ok) { errors.push(frame.label + '抽帧失败：' + result.error); continue; }
+    frames.push({
+      name: frame.name,
+      label: frame.label,
+      buffer: result.buffer,
+      dataUrl: dataUrlForImage(result.buffer, frame.output),
+      command: result.command
+    });
+  }
+  // 静态 gif（只有一帧）两张候选会抽出同一张图：字节相同就只留中间帧，别拿同一张图当"一组"送两次
+  if (frames.length === 2 && frames[0].buffer.equals(frames[1].buffer)) frames.pop();
+  return {frames, probe, commands, errors};
+}
+
+// 帧 → 多图接口要的 {url, label}（url 是 data URL，同 _ai.js 的约定）。
+export function framesToImagePayloads(frames) {
+  return (Array.isArray(frames) ? frames : [])
+    .filter(frame => frame && frame.dataUrl)
+    .map(frame => ({url: frame.dataUrl, label: String(frame.label || '')}));
+}
+
+// 「1 张走单图接口、2 张走多图接口」这一步抽成可注入的函数：测试里把两个真实调用的包装换成假的，
+// 就能验"2 张 → analyzeCaseTagGroupsWithGlm、1 张 → analyzeCaseTagsWithGlm"，不需要联网。
+// 只看 elements（activity 库里没有这列，与逐图那条路一致）；sameDesign 忽略 —— 那是浏览器按组那条路的信号。
+export async function analyzeFrameImages({
+  images, env, vocabulary, activities,
+  analyzeSingle = analyzeCaseTagsWithGlm, analyzeGroup = analyzeCaseTagGroupsWithGlm
+}) {
+  const list = Array.isArray(images) ? images.filter(item => item && item.url) : [];
+  if (!list.length) throw new Error('没有可识别的帧');
+  const result = list.length >= 2
+    ? await analyzeGroup(env, list, vocabulary, activities)
+    : await analyzeSingle(env, list[0].url, vocabulary, activities);
+  return {
+    api: list.length >= 2 ? 'group' : 'single',
+    elements: Array.isArray(result?.elements) ? result.elements : [],
+    activity: String(result?.activity || ''),
+    sameDesign: result?.sameDesign === true
+  };
+}
+
+// 动态物料的完整链路（除"下载原片"之外的每一步都在这里，好整段注入测试）：
+// 落盘原片 → ffprobe 探测 → 按计划抽帧 → 组 data URL。临时目录由调用方在 finally 里删（见 runBatch）。
+export async function prepareDynamicImages({
+  preview, buffer, dir, runner = defaultCommandRunner, ffmpegPath = 'ffmpeg', ffprobePath = 'ffprobe',
+  ffmpegTimeoutMs = FFMPEG_TIMEOUT_MS, ffprobeTimeoutMs = FFPROBE_TIMEOUT_MS, onLog = () => {}
+}) {
+  if (buffer && buffer.length > FRAMES_MAX_INPUT_BYTES) {
+    throw Object.assign(new Error('动态物料超过抽帧上限（' + Math.round(FRAMES_MAX_INPUT_BYTES / 1024 / 1024) + 'MB）：'
+      + preview?.preview_path), {kind: 'frame-extract'});
+  }
+  const input = writeDynamicSource(dir, preview, buffer);
+  const extracted = await extractDynamicFrames({
+    input, outputDir: dir, runner, ffmpegPath, ffprobePath, ffmpegTimeoutMs, ffprobeTimeoutMs, onLog,
+    // gif 小、解全片量帧也快，而且按帧号取"中间/最后"对 gif 比按时长更靠谱 ⇒ 明确要帧数
+    wantFrameCount: previewExtension(preview) === 'gif'
+  });
+  if (!extracted.frames.length) {
+    throw Object.assign(new Error('抽帧失败（' + (extracted.errors.join('；') || '没拿到任何一帧') + '）'),
+      {kind: 'frame-extract', commands: extracted.commands});
+  }
+  return {
+    images: framesToImagePayloads(extracted.frames),
+    model: FRAMES_MODEL,
+    frames: extracted.frames,
+    probe: extracted.probe,
+    commands: extracted.commands,
+    errors: extracted.errors
+  };
 }
 
 /* ───────────────────────── 主流程 ───────────────────────── */
@@ -757,14 +1122,25 @@ function printConfig(creds, options, extra = {}) {
   console.log('  Supabase   : ' + creds.url + '（来自' + creds.sources.url + ' ' + creds.sources.urlName + '）');
   console.log('  service key: ' + maskSecret(creds.serviceKey) + '（来自' + creds.sources.serviceKey + ' ' + creds.sources.serviceKeyName + '）');
   console.log('  GLM key    : ' + maskSecret(creds.glmKey) + '（来自' + creds.sources.glmKey + ' ' + creds.sources.glmKeyName + '）');
-  console.log('  模型       : ' + MODEL + '（免费视觉通道）');
+  console.log('  模型       : ' + MODEL + '（免费视觉通道）；动态物料抽帧后记 ' + FRAMES_MODEL);
   console.log('  并发/限流  : ' + options.concurrency + ' 张同时 · 每秒最多 ' + options.rate + ' 次模型调用');
   console.log('  experiment_key : ' + EXPERIMENT_KEY + '（只是分区名，别改）');
-  console.log('  动态图 gif : ' + (options.includeGif
-    ? '照旧送模型（--include-gif）'
-    : '默认跳过（GLM 视觉通道吃不下动图；要照旧送就加 --include-gif）'));
+  console.log('  动态物料   : ' + formatDynamicMode(options, extra.mediaTools));
+  for (const message of (extra.mediaTools?.errors || [])) console.log('    ⚠ ' + message);
   if (extra.vocabularySize) console.log('  元素词表   : ' + extra.vocabularySize + ' 个词（库内标签 + 静态元素词）');
 }
+
+// 动态物料这一行要能一眼看出"到底会不会抽帧"（用户要靠它判断 ffmpeg 有没有生效）。
+export function formatDynamicMode(options = {}, mediaTools = null) {
+  if (options.skipDynamic) return '(--skip-dynamic) gif/mp4/mov/webm 一律跳过，不抽帧';
+  if (mediaTools && !mediaTools.available) {
+    return '抽帧不可用 ⇒ gif/mp4/mov/webm 退回跳过（缺 ffmpeg/ffprobe，见下面 ⚠）';
+  }
+  const ffmpeg = mediaTools ? ' · ffmpeg ' + mediaTools.ffmpegPath + '（' + mediaTools.ffmpegFrom + '）' : '';
+  const ffprobe = mediaTools ? ' · ffprobe ' + mediaTools.ffprobePath + '（' + mediaTools.ffprobeFrom + '）' : '';
+  return 'gif/mp4/mov/webm 抽「中间帧 + 最后一帧」两张 PNG 再送模型' + ffmpeg + ffprobe;
+}
+
 
 function printProjectDistribution(items, titleOf) {
   const counts = new Map();
@@ -812,7 +1188,7 @@ async function runBatch(creds, plan, options, vocabulary, log) {
   const limiter = createRateLimiter(options.rate);
   const runId = (globalThis.crypto?.randomUUID?.() || '') || null;
   const startedAt = Date.now();
-  const stats = {ok: 0, fail: 0, done: 0, fallbackImages: 0};
+  const stats = {ok: 0, fail: 0, done: 0, fallbackImages: 0, dynamicItems: 0, frames: 0};
   const failureKinds = new Map();
   const failures = [];
   let cursor = 0;
@@ -838,6 +1214,7 @@ async function runBatch(creds, plan, options, vocabulary, log) {
       reason: item.reason,
       kind,
       attempts,
+      commands: Array.isArray(error?.commands) ? error.commands.map(entry => entry.id) : undefined,
       error: String(error?.message || error || '').slice(0, 300)
     });
     let mark = '';
@@ -855,27 +1232,68 @@ async function runBatch(creds, plan, options, vocabulary, log) {
   };
 
   const processOne = async (item) => {
-    const image = await withRetry(
-      () => loadPreviewImage(creds, item.preview),
+    const dynamic = previewKind(item.preview) === KIND_DYNAMIC;
+    // 明显超大的动态物料先按 preview_size_bytes 拦下来：抽帧只出两张 PNG，没必要把 GB 级原片拖进临时目录。
+    // （这个列如果是 0/缺，就靠 prepareDynamicImages 里的字节数二次兜底。）
+    if (dynamic) {
+      const declaredBytes = Number(item.preview.preview_size_bytes) || 0;
+      if (declaredBytes > FRAMES_MAX_INPUT_BYTES) {
+        throw Object.assign(new Error('动态物料超过抽帧上限（声明 '
+          + Math.round(declaredBytes / 1024 / 1024) + 'MB）：' + item.preview.preview_path), {kind: 'frame-extract'});
+      }
+    }
+    // 动态物料只能取**原片**（缩略图是静态首帧，拿它抽帧等于又回到"只认首帧"）
+    const loaded = await withRetry(
+      () => loadPreviewObject(creds, item.preview, {preferThumbnail: !dynamic}),
       {attempts: RETRY_ATTEMPTS, baseDelayMs: RETRY_BASE_MS, onRetry: ({delay}) => log.line('· 取图重试，等 ' + delay + 'ms')}
     );
-    if (image.value.usedFallback) {
+    if (loaded.value.usedFallback) {
       stats.fallbackImages += 1;
       log.line('· 缩略图缺失，改用原图：' + item.preview.preview_path);
     }
-    await limiter();
-    const analyzed = await withRetry(
-      () => withTimeout(
-        analyzeCaseTagsWithGlm({GLM_API_KEY: creds.glmKey}, image.value.dataUrl, vocabulary, CASE_ACTIVITY_VALUES),
-        MODEL_TIMEOUT_MS,
-        '模型超过 ' + MODEL_TIMEOUT_MS + 'ms 未返回'
-      ),
-      {attempts: RETRY_ATTEMPTS, baseDelayMs: RETRY_BASE_MS, onRetry: ({attempt, kind, delay}) => log.line('· 第 ' + attempt + ' 次失败（' + kind + '），等 ' + delay + 'ms 重试')}
-    );
-    const tags = Array.isArray(analyzed.value?.elements) ? analyzed.value.elements : [];
-    // 写之前重读一次：人工可能刚在 app 里给这张补过标签 / 排除过词，拿计划阶段的旧快照去写会覆盖掉它。
-    const fresh = await fetchCurrentTagRow(creds, item.preview.id);
-    await upsertTagRow(creds, buildSuccessRow({preview: item.preview, tags, runId, current: fresh}));
+    let workDir = '';
+    try {
+      let images = [{
+        url: dataUrlForImage(loaded.value.buffer, loaded.value.path, mimeForImagePath(item.preview.preview_path)),
+        label: ''
+      }];
+      let model = MODEL;
+      if (dynamic) {
+        workDir = createTempWorkDir();
+        const prepared = await prepareDynamicImages({
+          preview: item.preview,
+          buffer: loaded.value.buffer,
+          dir: workDir,
+          runner: options.runner,
+          ffmpegPath: options.ffmpegPath,
+          ffprobePath: options.ffprobePath,
+          onLog: (message) => log.line(message)
+        });
+        images = prepared.images;
+        model = prepared.model;
+        stats.dynamicItems += 1;
+        stats.frames += images.length;
+        log.line('· 抽帧：' + (item.preview.preview_filename || item.preview.id) + ' → ' + images.length + ' 帧（'
+          + prepared.frames.map(frame => frame.label + '/' + frame.command).join('、') + '）');
+      }
+      await limiter();
+      // 2 张帧 → 一条消息看多张（拿一套统一标签）；1 张 → 单图接口。两者都不改提示词（在 _ai.js 里）。
+      const analyzed = await withRetry(
+        () => withTimeout(
+          analyzeFrameImages({images, env: {GLM_API_KEY: creds.glmKey}, vocabulary, activities: CASE_ACTIVITY_VALUES}),
+          MODEL_TIMEOUT_MS,
+          '模型超过 ' + MODEL_TIMEOUT_MS + 'ms 未返回'
+        ),
+        {attempts: RETRY_ATTEMPTS, baseDelayMs: RETRY_BASE_MS, onRetry: ({attempt, kind: errorKind, delay}) => log.line('· 第 ' + attempt + ' 次失败（' + errorKind + '），等 ' + delay + 'ms 重试')}
+      );
+      const tags = analyzed.value.elements;
+      // 写之前重读一次：人工可能刚在 app 里给这张补过标签 / 排除过词，拿计划阶段的旧快照去写会覆盖掉它。
+      const fresh = await fetchCurrentTagRow(creds, item.preview.id);
+      await upsertTagRow(creds, buildSuccessRow({preview: item.preview, tags, model, runId, current: fresh}));
+    } finally {
+      // 抽出来的临时 PNG 一律删干净：成功 / 抽帧失败 / 模型失败 / 中断都走这里。
+      cleanupTempDir(workDir);
+    }
   };
 
   const workerCount = Math.max(1, Math.min(options.concurrency, total));
@@ -905,6 +1323,10 @@ async function runBatch(creds, plan, options, vocabulary, log) {
     + '，用时 ' + formatDuration(elapsedMs)
     + '，平均 ' + (stats.done / Math.max(0.001, elapsedMs / 1000)).toFixed(1) + '/s');
   if (stats.fallbackImages) log.line('缩略图缺失、退回原图：' + stats.fallbackImages + ' 张（见上面的逐条日志）');
+  if (stats.dynamicItems) log.line('抽帧识别：' + stats.dynamicItems + ' 张动态物料（gif/mp4/mov/webm），共送出 ' + stats.frames + ' 帧');
+  if (failureKinds.get('frame-extract')) {
+    log.line('其中抽帧失败 ' + failureKinds.get('frame-extract') + ' 张（没送模型：ffmpeg 探测/抽帧全试过都没拿到帧，原因见失败清单）');
+  }
   if (failureKinds.size) {
     log.line('失败分类：' + [...failureKinds.entries()].map(([kind, count]) => kind + ' ' + count).join(' / '));
   }
@@ -949,30 +1371,51 @@ async function main() {
 
   const {rows: allPreviews, total: previewTotal} = await fetchAllPreviews(creds);
   const casePreviews = allPreviews.filter(preview => projectIds.has(preview.source_file_id));
-  const previews = selectRecognizablePreviews(casePreviews, {includeGif: options.includeGif});
-  const skipped = skipSummary(casePreviews, {includeGif: options.includeGif});
+
+  // 抽帧能力先探测（只跑 `ffmpeg -version` / `ffprobe -version`，只读、无副作用）：
+  // 缺了就只把动态物料退回"跳过并记原因"，静态图照旧跑 —— 绝不让整轮挂掉。
+  // --skip-dynamic 时不探测（反正不用）。
+  const mediaTools = options.skipDynamic
+    ? {available: false, ffmpegPath: '', ffprobePath: '', ffmpegFrom: '', ffprobeFrom: '', errors: []}
+    : await probeMediaTools().catch(error => ({
+      available: false, ffmpegPath: '', ffprobePath: '', ffmpegFrom: '', ffprobeFrom: '',
+      errors: ['抽帧能力探测失败：' + String(error?.message || error).slice(0, 160)]
+    }));
+  const queueOptions = {skipDynamic: options.skipDynamic, ffmpegAvailable: mediaTools.available};
+  if (!options.skipDynamic && !mediaTools.available) {
+    console.warn('⚠ 没有可用的 ffmpeg/ffprobe ⇒ 动态物料（gif/mp4/mov/webm）本轮按"跳过"处理，静态图照常跑。');
+    console.warn('  要装/指定：cf. USAGE（可用 FFMPEG_PATH / FFPROBE_PATH 覆盖路径）。');
+  }
+
+  const previews = selectRecognizablePreviews(casePreviews, queueOptions);
+  const skipped = skipSummary(casePreviews, queueOptions);
 
   const existingRows = await fetchExistingTagRows(creds);
   const vocabulary = elementVocabularyFromRows(await fetchVocabularyRows(creds));
   const plan = planWorkItems({previews, existingRows, force: options.force, limit: options.limit});
+  const pendingKinds = pendingKindCounts(plan.pending);
 
-  printConfig(creds, options, {vocabularySize: vocabulary.length});
+  printConfig(creds, options, {vocabularySize: vocabulary.length, mediaTools});
   console.log('范围：' + (options.project ? '项目「' + options.project + '」→ ' + sources.length + ' 个' : '全部案例项目 ' + sources.length + ' 个')
     + '；物料 ' + casePreviews.length + ' 张，预览表共 ' + previewTotal + ' 行');
-  console.log('不进识别队列（物料 ' + casePreviews.length + ' 张里跳过 ' + (casePreviews.length - previews.length) + ' 张）：'
-    + formatSkipSummary(skipped, {includeGif: options.includeGif}));
+  console.log(formatQueueComposition(skipped, queueOptions));
   console.log('待处理：' + plan.stats.pending + ' 张'
+    + '（其中直接送图 ' + pendingKinds.direct + ' 张 · 抽帧送 ' + pendingKinds.dynamic + ' 张）'
     + '（新增 ' + plan.stats.reasons.noRow
     + ' / 未成功 ' + plan.stats.reasons.notSuccess
     + ' / 内容变了 ' + plan.stats.reasons.contentChanged
     + (options.force ? ' / --force 重跑 ' + plan.stats.reasons.force : '')
     + '），跳过 ' + plan.stats.skipped + ' 张（已成功且内容没变）'
     + (plan.stats.pendingTotal > plan.stats.pending ? '，另有 ' + (plan.stats.pendingTotal - plan.stats.pending) + ' 张被 --limit 留到下一轮' : ''));
+  if (pendingKinds.dynamic) {
+    console.log('  抽帧那 ' + pendingKinds.dynamic + ' 张：每张用 ffmpeg 抽「中间帧 + 最后一帧」两张 PNG，'
+      + '当一组送 ' + FRAMES_MODEL + '（一条消息看两张，拿回一套统一标签）。');
+  }
 
   if (options.dryRun) {
     if (plan.pending.length) printProjectDistribution(plan.pending, id => projectTitles.get(id) || '');
-    else console.log('没有需要处理的图片（该跳过的都在上一行按原因列了）。');
-    console.log('--dry-run：没有调模型、没有写库。');
+    else console.log('没有需要处理的图片（该跳过的都在上面按原因列了）。');
+    console.log('--dry-run：没有调模型、没有写库、也没有真的抽帧（只探测了 ffmpeg/ffprobe 在不在、会不会用）。');
     return 0;
   }
   if (!plan.pending.length) {
@@ -982,12 +1425,18 @@ async function main() {
 
   if (!options.yes) {
     printProjectDistribution(plan.pending, id => projectTitles.get(id) || '');
-    const answer = await confirm('将对 ' + plan.pending.length + ' 张图调用模型（' + MODEL + '）并写库 vf_preview_ai_tags（experiment_key=' + EXPERIMENT_KEY + '）。确认继续？(y/N) ');
+    const answer = await confirm('将对 ' + plan.pending.length + ' 张图调用模型（静态图 ' + MODEL
+      + '；动态物料抽帧后走 ' + FRAMES_MODEL + '）并写库 vf_preview_ai_tags（experiment_key=' + EXPERIMENT_KEY + '）。确认继续？(y/N) ');
     if (!answer) { console.log('已取消。'); return 0; }
   }
 
   installSigintHandler(log);
-  const result = await runBatch(creds, plan, {...options, projectTitles}, vocabulary, log);
+  const result = await runBatch(creds, plan, {
+    ...options,
+    projectTitles,
+    ffmpegPath: mediaTools.ffmpegPath,
+    ffprobePath: mediaTools.ffprobePath
+  }, vocabulary, log);
   if (result.failures.length) return 1;
   return result.aborted ? 130 : 0;   // 130 = 被 Ctrl-C 中断（跟 shell 惯例一致，便于外面写重跑循环）
 }
