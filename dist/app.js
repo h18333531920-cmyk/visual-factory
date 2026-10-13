@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261013-search-synonym-v905';
+const TOOL_UI_VERSION = '20261013-case-group-ai-v906';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4537,46 +4537,107 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     }
     const finished = run.success + run.failed;
     button.disabled = !!run.running;
+    const groupDone = Math.min(run.groupsDone + (run.running ? 1 : 0), run.groupsTotal);
+    const groupText = run.groupsTotal > 1
+      ? (state.lang === 'zh'
+        ? ('第 ' + groupDone + '/' + run.groupsTotal + ' 组 · 共 ' + run.total + ' 张 · ')
+        : ('Group ' + groupDone + '/' + run.groupsTotal + ' · ' + run.total + ' images · '))
+      : '';
     button.textContent = run.running
       ? (state.lang === 'zh' ? ('识别中 ' + finished + '/' + run.total) : ('Analyzing ' + finished + '/' + run.total))
       : (state.lang === 'zh' ? '重新识别' : 'Analyze again');
     progress.hidden = false;
-    progress.innerHTML = '<span>' + escapeHtml(state.lang === 'zh'
+    progress.innerHTML = '<span>' + escapeHtml(groupText + (state.lang === 'zh'
       ? ('完成 ' + run.success + ' · 失败 ' + run.failed + (run.skipped ? ' · 跳过 ' + run.skipped : ''))
-      : ('Done ' + run.success + ' · Failed ' + run.failed + (run.skipped ? ' · Skipped ' + run.skipped : ''))) + '</span>'
+      : ('Done ' + run.success + ' · Failed ' + run.failed + (run.skipped ? ' · Skipped ' + run.skipped : '')))) + '</span>'
       + (run.running ? '<button type="button" id="case-ai-cancel-run">' + (state.lang === 'zh' ? '停止后续任务' : 'Stop remaining') + '</button>' : '')
       + (!run.running && run.failed ? '<button type="button" id="case-ai-retry-failed">' + (state.lang === 'zh' ? '重试失败项' : 'Retry failed') + '</button>' : '');
   }
 
-  async function recognizeCasePreviewAiTags(source, preview, run) {
-    const contentKey = casePreviewAiContentKey(preview);
-    await postCasePreviewAiTagAction({action: 'status', status: 'running', previewId: preview.id, runId: run.id, contentKey: contentKey});
+  // v906：按组识别。一个「组」= 1 张（语言判不出来、配对失败、或 onlyIds 只补新的那张）
+  // 或多张语言互补的同款图。多张时一次 POST {images:[...]}（服务端走组识别），
+  // 拿到**一套共同标签**后写给组内每一张 —— 同款各版标签一致，搜索结果里同款就不会重复占位。
+  // 人工补充 / 排除由服务端 save 动作原样保留，这套 AI 标签不会覆盖它们。
+  async function recognizeCasePreviewAiGroup(source, group, run) {
+    const members = group.members;
+    const contentKeys = new Map();
+    members.forEach(function(preview) { contentKeys.set(preview.id, casePreviewAiContentKey(preview)); });
+    // 组内每张都要留下失败痕迹（沿用逐图行为：失败只改状态，不清空原有标签）
+    const markFailed = async function(message) {
+      for (const preview of members) {
+        try {
+          await postCasePreviewAiTagAction({action: 'status', status: 'failed', previewId: preview.id, runId: run.id, contentKey: contentKeys.get(preview.id), error: message});
+        } catch (_statusError) {}
+      }
+    };
     try {
-      await signVisibleLibraryUrls([{source: source, preview: preview}]);
-      const url = state.libraryPreviewUrls[preview.preview_path] || '';
-      if (!url) throw new Error(state.lang === 'zh' ? '原图链接不可用' : 'Image URL unavailable');
-      const imageResponse = await fetch(url, {mode: 'cors'});
-      if (!imageResponse.ok) throw new Error('HTTP ' + imageResponse.status);
-      const blob = await imageResponse.blob();
-      const file = new File([blob], String(preview.preview_filename || 'preview'), {type: blob.type || 'image/jpeg'});
-      const image = await caseElementThumbnailDataUrl(file);
+      for (const preview of members) {
+        await postCasePreviewAiTagAction({action: 'status', status: 'running', previewId: preview.id, runId: run.id, contentKey: contentKeys.get(preview.id)});
+      }
+      const images = [];
+      for (const preview of members) {
+        await signVisibleLibraryUrls([{source: source, preview: preview}]);
+        const url = state.libraryPreviewUrls[preview.preview_path] || '';
+        if (!url) throw new Error(state.lang === 'zh' ? '原图链接不可用' : 'Image URL unavailable');
+        const imageResponse = await fetch(url, {mode: 'cors'});
+        if (!imageResponse.ok) throw new Error('HTTP ' + imageResponse.status);
+        const blob = await imageResponse.blob();
+        const file = new File([blob], String(preview.preview_filename || 'preview'), {type: blob.type || 'image/jpeg'});
+        images.push(await caseElementThumbnailDataUrl(file));
+      }
       const token = (state.session && state.session.access_token) || '';
-      const response = await fetch('/api/analyze-elements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({image: image, vocabulary: caseElementVocabulary(), activities: []})
-      });
-      const data = await response.json().catch(function() { return {}; });
-      if (!response.ok || !data.success) throw new Error(translateServerError(data.message) || ('HTTP ' + response.status));
-      const row = await postCasePreviewAiTagAction({
-        action: 'save', previewId: preview.id, tags: Array.isArray(data.elements) ? data.elements : [],
-        model: data.provider || 'glm-4v-flash', contentKey: contentKey, runId: run.id
-      });
+      const vocabulary = caseElementVocabulary();
+      const activities = FILTER_SECTIONS_CONFIG.activity.values;
+      const postAnalyze = async function(payload) {
+        const response = await fetch('/api/analyze-elements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(function() { return {}; });
+        if (!response.ok || !data.success) throw new Error(translateServerError(data.message) || ('HTTP ' + response.status));
+        return data;
+      };
+      let data = null;
+      let usedFallback = false;
+      if (images.length > 1) {
+        // 多成员组：一次把整组喂给模型，产出一套共同标签 —— 这是「英阿同款共享一套标签」的正路
+        try {
+          data = await postAnalyze({images: images, vocabulary: vocabulary, activities: activities});
+        } catch (_groupError) {
+          // v906b 兜底：多图不被接受（或临时失败）时退回逐张识别再取**并集** ——
+          // "同组共用一套标签"的效果仍然成立，代价是并集可能带上一版独有的词。
+          // model 记成 -group-fallback，便于事后找出这些行重跑。
+          usedFallback = true;
+          const collected = [];
+          for (const image of images) {
+            const single = await postAnalyze({image: image, vocabulary: vocabulary, activities: activities});
+            (Array.isArray(single.elements) ? single.elements : []).forEach(function(tag) {
+              const value = String(tag == null ? '' : tag).trim();
+              if (value && collected.indexOf(value) < 0) collected.push(value);
+            });
+          }
+          data = {elements: collected, activity: '', sameDesign: true, provider: 'glm-4v-flash'};
+          if (run && typeof run.groupFallbacks === 'number') run.groupFallbacks += 1;
+        }
+      } else {
+        // 单成员组仍走单图字段（老路径一字不变）
+        data = await postAnalyze({image: images[0], vocabulary: vocabulary, activities: activities});
+      }
+      const elements = Array.isArray(data.elements) ? data.elements : [];
+      // 模型判「不是同一设计」：标签照写（它毕竟看过了这一组图），只记一笔提醒人工复核，不静默丢弃
+      if (images.length > 1 && !usedFallback && data.sameDesign === false) run.sameDesignMismatch += 1;
+      const model = (data.provider || 'glm-4v-flash') + (images.length > 1 ? (usedFallback ? '-group-fallback' : '-group') : '');
+      let row = null;
+      for (const preview of members) {
+        row = await postCasePreviewAiTagAction({
+          action: 'save', previewId: preview.id, tags: elements,
+          model: model, contentKey: contentKeys.get(preview.id), runId: run.id
+        });
+      }
       return row;
     } catch (error) {
-      try {
-        await postCasePreviewAiTagAction({action: 'status', status: 'failed', previewId: preview.id, runId: run.id, contentKey: contentKey, error: error.message || '识别失败'});
-      } catch (_statusError) {}
+      await markFailed(error.message || '识别失败');
       throw error;
     }
   }
@@ -4596,17 +4657,30 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     if (!eligible.length) throw new Error(state.lang === 'zh' ? '没有可识别的图片物料。' : 'No supported images to analyze.');
     const existing = casePreviewAiRuns.get(source.id);
     if (existing && existing.running) return existing;
-    const run = {id: crypto.randomUUID(), sourceId: source.id, running: true, cancelled: false, total: eligible.length, success: 0, failed: 0, skipped: skipped, failedIds: []};
+    // v906 分组：给了 onlyIds（只补没认出的）时**不做配对**，把这些物料各自当单成员组跑，
+    // 免得"只补新的"顺手把别的物料卷进来。正常识别才按语言互补配对。
+    const groups = wanted
+      ? eligible.map(function(preview) { return {key: casePreviewGroupKey(preview), members: [preview]}; })
+      : casePreviewAiGroupsOf(eligible);
+    const run = {
+      id: crypto.randomUUID(), sourceId: source.id, running: true, cancelled: false,
+      total: eligible.length, groupsTotal: groups.length, groupsDone: 0, sameDesignMismatch: 0, groupFallbacks: 0,
+      success: 0, failed: 0, skipped: skipped, failedIds: []
+    };
     casePreviewAiRuns.set(source.id, run);
     updateCasePreviewAiRunUi(source.id);
     let cursor = 0;
     const worker = async function() {
       while (!run.cancelled) {
         const index = cursor++;
-        if (index >= eligible.length) return;
-        const preview = eligible[index];
-        try { await recognizeCasePreviewAiTags(source, preview, run); run.success += 1; }
-        catch (_error) { run.failed += 1; run.failedIds.push(preview.id); }
+        if (index >= groups.length) return;
+        const group = groups[index];
+        try { await recognizeCasePreviewAiGroup(source, group, run); run.success += group.members.length; }
+        catch (_error) {
+          run.failed += group.members.length;
+          group.members.forEach(function(preview) { run.failedIds.push(preview.id); });
+        }
+        run.groupsDone += 1;
         const backdrop = document.getElementById('case-project-backdrop');
         if (backdrop && backdrop.dataset.sourceId === source.id) {
           const currentId = backdrop.dataset.currentPreviewId;
@@ -4620,9 +4694,16 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     run.running = false;
     updateCasePreviewAiRunUi(source.id);
     renderLibraryGrid();
+    // 模型判「这一组不是同一设计」时照样写了标签（它看过了全部图），只在结果里提醒人工复核
+    const mismatch = run.sameDesignMismatch
+      ? (state.lang === 'zh' ? ('，有 ' + run.sameDesignMismatch + ' 组被判为不同设计，建议复核') : (', ' + run.sameDesignMismatch + ' group(s) judged as different designs — please review'))
+      : '';
+    const fallbackNote = run.groupFallbacks
+      ? (state.lang === 'zh' ? ('，有 ' + run.groupFallbacks + ' 组走了逐张兜底（标签取并集）') : (', ' + run.groupFallbacks + ' group(s) used per-image fallback'))
+      : '';
     showCaseToast(state.lang === 'zh'
-      ? ('逐图识别完成：成功 ' + run.success + '，失败 ' + run.failed + (run.cancelled ? '，已停止后续任务' : ''))
-      : ('Analysis finished: ' + run.success + ' succeeded, ' + run.failed + ' failed'), 4200);
+      ? ('逐图识别完成：成功 ' + run.success + '，失败 ' + run.failed + '，共 ' + run.groupsTotal + ' 组' + mismatch + fallbackNote + (run.cancelled ? '，已停止后续任务' : ''))
+      : ('Analysis finished: ' + run.success + ' succeeded, ' + run.failed + ' failed, ' + run.groupsTotal + ' group(s)' + mismatch + fallbackNote), 4200);
     return run;
   }
 
@@ -7751,7 +7832,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
             <div class="case-card-chips">
               ${source.country_id ? `<span class="case-chip">${escapeHtml(optionNameById(source.country_id))}</span>` : ''}
               ${source.activity_id ? `<span class="case-chip">${escapeHtml(optionNameById(source.activity_id))}</span>` : ''}
-              <span class="case-card-count">${state.lang === 'zh' ? materials.length + ' 个物料' : materials.length + ' materials'}</span>
+              <span class="case-card-count">${state.lang === 'zh' ? materials.length + ' 个物料' : materials.length + ' materials'}${item.languageGroupSize > 1 ? (state.lang === 'zh' ? ' · 多语言版 ' + item.languageGroupSize : ' · ' + item.languageGroupSize + ' versions') : ''}</span>
             </div>
           </div>
         </div>
@@ -12422,6 +12503,75 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     ].join(' ').toLowerCase();
     return !!text && tokens.every(function(token) { return text.includes(token); });
   }
+  // ── 同款多语言版配对（v906）───────────────────────────────────────
+  // 用户痛点：同一设计的 EN 版和 AR 版各识别一次，两版标签不一致，搜索结果里同款重复占位。
+  // 这里的配对**故意保守**：只在「一张 en + 一张 ar」语言互补时成组，语言判不出来的一律各自单飞。
+  // 语言判定走 caseMaterialLanguage（库里存的 > 文件名兜底），不猜、不做画面相似度（规划稿：
+  // 模型说"很相似"不算可靠证据）；AI 判「是否同一设计」只作参考（见 startCasePreviewAiRun）。
+  var CASE_PREVIEW_AI_GROUP_MAX = 4;
+  // 文件名里的语言标记（去掉它们，保留其余主体 —— **数字编号一个字都不动**）
+  var CASE_FILENAME_LANGUAGE_WORDS = /阿拉伯语|阿语|阿拉伯|英语|英文|arabic|english|عربي/gi;
+  var CASE_FILENAME_LANGUAGE_TOKENS = /(^|[^a-z0-9])(en|ar|eng|ara|arb)(?=$|[^a-z0-9])/gi;
+  // 文件名主体：去掉扩展名、语言标记与分隔符后剩下的部分（小写）。
+  // 例：`Steak_EN.jpg` / `steak_ar.png` → `steak`（同一编号才算同款，所以数字一律保留：
+  // `poster_01_en.jpg` 与 `poster_02_ar.jpg` → `poster01` ≠ `poster02`）。
+  // 主体为空时（文件名只有 en.png / ar.png 这种）视为相同，交给语言互补 + 类型 + 尺寸把关。
+  function caseFilenameGroupKey(filename) {
+    var name = String(filename || '').trim();
+    if (!name) return '';
+    name = name.replace(/\.[a-z0-9]{1,6}$/i, '');
+    name = name.replace(CASE_FILENAME_LANGUAGE_WORDS, ' ');
+    name = name.replace(CASE_FILENAME_LANGUAGE_TOKENS, ' ');
+    return name.replace(/[\s_\-+.·()（）\[\]【】#]+/g, '').toLowerCase();
+  }
+  // 尺寸相同：两边都有宽高时才算；任一方缺尺寸就不比尺寸（也**不因此放宽**类型/编号条件）
+  function casePreviewSameSize(a, b) {
+    var aw = Number(a && a.width) || 0, ah = Number(a && a.height) || 0;
+    var bw = Number(b && b.width) || 0, bh = Number(b && b.height) || 0;
+    if (aw <= 0 || ah <= 0 || bw <= 0 || bh <= 0) return true;
+    return aw === bw && ah === bh;
+  }
+  // 同一条物料的设计信号：类型相同（都为空也算相同）+ 尺寸相同 + 文件名同一编号
+  function caseSameDesignSignals(a, b) {
+    if (String((a && a.material_type) || '') !== String((b && b.material_type) || '')) return false;
+    if (!casePreviewSameSize(a, b)) return false;
+    return caseFilenameGroupKey(a && a.preview_filename) === caseFilenameGroupKey(b && b.preview_filename);
+  }
+  function casePreviewGroupKey(preview) {
+    return [caseFilenameGroupKey(preview && preview.preview_filename), String((preview && preview.material_type) || '')].join('|');
+  }
+  // 把**同一个项目内**的物料聚成候选组：**所有**物料都会落进某个组（含单成员组），成员保持传入顺序。
+  // （调用方保证是同一项目的一批物料；函数本身不看 source_file_id。）
+  // 一组最多 4 张：锚点 + 语言互补且设计信号一致的那些；多出来的继续往后两两配对，一个都不丢。
+  function casePreviewAiGroupsOf(materials) {
+    var list = (Array.isArray(materials) ? materials : []).filter(Boolean);
+    var used = new Set();
+    var groups = [];
+    for (var i = 0; i < list.length; i += 1) {
+      var anchor = list[i];
+      if (used.has(anchor)) continue;
+      used.add(anchor);
+      var members = [anchor];
+      var lang = caseMaterialLanguage(anchor);
+      if (lang === 'en' || lang === 'ar') {
+        var want = lang === 'en' ? 'ar' : 'en';
+        for (var j = i + 1; j < list.length && members.length < CASE_PREVIEW_AI_GROUP_MAX; j += 1) {
+          var candidate = list[j];
+          if (used.has(candidate)) continue;
+          if (caseMaterialLanguage(candidate) !== want) continue;
+          if (!caseSameDesignSignals(anchor, candidate)) continue;
+          used.add(candidate);
+          members.push(candidate);
+        }
+      }
+      groups.push({ key: casePreviewGroupKey(anchor), members: members });
+    }
+    return groups;
+  }
+  // 同组只展示一张：优先英文版（规划稿要求"有证据的 EN 版代表整组"），没有英文版就取第一张
+  function casePreviewGroupRepresentative(members) {
+    return members.find(function(preview) { return caseMaterialLanguage(preview) === 'en'; }) || members[0];
+  }
   // 网格里每个项目出一张卡片；有关键词时改为把项目里带该标签的物料各自铺开一张，
   // 一张都没命中的项目仍只出一张卡，封面跟随当前分类标签（搜索词是物料类型时优先跟随搜索词）
   function collapseCaseProjectItems(items) {
@@ -12436,14 +12586,23 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       seen.add(item.source.id);
       // 有关键词：本项目里所有物料级命中的物料各出一张卡（按 items 原始顺序），
       // 不再「一个项目一张代表图」——用户搜到的每一张都看得见。
+      // v906：同款多语言版先配对，**同一组只出 1 张卡**（优先英文版那张），避免同款重复占位。
       if (query) {
         const hits = items.filter(function(candidate) {
           return candidate.source.id === item.source.id
             && caseMaterialMatchesQuery(candidate, query);
         });
         if (hits.length) {
-          hits.forEach(function(hit) {
-            out.push({ source: hit.source, preview: hit.preview, url: hit.url || '', thumbUrl: hit.thumbUrl || '', isCaseProjectCard: true });
+          const hitItemByPreviewId = new Map();
+          hits.forEach(function(hit) { hitItemByPreviewId.set(hit.preview.id, hit); });
+          casePreviewAiGroupsOf(hits.map(function(hit) { return hit.preview; })).forEach(function(group) {
+            const hitMembers = group.members.filter(function(preview) { return hitItemByPreviewId.has(preview.id); });
+            if (!hitMembers.length) return;
+            const hit = hitItemByPreviewId.get(casePreviewGroupRepresentative(hitMembers).id);
+            out.push({
+              source: hit.source, preview: hit.preview, url: hit.url || '', thumbUrl: hit.thumbUrl || '',
+              isCaseProjectCard: true, languageGroupSize: hitMembers.length
+            });
           });
           return;
         }

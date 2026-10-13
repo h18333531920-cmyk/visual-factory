@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261013-search-synonym-v905`（相关词反向也认：搜「桌子」能命中填了它的「餐桌」；AI 扩展提示词要求把口语说法映射到词表正式写法）；部署 `a0864653-9ec0-4f32-a364-5d894eec3486`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261013-case-group-ai-v906`（**按组识别**：同款英/阿版一次看多张 → 一套共同标签；结果**按组占位**只出一张（默认英文版）；多图不被接受时自动退成逐张取并集并标 `-group-fallback`）；部署 `b64db21b-4610-43de-a678-db4b4c4468c2`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
 | 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`5ac8966`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-13 |
-| 自动化测试 | `node --test tests/` → **415/415 通过** | 实测 2026-10-13 |
+| 自动化测试 | `node --test tests/` → **445/445 通过**（v906 组识别新增 30 条） | 实测 2026-10-13 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在）；**`sql/025_tag_vocabulary_auto_sync.sql` 已由用户执行**（2026-10-13，SQL Editor 跑完无报错、结果面板 `1 row` = 末尾那句 `select vf_sync_tag_vocabulary()` 跑通） | 实测 2026-10-13 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -526,6 +526,17 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
     - `collapseCaseProjectItems()`：**有关键词时**，项目里所有物料级命中的物料**各出一张卡**（按 `items` 原顺序）；一张都没命中（只是项目名/项目标签命中）→ 仍只出**一张项目卡**（走原封面逻辑）；**无关键词时行为与原来逐字一致**。
     - 点击（网格点击 + 键盘 Enter）改为 `openCaseProjectModal(source.id, preview.material_type)`，浮窗落在那一组物料上。
     - 测试 414/414（新增 10 条，其中一条端到端串起 `libraryItemSearchText` + `libraryItemQueryMatchRank` + 铺开逻辑）。
+  - **✅ 步 A/B 部分已落地（v906，2026-10-13 已发测试站，部署 `b64db21b`）—— 同款英阿版共用一套标签、结果按组占位**。用户口径（2026-10-13）：**不逐图重跑、也不把 EN 的标签硬复制给 AR，而是「按组一次看多张」**。本轮四件事：
+    1. **服务端多图组识别**：`functions/_ai.js` 新增 `analyzeCaseTagGroupsWithGlm(env, images)`（images 2–4 张，元素形如 `{url, label}`，同一条消息里放多张图）+ `parseCaseTagGroups(text, vocabulary, activities)`；提示词先判「是不是同一条物料的不同语言版本」，再给**一套覆盖所有图的共同元素标签**（沿用 ≤5 字 / ≤12 条 / 优先词表写法 / 活动主题自由归纳）。`sameDesign` **缺字段 / 解析不出 / 怪值一律 false**（拿不准就当不同组）。
+    2. **端点**：`functions/api/analyze-elements.js` 支持 `images: [dataURL...]`（2–4 张）作为 `image` 的替代，返回 `{success, provider, elements, activity, sameDesign}`；体积上限**每张 ≤1.5MB、合计 ≤4MB**（按解码后字节算，超了 413 + 中文说明）。**单图老路径一字未改**（上传时的元素建议、底部 AI 按钮仍走 `image`）。
+    3. **客户端配对 + 按组识别**：新增 `caseFilenameGroupKey()` / `caseSameDesignSignals()` / `casePreviewAiGroupsOf(materials)`（**故意保守**：只在「一张 en + 一张 ar」语言互补时成组，语言判不出来各自单飞；同组还要求同 `material_type` + 同尺寸（两边都有尺寸时才算）+ **文件名同一编号**（数字一律保留）；一组最多 4 张，多出来的继续往后配对，含单成员组）。`startCasePreviewAiRun()` 改成**逐组**跑：多成员组一次 POST `{images:[...], vocabulary: caseElementVocabulary(), activities: FILTER_ACTIVITY…}`，拿到 elements 后**组内每张都写同一套标签**（model 记 `glm-4v-flash-group`）；`onlyIds`（只补没认出的）**不配对**、仍走单图字段。进度文案「第 x/y 组 · 共 n 张」，失败组内各成员都记失败（沿用"失败只改状态、不清空原标签"）；`sameDesign === false` 照写标签，只在结果 toast 里提示「有 N 组被判为不同设计，建议复核」。
+    4. **展示按组占位**：`collapseCaseProjectItems()` 有关键词时先算物料级命中，再按 `casePreviewAiGroupsOf` 合并 —— **同一组只出 1 张卡**（优先 `caseMaterialLanguage() === 'en'` 那张，没有英文版取命中里的第一张），item 上带 `languageGroupSize`；`renderCaseProjectCard()` 在已有「N 个物料」角标后追加「· 多语言版 N」（>1 才加）。**无关键词时行为与以前逐字一致**。
+    - **取舍（有意为之，别当 bug）**：① 配对**纯确定性**，模型判的 `sameDesign` 只作提示、不进展示逻辑，也**不落库**（`vf_preview_ai_tags` 没有这列）；模型判"不同设计"时**不拆组**（展示层无该信号可用）。② 显示用 `glm-4v-flash`（原模型不变），组请求把 `provider` 原样返回、由客户端按组加 `-group` 后缀，避免 `-group-group`。③ 组内只有个别成员命中时，`languageGroupSize` 记的是**命中成员数**（不是项目里那组的全部张数）。
+    - ⚠️ **未核实（已加兜底，等第一次真实跑就能验）**：**`glm-4v-flash` 是否真能一条消息吃多张图** —— 本仓库此前所有视觉调用都是一张图（`analyzeCaseTagsWithGlm` / `analyzeGalleryTagWithGlm` / `analyzeLanguageWithGlm`），这是第一次多图（规划稿 §11 说 GLM-4V 支持，但**没有实测**）。
+      **已加的兜底（v906 收尾）**：多成员组先试 `images` 多图请求；**失败就退回逐张识别再取并集**，仍然"同组共用一套标签"，并把该组的 `model` 记成 `glm-4v-flash-group-fallback`、结果 toast 提示「有 N 组走了逐张兜底（标签取并集）」⇒ **第一次点击不会白跑**。事后可按 `model like '%-group-fallback'` 找出这些行重跑。
+      若多图被拒，可选项：换模型名（`glm-4v-plus` / `glm-4v`）或就用兜底（代价是并集可能带上一版独有的词）。
+    - 未做：组识别**还没接进「一键识别」之外的地方**；展示端的组**不可展开**（规划稿 §3 的"组内可展开看其他版本"、步 C 的人工纠错/抽检都没做）；`languageGroupSize` 只用在角标文案，没有做"直接命中 M 张 / 可用语言 / 剩余数量分页"那一套。
+    - 测试 **445/445**：新增 `tests/case-preview-ai-groups-v906.test.mjs`（25 条：解析 / 端点源码 / 配对 vm / 铺开 vm / 流程源码）与 `tests/case-preview-ai-group-run-v906.test.mjs`（5 条：把真实 `startCasePreviewAiRun` 切进 vm 用假 fetch 跑，验"一组一次多图请求 + 组内每张都写同一套标签 + 一组失败则组内各成员都记失败 + `sameDesign=false` 只提示 + `onlyIds` 不配对"，外加服务端 `save` 不覆盖 `manual_tags`/`excluded_tags` 的实测）；`tests/library-case-expand-v904.test.mjs` 只补了 `caseMaterialLanguage` 桩（新依赖，行为不变）。
   - **步 1b 明确没做的四个小口子（下轮候选，别当 bug）**：① 卡片角标仍写「整个项目 N 个物料」，没有规划稿 §8.2 要求的「直接命中 M 张 / 可用语言 / 剩余数量分页」；② 结果计数（`state.libraryItems.length`）在搜索时数的是**卡片张数**（含铺开的多张），无关键词时是项目数；③ 点击落点是「该物料类型那一组」而非「那一张图」（规划稿 §8.3.4 想要 `preview_id` 级定位）；④ 开着「只看收藏」筛选时，同项目里没被收藏的命中物料不会铺开（合理，但需用户确认）。另：`collapseCaseProjectItems` 里旧的 `previewAiMatch` 兜底分支现在是死代码（保留未删）。
   - **🚧 用户 2026-10-13 追加的核心痛点：同款的英/阿版本在结果里重复占位**（搜「牛排」出英文版那张、搜「烤肉」出**同一设计的**阿语版那张；根因是逐图各识别一次，同款两版的标签不一致）。规划稿早有对应章节：**§3 设计分组**（分组证据与防连锁误合并）+ **§5 逐图识别如何支持语言版本去重**。
     - **口径（按规划稿，不要改成"硬统一标签"）**：① **结果按"设计组"占位** —— 同款多语言版在结果里只占一个位置（默认展示有证据的 EN 版），组内可展开看其他版本；② **证据分层** —— 其他版本标"同组待核验"，人工确认后才进直接命中。规划稿 §5 明确「**不能让已完成的 EN 标签自动替代失败的 AR 结果**」；硬复制标签会造成假命中（搜烤肉结果里那张其实是牛排版）。
@@ -537,7 +548,7 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
       ③ 模型判"同组"只作**参考**，与确定性信号不一致时**不合并**（单成员组正常参与搜索）；拿不准就拆开，宁可漏合并不要错合并；
       ④ 组级标签记为"组证据"，成员自己识别出的差异标签仍保留（规划稿 §4.3：替换只动 AI 管理部分，**人工补充与排除保持不变**）。
       - **成本**：同款两版合一后，1953 张 ≈ 1000 次多图调用（比逐图 1953 次更省）。
-      - 实现落点：`functions/_ai.js#analyzeCaseTagsWithGlm` 现在只收一张图，需要支持多图 + 返回 `sameDesign`；端点 `functions/api/case-preview-ai-tags.js` 相应加"组识别"入口。
+      - 实现落点（**已完成，见上面的 v906 记录**）：`functions/_ai.js` 新增 `analyzeCaseTagGroupsWithGlm()`（多图 + `parseCaseTagGroups()` 返回 `sameDesign`）；**组识别入口挂在 `functions/api/analyze-elements.js` 的 `images` 分支上**（不是 `case-preview-ai-tags.js` —— 那个端点只负责写库，组识别后仍逐张调它的 `save`）。③ 这一轮**没有**把模型的 `sameDesign` 反馈进合并判断（它只用于结果提示），因为展示层拿不到这个信号（没落库）；要完整按 ③ 做，得把"组"落库（新表或新列）。④「组证据 vs 成员自己的差异标签」也没分层，本轮是"组标签整组覆盖 AI 标签部分"。
   - **步 2（下一轮，需用户授权）**：放开写入范围 —— 去掉 `functions/api/case-preview-ai-tags.js` 里 `previewFor()` 的 `source_file_id=eq.EXPERIMENT_SOURCE_ID`，并把 `casePreviewAiEnabledFor` 换成 `isCaseProject(source)`。**`EXPERIMENT_KEY = 'augpicks-v1'` 不许改**（现有 28 行挂在这个 key 下，改名就读不到）。
   - **还没通的两处（步 2 之后/并行）**：① **元素筛选维度**没吃逐图标签 —— `librarySourceMatchesFilterValue()` 只查项目级 `visibleLibraryTags`，所以"搜索框能搜到、元素筛选 chips 搜不到"；② `collectTagLabelsInUse()` 现在会收全部项目的逐图标签 ⇒ 英文界面首屏补翻的候选词变多（1953 张量级，上线后留意首屏耗时）。
   - **步 2 之后**：分批铺开识别（每批几十张，跑完抽查）→ 覆盖够了再谈规划稿里的"设计分组/分层次搜索"（阶段 2–4）。

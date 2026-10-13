@@ -1500,6 +1500,67 @@ export async function analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, activ
   return parseCaseTagSuggestions(text, words, activities);
 }
 
+// 按组识别（v906）：同款的 2–4 张（例如同一设计的 EN / AR 版）**一次喂给视觉模型**，
+// 产出一套**共同标签**，顺带判断「这几张是不是同一条物料的不同语言版本」。
+// 起因：逐图各识别一次时，同一画面在两种语言下模型可能给不同词，搜索结果里同款就重复占位。
+// 口径与逐图识别一致（≤5 字 / ≤12 条 / 优先词表写法 / 活动主题自由归纳），只是把一张图换成一
+// 组图，并多返回 sameDesign。sameDesign 只作参考：拿不准就 false，宁可漏合并不要错合并。
+export const CASE_TAG_GROUP_MAX_IMAGES = 4;
+
+export function parseCaseTagGroups(text, vocabulary = [], activities = []) {
+  const base = parseCaseTagSuggestions(text, vocabulary, activities);
+  let sameDesign = false;
+  const objectMatch = String(text || '').match(/\{[\s\S]*\}/);
+  if (objectMatch) {
+    try {
+      const parsed = JSON.parse(objectMatch[0]);
+      const value = parsed ? parsed.sameDesign : undefined;
+      if (value === true) sameDesign = true;
+      else if (typeof value === 'string') sameDesign = /^(true|1|yes|是)$/i.test(value.trim());
+      // 缺字段 / 解析不出 / 其它值一律 false = 拿不准，当不同组。
+    } catch { /* 解析不出 = 拿不准 → 保持 false */ }
+  }
+  return { elements: base.elements, activity: base.activity, sameDesign };
+}
+
+export async function analyzeCaseTagGroupsWithGlm(env, images, vocabulary, activityVocabulary = []) {
+  const key = elementTagApiKey(env);
+  if (!key) throw new Error('元素识别未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY（智谱开放平台）。');
+  const list = (Array.isArray(images) ? images : [])
+    .map(item => (typeof item === 'string' ? {url: item} : item))
+    .filter(item => item && String(item.url || '').trim())
+    .slice(0, CASE_TAG_GROUP_MAX_IMAGES);
+  if (!list.length) throw new Error('缺少待识别的图片。');
+  const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean).slice(0, 160);
+  const activities = (Array.isArray(activityVocabulary) ? activityVocabulary : []).filter(Boolean).slice(0, 30);
+  // 版本标记（EN / AR）只有调用方真的给了才写进提示词，免得白写一句「第 1 张、第 2 张」干扰模型
+  const labels = list.map(item => String(item.label || '').trim());
+  const labelLine = labels.some(Boolean)
+    ? `图片顺序与版本标记（仅供参考，判断以画面为准）：${labels.map((label, index) => (index + 1) + '=' + (label || '未标注')).join('、')}。`
+    : '';
+  const lines = [
+    '你在帮案例库物料打搜索标签。下面是**同一条物料的多张图片**（可能只是语言或文案不同，例如一张英文版、一张阿拉伯语版），请把这几张放在一起看。',
+    '第一步：判断这几张是不是**同一条物料的不同语言版本**（画面主体、构图、版式、配色相同，只有文字语言或文案不同才算）。画面内容不一样就判 false；拿不准也判 false。',
+    labelLine,
+    '第二步：给**一套覆盖这些图的共同元素标签**（这一套标签会被写到每一张图上）：先写所有图共同出现的主体，再补共同的场景与次要物体；只有某一张图特有的明显主体也可以给，但要简短。',
+    '只描述画面里看得见的实体：食物、饮品、动物、人物、角色或吉祥物、餐具与道具、餐桌桌面、背景场景与节日布置（挂旗、气球、桌布等）。',
+    '不要把图片里的文字当成元素输出，但判断活动主题时可以用上文字信息（节日祝福语、活动名、问候语等）。标语、价格、水印、LOGO 仍然忽略。',
+    words.includes('kiki') ? '如果画面中的老虎角色是 Keeta 的黄色品牌吉祥物，必须标为 kiki，不要写卡通老虎、老虎吉祥物或黄色老虎；普通真实老虎仍标为老虎。' : '',
+    words.length ? `优先使用这份现有词表的写法（命中就必须原样使用）：${words.join('、')}。` : '',
+    activities.length ? `同时推断这组物料的核心活动主题：从画面内容和文字信息（节日祝福语、活动名等）自由归纳一个词，2-8 个字，例如：开学、世界杯、夏日、开斋节、宰牲节、聚餐、新年、国庆节、游戏、生日、万圣节、圣诞、情人节等，不限于以上例子；主题词要简短通用。画面和文字都推不出主题时才返回空字符串。` : '',
+    `每条 1-${ELEMENT_TAG_MAX_CHARS} 个汉字，按「主体优先、再补场景与次要物体」尽量列满，最多 ${ELEMENT_TAG_MAX_COUNT} 条；不要颜色、风格、形容词，不要解释、不要重复。`,
+    '只输出 JSON，不要代码块：{"sameDesign":true,"elements":["餐桌","牛排"],"activity":"聚餐"}'
+  ].filter(Boolean);
+  const content = list.map(item => ({ type: 'image_url', image_url: { url: String(item.url) } }));
+  content.push({ type: 'text', text: lines.join('\n') });
+  const data = await postJson(GLM_VISION_URL, {
+    model: GLM_VISION_MODEL,
+    temperature: 0.2,
+    messages: [{ role: 'user', content }]
+  }, { Authorization: `Bearer ${key}` });
+  return parseCaseTagGroups(parseResponseContent(data), words, activities);
+}
+
 export async function analyzeElementsWithGlm(env, imageBase64, vocabulary) {
   return (await analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, [])).elements;
 }
