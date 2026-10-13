@@ -21,7 +21,7 @@
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
 | 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`c8a7b3e`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-13 |
-| 自动化测试 | `node --test tests/` → **445/445 通过**（v906 组识别新增 30 条） | 实测 2026-10-13 |
+| 自动化测试 | `node --test tests/` → **461/461 通过**（v906 组识别新增 30 条 + 2026-10-13 本机批量识别脚本新增 16 条） | 实测 2026-10-13 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在）；**`sql/025_tag_vocabulary_auto_sync.sql` 已由用户执行**（2026-10-13，SQL Editor 跑完无报错、结果面板 `1 row` = 末尾那句 `select vf_sync_tag_vocabulary()` 跑通） | 实测 2026-10-13 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -560,6 +560,17 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
       - 实现落点（**已完成，见上面的 v906 记录**）：`functions/_ai.js` 新增 `analyzeCaseTagGroupsWithGlm()`（多图 + `parseCaseTagGroups()` 返回 `sameDesign`）；**组识别入口挂在 `functions/api/analyze-elements.js` 的 `images` 分支上**（不是 `case-preview-ai-tags.js` —— 那个端点只负责写库，组识别后仍逐张调它的 `save`）。③ 这一轮**没有**把模型的 `sameDesign` 反馈进合并判断（它只用于结果提示），因为展示层拿不到这个信号（没落库）；要完整按 ③ 做，得把"组"落库（新表或新列）。④「组证据 vs 成员自己的差异标签」也没分层，本轮是"组标签整组覆盖 AI 标签部分"。
   - **步 2（下一轮，需用户授权）**：放开写入范围 —— 去掉 `functions/api/case-preview-ai-tags.js` 里 `previewFor()` 的 `source_file_id=eq.EXPERIMENT_SOURCE_ID`，并把 `casePreviewAiEnabledFor` 换成 `isCaseProject(source)`。**`EXPERIMENT_KEY = 'augpicks-v1'` 不许改**（现有 28 行挂在这个 key 下，改名就读不到）。
   - **还没通的两处（步 2 之后/并行）**：① **元素筛选维度**没吃逐图标签 —— `librarySourceMatchesFilterValue()` 只查项目级 `visibleLibraryTags`，所以"搜索框能搜到、元素筛选 chips 搜不到"；② `collectTagLabelsInUse()` 现在会收全部项目的逐图标签 ⇒ 英文界面首屏补翻的候选词变多（1953 张量级，上线后留意首屏耗时）。
+  - **✅ 另开一条「本机命令行批量识别」通道（2026-10-13 新增 `scripts/recognize-case-tags.mjs`）**：
+    浏览器里的「一键识别」是 2 并发 + 手点 + 关页面就停（1953 张要 1.5–3 小时），所以把"把逐图标签铺满"这件事改由本机脚本干——
+    直连 Supabase（service role）+ 直连 `analyzeCaseTagsWithGlm`（**复用 `functions/_ai.js`，没有重写提示词**），
+    一次把案例库全部逐图元素标签补齐。要点：
+    - **只写 `vf_preview_ai_tags`**，写库语义照抄端点 `save`（`ai_tags` 刨掉 `excluded_tags`、`manual_tags`/`excluded_tags` 原样保留、写前重读该行再合并），**不碰** `vf_source_files` / `vf_asset_previews`。
+    - 断点续跑：`content_key` 与端点 `previewContentKey()` 一致且 `status='success'` 就跳过（`--force` 才重跑）；取图优先缩略图（`_thumb.jpg` → app.js 给预览图实际用的 `_thumb-<id>.jpg` → 退原图并记日志）；失败退避重试 3 次，彻底失败写字 `status='failed'` + 失败清单落 `outputs/recognize-failures-*.json`。
+    - 凭证只从环境变量 / `.local/recognize.env` 读（不进 git），日志与提示只打 key 前 4 位 + 长度、绝不整串输出。
+    - **本轮只做逐图**（分组口径仍 park）；活动主题不入库（表里没这列）。**`--dry-run` 只列条数、不调模型不写库。**
+    - ⚠️ **尚未对真实库跑过**（本机没有凭证，第一批得在用户机器上跑）：链路已在本机用「假 Supabase + 拦掉智谱域名」端到端验过（缩略图 404 退原图、合并写库保住 manual/excluded、失败标记、断点续跑、Ctrl-C 优雅退出、写操作只落在标签表），
+      纯逻辑另由 `tests/recognize-case-tags-script.test.mjs`（16 条，含"源码里不许出现硬编码密钥"）锁住。
+    - 🚧 **跑之前要人定的**：① 免费档 `glm-4v-flash` 的真实限流要跑一批才知道（默认 `--rate 2` 保守起步，`--concurrency` 上限 8）；② 缩略图缺失的真实比例要跑一次才知道（老数据可能没生成过）。
   - **步 2 之后**：分批铺开识别（每批几十张，跑完抽查）→ 覆盖够了再谈规划稿里的"设计分组/分层次搜索"（阶段 2–4）。
 
 ---

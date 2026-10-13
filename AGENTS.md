@@ -31,7 +31,7 @@
 ## 3. 干活时的硬约定
 
 - 改完必须 **bump 版本号**：`index.html` 5 处 `?v=` + `app.js` 的 `TOOL_UI_VERSION`（正本 §8.1）。
-- 提交前跑：`node --check app.js && node --test tests/`（基线 365 项全绿）。
+- 提交前跑：`node --check app.js && node --test tests/`（**基线计数以 `HANDOVER.md` §0 为准** —— 那个数每轮都在长，本文不再写死）。
 - 本机部署必须带 DNS 绕过：`NODE_OPTIONS="--require $PWD/.local/dns-hook.cjs"`（正本 §8.6）。
 - 写库逻辑里「**先读最新再合并、绝不拿空数组起底**」的保护（v868 加的）**不许删**（正本 §7.3）。
 - 结论必须区分 **实测 / 代码可查 / 未核实**，不要把猜测写成事实 —— 这个项目的文档就是这么烂掉的。

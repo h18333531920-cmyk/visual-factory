@@ -17,3 +17,7 @@ services/
 .codex-backups/
 .gemini-designer/
 docs/archive/
+
+# 本机跑批量识别等一次性任务的产物（失败清单里含项目名/文件名，别提交）
+outputs/
+output/
