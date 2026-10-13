@@ -27,6 +27,8 @@ function loadVocabularyUi(rows, options = {}) {
     TAG_VOCABULARY_IGNORED: 'ignored',
     TAG_VOCABULARY_RELATED_MAX: 8,
     TAG_TRANSLATE_MAX_CHARS: 20,
+    // v913：改名/删除进行中的那一行（'' = 没有操作在进行）
+    tagVocabularyManageBusy: options.busy || '',
     escapeHtml: value => String(value == null ? '' : value),
     escapeAttr: value => String(value == null ? '' : value)
   });

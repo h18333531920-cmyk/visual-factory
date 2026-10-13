@@ -207,7 +207,7 @@ test('v912 降级：sql/027 没执行时给中文提示、不崩、输入框回�
 });
 
 test('v912 改名/删除成功后刷新词表 + 重绘素材库（标签显示跟着变）', () => {
-  assert.match(appSource, /async function refreshAfterTagManage\(section\) \{[\s\S]*?resetTagVocabularyIndex\(\);[\s\S]*?await reloadTagVocabulary\(section\);[\s\S]*?await loadTagVocabulary\(\);[\s\S]*?await reloadLibraryData\(\);/);
+  assert.match(appSource, /async function refreshAfterTagManage\(section\) \{[\s\S]*?resetTagVocabularyIndex\(\);[\s\S]*?await reloadTagVocabulary\(section, \{ keepMessage: true \}\);[\s\S]*?await loadTagVocabulary\(\);[\s\S]*?await reloadLibraryData\(\);/);
   assert.match(appSource, /function resetTagVocabularyIndex\(\)/, '旧索引要能清掉（否则还按旧名字显示）');
   assert.match(appSource, /return refreshAfterTagManage\(section\);/, '两处成功分支都要刷新');
   assert.match(appSource, /tagManageRpc\('vf_rename_tag', \{ p_old: plan\.from, p_new: plan\.to \}\)/);
@@ -223,11 +223,11 @@ test('v912 没弄坏英文名 / 相关词的保存链路', () => {
   assert.match(appSource, /data-tv-translate="1"/);
 });
 
-test('v912 版本号六处同步', () => {
+test('版本号六处同步', () => {
   const indexSource = readFileSync(join(here, '..', 'index.html'), 'utf8');
-  const refs = indexSource.match(/\?v=20261013-tag-manage-v912/g) || [];
+  const refs = indexSource.match(/\?v=20261013-tag-manage-instant-v913/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261013-tag-manage-v912'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261013-tag-manage-instant-v913'/);
 });
 
 // ── 4) 纯逻辑（vm 切出来跑）：改名计划 / 撞名合并判定 ────────────────────────
