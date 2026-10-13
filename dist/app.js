@@ -703,9 +703,8 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-foot-tool-btn { flex: 0 0 auto; display: inline-flex; align-items: center; padding: 5px 11px; border: 1px dashed #b7c2d4; background: #fff; color: #475569; font-size: 12px; line-height: 1; border-radius: 999px; cursor: pointer; white-space: nowrap; }
 .case-foot-tool-btn:hover { border-color: #64748b; color: #0f172a; background: #f1f5f9; }
 .case-foot-tool-btn:disabled { color: #cbd5e1; border-color: #e2e8f0; background: #fafbfc; cursor: not-allowed; }
-.case-foot-tag-editor .case-tag-pop-group, .case-foot-ai-suggest { display: flex; flex-wrap: wrap; flex-direction: row; gap: 6px; align-items: flex-start; max-width: min(720px, calc(100vw - 32px)); max-height: 46vh; overflow: auto; }
+.case-foot-tag-editor .case-tag-pop-group { display: flex; flex-wrap: wrap; flex-direction: row; gap: 6px; align-items: flex-start; max-width: min(720px, calc(100vw - 32px)); max-height: 46vh; overflow: auto; }
 .case-foot-tag-editor-hint { flex: 1 0 100%; font-size: 11px; color: #94a3b8; margin-bottom: 2px; }
-.case-foot-ai-rerun-row { flex: 1 0 100%; margin-top: 4px; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
 #library-upload-modal .library-drop-zone { min-height: 168px !important; }
 #library-upload-modal .library-drop-zone .upload-zone-main { color: #334155 !important; font-size: 13.5px !important; font-weight: 600 !important; }
 #library-upload-modal .library-drop-zone .upload-zone-sub { color: #94a3b8 !important; font-size: 12px !important; font-weight: 400 !important; }
@@ -879,7 +878,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261013-upload-autotag-v914';
+const TOOL_UI_VERSION = '20261013-drop-foot-ai-v915';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -5500,7 +5499,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         + (state.lang === 'zh' ? '全部标签 · ' + chips.length : 'All tags · ' + chips.length)
         + '</div>'
         + chips.map(function(item) { return '<span class="case-foot-tag' + (item.element ? ' is-element' : '') + '">' + escapeHtml(item.text) + '</span>'; }).join('');
-      // v858：标签多到出浮窗时，「＋标签 / AI 识别」两个按钮也放进浮窗（与左下角同款，点了关浮窗并打开对应编辑器）
+      // v858：标签多到出浮窗时，「＋标签」按钮也放进浮窗（与左下角同款，点了关浮窗并打开对应编辑器）
       const footToolBtns = box.parentElement ? Array.from(box.parentElement.querySelectorAll('.case-foot-tool-btn')) : [];
       if (footToolBtns.length) {
         const toolsRow = document.createElement('div');
@@ -5540,24 +5539,19 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
 
   // ── v858 详情弹窗左下角标签快捷编辑 ─────────────────────────
   // 「＋标签」：弹出标签选择浮窗（与上传表单同套词表），点一下即时写云端（读库最新 tags 再合并，
-  // 与封面标记同一路数，防并发互覆盖），再点取消；「AI 识别」：拿封面/第一张图片走
-  // /api/analyze-elements 建议元素与活动主题，点建议词采纳（同样即时保存），可重新识别只补新。
+  // 与封面标记同一路数，防并发互覆盖），再点取消。
+  // v915：「AI 识别」按钮整块摘除（渲染 + 接线都不再出现），元素识别改由后台无人值守跑。
   let caseFootToolsCleanup = null;
   function wireCaseFootTagTools(backdrop, source, canManage) {
     if (!canManage || caseFootToolsCleanup) return;
     const box = backdrop.querySelector('#case-foot-tags');
     const addBtn = backdrop.querySelector('#case-foot-add-tag');
-    const aiBtn = backdrop.querySelector('#case-foot-ai-tag');
-    if (!box || !addBtn || !aiBtn) return;
-    let footSel = null;       // 编辑中的选择态（打开编辑器/AI 采纳时从 source 现算）
+    if (!box || !addBtn) return;
+    let footSel = null;       // 编辑中的选择态（打开编辑器时从 source 现算）
     let editorPop = null;
-    let suggestPop = null;
-    let suggestSeen = [];     // AI 已建议过的元素（重新识别只补新不覆盖）
-    let suggestThemes = [];
     const zh = function() { return state.lang === 'zh'; };
 
     const closeEditor = function() { if (editorPop) { editorPop.remove(); editorPop = null; } };
-    const closeSuggest = function() { if (suggestPop) { suggestPop.remove(); suggestPop = null; } };
     const positionPop = function(pop, anchor) {
       pop.style.position = 'fixed';
       pop.style.visibility = 'hidden';
@@ -5595,7 +5589,6 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     // ── ＋标签：标签选择浮窗（点一下即保存） ──
     const openEditor = function() {
       if (editorPop) { closeEditor(); return; }
-      closeSuggest();
       footSel = caseChipSelectionOf(source);
       editorPop = document.createElement('div');
       editorPop.className = 'case-tag-pop case-foot-tag-editor';
@@ -5662,94 +5655,13 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       persistSelection().catch(persistError);
     };
 
-    // ── AI 识别：封面/第一张图片 → 元素与活动主题建议，点建议词采纳（即时保存） ──
-    const runAiSuggest = function() {
-      const token = (state.session && state.session.access_token) || '';
-      if (!token) return;
-      const isVideo = p => String(p.preview_mime_type || '').toLowerCase().startsWith('video/');
-      const coverPick = caseCoverFor(source, 'all');
-      let imageMaterial = coverPick && coverPick.cover && !isVideo(coverPick.cover) ? coverPick.cover : null;
-      if (!imageMaterial) imageMaterial = caseMaterialsOf(source).find(function(p) { return !isVideo(p); }) || null;
-      if (!imageMaterial) { alert(zh() ? '没有可识别的图片物料。' : 'No image material to analyze.'); return; }
-      const url = state.libraryPreviewUrls[imageMaterial.preview_path] || '';
-      if (!url) { alert(zh() ? '拿不到原图，请先刷新页面再试。' : 'Cannot fetch the image. Refresh and retry.'); return; }
-      if (!footSel) footSel = caseChipSelectionOf(source);
-      showCaseToast(zh() ? '正在识别画面元素…' : 'Detecting elements…', 2000);
-      aiBtn.disabled = true;
-      fetch(url, { mode: 'cors' }).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
-        .then(function(blob) { return caseElementThumbnailDataUrl(new File([blob], String(imageMaterial.preview_filename || 'preview'), { type: blob.type || 'image/jpeg' })); })
-        .then(function(image) {
-          return fetch('/api/analyze-elements', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-            body: JSON.stringify({ image: image, vocabulary: caseElementVocabulary(), activities: FILTER_SECTIONS_CONFIG.activity.values })
-          });
-        })
-        .then(r => r.json())
-        .then(async function(data) {
-          aiBtn.disabled = false;
-          if (!data || !data.success) throw new Error(translateServerError(data && data.message) || 'HTTP 错误');
-          const elements = Array.isArray(data.elements) ? data.elements : [];
-          const theme = String(data.activity || '').trim();
-          if (theme && suggestThemes.indexOf(theme) < 0) suggestThemes.push(theme);
-          elements.forEach(function(v) { if (v && suggestSeen.indexOf(v) < 0) suggestSeen.push(v); });
-          if (!suggestSeen.length && !suggestThemes.length) {
-            showCaseToast(zh() ? '没识别到可用的元素或主题' : 'No elements detected', 2400);
-            return;
-          }
-          // 英文界面：译名齐了再画建议弹窗，避免先中文后英文的闪动（6 秒上限防止接口异常卡住）
-          if (state.lang === 'en') {
-            await Promise.race([
-              translateMissingTagNames(suggestSeen.concat(suggestThemes)).catch(function () { return 0; }),
-              new Promise(function (resolve) { setTimeout(resolve, 6000); })
-            ]);
-          }
-          renderSuggestPop();
-        })
-        .catch(function(error) {
-          aiBtn.disabled = false;
-          alert(zh() ? ('AI 识别失败：' + ((error && error.message) || '请重试')) : ('AI detection failed: ' + ((error && error.message) || 'Please retry')));
-        });
-    };
-    const renderSuggestPop = function() {
-      closeSuggest();
-      if (!suggestSeen.length && !suggestThemes.length) return;
-      suggestPop = document.createElement('div');
-      suggestPop.className = 'case-tag-pop case-foot-ai-suggest';
-      suggestPop.innerHTML = '<div class="case-foot-tag-editor-hint">' + (zh() ? '点一下采纳（即时保存），再点取消' : 'Click to adopt (saved instantly); click again to remove') + '</div>'
-        + suggestThemes.map(function(value) {
-          const added = caseTagSelHas(footSel, 'activity', value);
-          return '<button type="button" class="case-tag-ai-chip case-tag-ai-activity' + (added ? ' is-added' : '') + '" data-foot-ai-activity="' + escapeAttr(value) + '">' + escapeHtml(libraryDisplayLabel(value)) + '</button>';
-        }).join('')
-        + suggestSeen.map(function(value) {
-          const added = caseTagSelHas(footSel, 'element', value);
-          return '<button type="button" class="case-tag-ai-chip' + (added ? ' is-added' : '') + '" data-foot-ai-value="' + escapeAttr(value) + '">' + escapeHtml(libraryDisplayLabel(value)) + '</button>';
-        }).join('')
-        + '<div class="case-foot-ai-rerun-row"><button type="button" class="case-tag-ai-bulk" id="case-foot-ai-rerun" title="' + (zh() ? '再识一次：只补充上次没认出的标签' : 'Detect again: only adds previously missed tags') + '">↻ ' + (zh() ? '重新识别' : 'Re-detect') + '</button></div>';
-      positionPop(suggestPop, aiBtn);
-      suggestPop.addEventListener('click', function(event) {
-        if (event.target.closest('#case-foot-ai-rerun')) { runAiSuggest(); return; }
-        const themeChip = event.target.closest('[data-foot-ai-activity]');
-        const elementChip = event.target.closest('[data-foot-ai-value]');
-        const chip = themeChip || elementChip;
-        if (!chip) return;
-        const key = themeChip ? 'activity' : 'element';
-        const value = themeChip ? themeChip.dataset.footAiActivity : elementChip.dataset.footAiValue;
-        caseTagSelToggle(footSel, key, value);
-        persistSelection().then(function() { renderSuggestPop(); }).catch(persistError);
-      });
-    };
-
-    addBtn.addEventListener('click', function() { closeSuggest(); openEditor(); });
-    aiBtn.addEventListener('click', function() { closeEditor(); if (suggestPop) { closeSuggest(); return; } runAiSuggest(); });
+    addBtn.addEventListener('click', openEditor);
     const outsideHandler = function(event) {
       if (editorPop && !editorPop.contains(event.target) && !addBtn.contains(event.target)) closeEditor();
-      if (suggestPop && !suggestPop.contains(event.target) && !aiBtn.contains(event.target)) closeSuggest();
     };
     document.addEventListener('click', outsideHandler, true);
     caseFootToolsCleanup = function() {
       closeEditor();
-      closeSuggest();
       document.removeEventListener('click', outsideHandler, true);
     };
   }
@@ -8391,7 +8303,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         <footer class="case-project-foot">
           ${previewAiEnabled ? `<div class="case-preview-ai-panel" id="case-preview-ai-panel"></div>` : `<div class="case-foot-line">
             <div class="case-foot-tags" id="case-foot-tags">${caseFootTagsHtml(source)}</div>
-            ${canManage ? `<div class="case-foot-tools"><button type="button" class="case-foot-tool-btn" id="case-foot-add-tag" title="${state.lang === 'zh' ? '点击标签即时保存到云端' : 'Click a tag to save instantly'}">＋ ${state.lang === 'zh' ? '标签' : 'Tags'}</button><button type="button" class="case-foot-tool-btn" id="case-foot-ai-tag" title="${state.lang === 'zh' ? 'AI 识别画面元素并建议标签' : 'AI suggests tags from the cover'}">${state.lang === 'zh' ? 'AI 识别' : 'AI Tags'}</button></div>` : ''}
+            ${canManage ? `<div class="case-foot-tools"><button type="button" class="case-foot-tool-btn" id="case-foot-add-tag" title="${state.lang === 'zh' ? '点击标签即时保存到云端' : 'Click a tag to save instantly'}">＋ ${state.lang === 'zh' ? '标签' : 'Tags'}</button></div>` : ''}
           </div>`}
           <div class="case-foot-actions">
             <button type="button" class="case-secondary-btn" id="case-download-all">${state.lang === 'zh' ? '下载图片物料' : 'Download Images'}</button>

@@ -45,10 +45,10 @@ test('前端：英文界面查词表译名，缺表时永久退回原文', () =>
 
 test('新表与新端点：代理白名单已登记、版本号六处同步', () => {
   assert.match(policySource, /'vf_tag_vocabulary'/, '非维护账号要能读词表');
-  assert.match(indexSource, /app\.js\?v=20261013-upload-autotag-v914/);
-  const refs = indexSource.match(/\?v=20261013-upload-autotag-v914/g) || [];
+  assert.match(indexSource, /app\.js\?v=20261013-drop-foot-ai-v915/);
+  const refs = indexSource.match(/\?v=20261013-drop-foot-ai-v915/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261013-upload-autotag-v914'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261013-drop-foot-ai-v915'/);
 });
 
 test('标签词表：自动更新（中文界面也补翻，不阻塞渲染）', () => {

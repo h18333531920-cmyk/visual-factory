@@ -57,9 +57,9 @@ test('v858 素材缩略图聚拢排序：名字贴近的物料聚成一簇，簇
 });
 
 test('v858 详情弹窗左下角：＋标签快捷编辑（点一下即存云）与浮窗工具行', () => {
-  // footer 结构：标签行 + 工具按钮（仅管理员可见）
+  // footer 结构：标签行 + 工具按钮（仅管理员可见）；v915 起「AI 识别」按钮已摘除，只剩「＋标签」
   assert.match(appSource, /id="case-foot-add-tag"/);
-  assert.match(appSource, /id="case-foot-ai-tag"/);
+  assert.doesNotMatch(appSource, /id="case-foot-ai-tag"/);
   assert.match(appSource, /class="case-foot-line"/);
   assert.match(appSource, /class="case-foot-tools"/);
   // 编辑浮窗：同套词表渲染 + 即时保存提示
@@ -82,20 +82,15 @@ test('v858 详情弹窗左下角：＋标签快捷编辑（点一下即存云）
   assert.match(appSource, /if \(caseFootToolsCleanup\) \{ caseFootToolsCleanup\(\); caseFootToolsCleanup = null; \}/);
 });
 
-test('v858 AI 识别按钮：封面图走 analyze-elements，建议词点一下采纳', () => {
-  // 识别用图：封面优先（视频跳过），否则第一张图片物料
-  assert.match(appSource, /const coverPick = caseCoverFor\(source, 'all'\);/);
-  assert.match(appSource, /\.find\(function\(p\) \{ return !isVideo\(p\); \}\) \|\| null;/);
-  // 与上传表单同端点同参数（元素词表 + 活动词表）
-  assert.match(appSource, /body: JSON\.stringify\(\{ image: image, vocabulary: caseElementVocabulary\(\), activities: FILTER_SECTIONS_CONFIG\.activity\.values \}\)/, 'v902 起词表带库内正在用的标签');
-  // 建议浮窗：活动主题（蓝）在前、元素在后，点一下采纳（即时保存），可重新识别只补新
-  assert.match(appSource, /data-foot-ai-activity=/);
-  assert.match(appSource, /data-foot-ai-value=/);
-  assert.match(appSource, /↻ ' \+ \(zh\(\) \? '重新识别' : 'Re-detect'\)/);
-  assert.match(appSource, /suggestSeen\.indexOf\(v\) < 0/);
-  // 识别中按钮禁用防重复点，失败有报错提示
-  assert.match(appSource, /aiBtn\.disabled = true;/);
-  assert.match(appSource, /AI 识别失败：/);
+test('v915 详情弹窗「AI 识别」按钮已摘除（原 v858 那条断言按新口径改写）', () => {
+  // 按钮本体、建议 chip 与整条接线都不许再出现
+  assert.doesNotMatch(appSource, /id="case-foot-ai-tag"/);
+  assert.doesNotMatch(appSource, /data-foot-ai-activity=|data-foot-ai-value=/);
+  assert.doesNotMatch(appSource, /suggestSeen\.indexOf\(v\) < 0|aiBtn\.disabled = true;/);
+  assert.doesNotMatch(appSource, /AI 识别失败：/);
+  // 同一条底栏上的「＋标签」不受影响
+  assert.match(appSource, /id="case-foot-add-tag"/);
+  assert.match(appSource, /const addBtn = backdrop\.querySelector\('#case-foot-add-tag'\);/);
 });
 
 test('v858 标签序列化抽成公共函数：编辑弹窗与快捷编辑共用，逻辑不漂移', () => {
