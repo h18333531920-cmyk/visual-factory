@@ -194,7 +194,7 @@
 - 上传流程 `renderUploadModal()`：支持单图 / 多图 / 项目上传；案例库上传**必填平台 + 国家**、单次上限 **100** 张、进度按张数、取消上传不再卡按钮。
 - 批量编辑 `openBatchEditModal()`；多选 `libraryMultiSelect` / `librarySelectedIds`。
 - 书签系统 `renderLibraryBookmarkModal()` / `renderLibraryBookmarkInlineHover()`。
-- 搜索：`libraryItemSearchText()` / `libraryItemMatchesQuery()`，含拼音与英文扩展表。**AI 联想只从库内标签里挑（v894）**：搜索框下方浮窗显示「库内关联标签」（`/api/expand-query` 的 `terms` 经客户端反查/词表校验后的结果，点一下改成只搜该标签）；AI 返回但库里没有的词一律丢掉、也不参与匹配。词表 `related` 那一层是**零 AI 的确定性扩展**（`tagVocabularyQueryTerms`）。**展示单位（v903/v904）**：逐图 AI 标签现在全库可读（`loadAllPreviewAiTags()`），项目卡的搜索文本吃**整个项目**的逐图标签（`caseProjectElementTags()`）；**无关键词按项目卡；有关键词时项目里每张命中物料各出一张卡**（`collapseCaseProjectItems` + `caseMaterialMatchesQuery`，判定文本 = 物料类型 + 文件名 + 该图逐图标签）。
+- 搜索：`libraryItemSearchText()` / `libraryItemMatchesQuery()`，含拼音与英文扩展表。**AI 联想只从库内标签里挑（v894）**：搜索框下方浮窗显示「库内关联标签」（`/api/expand-query` 的 `terms` 经客户端反查/词表校验后的结果，点一下改成只搜该标签）；AI 返回但库里没有的词一律丢掉、也不参与匹配。词表 `related` 那一层是**零 AI 的确定性扩展**（`tagVocabularyQueryTerms`，v905 起**正反两向**：该行填的相关词、以及"哪些行把这句话当相关词"，都参与匹配）。**展示单位（v903/v904）**：逐图 AI 标签现在全库可读（`loadAllPreviewAiTags()`），项目卡的搜索文本吃**整个项目**的逐图标签（`caseProjectElementTags()`）；**无关键词按项目卡；有关键词时项目里每张命中物料各出一张卡**（`collapseCaseProjectItems` + `caseMaterialMatchesQuery`，判定文本 = 物料类型 + 文件名 + 该图逐图标签）。
 - **案例项目的判定**：`source_path` 为空 **且** 有预览图 ⇒ 案例项目（`isCaseProject()`）。
   ⚠️ **写 SQL 时注意**：库里的空值实测是**空字符串**、不是 `NULL`（用 `is null` 查出来是 0 行），要写 `coalesce(source_path,'') = ''`；另外案例库还带 `tags` 里有 `vf:kind:source` 标记。
 
