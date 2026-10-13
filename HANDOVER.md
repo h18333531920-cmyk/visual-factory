@@ -196,6 +196,7 @@
 - 书签系统 `renderLibraryBookmarkModal()` / `renderLibraryBookmarkInlineHover()`。
 - 搜索：`libraryItemSearchText()` / `libraryItemMatchesQuery()`，含拼音与英文扩展表。**AI 联想只从库内标签里挑（v894）**：搜索框下方浮窗显示「库内关联标签」（`/api/expand-query` 的 `terms` 经客户端反查/词表校验后的结果，点一下改成只搜该标签）；AI 返回但库里没有的词一律丢掉、也不参与匹配。词表 `related` 那一层是**零 AI 的确定性扩展**（`tagVocabularyQueryTerms`）。
 - **案例项目的判定**：`source_path` 为空 **且** 有预览图 ⇒ 案例项目（`isCaseProject()`）。
+  ⚠️ **写 SQL 时注意**：库里的空值实测是**空字符串**、不是 `NULL`（用 `is null` 查出来是 0 行），要写 `coalesce(source_path,'') = ''`；另外案例库还带 `tags` 里有 `vf:kind:source` 标记。
 
 ### 7.2 案例项目浮窗（case project modal）—— 改动最频繁的模块
 | 函数 | 说明 |
