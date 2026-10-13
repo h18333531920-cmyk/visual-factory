@@ -9,11 +9,19 @@ export function dataPlan(ctx, path, method, base, headers) {
   const target=new URL(path,base);if(target.origin!==new URL(base).origin||target.username||target.password)throw fail('请求路径无效',403);
   const parts=target.pathname.split('/').filter(Boolean);
   const rest=parts[0]==='rest'&&parts[1]==='v1'&&parts.length===3&&tables.has(parts[2]);
+  // v901：「按站内标签重算词表」这一个 RPC 放行（前端词表页「同步库内标签」按钮用）。
+  // 只放这一个名字、只允许 POST、且必须维护权限；不带 body 改写（RPC 无参数）。
+  const syncRpc=parts[0]==='rest'&&parts[1]==='v1'&&parts[2]==='rpc'&&parts[3]==='vf_sync_tag_vocabulary'&&parts.length===4;
   const special=['sign','list','authenticated','public'].includes(parts[3]);
   const bucketIndex=special?4:3,bucket=parts[bucketIndex];
   const storage=parts[0]==='storage'&&parts[1]==='v1'&&parts[2]==='object'&&['vf-library','vf-projects'].includes(bucket);
-  if(!rest&&!storage)throw fail('请求路径无效',403);
+  if(!rest&&!storage&&!syncRpc)throw fail('请求路径无效',403);
   if(!['GET','HEAD','POST','PATCH','PUT','DELETE'].includes(method))throw fail('请求方法不支持',405);
+  if(syncRpc){
+    if(method!=='POST')throw fail('请求方法不支持',405);
+    if(!ctx.maintenance)throw fail('此操作需要开发者维护权限',403);
+    return {target,rest:false,storage:false,syncRpc:true,parts,bucket:null,ownerColumn:null,jsonBody:false,read:false,uploadInsert:false,uploadTagPatch:false};
+  }
   const profile=rest&&parts[2]==='vf_profiles';
   if(profile&&method!=='GET')throw fail('请使用账号管理面板',403);
   const features=accountFeatures(ctx.account);

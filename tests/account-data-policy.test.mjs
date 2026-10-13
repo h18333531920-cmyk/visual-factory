@@ -12,6 +12,19 @@ test('icons cannot access asset records or mint signed asset URLs',()=>{
  assert.equal(plan(icons,'/rest/v1/vf_profiles?id=neq.any').target.searchParams.get('id'),'eq.'+uid);
  assert.equal(plan(icons,'/rest/v1/vf_profiles?select=*,vf_source_files(*)').target.searchParams.get('select'),'id,email,display_name,role,status');
 });
+test('v901：词表同步 RPC 只放行一个名字、只允许 POST、且要维护权限',()=>{
+ const admin={...diy,maintenance:{}};
+ const p=plan(admin,'/rest/v1/rpc/vf_sync_tag_vocabulary','POST');
+ assert.equal(p.syncRpc,true);
+ assert.equal(p.jsonBody,false,'RPC 无参数，body 原样透传');
+ assert.equal(p.read,false);
+ assert.throws(()=>plan(diy,'/rest/v1/rpc/vf_sync_tag_vocabulary','POST'),{status:403},'普通账号不给同步');
+ assert.throws(()=>plan(admin,'/rest/v1/rpc/vf_sync_tag_vocabulary','GET'),{status:405});
+ assert.throws(()=>plan(admin,'/rest/v1/rpc/vf_sync_tag_vocabulary_extra','POST'),{status:403});
+ assert.throws(()=>plan(admin,'/rest/v1/rpc/vf_sync_tag_vocabulary/extra','POST'),{status:403});
+ assert.throws(()=>plan(admin,'/rest/v1/rpc/vf_some_other_fn','POST'),{status:403});
+});
+
 test('unknown tables, RPC, cross-origin and traversal are not proxied',()=>{
  for(const path of ['//untrusted.invalid/a','/rest/v1/rpc/vf_is_admin','/rest/v1/unknown','/storage/v1/object/vf-projects/another/file'])assert.throws(()=>plan(diy,path),{status:403});
  assert.throws(()=>plan(diy,'/rest/v1/vf_projects?select=*,vf_profiles(*)'),{status:403});

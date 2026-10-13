@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-vocab-autosync-v900`（词表 3 列：中文名/英文名/相关词，靠数据库自动同步；浮窗「库内关联标签」分来源；缓存命中会后台静默重问）；部署 `29ee8d46-a84c-4579-82e8-95773e952740`，2026-10-12 本机 wrangler 直发 | 实测 2026-10-12 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261012-vocab-sync-rpc-v901`（词表 3 列 + 数据库自动同步；代理放行「同步库内标签」这一个 RPC）；部署 `652351e1-ba6f-4add-875f-1e6f0f786e63`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
 | 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`084ba71`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-12 |
-| 自动化测试 | `node --test tests/` → **397/397 通过**（含标签词表平表 / 相关词 / 库内标签口径 / 浮窗分源 / 缓存重问 / 词表自动同步 18 项） | 实测 2026-10-12 |
+| 自动化测试 | `node --test tests/` → **398/398 通过** | 实测 2026-10-13 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在）；**`sql/025_tag_vocabulary_auto_sync.sql` 已由用户执行**（2026-10-13，SQL Editor 跑完无报错、结果面板 `1 row` = 末尾那句 `select vf_sync_tag_vocabulary()` 跑通） | 实测 2026-10-13 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -437,7 +437,8 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
 >   - 相关词列**英文界面显示英文**（`tagVocabularyRelatedDisplayText` 走 `libraryDisplayLabel`），**保存时用词表反查换回库内中文标签**（`tagVocabularyRelatedStorageWords` → `libraryExpansionCanonicalTerm`）——存库仍是中文，匹配链路不变。
 >   - ✅ **2026-10-13 用户已执行 sql/025**（SQL Editor 返回 `1 row`、无报错）⇒ 词表自动同步**已生效**：函数 `vf_sync_tag_vocabulary()`、三张源表的触发器、以及一次存量回填都已在真实库里落地。
 >   - ⚠️ 执行前的降级（现已是历史）：不执行 sql/025 时一切照旧（前端补翻 + 手动改英文名/相关词），只是不会自动收全/清孤儿。
->   - 🚧 **还没验的**：界面上点「同步库内标签」按钮是否正常提示（没验 = 未核实）；触发器在真实上传时就地生效也还没实测过。以后上传/删除物料时留意一下词表行数变化即可。
+>   - **v901 修「同步库内标签按钮点不动」**：报「请求路径无效」**不是** sql/025 的问题，而是**客户端所有 Supabase 请求都走服务端代理** `/api/account-data`（公司网络封 supabase.co 直连），那份白名单只放行 `rest/v1/<表>` 与 storage，`rest/v1/rpc/*` 一律 403。修法：在 `functions/_account-data-policy.js` 里**只放行 `vf_sync_tag_vocabulary` 这一个 RPC**（仅 POST、必须维护权限，别的一律照旧 403），并加了单元测试锁死。⚠️ **数据库触发器不受这个影响**——自动同步是在库里跑的，上传/删除物料照旧实时更新词表，这个按钮只是"手动重算一次"的入口。
+>   - 🚧 **还没验的**：界面上点「同步库内标签」按钮是否正常提示（v901 之后需要用户再点一次；没验 = 未核实）；触发器在真实上传/删除时就地生效也还没实测过。
 >   - 🚧 **已知未做**：`vf_library_options`（国家/活动/类别）里的词不进词表（它们是选项、有自己的双语字段）；`vf_preview_ai_tags.excluded_tags` 也不算"在用标签"。
 >
 > **词表的三条事实（2026-10-12 逐条查代码核实，回答用户提问）**

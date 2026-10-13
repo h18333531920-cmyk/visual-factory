@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261012-vocab-autosync-v900';
+const TOOL_UI_VERSION = '20261012-vocab-sync-rpc-v901';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -16549,8 +16549,8 @@ function libraryTagsForForm(formData, kind) {
           renderTagVocabularySection(section);
         }).catch(function(error) {
           tagVocabularyMessage = zh
-            ? ('同步失败：' + (error.message || '').slice(0, 60) + '（若提示函数不存在，请先在 Supabase 执行 sql/025_tag_vocabulary_auto_sync.sql）')
-            : 'Sync failed. Run sql/025 first.';
+            ? ('同步失败：' + (error.message || '').slice(0, 60) + '（提示「请求路径无效」= 服务端还没放行这个 RPC，需部署最新 functions；提示「函数不存在」= 先在 Supabase 执行 sql/025）')
+            : 'Sync failed. Deploy latest functions, or run sql/025 first.';
           renderTagVocabularySection(section);
         });
         return;

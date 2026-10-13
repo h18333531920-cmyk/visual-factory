@@ -150,7 +150,7 @@ test('v899/v900 词表只剩「中文名 + 英文名 + 相关词」：新增/删
   // 代替删除按钮：数据库自动同步 + 一个手动同步入口
   assert.match(appSource, /data-tv-sync="1"/);
   assert.match(appSource, /state\.supabase\.rpc\('vf_sync_tag_vocabulary'\)/);
-  assert.match(appSource, /sql\/025_tag_vocabulary_auto_sync\.sql/, '失败提示里指路 sql/025');
+  assert.match(appSource, /先在 Supabase 执行 sql\/025/, '失败提示里指路 sql/025');
 });
 
 test('v900 相关词在英文界面显示英文，存库仍写回库内中文标签', () => {
