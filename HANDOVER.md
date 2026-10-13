@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261013-material-type-filter-v909`（**铺开服从类别筛选**：搜关键词 + 选中「开机海报/弹窗…」时只出该类别的物料；往上叠 v908 的**写入范围全开**+元素筛选吃逐图标签、v907 的**识别噪音黑名单**、v906 的**按组识别**+**按组占位**）；部署 `3f5c7d74`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261013-modal-focus-preview-v910`（**点哪张开哪张**：点铺开卡打开浮窗时大图落在点的那一张，不再是类型组默认封面；往上叠 v909 的**铺开服从类别筛选**、v908 的**写入范围全开**+元素筛选吃逐图标签、v907 的**识别噪音黑名单**、v906 的**按组识别**+**按组占位**）；部署 `9f29a24d`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
-| 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`0a2a6fc`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-13 |
-| 自动化测试 | `node --test tests/` → **485/485 通过**（v909 类别筛选 5 条；v908 写入范围/筛选 13 条；v907 噪音黑名单 6 条；v906 组识别 30 条 + 2026-10-13 本机批量识别脚本 16 条） | 实测 2026-10-13 |
+| 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`3220972`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-13 |
+| 自动化测试 | `node --test tests/` → **492/492 通过**（v910 浮窗定位 7 条；v909 类别筛选 5 条；v908 写入范围/筛选 13 条；v907 噪音黑名单 6 条；v906 组识别 30 条 + 2026-10-13 本机批量识别脚本 16 条） | 实测 2026-10-13 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表四件 `sql/022` / `023` / `024` / **`025`** 均**已执行**；**`sql/026_tag_vocabulary_trigger_tuning.sql` 也已执行**（2026-10-13，自检返回 9 条 `vf_tag_sync_*` 触发器：`_ins`/`_del` = STATEMENT、`_upd` = ROW ⇒ 状态写不再触发词表全量重算） | 实测 2026-10-13 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -559,6 +559,13 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
     - **改法**：`collapseCaseProjectItems()` 新增 `typeFilters`（从 `selectedLibraryTagValues()` 里挑出真正的物料类别，用 `caseMaterialTypeSet()` 判）与 `passTypeFilter()`，铺开（`hits`）和「封面替换」（`previewAiMatch`）**两处都过这道闸**；**没选类别时一律放行**，行为与 v904 逐字一致。
     - 测试 **485/485**：新增 `tests/case-type-filter-expand-v909.test.mjs`（5 条，含「换个类别就换一批物料」「没选类别时行为不变」「项目里没有该类别的命中物料时回落项目卡，而不是拿别的类别的图当封面」）；`tests/library-case-expand-v904.test.mjs` 与 `tests/case-preview-ai-groups-v906.test.mjs` 的 vm 切片补了 `selectedLibraryTagValues` 桩（新依赖，行为不变）。
     - ⚠️ **有意保留的语义**：类别筛选仍是**项目级**的 —— 项目只要**有**开机海报就整体通过；若关键词只在它的弹窗里命中，这张卡会回落成该项目的**开机海报封面**（类别没错，但那张图本身未必含关键词）。要做到「图和关键词都必须属于同一类别」得改判定语义，**本轮没做**。
+  - **✅ v910（2026-10-13，已发测试站，部署 `9f29a24d`）—— 点哪张铺开卡，浮窗大图就落在哪一张**。用户实测反馈：搜「餐桌」后点开某张铺开的物料，浮窗左边大图却是**该物料类型组的默认封面**（看着像项目封面），不是他点的那张。
+    - **根因**：v904 把点击落点从「项目」改成了「物料类型那一组」（`openCaseProjectModal(source.id, preview.material_type)`），而 `openCaseProjectModal` 里初始大图取的是 `caseCoverFor(source, tabValue).cover` —— **类型组里优先英文版的那张**，不是被点的那张。这正是「步 1b 明确没做的四个小口子」里的第 ③ 条。
+    - **改法**：`openCaseProjectModal(sourceId, focusType, focusPreviewId)` 加第三个参数；把「初始大图选谁」抽成纯函数 `caseModalInitialPreviewId(materials, fallbackId, focusPreviewId)`（focus 属于本项目就用它，否则退回 fallback）；网格点击（`app.js:9460`）与键盘 Enter（`app.js:9488`）两处都补 `X.preview.id`。**`tabValue` / 侧栏 / 左右切换 / AI 面板逻辑一行未动**；「切 tab 后重开浮窗」那两处仍不传 id。
+    - 测试 **492/492**：新增 `tests/case-modal-focus-preview-v910.test.mjs`（7 条：helper 的 vm 切片 4 条 + 源码接线 3 条）；`tests/library-case-expand-v904.test.mjs` 的点击签名断言随之更新。
+    - **浏览器实测（本次会话真的点了一遍）**：搜「餐桌」→ 点第 2 张（寿司/咖啡那张）→ 浮窗左边大图就是那张，底部「当前物料 AI 标签」显示该图的 `汉堡·餐桌·咖啡杯·寿司·蛋糕` ⇒ 确认不是默认封面。
+    - ⚠️ **还没改的入口**：右键菜单「查看详情」（`app.js` 约 9602，`openCaseProjectModal(source.id)`）**只传 sourceId**，仍走类型组封面；它的调用方手里其实有 item（含 preview），要一并修很容易 —— **故意没动**，等用户定。
+    - ⚠️ **未核实**：侧栏若把语言筛选停在 en/ar、且被点那张恰好被过滤掉，高亮看不到（默认 `'all'`，正常场景无影响）；`material_type` 不在物料目录里时 `tabValue` 会回落、而 `currentId` 仍是被点那张（有意为之）。
   - **🚧 用户 2026-10-13 追加的核心痛点：同款的英/阿版本在结果里重复占位**（搜「牛排」出英文版那张、搜「烤肉」出**同一设计的**阿语版那张；根因是逐图各识别一次，同款两版的标签不一致）。规划稿早有对应章节：**§3 设计分组**（分组证据与防连锁误合并）+ **§5 逐图识别如何支持语言版本去重**。
     - **口径（按规划稿，不要改成"硬统一标签"）**：① **结果按"设计组"占位** —— 同款多语言版在结果里只占一个位置（默认展示有证据的 EN 版），组内可展开看其他版本；② **证据分层** —— 其他版本标"同组待核验"，人工确认后才进直接命中。规划稿 §5 明确「**不能让已完成的 EN 标签自动替代失败的 AR 结果**」；硬复制标签会造成假命中（搜烤肉结果里那张其实是牛排版）。
     - **配对证据（按可靠性）**：`vf_asset_previews.language`（en/ar/none/空，AI 识别或手改，空则按文件名兜底）互补 + 同项目 + 同 `material_type`/同尺寸 + 文件名结构（**编号必须保留**，规划稿禁止"删掉数字强行合并"）+ **画面相似度**（要用算法如感知哈希，规划稿明说"模型说很相似不能当可靠概率"）；AI 只作疑难项兜底。防连锁误合并：新成员要跟**组内整体**比（A像B、B像C ≠ A像C）。
