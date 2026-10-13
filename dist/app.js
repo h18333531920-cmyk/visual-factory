@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261013-tag-noise-v907';
+const TOOL_UI_VERSION = '20261013-write-scope-v908';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3537,12 +3537,16 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
     var target = String(value || '').trim();
     if (!target) return false;
     var tags = visibleLibraryTags(source);
+    // v908：元素这一维吃「全项目所有物料的逐图 AI 标签」——v903/v904 已经把这份数据接进搜索，
+    // 这里接上，元素筛选条才和搜索框一致（非案例项目 / 非元素维度拿到的是空数组，行为逐字不变）。
+    var elementTags = dim === 'element' ? caseProjectElementTagsFor(source) : [];
     if (dim === 'country') {
       if (String(libCountryLabel(source) || '') === target) return true;
     } else if (dim === 'activity') {
       if (String(libActivityLabel(source) || '') === target || tags.indexOf(target) >= 0) return true;
     } else {
       if (tags.indexOf(target) >= 0) return true;
+      if (elementTags.indexOf(target) >= 0) return true;
       // v862：业务策略自定义值存的是标记，解码后匹配（同词表值直接命中 tags）
       if (dim === 'strategy' && tags.map(caseStrategyMarkerValue).indexOf(target) >= 0) return true;
     }
@@ -3551,7 +3555,7 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
     var text = '';
     if (dim === 'country') text = String(libCountryLabel(source) || '');
     else if (dim === 'activity') text = String(libActivityLabel(source) || '') + ' ' + tags.join(' ');
-    else text = tags.join(' ');
+    else text = tags.concat(elementTags).join(' ');
     text = text.toLowerCase();
     return terms.some(function(t) { return text.indexOf(String(t).toLowerCase()) >= 0; });
   }
@@ -4306,12 +4310,11 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return !!source && source.id === CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID;
   }
 
-  // v903：读/展示/搜索已经对**所有案例项目**开放（`loadAllPreviewAiTags()` + `caseProjectElementTags()`），
-  // 但**写入仍只允许实验项目**——服务端 `previewFor()` 里锁着 EXPERIMENT_SOURCE_ID，
-  // 放开它属于「步 2：往共享库写逐图标签」，需要用户当次授权。
-  // 所以面板/一键识别先按"可写"来开关（否则用户点了必然逐张 404）；步 2 把这里换成 isCaseProject(source) 即可。
+  // v908（步 2）：读/展示/搜索/写入**全部对案例项目开放**。
+  // 服务端 `previewFor()` 的来源锁已去掉（仍然只认请求里带的那张 preview），
+  // 所以这里跟 isCaseProject 对齐，非案例项目（模板/图库单图素材）照旧不显示识别入口。
   function casePreviewAiEnabledFor(source) {
-    return isCasePreviewAiExperimentSource(source);
+    return isCaseProject(source);
   }
 
   function casePreviewAiRow(previewId) {
@@ -4391,6 +4394,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       return state.supabase.from(CASE_PREVIEW_AI_TABLE).select(select).eq('source_file_id', sourceId);
     });
     result.rows.forEach(function(row) { state.previewAiTagsByPreviewId.set(row.preview_id, row); });
+    if (result.rows.length) notePreviewAiTagsChanged();
     return result.rows;
   }
 
@@ -4410,10 +4414,37 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         rows.push(row);
         state.previewAiTagsByPreviewId.set(row.preview_id, row);
       });
+      if (result.rows.length) notePreviewAiTagsChanged();
       if (result.rows.length < PREVIEW_AI_TAGS_PAGE_SIZE) return rows;
     }
     console.warn('逐图 AI 标签已读到分页上限（' + (PREVIEW_AI_TAGS_PAGE_SIZE * PREVIEW_AI_TAGS_MAX_PAGES) + ' 行），后面的行没有加载。');
     return rows;
+  }
+
+  // v908：元素筛选也要吃同一份聚合（搜索框能搜到的，元素筛选条就得能筛到）。
+  // 聚合要遍历项目里每张物料、每张再按 id 找一次 preview，所以按项目缓存：
+  // 物料数组换了引用、长度变了、或逐图标签行有增删（caseProjectElementTagsStamp 递增）时整表失效。
+  var caseProjectElementTagsCache = new Map();
+  var caseProjectElementTagsStamp = 0;
+
+  function notePreviewAiTagsChanged() { caseProjectElementTagsStamp += 1; }
+
+  function caseProjectElementTagsFor(source) {
+    if (!source || !source.id) return [];
+    const key = String(source.id);
+    const cached = caseProjectElementTagsCache.get(key);
+    if (cached
+      && cached.materials === state.libraryPreviews
+      && cached.materialsLength === state.libraryPreviews.length
+      && cached.stamp === caseProjectElementTagsStamp) return cached.tags;
+    const tags = isCaseProject(source) ? caseProjectElementTags(caseMaterialsOf(source)) : [];
+    caseProjectElementTagsCache.set(key, {
+      materials: state.libraryPreviews,
+      materialsLength: state.libraryPreviews.length,
+      stamp: caseProjectElementTagsStamp,
+      tags: tags
+    });
+    return tags;
   }
 
   async function postCasePreviewAiTagAction(payload) {
@@ -4426,7 +4457,10 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     });
     const data = await response.json().catch(function() { return {}; });
     if (!response.ok || !data.success) throw new Error(translateServerError(data.message) || ('HTTP ' + response.status));
-    if (data.row && data.row.preview_id) state.previewAiTagsByPreviewId.set(data.row.preview_id, data.row);
+    if (data.row && data.row.preview_id) {
+      state.previewAiTagsByPreviewId.set(data.row.preview_id, data.row);
+      notePreviewAiTagsChanged();
+    }
     return data.row || null;
   }
 
@@ -5823,6 +5857,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     state.libraryPreviewUrls = {};
     state.libraryPreviewUrlSignedAt = {};
     state.previewAiTagsByPreviewId.clear();
+    notePreviewAiTagsChanged();
     previewAiTagsTableReady = null;
     libraryPreviewImageNodeCache.clear();
     libraryUnavailableThumbnailPaths.clear();

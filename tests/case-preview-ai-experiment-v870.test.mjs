@@ -101,7 +101,8 @@ test('服务端：人工排除可显式撤销',async t=>{
   assert.deepEqual(mock.writes.at(-1).ai_tags,['kiki']);
 });
 
-test('服务端：不能给实验项目以外的物料写标签',async t=>{
+// v908：来源锁已去掉（来源不再限制成实验项目），但**必须**是请求里带的那一张、且库里唯一存在。
+test('服务端：请求里的物料查不到就不写库（v908 已去掉来源锁）',async t=>{
   const mock=mockFetch({preview:false});const old=globalThis.fetch;globalThis.fetch=mock.fetcher;t.after(()=>{globalThis.fetch=old;});
   const response=await handleCasePreviewAiTags(request({action:'save',previewId,tags:['kiki']}),env);
   assert.equal(response.status,404);assert.equal(mock.writes.length,0);
@@ -113,14 +114,12 @@ test('服务端：写入分区键锁死 augpicks-v1（改名 = 现有 28 行读�
   assert.match(serverSource,/新项目的行也写这里/);
 });
 
-// 注意（v903 步1）：**读**已经对全部案例项目开放（`loadAllPreviewAiTags()` + `caseProjectElementTags()`），
-// 但**写**（一键识别、逐图标签面板里的采纳/排除）仍只放开实验项目——服务端 `previewFor()` 锁着实验来源，
-// 放开属于步 2（写共享库，需用户当次授权）。所以面板仍按"可写"开关，避免点了逐张 404。
-test('前端：读全部项目、写仍只放开实验项目（v903 步1）',()=>{
+// v908（步 2）：**读写都**对全部案例项目开放 —— 服务端 `previewFor()` 不再锁实验来源，
+// 前端 `casePreviewAiEnabledFor()` 跟着换成 `isCaseProject(source)`（v903 步 1 时写这一侧还锁着）。
+test('前端：读写都对全部案例项目开放（v908 步 2）',()=>{
   assert.match(appSource,/CASE_PREVIEW_AI_EXPERIMENT_SOURCE_ID = 'bfa82ce5-fca0-403b-8f7e-c6b6eafaf4c5'/);
-  // 门禁函数：现在明确分成「读写是否放开」，写这一侧仍是实验项目
   assert.match(appSource,/function isCasePreviewAiExperimentSource\(source\) \{/);
-  assert.match(appSource,/function casePreviewAiEnabledFor\(source\) \{\s*\n\s*return isCasePreviewAiExperimentSource\(source\);/);
+  assert.match(appSource,/function casePreviewAiEnabledFor\(source\) \{\s*\n\s*return isCaseProject\(source\);/);
   assert.match(appSource,/if \(!casePreviewAiEnabledFor\(source\)\) return;/,'一键识别的门禁仍按可写范围');
   assert.match(appSource,/const previewAiEnabled = casePreviewAiEnabledFor\(source\);/);
   // 读数据不再认实验项目：启动读全表、单项目读只按 source_file_id、全库不按 experiment_key 过滤

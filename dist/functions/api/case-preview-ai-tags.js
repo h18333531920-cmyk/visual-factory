@@ -1,9 +1,8 @@
 import {json, requireAdmin, supabaseFetch} from '../_shared.js';
 
-// 逐图 AI 标签已经是所有案例项目共用的功能（前端门禁 = isCaseProject）。
+// 逐图 AI 标签是所有案例项目共用的功能（前端门禁 = isCaseProject，v908 起写入范围已放开）。
 // EXPERIMENT_KEY 现在只是分区名：库里已有的行都挂在这个 key 下，新项目的行也写这里，
 // 改名 = 现有数据全部读不到，所以不要动它。
-const EXPERIMENT_SOURCE_ID = 'bfa82ce5-fca0-403b-8f7e-c6b6eafaf4c5';
 const EXPERIMENT_KEY = 'augpicks-v1';
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[1-5][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
 const STATUSES = new Set(['running', 'failed', 'expired']);
@@ -19,12 +18,13 @@ function cleanTags(values) {
   return out;
 }
 
+// v908：不再锁实验项目来源，但**仍然只认请求里带的那一张**（id 精确匹配、必须唯一一条）。
+// 写库时 source_file_id 取库里这一行自己的值，调用方无法指定别的项目/别的行。
 async function previewFor(env, previewId) {
   const query = `/rest/v1/vf_asset_previews?id=eq.${encodeURIComponent(previewId)}`
-    + `&source_file_id=eq.${EXPERIMENT_SOURCE_ID}`
     + '&select=id,source_file_id,preview_path,preview_size_bytes,updated_at';
   const rows = await supabaseFetch(env, query, {method: 'GET'}, true);
-  if (!Array.isArray(rows) || rows.length !== 1) throw Object.assign(new Error('实验物料不存在'), {status: 404});
+  if (!Array.isArray(rows) || rows.length !== 1) throw Object.assign(new Error('物料不存在'), {status: 404});
   return rows[0];
 }
 
