@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261013-tag-manage-instant-v913`（词表改名/删除**点完立刻变**：确认后先乐观更新本地再发请求，失败回滚；结果消息不再被重读清空）；往上叠 v912 的**词表统一管理标签**（`sql/027` 已执行、改名实测通过）、v910 的**点哪张开哪张**、v909 的**铺开服从类别筛选**、v908 的**写入范围全开**、v907 的**识别噪音黑名单**、v906 的**按组识别**+**按组占位**）；部署 `4c72aabc`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261013-upload-autotag-v914`（**上传表单去掉 AI 元素识别**、平台/国家/活动主题**必填**；顶部新增**后台识别进度条**：正在识别 / 排队还剩 N 张 / 无事隐藏，状态来自数据库、刷新仍在）；往上叠 v913 的**改名删除即时生效**、v912 的**词表统一管理标签**（`sql/027` 已执行）、v907 的**识别噪音黑名单**、v906 的**按组识别**+**按组占位**）；部署 `1dd9fecb`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
-| 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`891b639`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-13 |
-| 自动化测试 | `node --test tests/` → **534/534 通过**（v913 即时生效 19 条；v912 词表改名/删除 21 条；v910 浮窗定位 7 条；v909 类别筛选 5 条；v908 写入范围/筛选 13 条；v907 噪音黑名单 6 条；v906 组识别 30 条 + 本机批量识别脚本 16 条） | 实测 2026-10-13 |
+| 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`27783c3`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-13 |
+| 自动化测试 | `node --test tests/` → **573/573 通过**（v914 上传改造 + 进度条 39 条；v913 即时生效 19 条；v912 词表改名/删除 21 条；v910 浮窗定位 7 条；v909 类别筛选 5 条；v908 写入范围/筛选 13 条；v907 噪音黑名单 6 条；v906 组识别 30 条 + 本机批量识别脚本 16 条） | 实测 2026-10-13 |
 | 逐图 AI 标签覆盖 | **已铺满全库**：`vf_preview_ai_tags` **1935 行 / 98 个案例项目**（1848 成功 + 87 失败，失败的 87 张**全是 `.gif`**）；2026-10-13 用本机脚本跑完，用时 25 分 35 秒 | 实测 2026-10-13 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表四件 `sql/022` / `023` / `024` / **`025`** 均**已执行**；**`sql/026_tag_vocabulary_trigger_tuning.sql` 也已执行**（2026-10-13，自检返回 9 条 `vf_tag_sync_*` 触发器：`_ins`/`_del` = STATEMENT、`_upd` = ROW ⇒ 状态写不再触发词表全量重算）；**`sql/027_tag_manage.sql` 也已执行**（2026-10-13，改名/删除两个 RPC 函数就位、均为 `security definer`，实测可调、改名已跑通） | 实测 2026-10-13 |
@@ -598,6 +598,20 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
     - **改法**：① 新增纯函数 `tagVocabularyOptimisticRename(rows,id,nextName)` / `tagVocabularyOptimisticRemove(rows,id)`（返回新数组、不就地改；改名同时改 `name_zh` 与 `id='el:<新名>'`，撞名则两行合一、`related` 取并集 + `source='manual'`，与 sql/027 口径一致）；② 确认后**先乐观更新本地 + 立即整段重画**，再发 RPC，失败回滚并沿用原有降级；③ 进行中态 `tagVocabularyManageBusy`：忙碌时整表输入框与删除按钮禁用、当前行显示「处理中…」，另有 60s 看门狗兜底解锁（防请求不回来把整张表永久禁用）；④ 消息块抽成 `#tv-messages` 并让 `refreshTagVocabularyBody` 也更新它（**顺带修好了英文名/相关词保存后「已保存。」看不到的老毛病**）；`reloadTagVocabulary(section,{keepMessage:true})` 用在管理操作的成功与失败两处，普通「刷新」/首次挂载/「同步库内标签」/「补翻译」行为不变。
     - 测试 **534/534**：新增 `tests/tag-manage-instant-v913.test.mjs`（19 条：7 条 vm 纯逻辑 + 2 条真渲 HTML + 8 条接线 + 版本号）。
     - ⚠️ **未核实**：真机没复现（本机无真库/浏览器）。除根因 A/B 外，还有一个次要可能 —— 用户在 RPC 在飞时点了「刷新」，那个请求若快照早于提交、却晚于改名自己的重读返回，就会**最后画上旧数据**（所有 `reloadTagVocabulary` 调用点都没有序号/取消机制）；乐观更新 + 立刻重画对这条竞态同样有效，但**没实测**。另：撞名合并时 `related` 的本地顺序（保留行在前 + 去重）与 sql/027 的 `array_agg(distinct … order by …)` 可能不同，约 1 秒后重读会被服务端值覆盖。
+  - **✅ v914（2026-10-13，已发测试站，部署 `1dd9fecb`）—— 上传表单去掉 AI 元素识别 + 三标签必填 + 后台识别进度条**。用户口径：上传去掉 AI 识别（走后台无人值守识别），但**保留标签选择浮窗**；平台/国家/活动主题**必填**；AI 与人工标签**去重**；顶部加**后台识别进度条**，且**刷新后仍在**。
+    - **W1.1 去掉上传时的 AI 元素识别**：删掉 `renderCaseTagBar()` 里的 AI 建议区块（`data-case-tag-ai`）、拖图上传那条路的「挑开屏 → `/api/analyze-elements` → 建议 chip」整段，以及两处空的 `clearCaseElementSuggestions()` 调用。**函数本体（`requestCaseElementSuggestions` / `selectCaseElementSuggestionFile` / `clearCaseElementSuggestions`）与端点 `functions/api/analyze-elements.js` 一字未删**（线上在跑、别处可能引用）。物料类型自动识别 / 缩略图网格 / 成套自动判数量原样保留（有测试锁）。
+      - ⚠️ **保留未动的一处**：**项目详情弹窗**左下角的「AI 识别」按钮（`#case-foot-ai-tag`）**还在** —— 任务书说的是"上传表单里"，而且它被在库的 `tests/case-foot-tools-v858.test.mjs` 锁着。**要不要也去掉，等用户定**（约 10 行小改）。
+    - **W1.2 平台/国家/活动主题必填**：在既有 `validateCaseProjectUpload()` 上扩展（没新造一套），缺哪报哪、复用 `.case-tag-row.is-missing` / `.case-tag-add.is-required` 标红并自动弹面板。**只在上传分支校验，编辑已有项目不拦**（测试锁"全仓只有 1 次调用"）。
+      - ⚠️ **副作用**：以前"平台+国家选齐就能传"，现在**每次上传都必须显式选活动主题**（预填只在素材库筛选停在该项时才带出来）。同事若觉得烦，可考虑把"上次选过的活动主题"也记住（现在只记平台）。
+    - **W1.3「元素」行本来就支持自定义新增**（核实结论）：`CASE_TAG_CUSTOM_KEYS = ['element','activity','strategy']`（v826 起）已给了 `＋ / 输入框 / 添加`，回车即 `addCaseTagCustomValue → caseTagSelToggle(sel,'element',value)`。**唯一与需求不符的是上限**：实际是"中文 6 字 / 英文 12 字符"（三条行共用），不是 ≤5 字 —— 没改（改会连带影响另两行），只把真实口径锁进测试。
+    - **W1.4 去重口径统一**：端点 `save` 与脚本 `buildSuccessRow` 现在都 **`ai_tags` 同时刨掉 `excluded_tags` 和 `manual_tags`**；`manual_tags` / `excluded_tags` 本身仍原样保留、绝不覆盖（铁律未破）。测试**两边都真跑并逐例比对三个数组同值**。
+    - **W2 后台识别进度条**：新增纯函数 `recognizeProgressState({previews,tagRows,sources,lang})` → `{visible,kind,projectTitle,remaining}`，三态：`running`（有 `status='running'` 行 → 项目名取 `vf_source_files.title`）/ `queued`（还剩 N 张 = 案例项目里没有 `success` 行、且脚本真会送的图片；视频/psd/无 `preview_path` 不算）/ `idle`（整条隐藏）。细条是素材库页最顶上的**占位细带**（不是 fixed，不挡检索栏），**轮询 20s**，`recognizeProgressCanPoll()` 要求 `state.route==='library'` + 有 `access_token`，换页/登出即停。收起记 `localStorage['vf_recognize_progress_hidden_v1']`（记的是"收起时那一种状态"，状态换了会重新出现）。**没新增任何端点** —— `loadAllPreviewAiTags()` 的 `PREVIEW_AI_TAGS_SELECT` 本来就带 `status`。
+    - 测试 **573/573**：新增 `tests/upload-autotag-v914.test.mjs`（15 条）+ `tests/recognize-progress-bar-v914.test.mjs`（24 条）；`case-upload-required-tags-v809` / `element-ai-suggest` 按新口径更新。
+    - ⚠️ **未核实 / 已知偏差（重要）**：
+      ① **进度条只在素材库页**显示与轮询，首页/工具页没有；素材库页往下滚时会被 sticky 检索栏盖住（这是"不挡内容"的代价，没做 sticky）。
+      ② **"还剩 N 张"是近似**：素材库的 sources/previews 是按筛选加载的（选了筛选就只统计已加载那部分）；只看 `status` 不看 `content_key`（图片换过但行仍 success 的算完成）；行被删时客户端 Map 不清理，残留 success 行会让数字偏小。
+      ③ **轮询副作用未实测**：每 20s 重读整表 `vf_preview_ai_tags`（1935 行 ≈ 2 个分页请求），且会作废元素筛选的聚合缓存 —— 选中元素筛选时重算更频繁，**没在浏览器里量过**。
+      ④ **真机端到端未做**：没登录真站，进度条实际观感（细条位置、收起行为）没在浏览器看过；上传必填拦截只到"真跑校验函数"这一级。
   - **🚧 用户 2026-10-13 追加的核心痛点：同款的英/阿版本在结果里重复占位**（搜「牛排」出英文版那张、搜「烤肉」出**同一设计的**阿语版那张；根因是逐图各识别一次，同款两版的标签不一致）。规划稿早有对应章节：**§3 设计分组**（分组证据与防连锁误合并）+ **§5 逐图识别如何支持语言版本去重**。
     - **口径（按规划稿，不要改成"硬统一标签"）**：① **结果按"设计组"占位** —— 同款多语言版在结果里只占一个位置（默认展示有证据的 EN 版），组内可展开看其他版本；② **证据分层** —— 其他版本标"同组待核验"，人工确认后才进直接命中。规划稿 §5 明确「**不能让已完成的 EN 标签自动替代失败的 AR 结果**」；硬复制标签会造成假命中（搜烤肉结果里那张其实是牛排版）。
     - **配对证据（按可靠性）**：`vf_asset_previews.language`（en/ar/none/空，AI 识别或手改，空则按文件名兜底）互补 + 同项目 + 同 `material_type`/同尺寸 + 文件名结构（**编号必须保留**，规划稿禁止"删掉数字强行合并"）+ **画面相似度**（要用算法如感知哈希，规划稿明说"模型说很相似不能当可靠概率"）；AI 只作疑难项兜底。防连锁误合并：新成员要跟**组内整体**比（A像B、B像C ≠ A像C）。
