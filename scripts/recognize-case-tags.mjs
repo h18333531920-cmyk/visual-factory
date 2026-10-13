@@ -14,6 +14,8 @@
 //      对不上就说明画面变过，那张得重跑，这也是断点续跑判断「已完成」的唯一依据。
 //   ③ 识别口径复用 functions/_ai.js 的 analyzeCaseTagsWithGlm()（提示词、≤5 字 / ≤12 条、词表归一、
 //      KIKI 别名都在那边），这里绝不重写提示词。
+//   ④ 哪些物料"能识别"只有一处判据：previewSkipReason()（见下）。v916 起 **.gif 默认不算待处理**
+//      —— GLM 视觉通道吃不下动图（2026-10-13 全量实测：93 张 gif 只成功 6 张）。要照旧送 gif 加 --include-gif。
 // 本轮只做**逐图**识别；按组（多图）识别那条路先不碰 —— 分组口径还 park 着（见 HANDOVER §11）。
 //
 // 安全：只写 vf_preview_ai_tags，不碰 vf_source_files / vf_asset_previews；
@@ -58,6 +60,20 @@ export const NON_IMAGE_EXTENSIONS = new Set([
   'ttf', 'otf', 'woff', 'woff2'
 ]);
 
+// 动态图默认也不进队列（v916），但**它和上面那组不是一回事**：上面是"喂给模型没意义"，
+// gif 是"模型吃不下" —— 2026-10-13 全量识别实测：全库 93 张 gif 只有 6 张成功（那 6 张是压缩过的小 gif），
+// 失败 87 张，原因两类：`图片输入格式/解析错误` 52 张 + `图片过大，请改用缩略图识别` 35 张
+// ⇒ GLM 视觉通道吃不下动图，是结构性限制，重试多少次都是白烧额度。
+// 不跳过的话还有个更烦的后果：脚本按顺序取物料，队首那批 gif 永远跑不过，
+// `--limit 8` 就永远只取到 gif，把新上传的图全挤到队尾（worker 空转）。
+// 将来做了「抽静态帧」再用 --include-gif 把它们放回来。
+export const ANIMATED_EXTENSIONS = new Set(['gif']);
+
+// 跳过原因（给计数与文案用，别在打印的地方硬编码字符串）
+export const SKIP_NO_PATH = 'no-path';       // 没有 preview_path（字体卡之类的虚拟预览）
+export const SKIP_NON_IMAGE = 'non-image';   // 视频 / 源文件 / 矢量图
+export const SKIP_ANIMATED = 'animated';     // 动态图（gif），GLM 吃不下
+
 const MIME_BY_EXT = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg',
   png: 'image/png', webp: 'image/webp', gif: 'image/gif', bmp: 'image/bmp', avif: 'image/avif'
@@ -98,10 +114,51 @@ export function previewExtension(preview) {
   return match ? match[1].toLowerCase() : '';
 }
 
-export function isRecognizablePreview(preview) {
-  if (!String(preview?.preview_path || '')) return false;
+// 「这张能不能送模型」的**唯一判据**：返回 '' = 送，否则返回跳过原因。
+// main 的筛选、dry-run 的计数都走它；网站那条进度条的「还剩 N 张」是同一条口径
+// （app.js 的 recognizeProgressSkipExtension / RECOGNIZE_PROGRESS_SKIP_EXT + _ANIMATED_EXT，
+// 改一边必须改另一边 —— tests/recognize-skip-gif-v916.test.mjs 锁两边逐字一致）。
+export function previewSkipReason(preview, {includeGif = false} = {}) {
+  if (!String(preview?.preview_path || '')) return SKIP_NO_PATH;
   const ext = previewExtension(preview);
-  return !ext || !NON_IMAGE_EXTENSIONS.has(ext);
+  if (!ext) return '';                                       // 没有后缀的老数据当图片试一把
+  if (NON_IMAGE_EXTENSIONS.has(ext)) return SKIP_NON_IMAGE;
+  if (!includeGif && ANIMATED_EXTENSIONS.has(ext)) return SKIP_ANIMATED;
+  return '';
+}
+
+export function isRecognizablePreview(preview, options = {}) {
+  return previewSkipReason(preview, options) === '';
+}
+
+export function selectRecognizablePreviews(previews, options = {}) {
+  return (Array.isArray(previews) ? previews : []).filter(preview => isRecognizablePreview(preview, options));
+}
+
+// 「不进队列的有多少张、为什么」：dry-run 与正式跑共用这一份计数，别在两处各算一遍。
+export function skipSummary(previews, options = {}) {
+  const summary = {total: 0, recognized: 0, noPath: 0, nonImage: 0, animated: 0};
+  for (const preview of Array.isArray(previews) ? previews : []) {
+    summary.total += 1;
+    const reason = previewSkipReason(preview, options);
+    if (reason === SKIP_NO_PATH) summary.noPath += 1;
+    else if (reason === SKIP_NON_IMAGE) summary.nonImage += 1;
+    else if (reason === SKIP_ANIMATED) summary.animated += 1;
+    else summary.recognized += 1;
+  }
+  return summary;
+}
+
+// 计数为 0 的也照打：这段的意义就是让人一眼看懂"哪些被跳过、凭什么"。
+export function formatSkipSummary(summary, {includeGif = false} = {}) {
+  const counts = summary || {};
+  return [
+    '非图片 ' + (counts.nonImage || 0) + ' 张（视频 / 源文件 / 矢量图）',
+    '动态图 ' + (counts.animated || 0) + ' 张' + (includeGif
+      ? '（--include-gif：gif 照旧送模型）'
+      : '（gif 不支持：GLM 视觉通道吃不下动图，2026-10-13 实测 93 张只成功 6 张；要照旧送 gif 加 --include-gif）'),
+    '无预览路径 ' + (counts.noPath || 0) + ' 张（字体卡之类的虚拟预览）'
+  ].join(' · ');
 }
 
 export function mimeForImagePath(path) {
@@ -399,6 +456,7 @@ export function createOptions() {
     dryRun: false,
     yes: false,
     markFailed: true,
+    includeGif: false,
     help: false
   };
 }
@@ -444,6 +502,7 @@ export function parseArgs(argv = process.argv.slice(2)) {
     }
     if (arg === '--force') { options.force = true; continue; }
     if (arg === '--dry-run') { options.dryRun = true; continue; }
+    if (arg === '--include-gif') { options.includeGif = true; continue; }
     if (arg === '--yes' || arg === '-y') { options.yes = true; continue; }
     if (arg === '--no-fail-mark') { options.markFailed = false; continue; }
     throw new Error('未知参数：' + arg + '（--help 看用法）');
@@ -501,6 +560,7 @@ const USAGE = `案例库逐图 AI 标签 · 本机批量识别
   --rate <N>                  每秒最多发起几次模型调用，默认 ${DEFAULT_RATE}（免费档限流未知，先保守）
   --force                     连「已成功且内容没变」的行也重跑（默认跳过它们）
   --dry-run                   只列将处理多少张、分布在哪些项目，不调模型、不写库
+  --include-gif               把 .gif 也送进模型（默认跳过：GLM 视觉通道吃不下动图，实测 93 张只成功 6 张）
   --yes                       跳过开始前的确认（非 dry-run 且无 TTY 时必须加）
   --no-fail-mark              失败时不在库里写 status='failed'（默认写，便于 app 里看到失败标记）
   --help                      看这段
@@ -700,6 +760,9 @@ function printConfig(creds, options, extra = {}) {
   console.log('  模型       : ' + MODEL + '（免费视觉通道）');
   console.log('  并发/限流  : ' + options.concurrency + ' 张同时 · 每秒最多 ' + options.rate + ' 次模型调用');
   console.log('  experiment_key : ' + EXPERIMENT_KEY + '（只是分区名，别改）');
+  console.log('  动态图 gif : ' + (options.includeGif
+    ? '照旧送模型（--include-gif）'
+    : '默认跳过（GLM 视觉通道吃不下动图；要照旧送就加 --include-gif）'));
   if (extra.vocabularySize) console.log('  元素词表   : ' + extra.vocabularySize + ' 个词（库内标签 + 静态元素词）');
 }
 
@@ -886,8 +949,8 @@ async function main() {
 
   const {rows: allPreviews, total: previewTotal} = await fetchAllPreviews(creds);
   const casePreviews = allPreviews.filter(preview => projectIds.has(preview.source_file_id));
-  const previews = casePreviews.filter(isRecognizablePreview);
-  const skippedFiles = casePreviews.length - previews.length;
+  const previews = selectRecognizablePreviews(casePreviews, {includeGif: options.includeGif});
+  const skipped = skipSummary(casePreviews, {includeGif: options.includeGif});
 
   const existingRows = await fetchExistingTagRows(creds);
   const vocabulary = elementVocabularyFromRows(await fetchVocabularyRows(creds));
@@ -895,7 +958,9 @@ async function main() {
 
   printConfig(creds, options, {vocabularySize: vocabulary.length});
   console.log('范围：' + (options.project ? '项目「' + options.project + '」→ ' + sources.length + ' 个' : '全部案例项目 ' + sources.length + ' 个')
-    + '；物料 ' + casePreviews.length + ' 张（跳过非图片 ' + skippedFiles + ' 张），预览表共 ' + previewTotal + ' 行');
+    + '；物料 ' + casePreviews.length + ' 张，预览表共 ' + previewTotal + ' 行');
+  console.log('不进识别队列（物料 ' + casePreviews.length + ' 张里跳过 ' + (casePreviews.length - previews.length) + ' 张）：'
+    + formatSkipSummary(skipped, {includeGif: options.includeGif}));
   console.log('待处理：' + plan.stats.pending + ' 张'
     + '（新增 ' + plan.stats.reasons.noRow
     + ' / 未成功 ' + plan.stats.reasons.notSuccess
@@ -905,7 +970,8 @@ async function main() {
     + (plan.stats.pendingTotal > plan.stats.pending ? '，另有 ' + (plan.stats.pendingTotal - plan.stats.pending) + ' 张被 --limit 留到下一轮' : ''));
 
   if (options.dryRun) {
-    printProjectDistribution(plan.pending, id => projectTitles.get(id) || '');
+    if (plan.pending.length) printProjectDistribution(plan.pending, id => projectTitles.get(id) || '');
+    else console.log('没有需要处理的图片（该跳过的都在上一行按原因列了）。');
     console.log('--dry-run：没有调模型、没有写库。');
     return 0;
   }

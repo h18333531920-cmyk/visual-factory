@@ -391,6 +391,6 @@ test('v914 别搞混：#library-status（列表上方那行计数）不许被这
 });
 
 test('v914 版本号（index.html 5 处 + app.js 1 处）', () => {
-  assert.equal((indexSource.match(/\?v=20261013-drop-foot-ai-v915/g) || []).length, 5);
-  assert.match(source, /const TOOL_UI_VERSION = '20261013-drop-foot-ai-v915'/);
+  assert.equal((indexSource.match(/\?v=20261013-skip-gif-v916/g) || []).length, 5);
+  assert.match(source, /const TOOL_UI_VERSION = '20261013-skip-gif-v916'/);
 });

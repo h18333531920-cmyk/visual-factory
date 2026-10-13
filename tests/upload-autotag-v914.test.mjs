@@ -325,7 +325,7 @@ test('v914 口径的源码锚点：两边都按 manual_tags 过滤（改动一�
 /* ── 5) 版本号 ──────────────────────────────────────────────────────────── */
 
 test('v914 版本号六处同步', () => {
-  const refs = indexSource.match(/\?v=20261013-drop-foot-ai-v915/g) || [];
+  const refs = indexSource.match(/\?v=20261013-skip-gif-v916/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(source, /const TOOL_UI_VERSION = '20261013-drop-foot-ai-v915'/);
+  assert.match(source, /const TOOL_UI_VERSION = '20261013-skip-gif-v916'/);
 });

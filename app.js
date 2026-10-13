@@ -878,7 +878,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261013-drop-foot-ai-v915';
+const TOOL_UI_VERSION = '20261013-skip-gif-v916';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4484,10 +4484,18 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   // 与 scripts/recognize-case-tags.mjs 的 NON_IMAGE_EXTENSIONS 同口径：
   // 这些后缀脚本直接跳过，不算"待识别"，否则"还剩 N 张"永远清不到零。
   const RECOGNIZE_PROGRESS_SKIP_EXT = ['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv', 'pdf', 'psd', 'psb', 'ai', 'eps', 'svg', 'json', 'zip', 'rar', 'ttf', 'otf', 'woff', 'woff2'];
+  // v916：与 scripts/recognize-case-tags.mjs 的 ANIMATED_EXTENSIONS 同口径 —— .gif 默认也不进识别队列。
+  // GLM 视觉通道吃不下动图（2026-10-13 全量实测：93 张 gif 只成功 6 张 / 失败 87 张），
+  // 脚本默认跳过、另开了 --include-gif 逃生开关；网站没人传那个参数，所以这里按"默认跳过"算，
+  // 否则库里那 87 张会让进度条永远显示"还剩 87 张"。
+  // ⚠️ 改一边要改另一边（tests/recognize-skip-gif-v916.test.mjs 逐字锁两边一致）。
+  const RECOGNIZE_PROGRESS_ANIMATED_EXT = ['gif'];
 
   function recognizeProgressSkipExtension(preview) {
     const match = String((preview && preview.preview_path) || '').match(/\.([a-z0-9]+)$/i);
-    return !!match && RECOGNIZE_PROGRESS_SKIP_EXT.includes(match[1].toLowerCase());
+    if (!match) return false;
+    const ext = match[1].toLowerCase();
+    return RECOGNIZE_PROGRESS_SKIP_EXT.includes(ext) || RECOGNIZE_PROGRESS_ANIMATED_EXT.includes(ext);
   }
 
   // 纯逻辑：只吃「库里读到的数据」，同一份数据必须算出同一个结果（刷新后重算要一致）。
@@ -4532,7 +4540,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (!preview || preview.id == null) return;
       if (!titleById.has(String(preview.source_file_id || ''))) return;
       if (!String(preview.preview_path || '')) return;      // 字体卡之类的虚拟预览不算物料
-      if (recognizeProgressSkipExtension(preview)) return;  // 视频/源文件：脚本直接跳过
+      if (recognizeProgressSkipExtension(preview)) return;  // 视频/源文件/gif：脚本直接跳过（v916 起含 .gif）
       if (statusByPreview.get(String(preview.id)) === 'success') return;
       remaining += 1;
     });
