@@ -39,7 +39,20 @@ function loadQueryTerms(rows) {
   const rowsByZh = new Map(rows.map(row => [row.name_zh, row]));
   const byName = new Map(rows.filter(row => row.name_en).map(row => [row.name_zh, row.name_en]));
   const byEn = new Map(rows.filter(row => row.name_en).map(row => [row.name_en.toLowerCase(), row.name_zh]));
-  const context = vm.createContext({ tagVocabularyRowsByZh: rowsByZh, tagVocabularyByName: byName, tagVocabularyByEn: byEn });
+  // v905：反向相关词索引（相关词小写 → 挂在哪个中文名行下），与 loadTagVocabulary 里的一致
+  const relatedToZh = new Map();
+  rows.forEach(row => {
+    (Array.isArray(row.related) ? row.related : []).forEach(word => {
+      const key = String(word || '').trim().toLowerCase();
+      if (key && !relatedToZh.has(key)) relatedToZh.set(key, row.name_zh);
+    });
+  });
+  const context = vm.createContext({
+    tagVocabularyRowsByZh: rowsByZh,
+    tagVocabularyByName: byName,
+    tagVocabularyByEn: byEn,
+    tagVocabularyRelatedToZh: relatedToZh
+  });
   vm.runInContext(slice, context);
   return context;
 }
@@ -121,6 +134,19 @@ test('搜索三层：① 原词 ② 中英归一 ③ 相关词（搜「甜点」
   assert.deepEqual(terms('Dessert'), ['dessert', '甜点', '蛋挞', '蛋糕'], '英文写法也能命中中文概念');
   assert.deepEqual(terms('不存在的词'), ['不存在的词'], '词表外的词只按原词匹配');
   assert.deepEqual(terms(''), []);
+});
+
+test('v905 相关词反过来也认：搜「桌子」命中把桌子填进相关词的「餐桌」那一行', () => {
+  const c = loadQueryTerms([
+    { name_zh: '餐桌', name_en: 'Table', related: ['桌子', '桌面'] },
+    { name_zh: '甜点', name_en: 'Dessert', related: [] }
+  ]);
+  const terms = value => Array.from(c.tagVocabularyQueryTerms(value));
+  assert.deepEqual(terms('桌子'), ['桌子', '餐桌', 'table', '桌面'], '口语说法命中正式标签 + 它的英文名/其他相关词');
+  assert.deepEqual(terms('桌面'), ['桌面', '餐桌', 'table', '桌子'], '相关词里的每个词都能反向命中');
+  assert.deepEqual(terms('table'), ['table', '餐桌', '桌子', '桌面'], '英文写法也能反向命中');
+  assert.deepEqual(terms('甜点'), ['甜点', 'dessert'], '没填相关词的词不受影响');
+  assert.deepEqual(terms('无关词'), ['无关词'], '两边都没匹配上就只留原词');
 });
 
 test('搜索接进 libraryItemQueryMatchRank（不是只改渲染）', () => {

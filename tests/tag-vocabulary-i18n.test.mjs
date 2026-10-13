@@ -45,10 +45,10 @@ test('前端：英文界面查词表译名，缺表时永久退回原文', () =>
 
 test('新表与新端点：代理白名单已登记、版本号六处同步', () => {
   assert.match(policySource, /'vf_tag_vocabulary'/, '非维护账号要能读词表');
-  assert.match(indexSource, /app\.js\?v=20261013-case-expand-v904/);
-  const refs = indexSource.match(/\?v=20261013-case-expand-v904/g) || [];
+  assert.match(indexSource, /app\.js\?v=20261013-search-synonym-v905/);
+  const refs = indexSource.match(/\?v=20261013-search-synonym-v905/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261013-case-expand-v904'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261013-search-synonym-v905'/);
 });
 
 test('标签词表：自动更新（中文界面也补翻，不阻塞渲染）', () => {
@@ -60,7 +60,8 @@ test('标签词表：搜索三层（子串 + 中英归一 + 相关词）', () =>
   assert.match(appSource, /select\('id,name_zh,name_en,kind,related'\)/, '词表要读相关词');
   assert.match(appSource, /\/related\/i\.test\(String\(result\.error\.message/, 'sql/024 未执行时要能退化');
   assert.match(appSource, /function tagVocabularyQueryTerms/, '要有查询归一');
-  assert.match(appSource, /canonicalRow\.related/, '相关词要一起参与匹配');
+  assert.match(appSource, /\(Array\.isArray\(row && row\.related\) \? row\.related : \[\]\)\.forEach\(push\)/, '相关词要一起参与匹配');
+  assert.match(appSource, /tagVocabularyRelatedToZh\.get\(lower\)/, 'v905：反向相关词（搜「桌子」命中填了它的「餐桌」行）');
   assert.match(appSource, /const vocabTerms = \(typeof tagVocabularyQueryTerms === 'function'\)/, '搜索匹配要接入词表归一');
   const sqlSource = readFileSync(join(here, '..', 'sql', '024_tag_vocabulary_related.sql'), 'utf8');
   assert.match(sqlSource, /add column if not exists related text\[\] not null default '\{\}'/, 'sql/024 要有幂等的加列语句');

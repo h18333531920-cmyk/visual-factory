@@ -67,9 +67,10 @@ test('v829 后端接口：登录鉴权 + 走文本模型扩展 + 返回 terms', 
   assert.match(ai, /glm-4-flash/, '纯文本扩展走免费的 glm-4-flash，不占用识图通道');
   assert.match(ai, /联想词必须优先从词表里选/, 'v839 词表锚定：词表有相关词必须原样返回');
   assert.match(ai, /搜「红包」应优先返回「优惠券」「折扣」/, 'v839 锚定示例：红包→优惠券/折扣');
-  assert.match(ai, /只返回搜索词指代事物的同义说法、画面主体或必要组成部分/, 'v833 收紧：只收主体/同义/组成部分');
+  assert.match(ai, /口语\/俗称\/近义说法要映射到词表里的正式写法/, 'v905：近义/口语说法要映射到词表里的正式写法');
+  assert.match(ai, /搜「桌子」→ 词表里的「餐桌」/, 'v905 的口语→正式标签示例');
   assert.match(ai, /不要返回同类并列的其他事物/, 'v833 收紧：排除薯条炸鸡这类并列词');
-  assert.match(ai, /搜「世界杯」→ 足球/, '口径示例：概念到画面主体');
+  assert.match(ai, /搜「足球」→ 世界杯、球衣、体育赛事、球场、运动员、球迷/, '口径示例：相关词要给全');
   assert.match(ai, /export async function expandQueryWithGlm/);
 });
 

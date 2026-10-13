@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261013-case-expand-v904';
+const TOOL_UI_VERSION = '20261013-search-synonym-v905';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -14480,6 +14480,7 @@ function libraryTagsForForm(formData, kind) {
   const tagVocabularyByName = new Map();   // 中文名 → 英文名（英文界面用）
   const tagVocabularyByEn = new Map();     // 英文名（小写）→ 中文名（中文界面用：标签本身是英文时也能显示中文）
   const tagVocabularyRowsByZh = new Map(); // 中文名 → 整行（搜索时取该行的相关词）
+  const tagVocabularyRelatedToZh = new Map(); // v905 反向：相关词（小写）→ 它挂在哪个中文名行下
   const tagTranslateAttempts = new Map();
 
   function isMissingTagVocabularyError(error) {
@@ -14514,6 +14515,12 @@ function libraryTagsForForm(formData, kind) {
             tagVocabularyByName.set(nameZh, nameEn);
             if (!tagVocabularyByEn.has(nameEn.toLowerCase())) tagVocabularyByEn.set(nameEn.toLowerCase(), nameZh);
           }
+          // v905：相关词反过来也认——「餐桌」那行填了 桌子，搜「桌子」也要命中「餐桌」的物料。
+          // 只建索引，不改表结构；同一相关词挂多行时保留先出现的那个（与 name_en 反查同一个策略）。
+          (Array.isArray(row && row.related) ? row.related : []).forEach(function (word) {
+            const key = String(word == null ? '' : word).trim().toLowerCase();
+            if (key && !tagVocabularyRelatedToZh.has(key)) tagVocabularyRelatedToZh.set(key, nameZh);
+          });
         });
         return true;
       } catch (error) {
@@ -14617,12 +14624,23 @@ function libraryTagsForForm(formData, kind) {
     if (!raw) return out;
     push(raw);
     const lower = raw.toLowerCase();
+    // v905：反向相关词——搜「桌子」时，词表里「餐桌」那行把桌子填在相关词里，于是餐桌也参与匹配。
+    // （管理员在词表里就能维护"口语说法 → 库内正式标签"的对应，零 AI、改完即时生效）
+    const rows = [];
+    const pushRow = function (nameZh) {
+      const text = String(nameZh == null ? '' : nameZh).trim();
+      if (text && rows.indexOf(text) < 0) rows.push(text);
+    };
     const canonicalZh = tagVocabularyRowsByZh.has(raw) ? raw : (tagVocabularyByEn.get(lower) || '');
-    if (!canonicalZh) return out;
-    push(canonicalZh);
-    push(tagVocabularyByName.get(canonicalZh));
-    const canonicalRow = tagVocabularyRowsByZh.get(canonicalZh);
-    (Array.isArray(canonicalRow && canonicalRow.related) ? canonicalRow.related : []).forEach(push);
+    if (canonicalZh) pushRow(canonicalZh);
+    pushRow(tagVocabularyRelatedToZh.get(lower));
+    if (!rows.length) return out;
+    rows.forEach(function (nameZh) {
+      push(nameZh);
+      push(tagVocabularyByName.get(nameZh));
+      const row = tagVocabularyRowsByZh.get(nameZh);
+      (Array.isArray(row && row.related) ? row.related : []).forEach(push);
+    });
     return out;
   }
 
