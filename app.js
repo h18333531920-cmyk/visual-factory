@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261013-case-tags-wide-v903';
+const TOOL_UI_VERSION = '20261013-case-expand-v904';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -9336,7 +9336,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         if (!button) {
           var clickItem = libraryItemByPreviewId(card.dataset.previewId);
           if (clickItem && isBookmarkSource(clickItem.source)) { openLibraryBookmarkPopup(clickItem.source.id); return; }
-          if (clickItem && clickItem.isCaseProjectCard) { openCaseProjectModal(clickItem.source.id); void logAssetEvent('view', { source: clickItem.source }); return; }
+          if (clickItem && clickItem.isCaseProjectCard) { openCaseProjectModal(clickItem.source.id, clickItem.preview && clickItem.preview.material_type); void logAssetEvent('view', { source: clickItem.source }); return; }
           if (clickItem && libraryKindOfSource(clickItem.source) === 'template') return; // 模版单击不弹窗，双击打开
           selectLibraryItem(card.dataset.previewId);
           return;
@@ -9364,7 +9364,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
           return;
         }
         var projItem = libraryItemByPreviewId(card.dataset.previewId);
-        if (projItem && projItem.isCaseProjectCard) { openCaseProjectModal(projItem.source.id); void logAssetEvent('view', { source: projItem.source }); return; }
+        if (projItem && projItem.isCaseProjectCard) { openCaseProjectModal(projItem.source.id, projItem.preview && projItem.preview.material_type); void logAssetEvent('view', { source: projItem.source }); return; }
         selectLibraryItem(card.dataset.previewId);
       });
     });
@@ -12406,22 +12406,55 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const text = casePreviewAiTags(previewId).join(' ').toLowerCase();
     return !!text && tokens.every(function(token) { return text.includes(token); });
   }
-  // 网格里每个项目只出一张卡片，封面跟随当前分类标签（搜索词是物料类型时优先跟随搜索词）
+  // 物料级命中：只看「这一张物料自己」的可搜文本（物料类型 + 文件名 + 该图的逐图 AI 标签），
+  // 与项目级命中（项目名/国家/活动/整项目物料类型集合）区分开——搜索时它就是
+  // 「项目里哪几张物料要铺开显示」的判据。关键词按空白分词，词与词是 AND，
+  // 必须在同一张物料里全部命中，不许跨图拼凑。没有关键词一律不算命中。
+  function caseMaterialMatchesQuery(item, query) {
+    const preview = item && item.preview;
+    if (!preview) return false;
+    const tokens = String(query || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!tokens.length) return false;
+    const text = [
+      preview.material_type || '',
+      preview.preview_filename || '',
+      casePreviewAiTags(preview.id).join(' ')
+    ].join(' ').toLowerCase();
+    return !!text && tokens.every(function(token) { return text.includes(token); });
+  }
+  // 网格里每个项目出一张卡片；有关键词时改为把项目里带该标签的物料各自铺开一张，
+  // 一张都没命中的项目仍只出一张卡，封面跟随当前分类标签（搜索词是物料类型时优先跟随搜索词）
   function collapseCaseProjectItems(items) {
     const fallbackType = state.libraryFilters.tag2 || 'all';
-    const queryType = caseCoverTypeFromQuery(state.libraryFilters.query);
+    const query = state.libraryFilters.query;
+    const queryType = caseCoverTypeFromQuery(query);
     const seen = new Set();
     const out = [];
     items.forEach(function(item) {
       if (!isCaseProject(item.source)) { out.push(item); return; }
       if (seen.has(item.source.id)) return;
       seen.add(item.source.id);
+      // 有关键词：本项目里所有物料级命中的物料各出一张卡（按 items 原始顺序），
+      // 不再「一个项目一张代表图」——用户搜到的每一张都看得见。
+      if (query) {
+        const hits = items.filter(function(candidate) {
+          return candidate.source.id === item.source.id
+            && caseMaterialMatchesQuery(candidate, query);
+        });
+        if (hits.length) {
+          hits.forEach(function(hit) {
+            out.push({ source: hit.source, preview: hit.preview, url: hit.url || '', thumbUrl: hit.thumbUrl || '', isCaseProjectCard: true });
+          });
+          return;
+        }
+      }
+      // 项目级命中（项目名/标签/国家/活动等）但一张物料都没命中：照旧出一张项目卡。
       // 逐图标签：关键词直接命中某张物料的 AI 标签时，项目卡临时使用
       // 这张真实命中图。只影响搜索封面，不改项目默认封面。
-      const previewAiMatch = state.libraryFilters.query
+      const previewAiMatch = query
         ? items.find(function(candidate) {
             return candidate.source.id === item.source.id
-              && casePreviewAiMatchesQuery(candidate.preview.id, state.libraryFilters.query);
+              && casePreviewAiMatchesQuery(candidate.preview.id, query);
           })
         : null;
       if (previewAiMatch) {

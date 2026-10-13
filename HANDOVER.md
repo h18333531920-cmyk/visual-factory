@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261013-case-tags-wide-v903`（逐图标签读全库 + 项目卡搜索聚合所有物料标签）；部署 `7de9e92d-788f-4d86-97f3-d794e4cee7fb`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261013-case-expand-v904`（搜词时按**命中的物料**铺开多张卡，不再只给一张代表图）；部署 `5bc95baa-fa1b-40da-8464-89bd1169f488`，2026-10-13 本机 wrangler 直发 | 实测 2026-10-13 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
 | 本地工作区 | 分支 `tmp-deploy-v871`，工作区干净（`3977f5c`）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-13 |
-| 自动化测试 | `node --test tests/` → **404/404 通过** | 实测 2026-10-13 |
+| 自动化测试 | `node --test tests/` → **414/414 通过** | 实测 2026-10-13 |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
 | 数据库迁移状态 | `sql/021_preview_ai_tags_experiment.sql` **已由用户手动执行**（`manual_tags` 列已存在）；词表三件 `sql/022` / `023` / `024` 也已执行（实测：`select=related` 返回 200，故意查假列名返回 400 ⇒ `related` 列真实存在）；**`sql/025_tag_vocabulary_auto_sync.sql` 已由用户执行**（2026-10-13，SQL Editor 跑完无报错、结果面板 `1 row` = 末尾那句 `select vf_sync_tag_vocabulary()` 跑通） | 实测 2026-10-13 |
 | 唯一部署红线 | **没有用户当次明确授权，禁止对正式站做任何发布动作** | 见 §8 |
@@ -194,7 +194,7 @@
 - 上传流程 `renderUploadModal()`：支持单图 / 多图 / 项目上传；案例库上传**必填平台 + 国家**、单次上限 **100** 张、进度按张数、取消上传不再卡按钮。
 - 批量编辑 `openBatchEditModal()`；多选 `libraryMultiSelect` / `librarySelectedIds`。
 - 书签系统 `renderLibraryBookmarkModal()` / `renderLibraryBookmarkInlineHover()`。
-- 搜索：`libraryItemSearchText()` / `libraryItemMatchesQuery()`，含拼音与英文扩展表。**AI 联想只从库内标签里挑（v894）**：搜索框下方浮窗显示「库内关联标签」（`/api/expand-query` 的 `terms` 经客户端反查/词表校验后的结果，点一下改成只搜该标签）；AI 返回但库里没有的词一律丢掉、也不参与匹配。词表 `related` 那一层是**零 AI 的确定性扩展**（`tagVocabularyQueryTerms`）。
+- 搜索：`libraryItemSearchText()` / `libraryItemMatchesQuery()`，含拼音与英文扩展表。**AI 联想只从库内标签里挑（v894）**：搜索框下方浮窗显示「库内关联标签」（`/api/expand-query` 的 `terms` 经客户端反查/词表校验后的结果，点一下改成只搜该标签）；AI 返回但库里没有的词一律丢掉、也不参与匹配。词表 `related` 那一层是**零 AI 的确定性扩展**（`tagVocabularyQueryTerms`）。**展示单位（v903/v904）**：逐图 AI 标签现在全库可读（`loadAllPreviewAiTags()`），项目卡的搜索文本吃**整个项目**的逐图标签（`caseProjectElementTags()`）；**无关键词按项目卡；有关键词时项目里每张命中物料各出一张卡**（`collapseCaseProjectItems` + `caseMaterialMatchesQuery`，判定文本 = 物料类型 + 文件名 + 该图逐图标签）。
 - **案例项目的判定**：`source_path` 为空 **且** 有预览图 ⇒ 案例项目（`isCaseProject()`）。
   ⚠️ **写 SQL 时注意**：库里的空值实测是**空字符串**、不是 `NULL`（用 `is null` 查出来是 0 行），要写 `coalesce(source_path,'') = ''`；另外案例库还带 `tags` 里有 `vf:kind:source` 标记。
 
@@ -500,6 +500,12 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
   **建议的切法（不是现在做，是记住顺序）**：
   - **规模已实测（2026-10-13 用户跑只读 SQL）**：案例项目 **99** 个、案例库图片 **1953** 张、`vf_preview_ai_tags` 已有 **28** 行（全在实验项目、`experiment_key` 只有 `augpicks-v1` 一种）、预览图总数 2165。⇒ 要铺满需再识别 **1925** 张，量级是**小时级**（不是天级）。
   - **✅ 步 1 已落地（v903）**：① **读**全部项目的逐图标签 —— 新增 `loadAllPreviewAiTags()`（`vf_preview_ai_tags` 全表、1000 行/页 `.range()` 分页、硬上限 20 页=2 万行、**不带 experiment_key 过滤**，`manual_tags` 列缺失与表不可用两条降级原样保留），启动时替换掉原来"只读实验项目"的调用；`loadPreviewAiTagsForSource()` 也去掉实验项目早退。② **搜索聚合** —— 新增 `caseProjectElementTags(materials)`，`libraryItemSearchText()` 里案例项目改成吃**整理项目所有物料**的逐图标签（单图素材仍只看自己那张）。③ **写入仍只放开实验项目**：`casePreviewAiEnabledFor(source)` 目前 = `isCasePreviewAiExperimentSource(source)`，服务端 `previewFor()` 也锁着实验来源 ⇒ 非实验项目**不显示**「一键识别」与逐图面板（否则点了逐张 404）。
+  - **✅ 步 1b 已落地（v904）—— 展示单位**：用户实测反馈"搜披萨时项目里多张带披萨的图只挑一张当封面显示"。按规划稿 §8.2「有关键词 → 按命中物料展示」实现：
+    - 新增 `caseMaterialMatchesQuery(item, query)`：判定**这一张物料自己**是否命中（候选文本 = `material_type` + `preview_filename` + 该图逐图 AI 标签；空白分词、逐词 AND、不许跨图拼凑）。
+    - `collapseCaseProjectItems()`：**有关键词时**，项目里所有物料级命中的物料**各出一张卡**（按 `items` 原顺序）；一张都没命中（只是项目名/项目标签命中）→ 仍只出**一张项目卡**（走原封面逻辑）；**无关键词时行为与原来逐字一致**。
+    - 点击（网格点击 + 键盘 Enter）改为 `openCaseProjectModal(source.id, preview.material_type)`，浮窗落在那一组物料上。
+    - 测试 414/414（新增 10 条，其中一条端到端串起 `libraryItemSearchText` + `libraryItemQueryMatchRank` + 铺开逻辑）。
+  - **步 1b 明确没做的四个小口子（下轮候选，别当 bug）**：① 卡片角标仍写「整个项目 N 个物料」，没有规划稿 §8.2 要求的「直接命中 M 张 / 可用语言 / 剩余数量分页」；② 结果计数（`state.libraryItems.length`）在搜索时数的是**卡片张数**（含铺开的多张），无关键词时是项目数；③ 点击落点是「该物料类型那一组」而非「那一张图」（规划稿 §8.3.4 想要 `preview_id` 级定位）；④ 开着「只看收藏」筛选时，同项目里没被收藏的命中物料不会铺开（合理，但需用户确认）。另：`collapseCaseProjectItems` 里旧的 `previewAiMatch` 兜底分支现在是死代码（保留未删）。
   - **步 2（下一轮，需用户授权）**：放开写入范围 —— 去掉 `functions/api/case-preview-ai-tags.js` 里 `previewFor()` 的 `source_file_id=eq.EXPERIMENT_SOURCE_ID`，并把 `casePreviewAiEnabledFor` 换成 `isCaseProject(source)`。**`EXPERIMENT_KEY = 'augpicks-v1'` 不许改**（现有 28 行挂在这个 key 下，改名就读不到）。
   - **还没通的两处（步 2 之后/并行）**：① **元素筛选维度**没吃逐图标签 —— `librarySourceMatchesFilterValue()` 只查项目级 `visibleLibraryTags`，所以"搜索框能搜到、元素筛选 chips 搜不到"；② `collectTagLabelsInUse()` 现在会收全部项目的逐图标签 ⇒ 英文界面首屏补翻的候选词变多（1953 张量级，上线后留意首屏耗时）。
   - **步 2 之后**：分批铺开识别（每批几十张，跑完抽查）→ 覆盖够了再谈规划稿里的"设计分组/分层次搜索"（阶段 2–4）。
