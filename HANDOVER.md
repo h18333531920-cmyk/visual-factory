@@ -229,6 +229,23 @@
 ### 7.6 数据分析看板（`analytics`，仅管理员）
 操作事件统计、热门素材预览、环图、生图统计（Lite/Pro 次数与积分）。数据源 `vf_asset_events`（含 `event_type='imagegen'`）。
 
+### 7.7 标签链路的「五处联动清单」——改标签相关功能时的自检表
+> 用户 2026-10-13 的原话：「这个功能需要关联上传、词表、搜索等等功能串，这里改了那里又漏了，我们没法面面俱到」。
+> 所以把它固化成清单：**动到标签，就照这张表逐条过一遍**，不用靠记性（改完在交付说明里逐条写"动了/没动、为什么"）。
+
+| # | 一处 | 唯一的真相 / 入口 | 改它时连带要确认 |
+|---|---|---|---|
+| 1 | **上传**（写入标签） | 物料标签：`vf_source_files.tags`（含 `vf:` 内部标记）；物料类型：`vf_asset_previews.material_type`；逐图标签：`vf_preview_ai_tags`（写入端点 `/api/case-preview-ai-tags`，客户端 `startCasePreviewAiRun()`） | 写库是不是"先读最新再合并"（别拿空数组起底）；新标签会不会被触发器收进词表 |
+| 2 | **词表**（标签字典） | 表 `vf_tag_vocabulary`；**同步的唯一入口是 `sql/025` 的触发器**（收全 + 清孤儿）；前端只维护「英文名 / 相关词」两列（`reloadTagVocabulary()` / `saveTagVocabularyPatch()`） | SQL 没执行时的降级（前端仍能读，只是不自动收全）；`source='manual'` 的行不许被覆盖 |
+| 3 | **搜索**（匹配） | **唯一入口** `libraryItemQueryMatchRank()`；文本 = `libraryItemSearchText()`（含逐图标签、物料类型、国家/活动/类别、拼音与英文扩展表）；归一 = `tagVocabularyQueryTerms()`（中英归一 + 相关词**正反两向**）；AI 扩展 = `libraryExpansionTerms` | 新增的标签来源有没有进搜索文本；筛选维度（`librarySourceMatchesFilterValue()`）要不要同步支持 |
+| 4 | **展示**（结果长什么样） | `renderLibraryGrid()` → `collapseCaseProjectItems()`（无关键词=项目卡；有关键词=按命中物料铺开；同语言组只占一位）+ `renderCaseProjectCard()` | 计数/角标含义会跟着变；点卡片的落点（`openCaseProjectModal(sourceId, focusType)`） |
+| 5 | **中英适配** | 显示名 `libraryDisplayLabel()`；归一索引 `tagVocabularyByName` / `tagVocabularyByEn`（读入在 `loadTagVocabulary()`）；补英文的路：页面加载/切语言的 `ensureTagTranslations()` → `/api/tag-translate` 落库，或词表页「补翻译」按钮 | 新标签有没有英文名（没有就显示中文）；英文界面显示时动作值仍必须用**原始中文标签** |
+
+**铁律**：**任何新增的"标签来源"，必须回答三个问题才算改完** ——
+① 它会不会进词表（`sql/025` 的收全覆盖到没有）？② 搜索（框 + 筛选）看不看得到它？③ 双语显示认不认它（有没有英文名）？
+
+**测试是这套清单的执行者**：接线类断言已经有一批（例：`case-preview-ai-library-wide-v903.test.mjs` 把"搜索文本 + 排序 + 铺开"串起来跑；`library-case-expand-v904.test.mjs` 管铺开；`element-ai-suggest.test.mjs` 管识别解析）。**改了其中一处而忘了另一处，这些测试会红** —— 比人肉检查可靠。
+
 ---
 
 ## 8. 部署
