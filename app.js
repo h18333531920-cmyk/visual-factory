@@ -863,7 +863,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261013-write-scope-v908';
+const TOOL_UI_VERSION = '20261013-material-type-filter-v909';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -12613,6 +12613,14 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const fallbackType = state.libraryFilters.tag2 || 'all';
     const query = state.libraryFilters.query;
     const queryType = caseCoverTypeFromQuery(query);
+    // v909：选中了「物料类别」筛选（开机海报 / 弹窗 / 头图…，案例库里它落在 tag2）时，
+    // 铺开的物料也必须属于该类别 —— v904 铺开时只看关键词命不命中、没看类别筛选，
+    // 于是「开机海报」下会混进同一个项目里的弹窗 / 横banner。
+    const typeFilters = selectedLibraryTagValues().filter(tag => caseMaterialTypeSet(tag));
+    const passTypeFilter = function(preview) {
+      if (!typeFilters.length) return true;
+      return typeFilters.indexOf((preview && preview.material_type) || '') >= 0;
+    };
     const seen = new Set();
     const out = [];
     items.forEach(function(item) {
@@ -12625,6 +12633,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (query) {
         const hits = items.filter(function(candidate) {
           return candidate.source.id === item.source.id
+            && passTypeFilter(candidate.preview)
             && caseMaterialMatchesQuery(candidate, query);
         });
         if (hits.length) {
@@ -12648,6 +12657,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       const previewAiMatch = query
         ? items.find(function(candidate) {
             return candidate.source.id === item.source.id
+              && passTypeFilter(candidate.preview)
               && casePreviewAiMatchesQuery(candidate.preview.id, query);
           })
         : null;

@@ -293,6 +293,7 @@ function loadCollapse(options = {}) {
     casePreviewAiTags: (id) => tagsById[id] || [],
     isCaseProject: (s) => !!s && s.caseProject === true,
     caseMaterialLanguage: options.caseMaterialLanguage || (() => ''),
+    selectedLibraryTagValues: options.selectedLibraryTagValues || (() => []),
   });
   vm.runInContext(source.slice(blockStart, blockEnd)
     + '\n;({ collapseCaseProjectItems, caseMaterialMatchesQuery })', context);

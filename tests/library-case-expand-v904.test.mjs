@@ -47,6 +47,8 @@ function loadCollapse(options = {}) {
     // v906 起铺开前会先按「同款语言互补」配对（casePreviewAiGroupsOf）。
     // 这份用例的物料都没有语言证据，桩成空字符串 ⇒ 一律单成员组，行为与 v904 逐字一致。
     caseMaterialLanguage: options.caseMaterialLanguage || (() => ''),
+    // v909 起铺开还要看「选中的物料类别筛选」（案例库里就是 tag2 那些值）
+    selectedLibraryTagValues: options.selectedLibraryTagValues || (() => []),
   });
   vm.runInContext(source.slice(blockStart, blockEnd)
     + '\n;({ collapseCaseProjectItems, caseMaterialMatchesQuery, casePreviewAiMatchesQuery })', context);
@@ -266,6 +268,7 @@ test('v904 端到端：真实搜索文本 + 排名 + 铺开，项目内第 1、3
     casePreviewAiTags: (id) => tagsById[id] || [],
     // 同 loadCollapse：这批物料没有语言证据 ⇒ 不配组
     caseMaterialLanguage: () => '',
+    selectedLibraryTagValues: () => [],
   });
   vm.runInContext(source.slice(searchStart, searchEnd)
     + source.slice(rankStart, rankEnd)
