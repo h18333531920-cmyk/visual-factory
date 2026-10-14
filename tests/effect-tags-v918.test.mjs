@@ -314,7 +314,8 @@ test('v918 前端展示：项目浮窗多一行「动效标签」，无值且非
   assert.match(appSource, /const effectTags = effectLayers\.manual\.concat\(effectLayers\.ai\);/);
   assert.match(appSource, /const showEffectRow = effectTags\.length > 0 \|\| \(canEdit && casePreviewAiDynamicPreview\(preview\)\);/);
   assert.match(appSource, /'<span class="case-preview-ai-effect-title">' \+ \(state\.lang === 'zh' \? '动效标签' : 'Motion tags'\)/);
-  assert.match(appSource, /\(!showEffectRow \? '' : '<div class="case-preview-ai-effect">'/, '没有值又不是动态物料就整行不出现');
+  // v929：动效行的 div 上多挂一个「加号态」class（× 的显隐靠它），"整行不出现"这条判断没变
+  assert.match(appSource, /\(!showEffectRow \? '' : '<div class="case-preview-ai-effect' \+ \(addingKind === 'effect' \? ' is-adding' : ''\) \+ '">'/, '没有值又不是动态物料就整行不出现');
   assert.match(appSource, /case-preview-ai-effect-tag/);
   assert.match(appSource, /\.case-preview-ai-effect \{ grid-column: 1 \/ -1;/, '新行占满整行，不挤坏原来那行标签');
 });
@@ -440,8 +441,8 @@ test('v918 词表页：kind=effect 的行看得见（动效小标记），且不
 
 test('v918 版本号（index.html 5 处 + app.js 1 处）', () => {
   const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-  assert.equal((indexSource.match(/\?v=20261014-chip-x-hover-v928/g) || []).length, 5);
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-chip-x-hover-v928'/);
+  assert.equal((indexSource.match(/\?v=20261014-chip-x-add-mode-v929/g) || []).length, 5);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-chip-x-add-mode-v929'/);
 });
 
 /* ── 8) 脚本文案：dry-run 能看出"会请求效果标签的有几张" ─────────────────── */

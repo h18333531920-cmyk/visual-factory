@@ -1,17 +1,25 @@
-// v928（2026-10-14）：标签上的「×」不再常驻 —— 鼠标移上去才出来。
+// 标签上的「×」什么时候出现（v928 起改这个，v929 定稿）。
 //
-// 用户口径（原话，附截图）：「我点了加号之后，标签上永远都有叉号了」。
+// 用户口径（两次，隔了一天）：
+//   v928：「我点了加号之后，标签上永远都有叉号了」            ⇒ 先改成"鼠标移上去才出现"
+//   v929：「现在鼠标 hover 状态会出现叉，这个叉是常驻的吗？这样太容易误删了，
+//          要点加号的情况下才出现叉」                        ⇒ 再改成"只在加号态出现"（本文件断言的口径）
 //
-// 背景：v926 把「编辑 / 完成」两个按钮删掉时，说明里写的是「× 就是删除入口，必须一直看得见」
-// （见那一版 CSS 注释），于是每个标签右边都常挂一个 ×。用户不要这个。v928 改成：
-//   **× 默认 opacity:0（位置照旧占着，所以露出来时整行不跳），鼠标移到这个标签上、
-//     或键盘把焦点移进去才 opacity:1；触屏设备（没有 hover）则一直亮着，否则 iPad 上删不掉。**
+// 背景：v926 删「编辑 / 完成」两个按钮时，把 × 的显隐规则一起拆了（`display: inline-flex` 直接挪进基础规则），
+// 于是每个标签右边常挂一个 ×；v925 时它本来是 `.case-preview-ai-tag.is-editing button { ... }`
+// （只有编辑态才显示）。现在的口径：
+//   **× 默认 opacity:0（位置照旧占着，所以亮起来时整行不跳）；
+//     只有点了这一行末尾的「＋」（面板进入 dataset.adding = 'element' / 'effect'）才 opacity:1；
+//     收起小输入框（Esc / 空框失焦）就跟着灭。**
+//   不再用 hover 触发（用户嫌"扫过去就亮、旁边就是标签本体，太容易误删"），
+//   触屏也没关系：中点 ＋ 一样能进加号态。
 //
 // 本文件锁住三件事：
-//   ① 元素标签与动效标签的 × 默认都是藏着的，且各有 hover / focus-within 露出规则；
-//   ② 触屏媒体查询里把 × 露出来；
-//   ③ 只是**视觉上藏** —— 真渲面板里删除按钮的 markup（人工标签的 `data-preview-manual-remove`、
-//      AI 标签的 `data-preview-ai-exclude`）与末尾的「＋」都还在，删除/新增能力没被删掉。
+//   ① 元素标签与动效标签的 × 默认藏着；`is-adding` 时才亮；**没有 hover / focus-within 触发**、
+//      也没有 `@media (hover: none)` 那种"触屏一直亮"的兜底（那会让 × 又常驻）；
+//   ② 「加号态」这个 class 是**跟着 ＋ 走的**：渲染时读 `panel.dataset.adding`，元素行 / 动效行各管各的；
+//   ③ 只是**视觉上藏** —— 真渲面板里三个删除入口的 markup 与末尾的「＋」都在，删除/新增能力没被删掉。
+//      （文件名里的 v928 是"× 不再常驻"那一版的起点，v929 把触发条件收紧到加号态。）
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -23,7 +31,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261014-chip-x-hover-v928';
+const VERSION = '20261014-chip-x-add-mode-v929';
 
 const escapeHtml = (value) => String(value == null ? '' : value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -34,11 +42,11 @@ const cssEnd = source.indexOf('.case-foot-tool-btn {');
 assert.ok(cssStart > 0 && cssEnd > cssStart, '标签 chip 的样式片段必须切得出来');
 const chipCss = source.slice(cssStart, cssEnd);
 
-function renderPanel({lang = 'zh', manual = [], ai = [], effectManual = []} = {}) {
+function renderPanel({lang = 'zh', manual = [], ai = [], effectManual = [], adding = ''} = {}) {
   const start = source.indexOf('  const CASE_PREVIEW_AI_INLINE_ADD = {');
   const end = source.indexOf('  function wireCasePreviewAiHover(panel, manualTags, aiTags, excluded) {');
   assert.ok(start > 0 && end > start, 'v926 的面板片段必须切得出来');
-  const panel = {dataset: {}, innerHTML: ''};
+  const panel = {dataset: adding ? {adding} : {}, innerHTML: ''};
   const backdrop = {querySelector: (selector) => (String(selector).indexOf('case-preview-ai-panel') >= 0 ? panel : null)};
   const context = vm.createContext({
     state: {lang},
@@ -58,28 +66,49 @@ function renderPanel({lang = 'zh', manual = [], ai = [], effectManual = []} = {}
     document: {getElementById: () => null},
     alert: () => {}
   });
-  vm.runInContext(source.slice(start, end) + '\n;({renderCasePreviewAiPanel})', context, {filename: 'app-v928-panel.js'});
+  vm.runInContext(source.slice(start, end) + '\n;({renderCasePreviewAiPanel})', context, {filename: 'app-chip-x-panel.js'});
   context.renderCasePreviewAiPanel(backdrop, {id: 'p1', preview_filename: 'a.png'}, true);
   return panel.innerHTML;
 }
 
-test('v928 ①：元素标签的 × 默认藏着，hover / focus-within 才露出来', () => {
+test('v929 ①：元素标签的 × 默认藏着，只有加号态才亮', () => {
   assert.match(chipCss, /\.case-preview-ai-tag button \{[^}]*opacity: 0;/, '× 默认必须是 opacity:0');
-  assert.match(chipCss, /\.case-preview-ai-tag button \{[^}]*display: inline-flex;[^}]*opacity: 0;/, '别改成 display:none —— 那样露出来时整行会跳（占位要留着）');
-  assert.match(chipCss, /\.case-preview-ai-tag:hover button,\s*\n\s*\.case-preview-ai-tag:focus-within button \{ opacity: 1; \}/, '鼠标移上去要露出来（键盘焦点同理）');
-  assert.match(chipCss, /\.case-preview-ai-pop \.case-preview-ai-tag button \{ display: none; \}/, '溢出时那个浮窗里的标签照旧不显示 ×');
+  assert.match(chipCss, /\.case-preview-ai-tag button \{[^}]*display: inline-flex;[^}]*opacity: 0;/, '别改成 display:none —— 那样亮起来时整行会跳（占位要留着）');
+  assert.match(chipCss, /\.case-preview-ai-chips\.is-adding \.case-preview-ai-tag button \{ opacity: 1; \}/, '加号态才把 × 亮出来');
 });
 
-test('v928 ①：人工动效标签的 × 同一口径', () => {
+test('v929 ①：不再用 hover / focus-within 触发（用户嫌扫过去就亮、太容易误删）', () => {
+  assert.doesNotMatch(chipCss, /\.case-preview-ai-tag:hover button/, 'hover 不该再让 × 出现');
+  assert.doesNotMatch(chipCss, /\.case-preview-ai-tag:focus-within button/, 'focus-within 也不该触发');
+  assert.doesNotMatch(chipCss, /@media \(hover: none\)/, '触屏那条"一直亮"的兜底要去掉，否则 × 在 iPad 上又常驻');
+});
+
+test('v929 ①：人工动效标签的 × 同一口径', () => {
   assert.match(chipCss, /\.case-preview-ai-effect-tag button \{[^}]*opacity: 0;/, '动效标签的 × 默认也要藏着');
-  assert.match(chipCss, /\.case-preview-ai-effect-tag:hover button,\s*\n\s*\.case-preview-ai-effect-tag:focus-within button \{ opacity: 1; \}/, '动效标签 hover 也要露出来');
+  assert.match(chipCss, /\.case-preview-ai-effect\.is-adding \.case-preview-ai-effect-tag button \{ opacity: 1; \}/, '动效行的加号态才亮它自己的 ×');
+  assert.doesNotMatch(chipCss, /\.case-preview-ai-effect-tag:hover button/, '动效标签也不该 hover 触发');
 });
 
-test('v928 ②：触屏（没有 hover）上 × 一直亮着，否则 iPad 删不掉标签', () => {
-  assert.match(chipCss, /@media \(hover: none\) \{[\s\S]*?\.case-preview-ai-tag button,\s*\n\s*\.case-preview-ai-effect-tag button \{ opacity: 1; \}/, '触屏要一直显示 ×');
+test('v929 ②：is-adding 跟着 ＋ 走，两行各管各的', () => {
+  const idle = renderPanel({manual: ['汉堡'], ai: ['披萨'], effectManual: ['缩放']});
+  assert.doesNotMatch(idle, /is-adding/, '没点 ＋ 时两行都不该有 is-adding');
+  const elementAdding = renderPanel({manual: ['汉堡'], ai: ['披萨'], effectManual: ['缩放'], adding: 'element'});
+  assert.match(elementAdding, /class="case-preview-ai-chips is-adding"/, '点元素行 ＋ 时只有元素行进加号态');
+  assert.doesNotMatch(elementAdding, /case-preview-ai-effect is-adding/, '动效行不该跟着进加号态');
+  const effectAdding = renderPanel({manual: ['汉堡'], ai: ['披萨'], effectManual: ['缩放'], adding: 'effect'});
+  assert.match(effectAdding, /class="case-preview-ai-effect is-adding"/, '点动效行 ＋ 时动效行进加号态');
+  assert.doesNotMatch(effectAdding, /case-preview-ai-chips is-adding/, '元素行不该跟着进加号态');
 });
 
-test('v928 ③：只是视觉上藏了 —— 删除按钮与「＋」的 markup 都还在', () => {
+test('v929 ②：源码层面确认 —— dataset.adding 是 ＋ 设的、收起时删掉，且渲染真的读它', () => {
+  assert.match(source, /panelNode\.dataset\.adding = config\.kind;/, '＋ 负责进入加号态');
+  assert.match(source, /delete dom\.panel\.dataset\.adding;/, '收起小输入框负责退出加号态');
+  assert.match(source, /const addingKind = String\(\(panel\.dataset && panel\.dataset\.adding\) \|\| ''\);/, '渲染时真的读这个状态');
+  assert.match(source, /addingKind === 'element' \? ' is-adding' : ''/, '元素行按 kind 加 class');
+  assert.match(source, /addingKind === 'effect' \? ' is-adding' : ''/, '动效行按 kind 加 class');
+});
+
+test('v929 ③：只是视觉上藏了 —— 删除按钮与「＋」的 markup 都还在', () => {
   const html = renderPanel({manual: ['汉堡'], ai: ['披萨'], effectManual: ['缩放']});
   assert.match(html, /data-preview-manual-remove="汉堡"/, '人工标签的删除按钮还在');
   assert.match(html, /data-preview-ai-exclude="披萨"/, 'AI 标签的排除按钮还在');
@@ -88,7 +117,7 @@ test('v928 ③：只是视觉上藏了 —— 删除按钮与「＋」的 markup
   assert.doesNotMatch(html, /is-editing/, '编辑态这套东西不该回来');
 });
 
-test('v928 ③：版本号六处同步', () => {
+test('v929 ③：版本号六处同步', () => {
   assert.match(source, new RegExp("const TOOL_UI_VERSION = '" + VERSION + "'"));
   const refs = indexSource.match(new RegExp('\\?v=' + VERSION, 'g')) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处 ?v= 指向新版本');

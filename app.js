@@ -720,13 +720,12 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-preview-ai-tag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 5px 8px; border: 1px solid #fdba74; border-radius: 999px; background: #fff7ed; color: #9a3412; font-size: 11px; line-height: 1; cursor: default; }
 .case-preview-ai-tag.is-manual { border-color: #86efac; background: #f0fdf4; color: #166534; }
 /* v926：× 就是删除入口（「编辑 / 完成」两个按钮已删掉）。
-   v928：改回"默认藏起来" —— 用户口径：「我点了加号之后，标签上永远都有叉号了」。
-   现在 × 只在**鼠标移到这个标签上**（或键盘把焦点移进去 / 触屏设备）时才露出来，
-   位置照旧占着（opacity 而不是 display），所以露出来时整行不会跳。 */
+   v928：× 改成不常驻。**v929：只在「加号态」出现** —— 点了行末尾的「＋」才亮、收起小输入框就灭。
+   用户口径：「这样太容易误删了，要点加号的情况下才出现叉」。
+   位置照旧占着（opacity 而不是 display），所以亮起来时整行不会跳。 */
 .case-preview-ai-tag button { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #c2410c; font-size: 13px; line-height: 12px; cursor: pointer; opacity: 0; transition: opacity .12s ease; }
 .case-preview-ai-tag.is-manual button { color: #15803d; }
-.case-preview-ai-tag:hover button,
-.case-preview-ai-tag:focus-within button { opacity: 1; }
+.case-preview-ai-chips.is-adding .case-preview-ai-tag button { opacity: 1; }
 .case-preview-ai-tag button:hover { background: #fed7aa; }
 .case-preview-ai-tag.is-manual button:hover { background: #bbf7d0; }
 .case-preview-ai-excluded { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 4px 7px; border-radius: 999px; background: #f1f5f9; color: #94a3b8; font-size: 10.5px; text-decoration: line-through; }
@@ -754,17 +753,11 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-preview-ai-effect-title { font-size: 11px; font-weight: 650; color: #7c3aed; white-space: nowrap; }
 .case-preview-ai-effect-tag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 5px 8px; border: 1px solid #c4b5fd; border-radius: 999px; background: #f5f3ff; color: #5b21b6; font-size: 11px; line-height: 1; }
 /* v926：人工动效标签（manual_effect_tags）沿用元素人工标签那套绿色小 chip，带 × 可删
-   v928：× 与元素标签同一口径 —— 默认藏着，鼠标移上去（或触屏）才出来 */
+   v928/v929：× 与元素标签同一口径 —— 默认藏着，**点了这一行的「＋」才亮** */
 .case-preview-ai-effect-tag.is-manual { border-color: #86efac; background: #f0fdf4; color: #166534; }
 .case-preview-ai-effect-tag button { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #15803d; font-size: 13px; line-height: 12px; cursor: pointer; opacity: 0; transition: opacity .12s ease; }
-.case-preview-ai-effect-tag:hover button,
-.case-preview-ai-effect-tag:focus-within button { opacity: 1; }
+.case-preview-ai-effect.is-adding .case-preview-ai-effect-tag button { opacity: 1; }
 .case-preview-ai-effect-tag button:hover { background: #bbf7d0; }
-/* 触屏没有 hover：那就把 × 一直亮着，否则在 iPad 上删不掉标签 */
-@media (hover: none) {
-  .case-preview-ai-tag button,
-  .case-preview-ai-effect-tag button { opacity: 1; }
-}
 .case-foot-tool-btn { flex: 0 0 auto; display: inline-flex; align-items: center; padding: 5px 11px; border: 1px dashed #b7c2d4; background: #fff; color: #475569; font-size: 12px; line-height: 1; border-radius: 999px; cursor: pointer; white-space: nowrap; }
 .case-foot-tool-btn:hover { border-color: #64748b; color: #0f172a; background: #f1f5f9; }
 .case-foot-tool-btn:disabled { color: #cbd5e1; border-color: #e2e8f0; background: #fafbfc; cursor: not-allowed; }
@@ -943,7 +936,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-chip-x-hover-v928';
+const TOOL_UI_VERSION = '20261014-chip-x-add-mode-v929';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -5216,11 +5209,13 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const excluded = row && Array.isArray(row.excluded_tags) ? row.excluded_tags.filter(Boolean) : [];
     const canEdit = canManage && previewAiTagsTableReady === true;
     const showEffectRow = effectTags.length > 0 || (canEdit && casePreviewAiDynamicPreview(preview));
+    // v929：× 只在「加号态」出现（点了这一行的 ＋ 才亮）—— 谁在加号态看 panel.dataset.adding（值是 config.kind）
+    const addingKind = String((panel.dataset && panel.dataset.adding) || '');
     panel.dataset.previewId = preview.id;
     // 面板自己的重画入口（＋ 展开 / 回车添加 / 删除标签后都走它），带的是渲染时那一份 preview 与 canManage
     panel.__casePreviewAiRefresh = function() { renderCasePreviewAiPanel(backdrop, preview, canManage); };
     panel.innerHTML = '<span class="case-preview-ai-title">' + (state.lang === 'zh' ? '当前物料 AI 标签' : 'Current material AI tags') + '</span>'
-      + '<div class="case-preview-ai-chips">'
+      + '<div class="case-preview-ai-chips' + (addingKind === 'element' ? ' is-adding' : '') + '">'
       + manualTags.map(function(tag) {
         return '<span class="case-preview-ai-tag is-manual" title="' + (state.lang === 'zh' ? '人工标签' : 'Manual tag') + '">' + escapeHtml(libraryDisplayLabel(tag))
           + (canEdit ? '<button type="button" data-preview-manual-remove="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '删除人工标签 ' : 'Remove manual tag ') + tag) + '">×</button>' : '')
@@ -5238,7 +5233,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       + '</div>'
       + (canManage && previewAiTagsTableReady === 'needs-manual-tags-column' ? '<span class="case-preview-ai-status is-error">需补执行 sql/021</span>' : '')
       // v918 动效标签独立成行，中英双语跟 state.lang；v926 起这一行也有人工层和它自己的「＋」
-      + (!showEffectRow ? '' : '<div class="case-preview-ai-effect">'
+      + (!showEffectRow ? '' : '<div class="case-preview-ai-effect' + (addingKind === 'effect' ? ' is-adding' : '') + '">'
           + '<span class="case-preview-ai-effect-title">' + (state.lang === 'zh' ? '动效标签' : 'Motion tags') + '</span>'
           + effectLayers.manual.map(function(tag) {
             return '<span class="case-preview-ai-effect-tag is-manual" title="' + (state.lang === 'zh' ? '人工动效标签' : 'Manual motion tag') + '">'
