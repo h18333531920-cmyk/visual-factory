@@ -64,14 +64,18 @@ test('服务端：人工新增不走AI整组覆盖，并可单独删除',async t
   assert.deepEqual(add.writes.at(-1).excluded_tags,[]);
 });
 
-test('服务端：图片变化后人工新增会清理旧内容证据并绑定当前版本',async t=>{
+// v926 改口径：人工新增**只做「加/去重这个词 + 更新 content_key」**，不再因为"画面变过"清空任何字段
+// （全库 manual_tags 非空的行一直是 0 —— 顺手加一个词却把这张图上其它人工标签一起清掉、状态打回 idle，
+//  这条逻辑是嫌疑之一）。"画面变了旧标签作废"仍然是 status / save 两条识别流程的口径。
+test('服务端：图片变化后人工新增不再清理旧内容证据，只绑定当前版本（v926）',async t=>{
   const current={preview_id:previewId,source_file_id:sourceId,ai_tags:['旧AI'],manual_tags:['旧人工'],excluded_tags:['旧排除'],status:'success',content_key:'old'};
   const mock=mockFetch({current});const old=globalThis.fetch;globalThis.fetch=mock.fetcher;t.after(()=>{globalThis.fetch=old;});
   const response=await handleCasePreviewAiTags(request({action:'manual-add',previewId,tag:'新标签'}),env);
   assert.equal(response.status,200);
-  assert.deepEqual(mock.writes.at(-1).ai_tags,[]);
-  assert.deepEqual(mock.writes.at(-1).manual_tags,['新标签']);
-  assert.deepEqual(mock.writes.at(-1).excluded_tags,[]);
+  assert.deepEqual(mock.writes.at(-1).ai_tags,['旧AI'],'画面变过也不许清 AI 标签');
+  assert.deepEqual(mock.writes.at(-1).manual_tags,['旧人工','新标签'],'老的人工标签一个都不能掉，新词追加在后面');
+  assert.deepEqual(mock.writes.at(-1).excluded_tags,['旧排除'],'人工排除也不许被清');
+  assert.equal(mock.writes.at(-1).status,'success','状态不许被打回 idle（那会让整张图显示"待识别"）');
   // v924：绑定的 key 是服务端按当前图片算出来的（2 段格式），不再是调用方传来的那个字符串
   assert.equal(mock.writes.at(-1).content_key,'p.png|12');
 });

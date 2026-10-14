@@ -6,6 +6,8 @@ import {json, requireAdmin, supabaseFetch} from '../_shared.js';
 // v918：save 动作额外接收并写入 effect_tags（动效/弹窗的"效果类型"，与 ai_tags 并列的独立一维，
 // 由「动态物料抽帧识别」那条路产出，见 scripts/recognize-case-tags.mjs）；静态物料传空数组。
 // sql/028 没执行（列不存在）时自动降级为"不写这一列"，不报错 —— 见 isMissingEffectTagsColumn。
+// v926：manual-add 只做「加/去重这个词 + 更新 content_key」两件事，**不再因为"画面变过"清空任何字段** ——
+// 用户只是加一个词，不该连这张图上其它人工标签一起清掉、把状态打回待识别（那两条老路径见 status / save）。
 const EXPERIMENT_KEY = 'augpicks-v1';
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[1-5][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
 const STATUSES = new Set(['running', 'failed', 'expired']);
@@ -156,18 +158,11 @@ export async function handleCasePreviewAiTags(request, env) {
     if (action === 'manual-add') {
       const tag = String(body.tag || '').trim();
       if (!tag || tag.length > 12) return json({success: false, message: '标签无效'}, 400);
-      // 库里还没存过 key（老行 / 从没识别过）⇒ 不作废，与 v923 之前的行为一致；
-      // 存过 key 才走 contentKeyUnchanged()（只比前两段，老格式 3 段 key 因此算"内容没变"）。
-      if (base.content_key && !contentKeyUnchanged(base.content_key, preview)) {
-        base.ai_tags = [];
-        // 画面变过 ⇒ 旧的动效效果标签同样作废（与 ai_tags 一起清，别留着上一版的动效描述）
-        base.effect_tags = [];
-        base.manual_tags = [];
-        base.excluded_tags = [];
-        base.status = 'idle';
-        base.model = '';
-        base.error_message = '';
-      }
+      // v926：**只做两件事** —— 加上（去重）这个词、把 content_key 更新成当前值。
+      // 删掉了原来那段「判定画面变过 ⇒ ai_tags / effect_tags / manual_tags / excluded_tags 全清空、
+      // status 打回 idle」：那只是用户想**加一个词**，却会把这张图上其它人工标签一起清掉、
+      // 顺手把状态打回"待识别"（v870 / v918 / v924 三次都是围绕它加断言）。
+      // 「画面变了旧标签作废」是**识别流程**的口径，保留在 status / save 两条路径上，那条不变。
       base.content_key = expectedContentKey;
       base.ai_tags = base.ai_tags.filter(value => value !== tag);
       base.manual_tags = cleanTags(base.manual_tags.concat(tag));

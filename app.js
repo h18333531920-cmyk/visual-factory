@@ -722,31 +722,39 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-preview-ai-chips { display: flex; align-items: center; gap: 5px; min-width: 0; overflow-x: auto; padding: 2px 0; scrollbar-width: thin; position: relative; }
 .case-preview-ai-tag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 5px 8px; border: 1px solid #fdba74; border-radius: 999px; background: #fff7ed; color: #9a3412; font-size: 11px; line-height: 1; cursor: default; }
 .case-preview-ai-tag.is-manual { border-color: #86efac; background: #f0fdf4; color: #166534; }
-.case-preview-ai-tag button { display: none; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #c2410c; font-size: 13px; line-height: 12px; cursor: pointer; }
-.case-preview-ai-tag.is-editing button { display: inline-flex; align-items: center; justify-content: center; }
+/* v926：× 不再藏在「编辑」态后面 —— 编辑/完成两个按钮已删掉，× 就是删除入口（必须一直看得见） */
+.case-preview-ai-tag button { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #c2410c; font-size: 13px; line-height: 12px; cursor: pointer; }
+.case-preview-ai-tag.is-manual button { color: #15803d; }
 .case-preview-ai-tag button:hover { background: #fed7aa; }
-.case-preview-ai-excluded { display: none; align-items: center; gap: 4px; flex: 0 0 auto; padding: 4px 7px; border-radius: 999px; background: #f1f5f9; color: #94a3b8; font-size: 10.5px; text-decoration: line-through; }
-.case-preview-ai-excluded.is-editing { display: inline-flex; }
+.case-preview-ai-tag.is-manual button:hover { background: #bbf7d0; }
+.case-preview-ai-excluded { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 4px 7px; border-radius: 999px; background: #f1f5f9; color: #94a3b8; font-size: 10.5px; text-decoration: line-through; }
 .case-preview-ai-excluded button { padding: 0; border: 0; background: transparent; color: #4f46e5; font-size: 10.5px; cursor: pointer; text-decoration: none; }
 .case-preview-ai-empty { color: #94a3b8; font-size: 11px; white-space: nowrap; }
 .case-preview-ai-status { color: #94a3b8; font-size: 10.5px; white-space: nowrap; }
 .case-preview-ai-status.is-error { color: #dc2626; }
-.case-preview-ai-edit-btn { flex: 0 0 auto; display: inline-flex; align-items: center; padding: 3px 8px; border: 1px dashed #cbd5e1; background: #fff; color: #64748b; font-size: 11px; line-height: 1; border-radius: 999px; cursor: pointer; white-space: nowrap; }
-.case-preview-ai-edit-btn:hover { border-color: #94a3b8; color: #0f172a; background: #f1f5f9; }
+/* v926：标签行末尾的小「＋」（点击就地展开小输入框）+ 那个小输入框与 ✓ —— 与 .case-foot-tool-btn 同一视觉语言，只是更小 */
+.case-preview-ai-add-plus { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 1px dashed #cbd5e1; background: #fff; color: #64748b; font-size: 12px; line-height: 1; border-radius: 999px; cursor: pointer; }
+.case-preview-ai-add-plus:hover { border-color: #f97316; color: #ea580c; background: #fff7ed; }
+.case-preview-ai-effect .case-preview-ai-add-plus:hover { border-color: #7c3aed; color: #6d28d9; background: #f5f3ff; }
+.case-preview-ai-add-input { flex: 0 0 auto; width: 120px; height: 22px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 999px; font-size: 11px; color: #1e293b; outline: none; }
+.case-preview-ai-add-input:focus { border-color: #f97316; }
+.case-preview-ai-effect .case-preview-ai-add-input:focus { border-color: #7c3aed; }
+.case-preview-ai-add-confirm { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 999px; background: #f97316; color: #fff; font-size: 11px; line-height: 1; cursor: pointer; }
+.case-preview-ai-add-confirm:hover { background: #ea580c; }
+.case-preview-ai-effect .case-preview-ai-add-confirm { background: #7c3aed; }
+.case-preview-ai-effect .case-preview-ai-add-confirm:hover { background: #6d28d9; }
 .case-preview-ai-pop { position: fixed; z-index: 300; display: none; flex-direction: column; gap: 4px; max-width: min(520px, 90vw); max-height: 260px; overflow: auto; padding: 10px 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14); }
 .case-preview-ai-pop.is-visible { display: flex; }
 .case-preview-ai-pop .case-preview-ai-tag { cursor: default; }
 .case-preview-ai-pop .case-preview-ai-tag button { display: none; }
-.case-preview-ai-add-row { flex: 1 0 100%; display: none; align-items: center; gap: 6px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
-.case-preview-ai-add-row.is-editing { display: flex; }
-.case-preview-ai-add-row input { flex: 1 1 auto; min-width: 0; padding: 5px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; outline: none; }
-.case-preview-ai-add-row input:focus { border-color: #f97316; }
-.case-preview-ai-add-row button { flex: 0 0 auto; padding: 5px 12px; border: 0; border-radius: 6px; background: #f97316; color: #fff; font-size: 12px; cursor: pointer; }
-.case-preview-ai-add-row button:hover { background: #ea580c; }
-/* v918 动效标签那一行（独立一维，与元素标签分开显示；没有值时整行不出现） */
+/* v918 动效标签那一行（独立一维，与元素标签分开显示） */
 .case-preview-ai-effect { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .case-preview-ai-effect-title { font-size: 11px; font-weight: 650; color: #7c3aed; white-space: nowrap; }
-.case-preview-ai-effect-tag { display: inline-flex; align-items: center; flex: 0 0 auto; padding: 5px 8px; border: 1px solid #c4b5fd; border-radius: 999px; background: #f5f3ff; color: #5b21b6; font-size: 11px; line-height: 1; }
+.case-preview-ai-effect-tag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 5px 8px; border: 1px solid #c4b5fd; border-radius: 999px; background: #f5f3ff; color: #5b21b6; font-size: 11px; line-height: 1; }
+/* v926：人工动效标签（manual_effect_tags）沿用元素人工标签那套绿色小 chip，带 × 可删 */
+.case-preview-ai-effect-tag.is-manual { border-color: #86efac; background: #f0fdf4; color: #166534; }
+.case-preview-ai-effect-tag button { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #15803d; font-size: 13px; line-height: 12px; cursor: pointer; }
+.case-preview-ai-effect-tag button:hover { background: #bbf7d0; }
 .case-foot-tool-btn { flex: 0 0 auto; display: inline-flex; align-items: center; padding: 5px 11px; border: 1px dashed #b7c2d4; background: #fff; color: #475569; font-size: 12px; line-height: 1; border-radius: 999px; cursor: pointer; white-space: nowrap; }
 .case-foot-tool-btn:hover { border-color: #64748b; color: #0f172a; background: #f1f5f9; }
 .case-foot-tool-btn:disabled { color: #cbd5e1; border-color: #e2e8f0; background: #fafbfc; cursor: not-allowed; }
@@ -925,7 +933,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-progress-detail-v925';
+const TOOL_UI_VERSION = '20261014-tag-inline-add-v926';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4980,6 +4988,150 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return state.lang === 'zh' ? '未识别' : 'Not analyzed';
   }
 
+  /* ── v926：标签行末尾的小「＋」= 就地新增人工标签 ─────────────────────────────
+     用户口径（原话）：「UI 变成在最后一个标签后面加一个加号图标小按钮，点击后出现一个小文本框，
+     输入后回车自动添加」。旧 UI 是「编辑」→ 打字 → **再点「添加」**，回车没人管 ⇒ 打完字按回车
+     什么都没发生、刷新就没了（2026-10-14 实测：全库 manual_tags 非空的行 = 0）。
+     现在：＋ → 小输入框（自动聚焦）→ **回车即添加**（✓ 同样可用）、Esc 收起、空框失焦收起；
+     添加成功后输入框**保持打开并清空**，连着加好几个不用重新点 ＋。
+     两条标签行（元素 / 动效）共用这一套，差别只有 action 与三个 id —— 全在这张表里。 */
+  const CASE_PREVIEW_AI_INLINE_ADD = {
+    element: {kind: 'element', inputId: 'case-preview-ai-add-input', plusId: 'case-preview-ai-add-plus', confirmId: 'case-preview-ai-add-confirm', action: 'manual-add'}
+  };
+  // 没提交完的草稿（重画面板会重建 input，草稿留在这里才不会把用户打的字吃掉）
+  const casePreviewAiInlineAddDraft = {};
+  // 刚点开 ＋ / 刚加完一条：下一次重画把光标放回输入框（连加好几个）
+  const casePreviewAiInlineAddFocus = {};
+
+  function casePreviewAiInlineAddConfig(value) {
+    const id = String(value || '');
+    if (!id) return null;
+    const kinds = Object.keys(CASE_PREVIEW_AI_INLINE_ADD);
+    for (let index = 0; index < kinds.length; index += 1) {
+      const config = CASE_PREVIEW_AI_INLINE_ADD[kinds[index]];
+      if (config.inputId === id || config.plusId === id || config.confirmId === id) return config;
+    }
+    return null;
+  }
+
+  function casePreviewAiInlineAddPlusHtml(config, lang) {
+    const label = lang === 'zh' ? '添加标签' : 'Add tag';
+    return '<button type="button" class="case-preview-ai-add-plus" id="' + config.plusId + '" title="' + escapeAttr(label) + '" aria-label="' + escapeAttr(label) + '">＋</button>';
+  }
+
+  function casePreviewAiInlineAddInputHtml(config, lang) {
+    return '<input type="text" class="case-preview-ai-add-input" id="' + config.inputId + '" maxlength="12" autocomplete="off"'
+      + ' value="' + escapeAttr(String(casePreviewAiInlineAddDraft[config.kind] || '')) + '"'
+      + ' placeholder="' + escapeAttr(lang === 'zh' ? '回车添加' : 'Enter to add') + '"'
+      + ' aria-label="' + escapeAttr(lang === 'zh' ? '新标签' : 'New tag') + '" />'
+      + '<button type="button" class="case-preview-ai-add-confirm" id="' + config.confirmId + '"'
+      + ' title="' + escapeAttr(lang === 'zh' ? '添加（回车）' : 'Add (Enter)') + '"'
+      + ' aria-label="' + escapeAttr(lang === 'zh' ? '添加' : 'Add') + '">✓</button>';
+  }
+
+  // 「这一行现在是 ＋ 还是小输入框」由面板 dataset.adding 决定（值是 config.kind；空 = 收起）。
+  function casePreviewAiInlineAddHtml(panel, config, lang) {
+    const open = String((panel && panel.dataset && panel.dataset.adding) || '') === config.kind;
+    return open ? casePreviewAiInlineAddInputHtml(config, lang) : casePreviewAiInlineAddPlusHtml(config, lang);
+  }
+
+  function casePreviewAiInlineAddDom(input) {
+    if (!input || typeof input.closest !== 'function') return null;
+    const config = casePreviewAiInlineAddConfig(input.id);
+    const panel = input.closest('#case-preview-ai-panel');
+    if (!config || !panel) return null;
+    return {panel: panel, backdrop: input.closest('#case-project-backdrop') || panel, config: config};
+  }
+
+  // 重画面板：用**渲染时那一份** preview / canManage（拉成闭包挂在面板上），
+  // 不在这里反查 state.libraryPreviews —— 面板画的就是打开浮窗时的那张物料。
+  function refreshCasePreviewAiPanel(backdrop, panel) {
+    const node = panel || (backdrop && backdrop.querySelector ? backdrop.querySelector('#case-preview-ai-panel') : null);
+    if (!node || typeof node.__casePreviewAiRefresh !== 'function') return false;
+    node.__casePreviewAiRefresh();
+    return true;
+  }
+
+  // 收起小输入框：清草稿 + 删 panel.dataset.adding + 重画。
+  function closeCasePreviewAiInlineAdd(input) {
+    const dom = casePreviewAiInlineAddDom(input);
+    if (!dom) return false;
+    casePreviewAiInlineAddDraft[dom.config.kind] = '';
+    delete dom.panel.dataset.adding;
+    refreshCasePreviewAiPanel(dom.backdrop, dom.panel);
+    return true;
+  }
+
+  // 把输入框里的词提交成人工标签 —— 回车与 ✓ 共用这一个入口（唯一写库路径）。
+  // 成功后清草稿、**保持输入框打开**、光标回输入框；失败只提示，草稿留着让用户重试。
+  function submitCasePreviewAiInlineAdd(input) {
+    const dom = casePreviewAiInlineAddDom(input);
+    if (!dom) return null;
+    const tag = String(input.value || '').trim();
+    if (!tag) { closeCasePreviewAiInlineAdd(input); return null; }
+    const previewId = dom.panel.dataset.previewId;
+    if (!previewId) return null;
+    if (tag.length > 12) {
+      alert(state.lang === 'zh' ? '标签最长 12 个字符' : 'Tags can be at most 12 characters.');
+      return null;
+    }
+    input.disabled = true;
+    return postCasePreviewAiTagAction({action: dom.config.action, previewId: previewId, tag: tag}).then(function() {
+      casePreviewAiInlineAddDraft[dom.config.kind] = '';
+      casePreviewAiInlineAddFocus[dom.config.kind] = true;
+      refreshCasePreviewAiPanel(dom.backdrop, dom.panel);
+      renderLibraryGrid();
+      return null;
+    }).catch(function(error) {
+      input.disabled = false;
+      alert(state.lang === 'zh' ? ('添加失败：' + (error.message || '请重试')) : ('Add failed: ' + (error.message || 'Please retry')));
+      return null;
+    });
+  }
+
+  // 小输入框上的键盘。**接线点就在 input 自己身上**（不是 document 级）：
+  // stopPropagation 保证按 Esc 只收起这个小框、不会顺带把整个项目浮窗关掉（关窗归 caseProjectKeyHandler 管）。
+  function casePreviewAiInlineAddKeydown(event) {
+    const input = event && event.target;
+    if (!casePreviewAiInlineAddConfig(input && input.id)) return false;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeCasePreviewAiInlineAdd(input);
+      return true;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      submitCasePreviewAiInlineAdd(input);
+      return true;
+    }
+    return false;
+  }
+
+  // 面板每次重画都是新节点 ⇒ 键盘 / 草稿 / 失焦这三件事都在这里挂（只对展开着的那一行）。
+  function wireCasePreviewAiInlineAddInput(panel, config) {
+    const input = panel && typeof panel.querySelector === 'function' ? panel.querySelector('#' + config.inputId) : null;
+    if (!input) return null;
+    if (typeof input.addEventListener === 'function') {
+      input.addEventListener('keydown', casePreviewAiInlineAddKeydown);
+      input.addEventListener('input', function() {
+        casePreviewAiInlineAddDraft[config.kind] = String(input.value || '');
+      });
+      // 空框失焦 = 取消收起；有内容就留着（用户可能只是去点 ✓ 或去别处看一眼再回来）
+      input.addEventListener('blur', function() {
+        if (String(input.value || '').trim()) return;
+        closeCasePreviewAiInlineAdd(input);
+      });
+    }
+    if (casePreviewAiInlineAddFocus[config.kind]) {
+      casePreviewAiInlineAddFocus[config.kind] = false;
+      if (typeof input.focus === 'function') input.focus();
+      if (typeof input.select === 'function') input.select();
+    }
+    return input;
+  }
+
   function renderCasePreviewAiPanel(backdrop, preview, canManage) {
     const panel = backdrop && backdrop.querySelector('#case-preview-ai-panel');
     if (!panel || !preview) return;
@@ -4995,27 +5147,26 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const status = casePreviewAiStatusText(row, preview);
     const excluded = row && Array.isArray(row.excluded_tags) ? row.excluded_tags.filter(Boolean) : [];
     const canEdit = canManage && previewAiTagsTableReady === true;
-    const isEditing = canEdit && panel.dataset.editing === '1';
     panel.dataset.previewId = preview.id;
-    const editingClass = isEditing ? ' is-editing' : '';
+    // 面板自己的重画入口（＋ 展开 / 回车添加 / 删除标签后都走它），带的是渲染时那一份 preview 与 canManage
+    panel.__casePreviewAiRefresh = function() { renderCasePreviewAiPanel(backdrop, preview, canManage); };
     panel.innerHTML = '<span class="case-preview-ai-title">' + (state.lang === 'zh' ? '当前物料 AI 标签' : 'Current material AI tags') + '</span>'
-      + '<div class="case-preview-ai-chips' + editingClass + '">'
+      + '<div class="case-preview-ai-chips">'
       + manualTags.map(function(tag) {
-        return '<span class="case-preview-ai-tag is-manual' + editingClass + '" title="' + (state.lang === 'zh' ? '人工标签' : 'Manual tag') + '">' + escapeHtml(libraryDisplayLabel(tag))
+        return '<span class="case-preview-ai-tag is-manual" title="' + (state.lang === 'zh' ? '人工标签' : 'Manual tag') + '">' + escapeHtml(libraryDisplayLabel(tag))
           + (canEdit ? '<button type="button" data-preview-manual-remove="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '删除人工标签 ' : 'Remove manual tag ') + tag) + '">×</button>' : '')
           + '</span>';
       }).join('')
       + aiTags.filter(function(tag) { return manualTags.indexOf(tag) < 0; }).map(function(tag) {
-        return '<span class="case-preview-ai-tag' + editingClass + '" title="' + (state.lang === 'zh' ? 'AI标签' : 'AI tag') + '">' + escapeHtml(libraryDisplayLabel(tag))
+        return '<span class="case-preview-ai-tag" title="' + (state.lang === 'zh' ? 'AI标签' : 'AI tag') + '">' + escapeHtml(libraryDisplayLabel(tag))
           + (canEdit ? '<button type="button" data-preview-ai-exclude="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '排除AI标签 ' : 'Exclude AI tag ') + tag) + '">×</button>' : '')
           + '</span>';
       }).join('')
       + (!tags.length ? '<span class="case-preview-ai-empty">' + escapeHtml(status) + '</span>' : '')
-      + excluded.map(function(tag) { return canEdit ? '<span class="case-preview-ai-excluded' + editingClass + '">' + (state.lang === 'zh' ? '已排除 ' : 'Excluded ') + escapeHtml(libraryDisplayLabel(tag)) + '<button type="button" data-preview-ai-restore="' + escapeAttr(tag) + '">' + (state.lang === 'zh' ? '撤销' : 'Undo') + '</button></span>' : ''; }).join('')
-      + (isEditing ? '<div class="case-preview-ai-add-row is-editing"><input type="text" id="case-preview-ai-add-input" placeholder="' + (state.lang === 'zh' ? '输入新标签，回车添加' : 'Type tag and press Enter') + '" /><button type="button" id="case-preview-ai-add-btn">' + (state.lang === 'zh' ? '添加' : 'Add') + '</button></div>' : '')
+      + excluded.map(function(tag) { return canEdit ? '<span class="case-preview-ai-excluded">' + (state.lang === 'zh' ? '已排除 ' : 'Excluded ') + escapeHtml(libraryDisplayLabel(tag)) + '<button type="button" data-preview-ai-restore="' + escapeAttr(tag) + '">' + (state.lang === 'zh' ? '撤销' : 'Undo') + '</button></span>' : ''; }).join('')
+      // v926：把「编辑 / 完成」换成标签行末尾的小「＋」（点开就地出现小输入框）
+      + (canEdit ? casePreviewAiInlineAddHtml(panel, CASE_PREVIEW_AI_INLINE_ADD.element, state.lang) : '')
       + '</div>'
-      + (canEdit && !isEditing ? '<button type="button" class="case-preview-ai-edit-btn" id="case-preview-ai-edit-toggle">' + (state.lang === 'zh' ? '编辑' : 'Edit') + '</button>' : '')
-      + (canEdit && isEditing ? '<button type="button" class="case-preview-ai-edit-btn" id="case-preview-ai-edit-done">' + (state.lang === 'zh' ? '完成' : 'Done') + '</button>' : '')
       + (canManage && previewAiTagsTableReady === 'needs-manual-tags-column' ? '<span class="case-preview-ai-status is-error">需补执行 sql/021</span>' : '')
       // v918：动效标签独立成行（只在有值时显示），中英双语跟 state.lang
       + (!effectTags.length ? '' : '<div class="case-preview-ai-effect">'
@@ -5026,6 +5177,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
           }).join('')
           + '</div>')
       + '<span class="case-preview-ai-status' + (row && row.status === 'failed' ? ' is-error' : '') + '">' + escapeHtml(status) + '</span>';
+    wireCasePreviewAiInlineAddInput(panel, CASE_PREVIEW_AI_INLINE_ADD.element);
     wireCasePreviewAiHover(panel, manualTags, aiTags, excluded);
   }
 
@@ -9398,37 +9550,26 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         });
         return;
       }
-      const editToggle = event.target.closest('#case-preview-ai-edit-toggle');
-      if (editToggle) {
+      // v926：「＋」就地展开小输入框（元素标签行 / 动效标签行共用这套 id 表）
+      const addPlus = event.target.closest('.case-preview-ai-add-plus');
+      if (addPlus) {
         event.stopPropagation();
-        const panel = backdrop.querySelector('#case-preview-ai-panel');
-        if (panel) { panel.dataset.editing = '1'; renderCasePreviewAiPanel(backdrop, current(), canManage); }
+        const config = casePreviewAiInlineAddConfig(addPlus.id);
+        const panelNode = addPlus.closest('#case-preview-ai-panel');
+        if (!config || !panelNode) return;
+        panelNode.dataset.adding = config.kind;
+        casePreviewAiInlineAddFocus[config.kind] = true;
+        refreshCasePreviewAiPanel(backdrop, panelNode);
         return;
       }
-      const editDone = event.target.closest('#case-preview-ai-edit-done');
-      if (editDone) {
+      // ✓ 与回车走同一个提交入口
+      const addConfirm = event.target.closest('.case-preview-ai-add-confirm');
+      if (addConfirm) {
         event.stopPropagation();
-        const panel = backdrop.querySelector('#case-preview-ai-panel');
-        if (panel) { delete panel.dataset.editing; renderCasePreviewAiPanel(backdrop, current(), canManage); }
-        return;
-      }
-      const addBtn = event.target.closest('#case-preview-ai-add-btn');
-      if (addBtn) {
-        event.stopPropagation();
-        const input = backdrop.querySelector('#case-preview-ai-add-input');
-        const tag = input && String(input.value || '').trim();
-        if (!tag) return;
-        const panel = addBtn.closest('#case-preview-ai-panel');
-        const previewId = panel && panel.dataset.previewId;
-        if (!previewId) return;
-        addBtn.disabled = true;
-        postCasePreviewAiTagAction({action: 'manual-add', previewId: previewId, tag: tag}).then(function() {
-          if (backdrop.isConnected && currentId === previewId) renderCasePreviewAiPanel(backdrop, current(), canManage);
-          renderLibraryGrid();
-        }).catch(function(error) {
-          addBtn.disabled = false;
-          alert(state.lang === 'zh' ? ('添加失败：' + (error.message || '请重试')) : ('Add failed: ' + (error.message || 'Please retry')));
-        });
+        const config = casePreviewAiInlineAddConfig(addConfirm.id);
+        const panelNode = addConfirm.closest('#case-preview-ai-panel');
+        const input = config && panelNode && typeof panelNode.querySelector === 'function' ? panelNode.querySelector('#' + config.inputId) : null;
+        if (input) submitCasePreviewAiInlineAdd(input);
         return;
       }
       if (event.target.closest('#case-ai-cancel-run')) {
@@ -9497,24 +9638,10 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (event.key === 'Escape') closeCaseProjectModal();
       else if (event.key === 'ArrowLeft') step(-1);
       else if (event.key === 'ArrowRight') step(1);
-      else if (event.key === 'Enter') {
-        const input = backdrop.querySelector('#case-preview-ai-add-input');
-        if (input && document.activeElement === input) {
-          const tag = String(input.value || '').trim();
-          if (!tag) return;
-          const panel = backdrop.querySelector('#case-preview-ai-panel');
-          const previewId = panel && panel.dataset.previewId;
-          if (!previewId) return;
-          input.disabled = true;
-          postCasePreviewAiTagAction({action: 'manual-add', previewId: previewId, tag: tag}).then(function() {
-            if (backdrop.isConnected) renderCasePreviewAiPanel(backdrop, current(), canManage);
-            renderLibraryGrid();
-          }).catch(function(error) {
-            input.disabled = false;
-            alert(state.lang === 'zh' ? ('添加失败：' + (error.message || '请重试')) : ('Add failed: ' + (error.message || 'Please retry')));
-          });
-        }
-      }
+      // v926：小输入框里的回车 = 添加 —— 接线点**不在这里**，而在那个 input 自己身上
+      // （wireCasePreviewAiInlineAddInput → casePreviewAiInlineAddKeydown，回车/Esc 都在那边处理完并
+      // stopPropagation，所以 Esc 只收起输入框、不会走到上面那句关窗）。这里刻意不再管回车，
+      // 免得同一件事两处实现、按一次回车写两次库。
     };
     document.addEventListener('keydown', caseProjectKeyHandler);
   }

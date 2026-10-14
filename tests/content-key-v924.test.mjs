@@ -228,10 +228,11 @@ test('v924 比较点收敛：脚本与前端不许再有裸 content_key !== 比�
   const planBody = extractFunction(scriptSource, 'planWorkItems');
   assert.match(planBody, /contentKeyUnchanged\(current\.content_key, preview\)/);
   assert.equal((planBody.match(/content_key \|\| ''\) !== /g) || []).length, 0);
-  // 端点：三个判断（status / save / manual-add）都走 contentKeyUnchanged；定义只有一处。
+  // 端点：两个判断（status / save）走 contentKeyUnchanged；定义只有一处。
+  // v926：manual-add 不再做内容比对（它只加词 + 更新 key），所以这里从 3 处变成 2 处。
   // 计数只看**调用形态** `!contentKeyUnchanged(`，免得把注释里提到的函数名也算进来。
-  assert.equal((endpointSource.match(/!contentKeyUnchanged\(/g) || []).length, 3,
-    'status / save / manual-add 三处判断');
+  assert.equal((endpointSource.match(/!contentKeyUnchanged\(/g) || []).length, 2,
+    'status / save 两处判断');
   assert.equal((endpointSource.match(/function contentKeyUnchanged\(/g) || []).length, 1, '比对函数只许有一份实现');
   assert.equal((endpointSource.match(/contentKey !== expectedContentKey/g) || []).length, 0);
 });
@@ -302,7 +303,7 @@ test('v924 端点：路径/大小真的不同 ⇒ 照样 409', async (t) => {
   assert.equal(empty.status, 409, '空 key 仍按"内容已变化"处理（与老行为一致）');
 });
 
-test('v924 端点 manual-add：库里是老格式 key 时不许清空已有标签', async (t) => {
+test('v924/v926 端点 manual-add：老格式 key 不做内容比对、图片真换了也不作废', async (t) => {
   const current = {
     preview_id: previewId, source_file_id: sourceId,
     ai_tags: ['汉堡'], manual_tags: [], excluded_tags: ['kiki'], status: 'success',
@@ -315,19 +316,22 @@ test('v924 端点 manual-add：库里是老格式 key 时不许清空已有标�
   assert.equal(row.status, 'success');
   assert.deepEqual(row.manual_tags, ['kiki']);
 
-  // 图片真换了（路径不同）：照旧整行作废 —— 这条老语义不许被这次改动弄丢
+  // v926：图片真换了（路径不同）也**不再整行作废** —— 加一个词不该顺带清掉这张图上其它人工标签。
+  // 作废只发生在识别流程（status / save），那两条路径的 409 语义由上一条用例守着。
   const changed = await callEndpoint(t, {
     action: 'manual-add', previewId, tag: 'kiki'
   }, {current: {...current, content_key: 'q.png|12|2026-10-14T09:00:00Z'}});
   const changedRow = changed.writes.at(-1);
-  assert.deepEqual(changedRow.ai_tags, [], '路径变了 ⇒ 旧 AI 标签作废');
-  assert.equal(changedRow.status, 'idle');
+  assert.deepEqual(changedRow.ai_tags, ['汉堡'], '路径变了也不许清 AI 标签');
+  assert.equal(changedRow.status, 'success', '状态不许被打回 idle');
+  assert.deepEqual(changedRow.excluded_tags, [], '人工排除里若正好有这个词，加回来就从排除里摘掉（老口径不变）');
   assert.deepEqual(changedRow.manual_tags, ['kiki'], '刚加的那个人工标签留着');
+  assert.equal(changedRow.content_key, 'p.png|12', 'key 更新成当前图片的指纹（服务端自己算的）');
 });
 
 /* ── 6) 版本号六处同步（index.html 5 处 + app.js 1 处） ───────────────── */
 
 test('v924 版本号六处同步（index.html 5 处 + app.js 1 处）', () => {
-  assert.equal((indexSource.match(/\?v=20261014-progress-detail-v925/g) || []).length, 5);
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-progress-detail-v925'/);
+  assert.equal((indexSource.match(/\?v=20261014-tag-inline-add-v926/g) || []).length, 5);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-tag-inline-add-v926'/);
 });

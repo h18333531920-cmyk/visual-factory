@@ -290,9 +290,13 @@ test('v918 端点源码：缺列只认这一种错（别的错误照旧抛出去
   const tailBlock = endpointSource.slice(endpointSource.indexOf("if (action === 'manual-remove')"));
   assert.doesNotMatch(excludeBlock, /effect_tags/);
   assert.doesNotMatch(tailBlock, /effect_tags/);
-  // manual-add 只在"画面变过 ⇒ 旧标签全作废"那个分支里清它（与 ai_tags 一起清）
+  // v926 改口径：manual-add **不再清任何字段**（只加词 + 更新 content_key）。
+  // 「画面变过就作废」现在只留在 status / save 两条识别流程路径上（v870 / v924 两个文件的用例守着）。
   const manualAddBlock = endpointSource.slice(endpointSource.indexOf("if (action === 'manual-add')"), endpointSource.indexOf("if (action === 'manual-remove')"));
-  assert.match(manualAddBlock, /base\.ai_tags = \[\];\s*\n\s*\/\/ 画面变过[\s\S]{0,120}?base\.effect_tags = \[\];/);
+  assert.doesNotMatch(manualAddBlock, /base\.ai_tags = \[\];/, '人工加一个词不该把 AI 标签清空');
+  assert.doesNotMatch(manualAddBlock, /base\.effect_tags = \[\];/, '人工加一个词不该把动效标签清空');
+  assert.doesNotMatch(manualAddBlock, /base\.status = 'idle';/, '人工加一个词不该把状态打回待识别');
+  assert.doesNotMatch(manualAddBlock, /contentKeyUnchanged\(/, '人工编辑这条路不再做内容比对');
 });
 
 /* ── 6) 前端：展示一行 + 可搜索 + 词表页标记 ───────────────────────────── */
@@ -426,8 +430,8 @@ test('v918 词表页：kind=effect 的行看得见（动效小标记），且不
 
 test('v918 版本号（index.html 5 处 + app.js 1 处）', () => {
   const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-  assert.equal((indexSource.match(/\?v=20261014-progress-detail-v925/g) || []).length, 5);
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-progress-detail-v925'/);
+  assert.equal((indexSource.match(/\?v=20261014-tag-inline-add-v926/g) || []).length, 5);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-tag-inline-add-v926'/);
 });
 
 /* ── 8) 脚本文案：dry-run 能看出"会请求效果标签的有几张" ─────────────────── */
