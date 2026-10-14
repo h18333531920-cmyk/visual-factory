@@ -18,7 +18,6 @@
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
 | 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261014-faster-tag-write-v932`（**修「点 ✓ 没反应」的真根因（blur 抢焦点→面板重画→按钮被销毁）+ 加标签的等待看得见 + 写库少跑两个往返**；往上叠 v929 的**× 只在加号态出现**、v928 的**× 不再常驻**、v927 的**去掉「一键识别」按钮 + 底部不再显示「AI直接应用」**、v926 的**标签「＋」内联新增 + 动效标签手工加**、v925 的**进度条显示具体哪几张**、v924 的**内容指纹去掉 updated_at**、v923 的**黑名单补价格/百分比**、v922 的**上传未分类红框+拦截+批量**、v918 的**效果类型标签**、v917 的**动态物料抽帧识别**）。⚠️ **手工动效标签这条链要用户先执行 `sql/031_manual_effect_tags.sql`**，否则端点回 503（不静默成功）；部署 `c2c98c2b`，2026-10-14 本机 wrangler 直发 | 实测 2026-10-14 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true`。**实测延迟 1.7–2.9 秒**（Pages Function 冷启动 + 上游调用是这个项目的基线，"点一下要等几秒"多半来在这） | 实测 2026-10-14 |
-| 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
 | 本地工作区 | 分支 `tmp-deploy-v871`，HEAD `e5798a8`（v932，含 `dist/`；v931/v930/v929/v928/v927/v926 在其前六个提交）；**已跟踪文件无未提交改动**（`tests/` 下有 51 个从未入库的旧测试文件，一直如此，本轮未动）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-14 |
