@@ -29,14 +29,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261014-tag-add-feedback-v930';
+const VERSION = '20261014-inline-add-focus-guard-v931';
 
 const escapeHtml = (value) => String(value == null ? '' : value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 const SLICE_START = '  const CASE_PREVIEW_AI_INLINE_ADD = {';
 const SLICE_END = '  function wireCasePreviewAiHover(panel, manualTags, aiTags, excluded) {';
-const EXPORTS = ';({submitCasePreviewAiInlineAdd, casePreviewAiInlineAddKeydown, closeCasePreviewAiInlineAdd})';
+const EXPORTS = ';({submitCasePreviewAiInlineAdd, casePreviewAiInlineAddKeydown, closeCasePreviewAiInlineAdd, wireCasePreviewAiPanelPointerGuard})';
 
 // 造一个"真"输入框：能 focus / 有 value / closest 能找回面板与背景
 function makeDom({kind = 'element', value = ''} = {}) {
@@ -173,6 +173,30 @@ test('v930 ④：输入法拼词中的回车 = 上屏，不算提交', () => {
   assert.equal(api.casePreviewAiInlineAddKeydown(makeEvent({keyCode: 229})), false, 'keyCode 229（老浏览器）同样不处理');
   assert.equal(api.casePreviewAiInlineAddKeydown(makeEvent({})), true, '正常回车仍然提交');
   assert.equal(prevented, 1);
+});
+
+test('v931：面板里的按钮挡住 mousedown 默认行为 —— 别让输入框的 blur 把要点的那颗按钮销毁', () => {
+  const {api} = load();
+  const listeners = {};
+  let attachCount = 0;
+  const panel = {dataset: {}, innerHTML: '', addEventListener: (type, handler) => { attachCount += 1; listeners[type] = handler; }};
+  api.wireCasePreviewAiPanelPointerGuard(panel);
+  assert.equal(typeof listeners.mousedown, 'function', '要在面板上挂一个 mousedown 守卫');
+  assert.equal(attachCount, 1);
+  api.wireCasePreviewAiPanelPointerGuard(panel);
+  assert.equal(attachCount, 1, '重复调用不要重复挂（面板重画时会再调一次）');
+  const fire = (hit) => {
+    let prevented = 0;
+    listeners.mousedown({target: {closest: (selector) => (String(selector) === hit ? {} : null)}, preventDefault() { prevented += 1; }});
+    return prevented;
+  };
+  assert.equal(fire('.case-preview-ai-add-confirm'), 1, '✓ 要挡住（否则先 blur、面板重画、click 到不了它）');
+  assert.equal(fire('.case-preview-ai-tag button'), 1, '标签上的 × 也要挡住');
+  assert.equal(fire('.case-preview-ai-effect-tag button'), 1, '动效标签的 × 也要挡住');
+  assert.equal(fire('.case-preview-ai-add-plus'), 1, '＋ 也要挡住');
+  assert.equal(fire('.something-else'), 0, '别的元素别乱挡');
+  // 渲染函数里真的调了它（而不是定义了没人用）
+  assert.match(source, /panel\.__casePreviewAiRefresh = function\(\) \{ renderCasePreviewAiPanel\(backdrop, preview, canManage\); \};\s*\n\s*wireCasePreviewAiPanelPointerGuard\(panel\);/);
 });
 
 test('v930 ⑤：版本号六处同步', () => {

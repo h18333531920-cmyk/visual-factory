@@ -936,7 +936,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-tag-add-feedback-v930';
+const TOOL_UI_VERSION = '20261014-inline-add-focus-guard-v931';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -5191,6 +5191,27 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return false;
   }
 
+  // v930：**按下这一片里的按钮时不许把输入框的焦点抢走**。
+  // 真机实测（2026-10-14，测试站）：点 ✓ / 点 × 的**第一件事**是输入框 blur ——
+  // 而空框 blur ⇒ `closeCasePreviewAiInlineAdd` ⇒ 整个面板重画 ⇒ 你正要点的那颗按钮**当场被销毁**，
+  // 于是 click 事件根本到不了它：表现就是用户说的「点对号一点反应没有」（输入框空了还会顺手消失）。
+  // 挡 mousedown 的默认行为（＝不让焦点从输入框移走）就不会有这次 blur，click 照常派发。
+  // 面板本身在重画时是复用的（只换 innerHTML），所以只挂一次。
+  function wireCasePreviewAiPanelPointerGuard(panel) {
+    if (!panel || panel.__casePreviewAiPointerGuard) return;
+    if (typeof panel.addEventListener !== 'function') return;
+    panel.__casePreviewAiPointerGuard = true;
+    panel.addEventListener('mousedown', function(event) {
+      const target = event && event.target;
+      if (!target || typeof target.closest !== 'function') return;
+      if (target.closest('.case-preview-ai-add-confirm') || target.closest('.case-preview-ai-add-plus')
+        || target.closest('.case-preview-ai-tag button') || target.closest('.case-preview-ai-effect-tag button')
+        || target.closest('.case-preview-ai-excluded button')) {
+        event.preventDefault();
+      }
+    });
+  }
+
   // 面板每次重画都是新节点 ⇒ 键盘 / 草稿 / 失焦这三件事都在这里挂（只对展开着的那一行）。
   function wireCasePreviewAiInlineAddInput(panel, config) {
     const input = panel && typeof panel.querySelector === 'function' ? panel.querySelector('#' + config.inputId) : null;
@@ -5241,6 +5262,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     panel.dataset.previewId = preview.id;
     // 面板自己的重画入口（＋ 展开 / 回车添加 / 删除标签后都走它），带的是渲染时那一份 preview 与 canManage
     panel.__casePreviewAiRefresh = function() { renderCasePreviewAiPanel(backdrop, preview, canManage); };
+    wireCasePreviewAiPanelPointerGuard(panel);
     panel.innerHTML = '<span class="case-preview-ai-title">' + (state.lang === 'zh' ? '当前物料 AI 标签' : 'Current material AI tags') + '</span>'
       + '<div class="case-preview-ai-chips' + (addingKind === 'element' ? ' is-adding' : '') + '">'
       + manualTags.map(function(tag) {
