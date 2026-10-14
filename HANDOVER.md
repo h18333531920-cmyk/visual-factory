@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261014-chip-x-hover-v928`（**标签上的「×」改成默认藏着、鼠标移上去才出来（触屏一直显示）**；往上叠 v927 的**去掉「一键识别」按钮 + 底部不再显示「AI直接应用」**、v926 的**标签「＋」内联新增 + 动效标签手工加**、v925 的**进度条显示具体哪几张**、v924 的**内容指纹去掉 updated_at**、v923 的**黑名单补价格/百分比**、v922 的**上传未分类红框+拦截+批量**、v918 的**效果类型标签**、v917 的**动态物料抽帧识别**）。⚠️ **手工动效标签这条链要用户先执行 `sql/031_manual_effect_tags.sql`**，否则端点回 503（不静默成功）；部署 `61a584a8`，2026-10-14 本机 wrangler 直发 | 实测 2026-10-14 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261014-chip-x-add-mode-v929`（**标签上的「×」只在「加号态」出现 —— 点了行末尾的 ＋ 才亮、收起小输入框就灭**；往上叠 v928 的**× 不再常驻**、v927 的**去掉「一键识别」按钮 + 底部不再显示「AI直接应用」**、v926 的**标签「＋」内联新增 + 动效标签手工加**、v925 的**进度条显示具体哪几张**、v924 的**内容指纹去掉 updated_at**、v923 的**黑名单补价格/百分比**、v922 的**上传未分类红框+拦截+批量**、v918 的**效果类型标签**、v917 的**动态物料抽帧识别**）。⚠️ **手工动效标签这条链要用户先执行 `sql/031_manual_effect_tags.sql`**，否则端点回 503（不静默成功）；部署 `261da36c`，2026-10-14 本机 wrangler 直发 | 实测 2026-10-14 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
-| 本地工作区 | 分支 `tmp-deploy-v871`，HEAD `66ec1c4`（v928，含 `dist/`；v927/v926 在其前三个提交）；**已跟踪文件无未提交改动**（`tests/` 下有 51 个从未入库的旧测试文件，一直如此，本轮未动）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-14 |
-| 自动化测试 | `node --test tests/` → **796/796 通过**（v928 新增 `chip-x-hover-v928` 5 条；v927 新增 `case-tag-ui-cleanup-v927` 7 条；v926 新增 `tag-inline-add-v926` 11 条 + `manual-effect-tags-v926` 22 条；v925 25 条 + v924 14 条 + v923 8 条 + v922 25 条 + v921 14 条 + v920 30 条 + v918 28 条 + v917 23 条 + 更早的都在） | 实测 2026-10-14 |
+| 本地工作区 | 分支 `tmp-deploy-v871`，HEAD `02b1cca`（v929，含 `dist/`；v928/v927/v926 在其前四个提交）；**已跟踪文件无未提交改动**（`tests/` 下有 51 个从未入库的旧测试文件，一直如此，本轮未动）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-14 |
+| 自动化测试 | `node --test tests/` → **798/798 通过**（`chip-x-hover-v928.test.mjs` 里的 5 条按 v929 口径重写成 7 条；v927 新增 `case-tag-ui-cleanup-v927` 7 条；v926 新增 `tag-inline-add-v926` 11 条 + `manual-effect-tags-v926` 22 条；v925 25 条 + v924 14 条 + v923 8 条 + v922 25 条 + v921 14 条 + v920 30 条 + v918 28 条 + v917 23 条 + 更早的都在） | 实测 2026-10-14 |
 | 后台识别 worker | **腾讯云已装好并跑通**：`/opt/case-tags/`（脚本 + `_ai.js` + `.local/recognize.env` 0600），主机已装 Node 20.20.2 与 ffmpeg 6.1.1，cron 每 5 分钟一批。⚠️ **worker 上仍是 v924 版脚本**（v926 又改过它、加了 `manual_effect_tags` 保护，需用户重传，见 §11 v926 条） | 实测 2026-10-14 |
 | 逐图 AI 标签覆盖 | **已铺满全库**：`vf_preview_ai_tags` **1942 行 / 98 个案例项目**，**全部 `status='success'`（失败 0）** —— v924 换脚本后原先那 87 张 `.gif` 已全部识别完；`effect_tags` 非空 83 行；**`manual_tags` / `excluded_tags` 非空行仍是 0 行**（人工加标签从未成功落库，见 §11 v926 条） | 实测 2026-10-14（查库） |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
@@ -758,6 +758,14 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
     - 测试 **796/796**：新增 `tests/chip-x-hover-v928.test.mjs`（5 条：元素标签与动效标签的 × 默认 `opacity:0` 且各有 hover/focus-within 露出规则、不许改成 `display:none`、触屏媒体查询里一直亮、真渲 HTML 里四个删除/新增入口都还在且 `is-editing` 没回来、版本号六处同步）。
     - ⚠️ **未核实**：真机上"鼠标移上去 × 才出现"的手感没看过（只有 CSS 源码断言 + 真渲 HTML 这一级证据）；`opacity: 0` 的按钮**仍然可点**（点它 = 排除/删除那个标签），只是看不见 —— 理论上"鼠标扫过去刚好点到"存在误触可能，如果用户反馈误删，改成 `pointer-events` 一并开关即可。
     - **顺带实测（2026-10-14 18:0x 查库）**：`vf_preview_ai_tags` 里 `manual_tags` 非空的行**仍然是 0 行**（共 1942 行，最近一次 `updated_at` 是 09:10Z，都是 cron worker 的识别写）。⇒ **v926 那个「人工加标签从来没落库」的根因仍未被证伪**，用户也还没确认"打了字按回车"。这一条继续挂在待办里。
+
+  - **✅ v929（2026-10-14，已发测试站，部署 `261da36c`）—— 标签的「×」收紧到只在「加号态」出现**。用户诉求原话：「现在鼠标 hover 状态会出现叉，这个叉是常驻的吗？这样太容易误删了，**要点加号的情况下才出现叉**」（v928 刚改成 hover 才出，用户当天就否掉了）。
+    - **改法**：CSS 去掉 `:hover` / `:focus-within` 两条露出规则，也**去掉 v928 那条 `@media (hover: none) { opacity: 1 }`**（它会让 iPad 上 × 又常驻）；改成 `opacity: 1` 只挂在**加号态**上：`.case-preview-ai-chips.is-adding .case-preview-ai-tag button` 与 `.case-preview-ai-effect.is-adding .case-preview-ai-effect-tag button`。基础规则仍是 `opacity: 0`（位置占着，亮起来不跳）。
+    - **加号态怎么来的**：复用 v926 已有的 `panel.dataset.adding`（`＋` 点击时设 `= config.kind`、`closeCasePreviewAiInlineAdd` 收起时 `delete`）—— 渲染时读它生成 class：`const addingKind = String((panel.dataset && panel.dataset.adding) || '')`，元素行加 `is-adding` 当 `addingKind === 'element'`、动效行当 `addingKind === 'effect'`，**两行各管各的**（点元素行的 ＋ 不会把动效行的 × 也点亮）。
+    - **删除入口的用法变了（要记住）**：想删人工标签 / 排除 AI 标签，**先点一下那个 ＋**（不用打字），× 就都出来了；按 Esc 或点空白处收起小输入框，× 跟着灭。触屏同理（点 ＋ 进加号态），所以不需要 hover 兜底。
+    - 版本号 → `20261014-chip-x-add-mode-v929`（`TOOL_UI_VERSION`、`index.html` 5 处 `?v=`、17 个测试文件里的旧版本断言一起换）。`npm run build:pages` 已跑、`diff -q` 三处一致。
+    - 测试 **798/798**：`tests/chip-x-hover-v928.test.mjs`（**文件名保留，内容按 v929 口径重写**：5 条 → 7 条）改成断言「× 默认 opacity:0」「加号态才 opacity:1」「**不许**再有 hover / focus-within / `@media (hover: none)` 触发」「`dataset.adding` 由 ＋ 设、收起时删、渲染真的读它」「两行 `is-adding` 互不串台」「真渲 HTML 里三个删除入口与 ＋ 的 markup 都还在、`is-editing` 没回来」「版本号六处同步」。另外把 `tests/effect-tags-v918.test.mjs` 里那条写死 `<div class="case-preview-ai-effect">` 的断言改成带 `is-adding` 的新形状（**"没有值又不是动态物料就整行不出现"这个判断本身没变**）。
+    - ⚠️ **未核实**：真机上"点 ＋ 才出 ×"的手感没看过（只有 CSS/源码断言 + 真渲 HTML 这一级证据）；`opacity: 0` 的按钮**仍然可点**（hover 已经不亮它了，但鼠标恰好落在那个 14px 上仍是"排除/删除"）—— 如果还有误删反馈，下一步是给隐藏态也加 `pointer-events: none`。
 
   - **🚧 用户 2026-10-13 追加的核心痛点：同款的英/阿版本在结果里重复占位**（搜「牛排」出英文版那张、搜「烤肉」出**同一设计的**阿语版那张；根因是逐图各识别一次，同款两版的标签不一致）。规划稿早有对应章节：**§3 设计分组**（分组证据与防连锁误合并）+ **§5 逐图识别如何支持语言版本去重**。
     - **口径（按规划稿，不要改成"硬统一标签"）**：① **结果按"设计组"占位** —— 同款多语言版在结果里只占一个位置（默认展示有证据的 EN 版），组内可展开看其他版本；② **证据分层** —— 其他版本标"同组待核验"，人工确认后才进直接命中。规划稿 §5 明确「**不能让已完成的 EN 标签自动替代失败的 AR 结果**」；硬复制标签会造成假命中（搜烤肉结果里那张其实是牛排版）。
