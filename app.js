@@ -746,6 +746,14 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-preview-ai-add-confirm:hover { background: #ea580c; }
 /* v932：添加中 —— 等写库的那几秒要让用户看见"在跑"，而且这时候点它不再有反应（挡住连点） */
 .case-preview-ai-add-confirm.is-busy { opacity: .55; cursor: progress; }
+/* v936：上传成功后把新入库的卡片**高亮几秒**提醒上传者（用户要求）。
+   用 outline + box-shadow（不依赖卡片自身的定位，也不用改各套卡片的模板），色是这套 UI 的橙。
+   6 秒后由 highlightFreshLibraryCards() 把 class 摘掉。 */
+@keyframes library-fresh-pulse {
+  0%, 100% { outline-color: rgba(249, 115, 22, 1); box-shadow: 0 0 0 7px rgba(249, 115, 22, .30); }
+  50% { outline-color: rgba(249, 115, 22, .45); box-shadow: 0 0 0 3px rgba(249, 115, 22, .12); }
+}
+.library-card.is-just-uploaded { outline: 3px solid #f97316; outline-offset: 2px; animation: library-fresh-pulse 1.1s ease-in-out infinite; }
 .case-preview-ai-effect .case-preview-ai-add-confirm { background: #7c3aed; }
 .case-preview-ai-effect .case-preview-ai-add-confirm:hover { background: #6d28d9; }
 .case-preview-ai-pop { position: fixed; z-index: 300; display: none; flex-direction: column; gap: 4px; max-width: min(520px, 90vw); max-height: 260px; overflow: auto; padding: 10px 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14); }
@@ -940,7 +948,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-library-hot-update-v935';
+const TOOL_UI_VERSION = '20261014-upload-highlight-v936';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -6602,53 +6610,89 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   // 这里的做法：① 删除 → 本地摘掉这一个项目（含它的物料行与标签缓存），连查都不用查；
   //              ② 上传 → 只重拉这一个项目的源文件行 + 它的物料行（同一套 select 字段与降级路径），
   //                 合进本地后只重画。查不到那一行时返回 false，调用方退回整库重拉兜底。
-  async function fetchLibrarySourceWithPreviews(sourceId) {
-    const sourceRes = await caseAwareQuery(full => state.supabase
-      .from('vf_source_files')
-      .select('id,title,country_id,activity_id,category_id,tags,visibility,source_path,source_filename,source_mime_type,source_size_bytes,source_ext,uploaded_by' + (full ? ',owner_name,owner_contact,project_note,download_link' : '') + ',created_at,updated_at')
-      .eq('id', sourceId)
-      .limit(1));
-    if (sourceRes.error) throw translateCaseSchemaError(sourceRes.error);
-    const source = (sourceRes.data || [])[0] || null;
+  async function fetchLibrarySourceWithPreviews(sourceIds) {
+    const ids = (Array.isArray(sourceIds) ? sourceIds : [sourceIds]).map(String).filter(Boolean);
+    if (!ids.length) return { sources: [], previews: [] };
+    const sources = [];
+    for (const idBatch of chunkArray(ids, SUPABASE_IN_BATCH_SIZE)) {
+      const sourceRes = await caseAwareQuery(full => state.supabase
+        .from('vf_source_files')
+        .select('id,title,country_id,activity_id,category_id,tags,visibility,source_path,source_filename,source_mime_type,source_size_bytes,source_ext,uploaded_by' + (full ? ',owner_name,owner_contact,project_note,download_link' : '') + ',created_at,updated_at')
+        .in('id', idBatch));
+      if (sourceRes.error) throw translateCaseSchemaError(sourceRes.error);
+      sources.push(...(sourceRes.data || []));
+    }
     const previews = [];
-    if (source) {
-      let from = 0;
-      for (;;) {
-        const res = await previewAwareQuery(full => state.supabase
-          .from('vf_asset_previews')
-          .select(previewSelectFields(full))
-          .eq('source_file_id', sourceId)
-          .order('sort_order', { ascending: true })
-          .order('id', { ascending: true })
-          .range(from, from + LIBRARY_PREVIEW_PAGE_SIZE - 1));
-        if (res.error) throw translateCaseSchemaError(res.error);
-        const rows = res.data || [];
-        previews.push(...rows);
-        if (rows.length < LIBRARY_PREVIEW_PAGE_SIZE) break;
-        from += LIBRARY_PREVIEW_PAGE_SIZE;
+    if (sources.length) {
+      for (const idBatch of chunkArray(sources.map(item => item.id), SUPABASE_IN_BATCH_SIZE)) {
+        let from = 0;
+        for (;;) {
+          const res = await previewAwareQuery(full => state.supabase
+            .from('vf_asset_previews')
+            .select(previewSelectFields(full))
+            .in('source_file_id', idBatch)
+            .order('sort_order', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, from + LIBRARY_PREVIEW_PAGE_SIZE - 1));
+          if (res.error) throw translateCaseSchemaError(res.error);
+          const rows = res.data || [];
+          previews.push(...rows);
+          if (rows.length < LIBRARY_PREVIEW_PAGE_SIZE) break;
+          from += LIBRARY_PREVIEW_PAGE_SIZE;
+        }
       }
     }
-    return { source: source, previews: previews };
+    return { sources: sources, previews: previews };
   }
 
-  async function applyLocalLibraryChange(sourceId, removed) {
-    if (!sourceId) return false;
+  // v936：上传成功后把新入库的卡片**高亮几秒**提醒上传者（用户要求：「上传的物料封面边缘可以
+  // 高亮显示几秒来提醒上传者」）。只加/去一个 class，不碰各套渲染模板：案例卡靠 data-case-project 认，
+  // 其余卡片（图库 / 模板 / 字体 / 书签）靠 data-preview-id 认。
+  function highlightFreshLibraryCards(sourceIds, previewIds, durationMs) {
+    const grid = document.getElementById('library-grid');
+    if (!grid || typeof grid.querySelectorAll !== 'function') return;
+    const sources = new Set((sourceIds || []).map(String));
+    const previews = new Set((previewIds || []).map(String));
+    const cards = Array.from(grid.querySelectorAll('.library-card')).filter(function(card) {
+      if (sources.has(String(card.getAttribute('data-case-project') || ''))) return true;
+      return previews.has(String(card.getAttribute('data-preview-id') || ''));
+    });
+    if (!cards.length) return;
+    cards.forEach(function(card) { card.classList.add('is-just-uploaded'); });
+    // 新卡片排在最前，一般不用滚；只有它不在视口里才滚一下，别平白把用户正在看的页面顶走
+    try {
+      const rect = cards[0].getBoundingClientRect();
+      const viewport = window.innerHeight || 0;
+      if (viewport && (rect.bottom < 80 || rect.top > viewport - 40)) {
+        cards[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    } catch (_scrollError) {}
+    window.setTimeout(function() {
+      cards.forEach(function(card) { card.classList.remove('is-just-uploaded'); });
+    }, durationMs || 6000);
+  }
+
+  async function applyLocalLibraryChange(sourceIds, removed) {
+    const ids = (Array.isArray(sourceIds) ? sourceIds : [sourceIds]).map(String).filter(Boolean);
+    if (!ids.length) return false;
+    const idSet = new Set(ids);
     if (removed) {
-      const gone = state.libraryPreviews.filter(item => item.source_file_id === sourceId);
-      state.librarySources = state.librarySources.filter(item => item.id !== sourceId);
-      state.libraryPreviews = state.libraryPreviews.filter(item => item.source_file_id !== sourceId);
+      const gone = state.libraryPreviews.filter(item => idSet.has(String(item.source_file_id)));
+      state.librarySources = state.librarySources.filter(item => !idSet.has(String(item.id)));
+      state.libraryPreviews = state.libraryPreviews.filter(item => !idSet.has(String(item.source_file_id)));
       gone.forEach(function(item) { state.previewAiTagsByPreviewId.delete(String(item.id)); });
     } else {
-      const fetched = await fetchLibrarySourceWithPreviews(sourceId);
-      if (!fetched.source) return false;
-      state.librarySources = [fetched.source]
-        .concat(state.librarySources.filter(item => item.id !== sourceId))
+      const fetched = await fetchLibrarySourceWithPreviews(ids);
+      if (!fetched.sources.length) return false;
+      state.librarySources = fetched.sources
+        .concat(state.librarySources.filter(item => !idSet.has(String(item.id))))
         .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
       state.libraryPreviews = sortLibraryPreviewsBySourceOrder(
-        state.libraryPreviews.filter(item => item.source_file_id !== sourceId).concat(fetched.previews)
+        state.libraryPreviews.filter(item => !idSet.has(String(item.source_file_id))).concat(fetched.previews)
       );
       try {
-        await signVisibleLibraryUrls(fetched.previews.map(preview => ({ source: fetched.source, preview: preview })));
+        const sourceById = new Map(fetched.sources.map(item => [String(item.id), item]));
+        await signVisibleLibraryUrls(fetched.previews.map(preview => ({ source: sourceById.get(String(preview.source_file_id)), preview: preview })));
       } catch (signError) {
         // 签名失败只是缩略图晚一步出来，不该把"上传成功"变成失败
         console.warn('Sign new preview URLs failed:', signError && signError.message);
@@ -6656,6 +6700,10 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     }
     notePreviewAiTagsChanged();
     refreshLibraryLoadedUi();
+    // 高亮要放在重画**之后**（class 得加在刚画出来的那张卡上）
+    if (!removed) {
+      highlightFreshLibraryCards(ids, state.libraryPreviews.filter(item => idSet.has(String(item.source_file_id))).map(item => item.id));
+    }
     return true;
   }
 
@@ -12641,22 +12689,26 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       const formData = new FormData(form);
       const libraryKind = formData.get('library_kind') || 'gallery';
       if (libraryKind === 'gallery') {
-        await uploadGalleryAssets(formData, setUploadProgress, run);
+        const gallerySourceIds = await uploadGalleryAssets(formData, setUploadProgress, run);
         setUploadProgress(100);
         setMessage(message, state.lang === 'zh' ? '图库素材已上传。' : 'Gallery assets uploaded.', false, true);
         setTimeout(closeLibraryUploadModal, 600);
         state.libraryFilters.kind = 'gallery';
-        await reloadLibraryData();
+        // v936：图库上传也改成就地合入 + 高亮新卡片（原来整库重拉，用户实测要等 8–9 秒）
+        const galleryApplied = await applyLocalLibraryChange(gallerySourceIds);
+        if (!galleryApplied) await reloadLibraryData();
         return;
       }
       if (libraryKind === 'template') {
         setUploadProgress(20);
-        await uploadTemplateAsset(formData);
+        const templateSourceIds = await uploadTemplateAsset(formData);
         setUploadProgress(100);
         setMessage(message, state.lang === 'zh' ? '模板已上传。' : 'Template uploaded.', false, true);
         setTimeout(closeLibraryUploadModal, 600);
         state.libraryFilters.kind = 'template';
-        await reloadLibraryData();
+        // v936：模板上传同理
+        const templateApplied = await applyLocalLibraryChange(templateSourceIds);
+        if (!templateApplied) await reloadLibraryData();
         return;
       }
       const previewFiles = Array.from(formData.getAll('preview_files')).filter(file => file && file.size > 0);
@@ -13033,6 +13085,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (cancelled()) throw new Error(LIBRARY_UPLOAD_CANCELLED);
       rememberLastCaseUploadCountry(optionNameById(formData.get('country')));
       if (onProgress) onProgress(95, doneCount, files.length);
+      // v936：把这一批新建的源文件 id 交回调用方 —— 上传完要**就地合进素材库 + 高亮新卡片**，不再整库重拉
+      return insertedSourceIds;
     } catch (error) {
       await cleanupGalleryUpload(insertedSourceIds, uploadedPaths);
       throw error;
@@ -15707,6 +15761,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (previewError) console.warn('Preview insert failed:', previewError);
     }
     void logAssetEvent('upload', { source: { id: sourceId, title: title, source_filename: templateFile.name } });
+    // v936：把新建的源文件 id 交回调用方（就地合进素材库 + 高亮新卡片用）
+    return [sourceId];
   }
 
 function libraryTagsForForm(formData, kind) {

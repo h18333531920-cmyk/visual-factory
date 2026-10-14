@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261014-library-hot-update-v935';
+const VERSION = '20261014-upload-highlight-v936';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -49,21 +49,34 @@ test('v935 ②：上传成功走"只重拉这一个项目"，兜底仍在', () =
   assert.doesNotMatch(upload, /^\s+await reloadLibraryData\(\);/m, '不许再无条件整库重拉');
 });
 
-test('v935 ③④：局部更新只动本地、只重画 —— 不许偷偷再整库重拉', () => {
-  const apply = slice('  async function applyLocalLibraryChange(sourceId, removed) {', '  // case_activity 是 v738 新增的类型值');
-  assert.match(apply, /state\.librarySources = state\.librarySources\.filter\(item => item\.id !== sourceId\)/, '删除要摘掉源文件行');
-  assert.match(apply, /state\.libraryPreviews = state\.libraryPreviews\.filter\(item => item\.source_file_id !== sourceId\)/, '删除要摘掉它的物料行');
+test('v935/v936 ③④：局部更新只动本地、只重画 —— 不许偷偷再整库重拉', () => {
+  const apply = slice('  async function applyLocalLibraryChange(sourceIds, removed) {', '  // case_activity 是 v738 新增的类型值');
+  assert.match(apply, /state\.librarySources = state\.librarySources\.filter\(item => !idSet\.has\(String\(item\.id\)\)\)/, '删除要摘掉源文件行');
+  assert.match(apply, /state\.libraryPreviews = state\.libraryPreviews\.filter\(item => !idSet\.has\(String\(item\.source_file_id\)\)\)/, '删除要摘掉它的物料行');
   assert.match(apply, /state\.previewAiTagsByPreviewId\.delete\(String\(item\.id\)\)/, '删除要顺手清掉标签缓存');
-  assert.match(apply, /const fetched = await fetchLibrarySourceWithPreviews\(sourceId\);/, '上传走"只读这一个项目"');
-  assert.match(apply, /if \(!fetched\.source\) return false;/, '查不到就返回 false，让调用方兜底');
-  assert.match(apply, /notePreviewAiTagsChanged\(\);\s*\n\s*refreshLibraryLoadedUi\(\);\s*\n\s*return true;/, '最后只重画当前界面');
+  assert.match(apply, /const fetched = await fetchLibrarySourceWithPreviews\(ids\);/, '上传走"只读这几个项目"');
+  assert.match(apply, /if \(!fetched\.sources\.length\) return false;/, '查不到就返回 false，让调用方兜底');
+  assert.match(apply, /notePreviewAiTagsChanged\(\);\s*\n\s*refreshLibraryLoadedUi\(\);/, '最后只重画当前界面');
+  assert.match(apply, /highlightFreshLibraryCards\(ids,/, 'v936：重画之后把新卡片高亮几秒');
   assert.doesNotMatch(apply, /loadLibrarySources\(\)|loadLibraryPreviews\(\)|loadAllPreviewAiTags\(\)|reloadLibraryData\(\)/, '局部更新里不许再出现整库重拉的调用');
-  // 只读一个项目：一条 source 查询 + 按页拉该项目的 preview，不等于整库
-  const fetchOne = slice('  async function fetchLibrarySourceWithPreviews(sourceId) {', '  async function applyLocalLibraryChange');
-  assert.match(fetchOne, /\.eq\('id', sourceId\)/, '源文件按 id 单查');
-  assert.match(fetchOne, /\.eq\('source_file_id', sourceId\)/, '物料按 source_file_id 单查');
-  assert.match(fetchOne, /caseAwareQuery\(/, '沿用整库加载那套字段/降级（免得两边形状不一致）');
-  assert.match(fetchOne, /previewAwareQuery\(/, '物料查询同样沿用降级路径');
+  // 只读指定的几个项目：按 id 批量查 source + 按 source_file_id 批量查 preview，不等于整库
+  const fetchSome = slice('  async function fetchLibrarySourceWithPreviews(sourceIds) {', '  // v936：上传成功后把新入库的卡片');
+  assert.match(fetchSome, /\.in\('id', idBatch\)/, '源文件按 id 批量查');
+  assert.match(fetchSome, /\.in\('source_file_id', idBatch\)/, '物料按 source_file_id 批量查');
+  assert.match(fetchSome, /caseAwareQuery\(/, '沿用整库加载那套字段/降级（免得两边形状不一致）');
+  assert.match(fetchSome, /previewAwareQuery\(/, '物料查询同样沿用降级路径');
+});
+
+test('v936：高亮只加/去一个 class，认卡片的两个属性，6 秒后自己摘掉', () => {
+  const hl = slice('  function highlightFreshLibraryCards(sourceIds, previewIds, durationMs) {', '  async function applyLocalLibraryChange');
+  assert.match(hl, /card\.classList\.add\('is-just-uploaded'\)/, '加高亮 class');
+  assert.match(hl, /window\.setTimeout\([\s\S]{0,200}card\.classList\.remove\('is-just-uploaded'\)/, '几秒后自己摘掉');
+  assert.match(hl, /data-case-project/, '案例卡按项目 id 认');
+  assert.match(hl, /data-preview-id/, '其余卡片按物料 id 认');
+  assert.match(source, /\.library-card\.is-just-uploaded \{ outline: 3px solid #f97316;/, '高亮样式（封面边缘橙圈）要在 app.js 里注入');
+  assert.match(source, /@keyframes library-fresh-pulse/, '要有个呼吸感的动画');
+  // v892 那条守卫（app.js 里不许再有搜索用的 is-fresh）不能被这次改动踩到 —— 类名故意避开
+  assert.doesNotMatch(source, /is-fresh/);
 });
 
 test('v935 ⑤：排序口径只有一份，纯函数真跑验序', () => {
