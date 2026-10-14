@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261014-tag-ui-cleanup-v927`（**去掉项目弹窗的「一键识别」按钮；标签面板底部不再显示「AI直接应用」这类废话，只在图片变了/失败/识别中/过期时才出字**；往上叠 v926 的**标签「＋」内联新增 + 动效标签手工加**、v925 的**进度条显示具体哪几张**、v924 的**内容指纹去掉 updated_at**、v923 的**黑名单补价格/百分比**、v922 的**上传未分类红框+拦截+批量**、v918 的**效果类型标签**、v917 的**动态物料抽帧识别**）。⚠️ **手工动效标签这条链要用户先执行 `sql/031_manual_effect_tags.sql`**，否则端点回 503（不静默成功）；部署 `42f9b651`，2026-10-14 本机 wrangler 直发 | 实测 2026-10-14 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261014-chip-x-hover-v928`（**标签上的「×」改成默认藏着、鼠标移上去才出来（触屏一直显示）**；往上叠 v927 的**去掉「一键识别」按钮 + 底部不再显示「AI直接应用」**、v926 的**标签「＋」内联新增 + 动效标签手工加**、v925 的**进度条显示具体哪几张**、v924 的**内容指纹去掉 updated_at**、v923 的**黑名单补价格/百分比**、v922 的**上传未分类红框+拦截+批量**、v918 的**效果类型标签**、v917 的**动态物料抽帧识别**）。⚠️ **手工动效标签这条链要用户先执行 `sql/031_manual_effect_tags.sql`**，否则端点回 503（不静默成功）；部署 `61a584a8`，2026-10-14 本机 wrangler 直发 | 实测 2026-10-14 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true` | 实测 2026-10-10 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
-| 本地工作区 | 分支 `tmp-deploy-v871`，HEAD `40dd964`（v927，含 `dist/`；v926 在其前两个提交）；**已跟踪文件无未提交改动**（`tests/` 下有 51 个从未入库的旧测试文件，一直如此，本轮未动）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-14 |
-| 自动化测试 | `node --test tests/` → **791/791 通过**（v927 新增 `case-tag-ui-cleanup-v927` 7 条；v926 新增 `tag-inline-add-v926` 11 条 + `manual-effect-tags-v926` 22 条；v925 25 条 + v924 14 条 + v923 8 条 + v922 25 条 + v921 14 条 + v920 30 条 + v918 28 条 + v917 23 条 + 更早的都在） | 实测 2026-10-14 |
+| 本地工作区 | 分支 `tmp-deploy-v871`，HEAD `66ec1c4`（v928，含 `dist/`；v927/v926 在其前三个提交）；**已跟踪文件无未提交改动**（`tests/` 下有 51 个从未入库的旧测试文件，一直如此，本轮未动）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-14 |
+| 自动化测试 | `node --test tests/` → **796/796 通过**（v928 新增 `chip-x-hover-v928` 5 条；v927 新增 `case-tag-ui-cleanup-v927` 7 条；v926 新增 `tag-inline-add-v926` 11 条 + `manual-effect-tags-v926` 22 条；v925 25 条 + v924 14 条 + v923 8 条 + v922 25 条 + v921 14 条 + v920 30 条 + v918 28 条 + v917 23 条 + 更早的都在） | 实测 2026-10-14 |
 | 后台识别 worker | **腾讯云已装好并跑通**：`/opt/case-tags/`（脚本 + `_ai.js` + `.local/recognize.env` 0600），主机已装 Node 20.20.2 与 ffmpeg 6.1.1，cron 每 5 分钟一批。⚠️ **worker 上仍是 v924 版脚本**（v926 又改过它、加了 `manual_effect_tags` 保护，需用户重传，见 §11 v926 条） | 实测 2026-10-14 |
 | 逐图 AI 标签覆盖 | **已铺满全库**：`vf_preview_ai_tags` **1942 行 / 98 个案例项目**，**全部 `status='success'`（失败 0）** —— v924 换脚本后原先那 87 张 `.gif` 已全部识别完；`effect_tags` 非空 83 行；**`manual_tags` / `excluded_tags` 非空行仍是 0 行**（人工加标签从未成功落库，见 §11 v926 条） | 实测 2026-10-14（查库） |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
@@ -750,6 +750,15 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
     - 版本号 → `20261014-tag-ui-cleanup-v927`（`TOOL_UI_VERSION`、`index.html` 5 处 `?v=`、16 个测试文件里的旧版本断言一起换）。`npm run build:pages` 已跑、`diff -q` 三处一致。
     - 测试 **791/791**：新增 `tests/case-tag-ui-cleanup-v927.test.mjs`（7 条：头部切片里断言没有按钮/进度条/「一键识别」文案但保留了「⋯」和关闭；`.case-ai-scan-btn` / `recognizeButton` / 旧报错文案全库不存在；run 机制按约定仍在；**真渲面板 HTML** 验「AI直接应用」不再出现、`stale`/`failed`/`running` 三种提醒仍在、`row` 为空时不出状态行；版本号六处同步）。**两条旧断言按新语义反转**：`case-preview-ai-experiment-v870.test.mjs` 的 `assert.match(...,/id="case-ai-recognize-all"/)` 与 `case-ai-write-scope-v908.test.mjs` 的按钮标记断言都改成 `doesNotMatch`，v908 那条的门禁说明也从"一键识别的入口"改成"批量识别的门禁仍在（入口只剩 `startCasePreviewAiRun`）"。
     - ⚠️ **未核实**：真机端到端**没做**（按钮是不是真的不见了、底部小字是不是真的没了，只有"真渲 HTML + 源码切片"这一级证据）；`updateCasePreviewAiRunUi` 等保留函数**没有任何测试覆盖它们"被调用"**（只有"存在"的断言）。
+  - **✅ v928（2026-10-14，已发测试站，部署 `61a584a8`）—— 标签上的「×」不再常驻，鼠标移上去才出来**。用户诉求原话：「我点了加号之后，标签上永远都有叉号了」（附截图：四个标签右边都挂着 ×）。
+    - **根因是我 v926 自己引入的**：v926 删掉「编辑 / 完成」两个按钮时，顺手把 × 的显隐规则也拆了 —— v925 的 CSS 是 `.case-preview-ai-tag.is-editing button { display: inline-flex; }`（**只有编辑态才显示 ×**），v926 直接把 `display: inline-flex` 挪进基础规则里，并在注释里写「× 就是删除入口，必须一直看得见」。用户不要这个常驻感。
+    - **改法（纯 CSS，markup 一行没动）**：`.case-preview-ai-tag button` / `.case-preview-ai-effect-tag button` 加 `opacity: 0` + `transition: opacity .12s`，再用 `:hover button` / `:focus-within button` 露出来；**用 opacity 而不是 `display:none`**，位置照旧占着 ⇒ 露出来时整行不跳。另外补一条 `@media (hover: none) { ... opacity: 1 }`：触屏没有 hover，不这样写 iPad 上就删不掉标签。
+    - **删除能力没变**：人工标签的 `data-preview-manual-remove`、AI 标签的 `data-preview-ai-exclude`、人工动效标签的 `data-preview-effect-manual-remove`、末尾的「＋」都原样在（测试里用**真渲面板 HTML** 断言过）；溢出时那个浮窗（`.case-preview-ai-pop`）里的标签照旧不显示 ×。
+    - 版本号 → `20261014-chip-x-hover-v928`（`TOOL_UI_VERSION`、`index.html` 5 处 `?v=`、17 个测试文件里的旧版本断言一起换）。`npm run build:pages` 已跑、`diff -q` 三处一致。
+    - 测试 **796/796**：新增 `tests/chip-x-hover-v928.test.mjs`（5 条：元素标签与动效标签的 × 默认 `opacity:0` 且各有 hover/focus-within 露出规则、不许改成 `display:none`、触屏媒体查询里一直亮、真渲 HTML 里四个删除/新增入口都还在且 `is-editing` 没回来、版本号六处同步）。
+    - ⚠️ **未核实**：真机上"鼠标移上去 × 才出现"的手感没看过（只有 CSS 源码断言 + 真渲 HTML 这一级证据）；`opacity: 0` 的按钮**仍然可点**（点它 = 排除/删除那个标签），只是看不见 —— 理论上"鼠标扫过去刚好点到"存在误触可能，如果用户反馈误删，改成 `pointer-events` 一并开关即可。
+    - **顺带实测（2026-10-14 18:0x 查库）**：`vf_preview_ai_tags` 里 `manual_tags` 非空的行**仍然是 0 行**（共 1942 行，最近一次 `updated_at` 是 09:10Z，都是 cron worker 的识别写）。⇒ **v926 那个「人工加标签从来没落库」的根因仍未被证伪**，用户也还没确认"打了字按回车"。这一条继续挂在待办里。
+
   - **🚧 用户 2026-10-13 追加的核心痛点：同款的英/阿版本在结果里重复占位**（搜「牛排」出英文版那张、搜「烤肉」出**同一设计的**阿语版那张；根因是逐图各识别一次，同款两版的标签不一致）。规划稿早有对应章节：**§3 设计分组**（分组证据与防连锁误合并）+ **§5 逐图识别如何支持语言版本去重**。
     - **口径（按规划稿，不要改成"硬统一标签"）**：① **结果按"设计组"占位** —— 同款多语言版在结果里只占一个位置（默认展示有证据的 EN 版），组内可展开看其他版本；② **证据分层** —— 其他版本标"同组待核验"，人工确认后才进直接命中。规划稿 §5 明确「**不能让已完成的 EN 标签自动替代失败的 AR 结果**」；硬复制标签会造成假命中（搜烤肉结果里那张其实是牛排版）。
     - **配对证据（按可靠性）**：`vf_asset_previews.language`（en/ar/none/空，AI 识别或手改，空则按文件名兜底）互补 + 同项目 + 同 `material_type`/同尺寸 + 文件名结构（**编号必须保留**，规划稿禁止"删掉数字强行合并"）+ **画面相似度**（要用算法如感知哈希，规划稿明说"模型说很相似不能当可靠概率"）；AI 只作疑难项兜底。防连锁误合并：新成员要跟**组内整体**比（A像B、B像C ≠ A像C）。
