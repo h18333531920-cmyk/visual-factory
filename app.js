@@ -177,6 +177,13 @@ datalist { display: none; }
 .case-head-inline-edit .case-inline-save:disabled { opacity: .6; cursor: wait; }
 .case-head-inline-edit .case-inline-cancel { background: #f1f5f9; color: #475569; }
 .case-head-inline-edit .case-inline-cancel:hover { background: #e2e8f0; }
+/* v937：进编辑态时**只留编辑表单** —— 上面那一段项目信息（标题 / 日期 / 项目链接 ↗ / 物料所有者 /
+   固定标签）和下面的舞台 + 素材列表 + 底栏（AI 标签行 / 下载 / 联系所有者）都收起来。
+   用户口径：「项目展示界面的编辑信息，下面红框里的东西都不要显示出来」（两张截图各框了一块）。
+   只改 display，DOM 与里面的视频/观察者都留着，退出编辑立刻原样回来。 */
+.case-project-modal.is-head-editing .case-project-titlewrap,
+.case-project-modal.is-head-editing .case-project-body,
+.case-project-modal.is-head-editing .case-project-foot { display: none; }
 .case-edit-body .case-field-secondary > span { color: #b7c0cc; font-size: 12px; }
 .case-edit-body .case-field-secondary input { border-color: #f1f4f8; background: #fbfcfd; color: #64748b; }
 .case-side-overlay { position: absolute; left: 0; right: 0; bottom: 0; padding: 24px 8px 7px; background: linear-gradient(to top, rgba(0, 0, 0, 0.74), rgba(0, 0, 0, 0)); opacity: 0; transition: opacity 180ms ease; pointer-events: none; }
@@ -948,7 +955,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-upload-highlight-v936';
+const TOOL_UI_VERSION = '20261014-edit-mode-hide-v937';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -8853,11 +8860,18 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     // 隐藏原有固定标签行，避免编辑时重复显示
     const fixedTags = backdrop.querySelector('.case-project-fixed-tags');
     if (fixedTags) fixedTags.style.display = 'none';
+    // v937：进编辑态时把「项目信息那一段 + 舞台/素材 + 底栏」整块收起来（用户口径：
+    // 「项目展示界面的编辑信息，下面红框里的东西都不要显示出来」）—— 只切一个 class，
+    // 退出编辑（取消 / 保存成功）时原样恢复。
+    const editingChrome = function(on) {
+      if (modal && modal.classList) modal.classList.toggle('is-head-editing', on);
+    };
+    editingChrome(true);
     wireOwnerCombobox(wrap);
     const inlineTagBar = wrap.querySelector('[data-case-inline-tag-bar]');
     wireCaseTagBar(inlineTagBar);
     applyCaseTagBarSelections(inlineTagBar, chipPrefill);
-    const exit = function() { wrap.remove(); if (fixedTags) fixedTags.style.display = ''; if (onCancelled) onCancelled(); };
+    const exit = function() { wrap.remove(); if (fixedTags) fixedTags.style.display = ''; editingChrome(false); if (onCancelled) onCancelled(); };
     wrap.querySelector('[data-inline-cancel]').addEventListener('click', exit);
     const saveBtn = wrap.querySelector('[data-inline-save]');
     saveBtn.addEventListener('click', async function() {
@@ -8893,6 +8907,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         Object.assign(source, result.data);
         wrap.remove();
         if (fixedTags) fixedTags.style.display = '';
+        editingChrome(false);
         if (onSaved) onSaved(result.data);
       } catch (error) {
         alert(error.message || (state.lang === 'zh' ? '保存失败，请重试' : 'Save failed. Please retry.'));
