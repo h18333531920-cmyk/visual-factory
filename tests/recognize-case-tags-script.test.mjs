@@ -39,8 +39,8 @@ import {
   elementVocabularyFromRows,
   effectVocabularyFromRows,
   effectRequestCount,
-  isMissingEffectTagsColumnError,
-  withoutEffectTags,
+  isMissingOptionalColumnError,
+  withoutMissingOptionalColumns,
   analyzeFrameImages,
   EFFECT_VOCABULARY_MAX,
   matchProjectSources,
@@ -580,20 +580,36 @@ test('v918 dry-run：能看出"这次会请求效果标签的有 N 张"，词表
   assert.match(scriptSource, /kind=effect/, '提示词表为空时要说清是 kind=effect 读不到 + 该跑 sql/028');
 });
 
-test('v918 sql/028 没执行时的降级：认出缺列错，并把 effect_tags 从载荷里摘掉重写', () => {
-  assert.equal(isMissingEffectTagsColumnError({
+test('v918/v926 缺列降级：认出是哪一列（effect_tags / manual_effect_tags），摘掉那一列重写', () => {
+  assert.equal(isMissingOptionalColumnError({
     message: "Could not find the 'effect_tags' column of 'vf_preview_ai_tags' in the schema cache"
-  }), true);
-  assert.equal(isMissingEffectTagsColumnError({message: 'column vf_preview_ai_tags.effect_tags does not exist'}), true);
-  assert.equal(isMissingEffectTagsColumnError({message: 'relation "public.vf_preview_ai_tags" does not exist'}), false);
-  assert.equal(isMissingEffectTagsColumnError(new Error('HTTP 500 服务繁忙')), false);
-  assert.equal(isMissingEffectTagsColumnError(null), false);
-  const stripped = withoutEffectTags({ai_tags: ['汉堡'], effect_tags: ['爆炸']});
-  assert.deepEqual(Object.keys(stripped), ['ai_tags'], '只摘 effect_tags，别的列一个不动');
-  assert.deepEqual(withoutEffectTags({ai_tags: []}), {ai_tags: []});
-  assert.deepEqual(withoutEffectTags(null), null);
+  }, 'effect_tags'), true);
+  assert.equal(isMissingOptionalColumnError({message: 'column vf_preview_ai_tags.effect_tags does not exist'}, 'effect_tags'), true);
+  assert.equal(isMissingOptionalColumnError({message: 'relation "public.vf_preview_ai_tags" does not exist'}, 'effect_tags'), false);
+  assert.equal(isMissingOptionalColumnError(new Error('HTTP 500 服务繁忙'), 'effect_tags'), false);
+  assert.equal(isMissingOptionalColumnError(null, 'effect_tags'), false);
+  // v926：两列必须分得清 —— 报 manual_effect_tags 时**不许**认成 effect_tags（下划线处没有词边界）
+  assert.equal(isMissingOptionalColumnError({
+    message: "Could not find the 'manual_effect_tags' column of 'vf_preview_ai_tags' in the schema cache"
+  }, 'manual_effect_tags'), true);
+  assert.equal(isMissingOptionalColumnError({
+    message: "Could not find the 'manual_effect_tags' column of 'vf_preview_ai_tags' in the schema cache"
+  }, 'effect_tags'), false, '摘错列会让另一列永远写不进去');
+
+  const onlyEffect = withoutMissingOptionalColumns(
+    {ai_tags: ['汉堡'], effect_tags: ['爆炸'], manual_effect_tags: ['缩放']},
+    {message: "Could not find the 'effect_tags' column of 'vf_preview_ai_tags' in the schema cache"});
+  assert.deepEqual(Object.keys(onlyEffect).sort(), ['ai_tags', 'manual_effect_tags'], '只摘点名的那一列');
+  const onlyManualEffect = withoutMissingOptionalColumns(
+    {ai_tags: ['汉堡'], effect_tags: ['爆炸'], manual_effect_tags: ['缩放']},
+    {message: "Could not find the 'manual_effect_tags' column of 'vf_preview_ai_tags' in the schema cache"});
+  assert.deepEqual(Object.keys(onlyManualEffect).sort(), ['ai_tags', 'effect_tags']);
+  assert.equal(withoutMissingOptionalColumns({ai_tags: []}, {message: 'HTTP 500 服务繁忙'}), null, '认不出是哪一列就不降级');
+  assert.equal(withoutMissingOptionalColumns({ai_tags: []}, {message: "Could not find the 'effect_tags' column"}), null, '载荷里本来就没有那一列 ⇒ 没什么可摘');
+  assert.equal(withoutMissingOptionalColumns(null, {message: 'x'}), null);
   // 写库通道只有一条：降级也要落在同一个 upsert 里（不许另开一条写路径）
-  assert.match(scriptSource, /return post\(withoutEffectTags\(row\)\)/);
+  assert.match(scriptSource, /return await post\(payload\);/);
+  assert.match(scriptSource, /withoutMissingOptionalColumns\(payload, error\)/);
   assert.equal(scriptSource.split("method: 'POST'").length - 1, 1);
 });
 

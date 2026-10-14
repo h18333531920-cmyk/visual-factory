@@ -963,6 +963,8 @@ const SERVER_ERROR_TRANSLATIONS = {
   '账号权限尚未在这个环境启用': 'Account access is not enabled in this environment yet.',
   '请先登录主站账号': 'Please sign in to the main site first.',
   '登录已失效，请重新登录': 'Your session has expired. Please sign in again.',
+  // v926：动效标签的人工层还没建好（sql/031 没跑）—— 英文界面也要看得懂
+  '人工动效标签还不能用：请在 Supabase 执行 sql/031_manual_effect_tags.sql。': 'Manual motion tags are not available yet: run sql/031_manual_effect_tags.sql in Supabase.',
   '登录服务暂时不可用': 'The sign-in service is temporarily unavailable.',
   '登录已失效': 'Your session has expired.',
   '请先验证开发者密码': 'Please verify the developer password first.',
@@ -4440,11 +4442,34 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   // v918：动效标签（effect_tags）—— 与元素标签**分开取**，不并进 casePreviewAiTags：
   // 元素筛选 chips 那一行用的是元素标签，效果不能混进去（用户口径：效果不进元素筛选那一维）。
   // content_key 过期时同样作废（画面换过了，旧的动效描述不算数）。
-  function casePreviewAiEffectTags(previewId) {
+  // v926：动效标签现在**分两层** —— 人工层 manual_effect_tags（手工加的，单独一列、永不覆盖）
+  // + AI 层 effect_tags。两者都要能搜到、都要能补英文名，但**展示时必须分开**（人工的绿色小 chip + × 可删）。
+  function casePreviewAiEffectTagLayers(previewId) {
     const row = casePreviewAiRow(previewId);
     const preview = state.libraryPreviews.find(function(item) { return item.id === previewId; });
-    if (row && preview && row.content_key && !casePreviewAiContentKeyUnchanged(row.content_key, preview)) return [];
-    return row && Array.isArray(row.effect_tags) ? row.effect_tags.filter(Boolean) : [];
+    const stale = !!(row && preview && row.content_key && !casePreviewAiContentKeyUnchanged(row.content_key, preview));
+    const manual = !stale && row && Array.isArray(row.manual_effect_tags) ? row.manual_effect_tags.filter(Boolean) : [];
+    const manualSet = new Set(manual);
+    // 同一个词两层都出现时只显示一次（人工那层优先 —— 与端点"人工的不进 AI 层"同口径）
+    const ai = (!stale && row && Array.isArray(row.effect_tags) ? row.effect_tags.filter(Boolean) : [])
+      .filter(function(tag) { return !manualSet.has(tag); });
+    return {manual: manual, ai: ai};
+  }
+
+  // 合并口径：搜索文本 / 补翻候选都用它（手工加的词也要能搜到）
+  function casePreviewAiEffectTags(previewId) {
+    const layers = casePreviewAiEffectTagLayers(previewId);
+    return layers.manual.concat(layers.ai);
+  }
+
+  // v926：这张物料是不是动态的（gif / mp4 / mov / webm —— 与识别脚本的 DYNAMIC_EXTENSIONS 同口径）。
+  // 只有动态物料才画「动效标签」那一行：静态图既不会有 AI 动效标签，也不该凭空多出一行加号入口
+  // （一千多张静态图每张都多一行 = 噪音）。
+  const CASE_PREVIEW_AI_DYNAMIC_EXT = ['gif', 'mp4', 'mov', 'webm'];
+  function casePreviewAiDynamicPreview(preview) {
+    const path = String((preview && (preview.preview_path || preview.preview_filename)) || '');
+    const match = path.match(/\.([a-z0-9]+)(?:\?|$)/i);
+    return !!match && CASE_PREVIEW_AI_DYNAMIC_EXT.indexOf(match[1].toLowerCase()) >= 0;
   }
 
   function caseProjectFixedTagsHtml(source) {
@@ -4484,36 +4509,59 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return /manual_tags/i.test(message) && /column|does not exist|schema cache/i.test(message);
   }
 
-  // v918：`effect_tags` 列缺失（sql/028 还没执行）单独认一次 —— 它的降级**不改 previewAiTagsTableReady**：
-  // 这一列是纯附加的，缺了只等于"看不到动效标签"，没理由像 manual_tags 那样把整块标签编辑封住。
-  function isMissingPreviewEffectTagsColumn(error) {
+  // v918 / v926：可选附加列缺失（sql/028 的 effect_tags / sql/031 的 manual_effect_tags）单独认一次 ——
+  // 它们的降级**不改 previewAiTagsTableReady**：这两列是纯附加的，缺了只等于"看不到那一层标签"，
+  // 没理由像 manual_tags 那样把整块标签编辑封住。
+  // `\b` 词边界是关键：`effect_tags` 不许误命中 `manual_effect_tags`（下划线也是 word 字符），
+  // 否则会走错降级分支、多读一轮。
+  function isMissingPreviewOptionalColumn(error, column) {
     const message = String(error && error.message || error || '');
-    return /effect_tags/i.test(message) && /column|does not exist|schema cache/i.test(message);
+    return new RegExp('\\b' + column + '\\b').test(message) && /column|does not exist|schema cache/i.test(message);
   }
 
-  // 逐图标签的字段清单（单项目读与分页读共用）；两道降级各退回一份更短的：
-  //   ① sql/028 没执行（没有 effect_tags）→ 去掉那一列（有 manual_tags）
-  //   ② 再不行（老库连 manual_tags 都没有）→ LEGACY，并标记需补执行 sql/021
-  const PREVIEW_AI_TAGS_SELECT = 'experiment_key,preview_id,source_file_id,ai_tags,manual_tags,excluded_tags,effect_tags,status,model,content_key,run_id,error_message,updated_at';
+  function isMissingPreviewEffectTagsColumn(error) {
+    return isMissingPreviewOptionalColumn(error, 'effect_tags');
+  }
+
+  function isMissingPreviewManualEffectTagsColumn(error) {
+    return isMissingPreviewOptionalColumn(error, 'manual_effect_tags');
+  }
+
+  // 逐图标签的字段清单（单项目读与分页读共用）；三道降级各退回一份更短的：
+  //   ① sql/031 没执行（没有 manual_effect_tags）→ 去掉那一列（还有 effect_tags）
+  //   ② sql/028 也没执行（连 effect_tags 都没有）→ 去掉那一列
+  //   ③ 再不行（老库连 manual_tags 都没有）→ LEGACY，并标记需补执行 sql/021
+  const PREVIEW_AI_TAGS_SELECT = 'experiment_key,preview_id,source_file_id,ai_tags,manual_tags,excluded_tags,effect_tags,manual_effect_tags,status,model,content_key,run_id,error_message,updated_at';
+  const PREVIEW_AI_TAGS_SELECT_NO_MANUAL_EFFECT = 'experiment_key,preview_id,source_file_id,ai_tags,manual_tags,excluded_tags,effect_tags,status,model,content_key,run_id,error_message,updated_at';
   const PREVIEW_AI_TAGS_SELECT_NO_EFFECT = 'experiment_key,preview_id,source_file_id,ai_tags,manual_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at';
   const PREVIEW_AI_TAGS_SELECT_LEGACY = 'experiment_key,preview_id,source_file_id,ai_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at';
   const PREVIEW_AI_TAGS_PAGE_SIZE = 1000;
   const PREVIEW_AI_TAGS_MAX_PAGES = 20;   // 硬上限 2 万行，防异常时分页死循环
 
-  // 三条降级必须保留：① `effect_tags` 列缺失 → 退回不带该列的读法（**不**改 previewAiTagsTableReady：
-  // 它只是少了动效标签这一行，标签编辑照旧可用）；② `manual_tags` 列缺失 → 退回不带该列的读法
-  // （并标记需补执行 sql/021）；③ 表不可用 → previewAiTagsTableReady = false 并返回空，页面其余部分照常。
+  // 四道读法必须保留（每一道都比上一道少一个可选列）：
+  //   ① 全字段；② sql/031 没执行 ⇒ 少 manual_effect_tags；③ sql/028 也没执行 ⇒ 再少 effect_tags；
+  //   ④ 老库连 manual_tags 都没有 ⇒ LEGACY + 标记需补执行 sql/021。
+  // 前两道降级**不**改 previewAiTagsTableReady（只是少了那一层标签，标签编辑照旧可用）；
+  // 只有表不可用才 previewAiTagsTableReady = false 并返回空，页面其余部分照常。
+  // 缺列时把空数组补回行里，这样上层（展示 / 搜索）不用到处判 undefined。
   async function readPreviewAiTagsRows(buildQuery, applyRange) {
     const runQuery = function(select) {
       const query = buildQuery(select);
       return applyRange ? applyRange(query) : query;
     };
     let result = await runQuery(PREVIEW_AI_TAGS_SELECT);
+    if (result.error && isMissingPreviewManualEffectTagsColumn(result.error)) {
+      result = await runQuery(PREVIEW_AI_TAGS_SELECT_NO_MANUAL_EFFECT);
+      if (!result.error) {
+        previewAiTagsTableReady = true;
+        return { rows: (result.data || []).map(function(row) { return Object.assign({manual_effect_tags: []}, row); }) };
+      }
+    }
     if (result.error && isMissingPreviewEffectTagsColumn(result.error)) {
       result = await runQuery(PREVIEW_AI_TAGS_SELECT_NO_EFFECT);
       if (!result.error) {
         previewAiTagsTableReady = true;
-        return { rows: (result.data || []).map(function(row) { return Object.assign({effect_tags: []}, row); }) };
+        return { rows: (result.data || []).map(function(row) { return Object.assign({effect_tags: [], manual_effect_tags: []}, row); }) };
       }
     }
     if (result.error && isMissingPreviewManualTagsColumn(result.error)) {
@@ -4521,7 +4569,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (!result.error) {
         previewAiTagsTableReady = 'needs-manual-tags-column';
         return {
-          rows: (result.data || []).map(function(row) { return Object.assign({manual_tags: [], effect_tags: []}, row); })
+          rows: (result.data || []).map(function(row) { return Object.assign({manual_tags: [], effect_tags: [], manual_effect_tags: []}, row); })
         };
       }
     }
@@ -4996,8 +5044,12 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
      添加成功后输入框**保持打开并清空**，连着加好几个不用重新点 ＋。
      两条标签行（元素 / 动效）共用这一套，差别只有 action 与三个 id —— 全在这张表里。 */
   const CASE_PREVIEW_AI_INLINE_ADD = {
-    element: {kind: 'element', inputId: 'case-preview-ai-add-input', plusId: 'case-preview-ai-add-plus', confirmId: 'case-preview-ai-add-confirm', action: 'manual-add'}
+    element: {kind: 'element', inputId: 'case-preview-ai-add-input', plusId: 'case-preview-ai-add-plus', confirmId: 'case-preview-ai-add-confirm', action: 'manual-add'},
+    // v926：动效标签那一行的人工层 —— 同一个 UI，写的是另一列（manual_effect_tags，sql/031）
+    effect: {kind: 'effect', inputId: 'case-preview-ai-effect-add-input', plusId: 'case-preview-ai-effect-add-plus', confirmId: 'case-preview-ai-effect-add-confirm', action: 'manual-effect-add'}
   };
+  // 人工动效标签的删除按钮属性（元素那层沿用 v870 的 data-preview-manual-remove，别混用）
+  const CASE_PREVIEW_AI_EFFECT_REMOVE_ATTR = 'data-preview-effect-manual-remove';
   // 没提交完的草稿（重画面板会重建 input，草稿留在这里才不会把用户打的字吃掉）
   const casePreviewAiInlineAddDraft = {};
   // 刚点开 ＋ / 刚加完一条：下一次重画把光标放回输入框（连加好几个）
@@ -5142,11 +5194,15 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const aiTags = !stale && row && Array.isArray(row.ai_tags) ? row.ai_tags.filter(Boolean) : [];
     const manualTags = !stale && row && Array.isArray(row.manual_tags) ? row.manual_tags.filter(Boolean) : [];
     const tags = casePreviewAiTags(preview.id);
-    // v918 动效标签（只有动态物料才有；静态物料写的是空数组）—— 与元素标签分开显示，有值才出行
-    const effectTags = casePreviewAiEffectTags(preview.id);
+    // v918 动效标签（只有动态物料才有；静态物料写的是空数组）—— 与元素标签分开显示
+    // v926：分两层显示 —— 人工层（manual_effect_tags，绿色 + × 可删）在前，AI 层（effect_tags）在后；
+    // 只要**任一层有值**就出行，另外动态物料即使两层都还没有值也出行（否则没有 ＋ 入口可点）。
+    const effectLayers = casePreviewAiEffectTagLayers(preview.id);
+    const effectTags = effectLayers.manual.concat(effectLayers.ai);
     const status = casePreviewAiStatusText(row, preview);
     const excluded = row && Array.isArray(row.excluded_tags) ? row.excluded_tags.filter(Boolean) : [];
     const canEdit = canManage && previewAiTagsTableReady === true;
+    const showEffectRow = effectTags.length > 0 || (canEdit && casePreviewAiDynamicPreview(preview));
     panel.dataset.previewId = preview.id;
     // 面板自己的重画入口（＋ 展开 / 回车添加 / 删除标签后都走它），带的是渲染时那一份 preview 与 canManage
     panel.__casePreviewAiRefresh = function() { renderCasePreviewAiPanel(backdrop, preview, canManage); };
@@ -5168,16 +5224,24 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       + (canEdit ? casePreviewAiInlineAddHtml(panel, CASE_PREVIEW_AI_INLINE_ADD.element, state.lang) : '')
       + '</div>'
       + (canManage && previewAiTagsTableReady === 'needs-manual-tags-column' ? '<span class="case-preview-ai-status is-error">需补执行 sql/021</span>' : '')
-      // v918：动效标签独立成行（只在有值时显示），中英双语跟 state.lang
-      + (!effectTags.length ? '' : '<div class="case-preview-ai-effect">'
+      // v918 动效标签独立成行，中英双语跟 state.lang；v926 起这一行也有人工层和它自己的「＋」
+      + (!showEffectRow ? '' : '<div class="case-preview-ai-effect">'
           + '<span class="case-preview-ai-effect-title">' + (state.lang === 'zh' ? '动效标签' : 'Motion tags') + '</span>'
-          + effectTags.map(function(tag) {
+          + effectLayers.manual.map(function(tag) {
+            return '<span class="case-preview-ai-effect-tag is-manual" title="' + (state.lang === 'zh' ? '人工动效标签' : 'Manual motion tag') + '">'
+              + escapeHtml(libraryDisplayLabel(tag))
+              + (canEdit ? '<button type="button" ' + CASE_PREVIEW_AI_EFFECT_REMOVE_ATTR + '="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '删除人工动效标签 ' : 'Remove manual motion tag ') + tag) + '">×</button>' : '')
+              + '</span>';
+          }).join('')
+          + effectLayers.ai.map(function(tag) {
             return '<span class="case-preview-ai-effect-tag" title="' + (state.lang === 'zh' ? '动效/弹窗效果类型（AI 识别）' : 'Motion / effect type (AI)') + '">'
               + escapeHtml(libraryDisplayLabel(tag)) + '</span>';
           }).join('')
+          + (canEdit ? casePreviewAiInlineAddHtml(panel, CASE_PREVIEW_AI_INLINE_ADD.effect, state.lang) : '')
           + '</div>')
       + '<span class="case-preview-ai-status' + (row && row.status === 'failed' ? ' is-error' : '') + '">' + escapeHtml(status) + '</span>';
     wireCasePreviewAiInlineAddInput(panel, CASE_PREVIEW_AI_INLINE_ADD.element);
+    wireCasePreviewAiInlineAddInput(panel, CASE_PREVIEW_AI_INLINE_ADD.effect);
     wireCasePreviewAiHover(panel, manualTags, aiTags, excluded);
   }
 
@@ -9499,6 +9563,24 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     });
     backdrop.addEventListener('click', function(event) {
       if (event.target === backdrop) { closeCaseProjectModal(); return; }
+      // v926：动效标签那一行的人工层删除（元素那条走下面的 data-preview-manual-remove，别混用）
+      const removeManualEffectTag = event.target.closest('[data-preview-effect-manual-remove]');
+      if (removeManualEffectTag) {
+        event.stopPropagation();
+        const panel = removeManualEffectTag.closest('#case-preview-ai-panel');
+        const previewId = panel && panel.dataset.previewId;
+        const tag = removeManualEffectTag.getAttribute('data-preview-effect-manual-remove');
+        if (!previewId || !tag || !panel) return;
+        removeManualEffectTag.disabled = true;
+        postCasePreviewAiTagAction({action: 'manual-effect-remove', previewId: previewId, tag: tag}).then(function() {
+          refreshCasePreviewAiPanel(backdrop, panel);
+          renderLibraryGrid();
+        }).catch(function(error) {
+          removeManualEffectTag.disabled = false;
+          alert(state.lang === 'zh' ? ('标签删除失败：' + (error.message || '请重试')) : ('Failed to remove tag: ' + (error.message || 'Please retry')));
+        });
+        return;
+      }
       const removeManualTag = event.target.closest('[data-preview-manual-remove]');
       if (removeManualTag) {
         event.stopPropagation();

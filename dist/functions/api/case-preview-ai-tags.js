@@ -5,9 +5,12 @@ import {json, requireAdmin, supabaseFetch} from '../_shared.js';
 // 改名 = 现有数据全部读不到，所以不要动它。
 // v918：save 动作额外接收并写入 effect_tags（动效/弹窗的"效果类型"，与 ai_tags 并列的独立一维，
 // 由「动态物料抽帧识别」那条路产出，见 scripts/recognize-case-tags.mjs）；静态物料传空数组。
-// sql/028 没执行（列不存在）时自动降级为"不写这一列"，不报错 —— 见 isMissingEffectTagsColumn。
+// sql/028 没执行（列不存在）时自动降级为"不写这一列"，不报错 —— 见 withoutMissingOptionalColumns。
 // v926：manual-add 只做「加/去重这个词 + 更新 content_key」两件事，**不再因为"画面变过"清空任何字段** ——
 // 用户只是加一个词，不该连这张图上其它人工标签一起清掉、把状态打回待识别（那两条老路径见 status / save）。
+// v926 还有动效标签的**人工层** manual_effect_tags（sql/031，另一个可选列）：只由 manual-effect-add /
+// manual-effect-remove 改动；save（识别流程）原样保留、绝不覆盖，且写 effect_tags 时刨掉人工那层的词
+// （同一条铁律：人工的不进 AI 层）。
 const EXPERIMENT_KEY = 'augpicks-v1';
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[1-5][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
 const STATUSES = new Set(['running', 'failed', 'expired']);
@@ -51,13 +54,35 @@ function contentKeyUnchanged(storedKey, preview) {
   return stored.split('|').slice(0, 2).join('|') === previewContentKey(preview);
 }
 
-// v918：sql/028 还没执行时表里没有 effect_tags 列，带这一列写会被 PostgREST 整条拒掉
-// （PGRST204「Could not find the 'effect_tags' column…」/ 42703）。识别出这种错就**降级**：
-// 去掉这一列重写一次，别的列照常 —— 不报错、只是这轮不写效果标签。
-// `select=*` 读那一侧本来就列无关（列不存在只是读回来没有这个字段），不用改。
-export function isMissingEffectTagsColumn(error) {
+// v918 / v926：这两列是**可选的附加列**（effect_tags 来自 sql/028，manual_effect_tags 来自 sql/031）。
+// 迁移没跑时带这一列写会被 PostgREST 整条拒掉（PGRST204「Could not find the '…' column…」/ 42703），
+// 所以识别出这种错就**降级**：把报文里点名的那一列从载荷里摘掉重写一次，别的列照常 ——
+// 不报错、只是这轮不写那一列。`select=*` 读那一侧本来就列无关，不用改。
+// `\b` 词边界是这里的关键：`effect_tags` 不会误命中 `manual_effect_tags`（下划线也是 word 字符，
+// 两者之间没有边界），否则摘错列 = 另一列永远写不进去。
+export const OPTIONAL_TAG_COLUMNS = ['effect_tags', 'manual_effect_tags'];
+
+export function isMissingOptionalColumn(error, column) {
+  return namesMissingColumn(String(error && error.message || error || ''), column);
+}
+
+function namesMissingColumn(message, column) {
+  return new RegExp('\\b' + column + '\\b').test(message)
+    && /column|does not exist|schema cache|Could not find/i.test(message);
+}
+
+// 摘掉「报文点名的那一列」重写；认不出是哪一列（或那一列本来就不在载荷里）返回 null，调用方照旧抛错。
+export function withoutMissingOptionalColumns(row, error) {
+  if (!row || typeof row !== 'object') return null;
   const message = String(error && error.message || error || '');
-  return /effect_tags/i.test(message) && /column|does not exist|schema cache|Could not find/i.test(message);
+  let next = null;
+  OPTIONAL_TAG_COLUMNS.forEach(function(column) {
+    if (!Object.prototype.hasOwnProperty.call(row, column)) return;
+    if (!namesMissingColumn(message, column)) return;
+    next = next || Object.assign({}, row);
+    delete next[column];
+  });
+  return next;
 }
 
 async function currentFor(env, previewId) {
@@ -77,14 +102,19 @@ async function saveRow(env, row) {
     if (!Array.isArray(rows) || rows.length !== 1) throw new Error('逐图标签保存失败');
     return rows[0];
   };
-  if (!Object.prototype.hasOwnProperty.call(row || {}, 'effect_tags')) return post(row);
-  try {
-    return await post(row);
-  } catch (error) {
-    if (!isMissingEffectTagsColumn(error)) throw error;
-    const {effect_tags, ...rest} = row;   // eslint-disable-line no-unused-vars
-    return post(rest);
+  // 最多重写 OPTIONAL_TAG_COLUMNS.length 次：两个可选列都缺时，第一次被拒只报其中一列，
+  // 所以摘一列重试一列，直到成功或没有可摘的列（那时抛最后一次的错）。
+  let payload = row;
+  for (let attempt = 0; attempt <= OPTIONAL_TAG_COLUMNS.length; attempt += 1) {
+    try {
+      return await post(payload);
+    } catch (error) {
+      const degraded = withoutMissingOptionalColumns(payload, error);
+      if (!degraded) throw error;
+      payload = degraded;
+    }
   }
+  throw new Error('逐图标签保存失败');
 }
 
 export async function handleCasePreviewAiTags(request, env) {
@@ -105,6 +135,9 @@ export async function handleCasePreviewAiTags(request, env) {
       ai_tags: cleanTags(current?.ai_tags),
       manual_tags: cleanTags(current?.manual_tags),
       excluded_tags: cleanTags(current?.excluded_tags),
+      // v926：人工动效层（sql/031 加列）。读不到这一列（迁移没跑）时是 [] + 写被拒 ⇒ saveRow 摘掉重写，
+      // 别的列照常。**识别流程绝不能覆盖它** —— 它只由 manual-effect-* 两个动作改动。
+      manual_effect_tags: cleanTags(current?.manual_effect_tags),
       status: current?.status || 'idle',
       model: String(current?.model || ''),
       content_key: String(current?.content_key || ''),
@@ -132,13 +165,18 @@ export async function handleCasePreviewAiTags(request, env) {
       // manual_tags / excluded_tags 本身照旧原样保留、绝不覆盖。
       const excluded = new Set(base.excluded_tags);
       const manual = new Set(base.manual_tags);
+      // v926：**人工动效标签也是一条"人工"的**（manual_effect_tags）—— effect_tags 里若出现同一个词，
+      // 不进 AI 层（同一条铁律：人工的不进 AI 层，AI 层每次整体覆盖）。它是独立一维，因此**不**并进 ai_tags 的过滤。
+      const manualEffect = new Set(base.manual_effect_tags);
       base.ai_tags = cleanTags(body.tags).filter(tag => !excluded.has(tag) && !manual.has(tag));
       // v918 效果标签（动态物料的"效果类型"，独立一维）：与 ai_tags **同一条去重口径**。
       // **只在调用方真的带了这个字段时才写**（静态物料传 effectTags: []，就是显式清空）：
       // 浏览器那条识别路（v917 起不抽帧）根本没产出效果标签，不带这个字段 ⇒ 这一列不被它清掉。
       if (Object.prototype.hasOwnProperty.call(body, 'effectTags') || Object.prototype.hasOwnProperty.call(body, 'effect_tags')) {
-        base.effect_tags = cleanTags(body.effectTags || body.effect_tags).filter(tag => !excluded.has(tag) && !manual.has(tag));
+        base.effect_tags = cleanTags(body.effectTags || body.effect_tags).filter(tag => !excluded.has(tag) && !manual.has(tag) && !manualEffect.has(tag));
       }
+      // 人工动效层原样保留（base 里带的就是库里那一条），这一行只是把"绝不覆盖"写明白
+      base.manual_effect_tags = cleanTags(base.manual_effect_tags);
       base.status = 'success';
       base.model = String(body.model || 'glm-4v-flash').slice(0, 80);
       base.content_key = contentKey;
@@ -174,6 +212,34 @@ export async function handleCasePreviewAiTags(request, env) {
       const tag = String(body.tag || '').trim();
       if (!tag || tag.length > 12) return json({success: false, message: '标签无效'}, 400);
       base.manual_tags = base.manual_tags.filter(value => value !== tag);
+      return json({success: true, row: await saveRow(env, base)});
+    }
+
+    // v926：动效标签那一行的人工层（manual_effect_tags，sql/031）—— 与元素那两条完全对称，
+    // 只是写的是另一列。人工加的词**不进 effect_tags**（那是 AI 层，每次重识别整体覆盖）。
+    if (action === 'manual-effect-add') {
+      const tag = String(body.tag || '').trim();
+      if (!tag || tag.length > 12) return json({success: false, message: '标签无效'}, 400);
+      // 这一列还没建立时（sql/031 没跑）**明说**，别让用户以为加成功了 ——
+      // 写进去也会被 saveRow 的降级摘掉、界面上什么都不出现，正是用户抱怨的那类"刷新就没了"。
+      // 判据：库里这一行**读得到**却没有这个字段 ⇒ 列不存在（select=* 是列无关读法）。
+      if (current && !Object.prototype.hasOwnProperty.call(current, 'manual_effect_tags')) {
+        return json({success: false, message: '人工动效标签还不能用：请在 Supabase 执行 sql/031_manual_effect_tags.sql。'}, 503);
+      }
+      // 同一个词只留一份：加进人工层就把它从 AI 层摘掉（与元素那条 manual-add 同口径）。
+      // 只有这一列**真的读到过**才动它 —— 读不到 = 不带这一列 = 库里原样保留，绝不拿空数组起底（v864 的教训）。
+      if (Array.isArray(current?.effect_tags)) {
+        base.effect_tags = cleanTags(current.effect_tags).filter(value => value !== tag);
+      }
+      base.manual_effect_tags = cleanTags(base.manual_effect_tags.concat(tag));
+      base.excluded_tags = base.excluded_tags.filter(value => value !== tag);
+      return json({success: true, row: await saveRow(env, base)});
+    }
+
+    if (action === 'manual-effect-remove') {
+      const tag = String(body.tag || '').trim();
+      if (!tag || tag.length > 12) return json({success: false, message: '标签无效'}, 400);
+      base.manual_effect_tags = base.manual_effect_tags.filter(value => value !== tag);
       return json({success: true, row: await saveRow(env, base)});
     }
 

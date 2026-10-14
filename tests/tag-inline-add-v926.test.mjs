@@ -38,7 +38,7 @@ const INLINE_ADD_EXPORTS = ';({CASE_PREVIEW_AI_INLINE_ADD, casePreviewAiInlineAd
 const escapeHtml = (value) => String(value == null ? '' : value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-function loadInlineAdd({lang = 'zh', row = null, tags = [], reject = ''} = {}) {
+function loadInlineAdd({lang = 'zh', row = null, tags = [], reject = '', effectManual = [], effectAi = [], dynamic = false} = {}) {
   const start = source.indexOf(SLICE_START);
   const end = source.indexOf(SLICE_END);
   assert.ok(start > 0 && end > start, 'v926 的「＋」片段必须切得出来');
@@ -52,7 +52,9 @@ function loadInlineAdd({lang = 'zh', row = null, tags = [], reject = ''} = {}) {
     libraryDisplayLabel: (value) => String(value == null ? '' : value),
     casePreviewAiRow: () => row,
     casePreviewAiTags: () => tags,
-    casePreviewAiEffectTags: () => [],
+    // 动效那两层由外部注入（这两个取值函数在切片之外，属 v926 第二部分）
+    casePreviewAiEffectTagLayers: () => ({manual: effectManual, ai: effectAi}),
+    casePreviewAiDynamicPreview: () => dynamic,
     casePreviewAiStatusText: () => (lang === 'zh' ? '未识别' : 'Not analyzed'),
     casePreviewAiContentKeyUnchanged: () => true,
     wireCasePreviewAiHover: () => {},

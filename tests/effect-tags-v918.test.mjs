@@ -280,16 +280,23 @@ test('v918 端点 save：sql/028 没执行（PGRST204 缺列）时摘掉该列�
   assert.equal(data.success, true);
 });
 
-test('v918 端点源码：缺列只认这一种错（别的错误照旧抛出去）', () => {
-  assert.match(endpointSource, /export function isMissingEffectTagsColumn\(error\)/);
-  assert.match(endpointSource, /\/effect_tags\/i\.test\(message\) && \/column\|does not exist\|schema cache\|Could not find\/i\.test\(message\)/);
-  assert.match(endpointSource, /const \{effect_tags, \.\.\.rest\} = row;[\s\S]{0,60}return post\(rest\);/);
-  // exclude / manual-remove / restore 这些动作的载荷里**不许**带 effect_tags
-  // （merge-duplicates 只动带上的列 ⇒ 不带就等于原样保留，这正是我们要的）
+test('v918 端点源码：缺列只认那一种错（别的错误照旧抛出去）', () => {
+  // v926：这一列不再是"唯一"的可选列（多了 manual_effect_tags）⇒ 降级改成通用的"摘掉报文点名的那一列"
+  assert.match(endpointSource, /export const OPTIONAL_TAG_COLUMNS = \['effect_tags', 'manual_effect_tags'\];/);
+  assert.match(endpointSource, /export function isMissingOptionalColumn\(error, column\)/);
+  assert.match(endpointSource, /new RegExp\('\\\\b' \+ column \+ '\\\\b'\)\.test\(message\)/);
+  assert.match(endpointSource, /export function withoutMissingOptionalColumns\(row, error\)/);
+  assert.match(endpointSource, /delete next\[column\];/);
+  // exclude 这个动作的载荷里**不许**带 effect_tags（merge-duplicates 只动带上的列 ⇒ 不带就等于原样保留）
   const excludeBlock = endpointSource.slice(endpointSource.indexOf("if (action === 'exclude')"), endpointSource.indexOf("if (action === 'manual-add')"));
-  const tailBlock = endpointSource.slice(endpointSource.indexOf("if (action === 'manual-remove')"));
   assert.doesNotMatch(excludeBlock, /effect_tags/);
-  assert.doesNotMatch(tailBlock, /effect_tags/);
+  // v926：manual-effect-add 是**故意**带 effect_tags 的（同一个词只留一份：加进人工层就从 AI 层摘掉），
+  // 所以这里只锁「别把 report 里没点名的列也顺手带上」这一层语义 —— manual-remove / restore 仍不许带。
+  const manualRemoveBlock = endpointSource.slice(endpointSource.indexOf("if (action === 'manual-remove')"), endpointSource.indexOf("if (action === 'manual-effect-add')"));
+  const restoreBlock = endpointSource.slice(endpointSource.indexOf("if (action === 'restore')"));
+  assert.doesNotMatch(manualRemoveBlock, /base\.effect_tags = /, '删人工元素标签不该动 AI 动效层');
+  assert.doesNotMatch(restoreBlock, /base\.effect_tags = /, '撤销排除不该动 AI 动效层');
+  assert.doesNotMatch(restoreBlock, /manual_effect_tags/, '撤销排除也不该动人工动效层');
   // v926 改口径：manual-add **不再清任何字段**（只加词 + 更新 content_key）。
   // 「画面变过就作废」现在只留在 status / save 两条识别流程路径上（v870 / v924 两个文件的用例守着）。
   const manualAddBlock = endpointSource.slice(endpointSource.indexOf("if (action === 'manual-add')"), endpointSource.indexOf("if (action === 'manual-remove')"));
@@ -301,10 +308,13 @@ test('v918 端点源码：缺列只认这一种错（别的错误照旧抛出去
 
 /* ── 6) 前端：展示一行 + 可搜索 + 词表页标记 ───────────────────────────── */
 
-test('v918 前端展示：项目浮窗多一行「动效标签」，只在有值时显示，中英双语', () => {
-  assert.match(appSource, /const effectTags = casePreviewAiEffectTags\(preview\.id\);/);
+test('v918 前端展示：项目浮窗多一行「动效标签」，无值且非动态物料就不出现，中英双语', () => {
+  // v926：这一行改成分两层取（人工层 + AI 层），可见性也带上"动态物料即使还没值也出行"（否则没有 ＋ 入口）
+  assert.match(appSource, /const effectLayers = casePreviewAiEffectTagLayers\(preview\.id\);/);
+  assert.match(appSource, /const effectTags = effectLayers\.manual\.concat\(effectLayers\.ai\);/);
+  assert.match(appSource, /const showEffectRow = effectTags\.length > 0 \|\| \(canEdit && casePreviewAiDynamicPreview\(preview\)\);/);
   assert.match(appSource, /'<span class="case-preview-ai-effect-title">' \+ \(state\.lang === 'zh' \? '动效标签' : 'Motion tags'\)/);
-  assert.match(appSource, /\(!effectTags\.length \? '' : '<div class="case-preview-ai-effect">'/, '没值就整行不出现');
+  assert.match(appSource, /\(!showEffectRow \? '' : '<div class="case-preview-ai-effect">'/, '没有值又不是动态物料就整行不出现');
   assert.match(appSource, /case-preview-ai-effect-tag/);
   assert.match(appSource, /\.case-preview-ai-effect \{ grid-column: 1 \/ -1;/, '新行占满整行，不挤坏原来那行标签');
 });

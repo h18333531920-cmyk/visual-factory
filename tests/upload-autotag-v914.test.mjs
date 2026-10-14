@@ -322,8 +322,9 @@ test('v914 两边口径一致：同一份 current + 同一批模型标签，端�
 test('v914 口径的源码锚点：两边都按 manual_tags 过滤（改动一处就会被这条抓住）', () => {
   const endpoint = readFileSync(join(here, '..', 'functions', 'api', 'case-preview-ai-tags.js'), 'utf8');
   const script = readFileSync(join(here, '..', 'scripts', 'recognize-case-tags.mjs'), 'utf8');
-  assert.match(endpoint, /const manual = new Set\(base\.manual_tags\);[\s\S]{0,200}?cleanTags\(body\.tags\)\.filter\(tag => !excluded\.has\(tag\) && !manual\.has\(tag\)\)/);
-  assert.match(script, /const manualSet = new Set\(manualTags\);[\s\S]{0,200}?cleanTags\(tags\)\.filter\(tag => !excludedSet\.has\(tag\) && !manualSet\.has\(tag\)\)/);
+  // v926：两条过滤之间多了一行「人工动效层 manual_effect_tags」（人工的不进 AI 层），所以窗口放宽到 600
+  assert.match(endpoint, /const manual = new Set\(base\.manual_tags\);[\s\S]{0,600}?cleanTags\(body\.tags\)\.filter\(tag => !excluded\.has\(tag\) && !manual\.has\(tag\)\)/);
+  assert.match(script, /const manualSet = new Set\(manualTags\);[\s\S]{0,600}?cleanTags\(tags\)\.filter\(tag => !excludedSet\.has\(tag\) && !manualSet\.has\(tag\)\)/);
   // manual_tags / excluded_tags 照旧原样保留、绝不覆盖
   assert.match(endpoint, /manual_tags: cleanTags\(current\?\.manual_tags\)/);
   assert.match(script, /manual_tags: manualTags,/);
