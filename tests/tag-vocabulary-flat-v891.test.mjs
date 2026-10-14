@@ -29,6 +29,9 @@ function loadVocabularyUi(rows, options = {}) {
     TAG_TRANSLATE_MAX_CHARS: 20,
     // v913：改名/删除进行中的那一行（'' = 没有操作在进行）
     tagVocabularyManageBusy: options.busy || '',
+    // v920：使用量视图（sql/030）。options.usage 不传 = 视图没跑的那种降级态（不显示数字）
+    tagVocabularyUsageMap: options.usage || null,
+    tagVocabularyUsageReady: options.usageReady === undefined ? null : options.usageReady,
     escapeHtml: value => String(value == null ? '' : value),
     escapeAttr: value => String(value == null ? '' : value)
   });

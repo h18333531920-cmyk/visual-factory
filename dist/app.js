@@ -451,8 +451,15 @@ html body .library-page:not(.library-page-home) .library-pin-strip::before {
 .tag-vocabulary-section .tv-message { margin-bottom: 10px; padding: 8px 10px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 12.5px; color: #475569; }
 .tag-vocabulary-section .tv-hint { margin: 10px 0 0; font-size: 11.5px; color: #94a3b8; line-height: 1.6; }
 .tag-vocabulary-section .tv-en-cell { position: relative; }
-.tag-vocabulary-section .tv-zh-cell { position: relative; }
-.tag-vocabulary-section .tv-mark { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 10.5px; color: #94a3b8; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 999px; padding: 0 6px; pointer-events: none; }
+.tag-vocabulary-section .tv-zh-cell { position: relative; display: flex; align-items: center; gap: 6px; }
+.tag-vocabulary-section .tv-zh-cell .tv-zh { flex: 1 1 auto; }
+.tag-vocabulary-section .tv-mark { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 10.5px; color: #94a3b8; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 999px; padding: 0 6px; pointer-events: none; white-space: nowrap; }
+/* 中文名那一格改成横排后，「动效」标记不再浮在右上角，而是跟在数字后面（不挡住数字） */
+.tag-vocabulary-section .tv-zh-cell .tv-mark { position: static; top: auto; right: auto; transform: none; }
+/* v920：中文名后面的「使用量」小徽章（这个词被几个物料用到，实时来自 sql/030 的视图）——
+   轻一点，别喧宾夺主：小号灰字 + 浅底；数字为 0 的转成红字（一眼看出孤儿词）。 */
+.tag-vocabulary-section .tv-usage { flex: 0 0 auto; font-size: 10.5px; line-height: 1.5; color: #64748b; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 999px; padding: 0 7px; white-space: nowrap; cursor: help; }
+.tag-vocabulary-section .tv-usage-zero { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
 /* v918：kind='effect' 的行在中文名后面挂个「动效」小标记（效果词表是人工维护的受控词表） */
 .tag-vocabulary-section .tv-mark-effect { color: #6d28d9; background: #f5f3ff; border-color: #ddd6fe; }
 .tag-vocabulary-section .tv-btn.tv-danger { color: #b91c1c; border-color: #fecaca; }
@@ -885,7 +892,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-force-dynamic-v919';
+const TOOL_UI_VERSION = '20261014-tag-usage-v920';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -16847,10 +16854,16 @@ function libraryTagsForForm(formData, kind) {
   let tagVocabularySuggestingId = '';   // 正在问 AI 相关词的那一行（防止重复点击）
   // v912：sql/027 的改名/删除 RPC 可用吗。null = 还没试过；false = 不可用（中文名只读、隐藏删除按钮）
   let tagVocabularyManageReady = null;
+  // v920：使用量（sql/030 的视图 public.vf_tag_usage）
+  //   tagVocabularyUsageMap  中文名 → {materials, projects}；null = 还没读到 / 读不到（就不显示数字）
+  //   tagVocabularyUsageReady null = 还没试过；false = 视图读不到（sql/030 没跑 / 没放行 ⇒ 只挂一句轻提示）
+  let tagVocabularyUsageMap = null;
+  let tagVocabularyUsageReady = null;
   const TAG_VOCABULARY_IGNORED = 'ignored';
   const TAG_VOCABULARY_RELATED_MAX = 8;                       // 一行最多 8 个相关词（再多会拖慢搜索）
   const TAG_VOCABULARY_RELATED_ENDPOINT = '/api/tag-vocabulary-related';
   const TAG_VOCABULARY_BUSY_TIMEOUT = 60000;                  // v913：进行中态兜底解锁（毫秒）
+  const TAG_USAGE_VIEW = 'vf_tag_usage';                      // v920：sql/030 建的使用量视图
 
   // v913：改名/删除是"全库级"的往返（锁竞争下慢到分钟级，HANDOVER §11 记过 180 秒）。
   // 万一请求再也不回来，别让整张表被永久禁用 —— 到点自动解锁并重画一次。
@@ -16914,11 +16927,44 @@ function libraryTagsForForm(formData, kind) {
     return Array.isArray(result.data) ? result.data : [];
   }
 
+  // v920：读一次使用量视图（sql/030_tag_usage.sql 建的 public.vf_tag_usage）。
+  //   为什么是**视图**：使用量必须实时算（存成一列一定会过期 —— 上传、删物料、识别、改名、删标签
+  //   每一处都得记得更新它）。视图每次查询现算，永远和真身一致。
+  //   一次查询拿全部行（341 行量级，上限放到 2000），存成「中文名 → {materials, projects}」的 map。
+  async function fetchTagUsageMap() {
+    if (!state.supabase) return null;
+    const result = await state.supabase.from(TAG_USAGE_VIEW)
+      .select('name_zh,materials,projects')
+      .limit(2000);
+    if (result.error) throw result.error;
+    const map = Object.create(null);
+    (Array.isArray(result.data) ? result.data : []).forEach(function(row) {
+      const name = String((row && row.name_zh) || '').trim();
+      if (!name) return;
+      map[name] = { materials: Number(row.materials) || 0, projects: Number(row.projects) || 0 };
+    });
+    return map;
+  }
+
+  // 读不到使用量就**静默降级**（sql/030 还没执行 / 代理没放行 / 查询失败）：
+  // 词表页照常打开，只是不显示数字，另挂一句轻提示（不是红色错误块）。
+  async function reloadTagUsage() {
+    try {
+      tagVocabularyUsageMap = await fetchTagUsageMap();
+      tagVocabularyUsageReady = true;
+    } catch (error) {
+      tagVocabularyUsageMap = null;
+      tagVocabularyUsageReady = false;
+    }
+  }
+
   // v913：options.keepMessage = 重读但**保留并继续显示**上一条结果消息。
   // 改名/删除走这条（结果消息是「已改名：素材 N 条…」，被清掉用户就完全看不到反馈了）；
   // 普通「刷新」按钮不传 ⇒ 照旧清空消息。
   async function reloadTagVocabulary(section, options) {
     const keepMessage = !!(options && options.keepMessage);
+    // v920：使用量和词表**并行**读（多一次查询而已）；它自己的失败在 reloadTagUsage 里吞掉，不阻塞词表
+    const usageTask = reloadTagUsage();
     try {
       tagVocabularyRows = await fetchTagVocabularyRows();
       if (!keepMessage) tagVocabularyMessage = '';
@@ -16928,6 +16974,7 @@ function libraryTagsForForm(formData, kind) {
         ? (state.lang === 'zh' ? '标签词表还没建：请在 Supabase SQL Editor 执行 sql/022_tag_vocabulary.sql。' : 'Table missing; run sql/022_tag_vocabulary.sql.')
         : (state.lang === 'zh' ? ('标签词表读取失败：' + (error.message || '').slice(0, 60)) : 'Failed to load the vocabulary.');
     }
+    await usageTask;
     renderTagVocabularySection(section || document.getElementById('tag-vocabulary-section'));
   }
 
@@ -16982,6 +17029,34 @@ function libraryTagsForForm(formData, kind) {
     return out;
   }
 
+  // v920：中文名后面那个「使用量」徽标的文案 —— **纯函数**（只看传进来的三样东西，方便单测）。
+  //   返回 null = 这一行**不显示数字**：
+  //     · 这个词没有中文名；
+  //     · usageMap 是 null（sql/030 的视图没跑 / 读不到 ⇒ 整列都不显示，不报错）；
+  //     · 视图里没有这个词（刚改完名还没同步到视图 —— 显示 0 会误导，宁可不显示）。
+  //   返回对象 = 要渲染的徽标：
+  //     text   徽标上的字：被几个**物料**用到；一个都没用到时是「未使用 / unused」
+  //     isZero 这个数字是 0（渲染时标红 —— 这是用户要的核心信息：一眼看出孤儿词）
+  //     title  悬停明细「物料 N 个 · 项目 M 个」（跟界面语言走）
+  function tagUsageBadge(row, usageMap, lang) {
+    const name = String((row && row.name_zh) || '').trim();
+    if (!name) return null;
+    if (!usageMap || typeof usageMap !== 'object') return null;
+    const usage = usageMap[name];
+    if (!usage) return null;
+    const materials = Math.max(0, Number(usage.materials) || 0);
+    const projects = Math.max(0, Number(usage.projects) || 0);
+    const zh = lang !== 'en';
+    const unused = materials === 0 && projects === 0;
+    return {
+      text: unused ? (zh ? '未使用' : 'unused') : String(materials),
+      isZero: materials === 0,
+      title: zh
+        ? ('物料 ' + materials + ' 个 · 项目 ' + projects + ' 个' + (unused ? '（还没被任何物料或项目用到）' : ''))
+        : (materials + ' assets · ' + projects + ' projects' + (unused ? ' (not used yet)' : ''))
+    };
+  }
+
   function tagVocabularyRowsHtml() {
     const zh = state.lang === 'zh';
     const editable = tagVocabularyCanManage();
@@ -16999,12 +17074,18 @@ function libraryTagsForForm(formData, kind) {
       // v913：操作进行中（改名等数据库往返）⇒ 整张表的输入与删除按钮都禁用，挡住连点两次
       const busy = !!tagVocabularyManageBusy;
       const rowBusy = busy && String(row.name_zh || '') === tagVocabularyManageBusy;
+      // v920：使用量小徽章（数字为 0 标红）。读不到视图 / 视图里没这个词时 usageBadge = null ⇒ 什么都不渲染。
+      //       它是按行算的，所以搜索结果过滤之后每一行照样带着自己的数字。
+      const usageBadge = tagUsageBadge(row, tagVocabularyUsageMap, state.lang);
+      const usageMark = usageBadge
+        ? '<span class="tv-usage' + (usageBadge.isZero ? ' tv-usage-zero' : '') + '" title="' + escapeAttr(usageBadge.title) + '">' + escapeHtml(usageBadge.text) + '</span>'
+        : '';
       // v912：中文名可改（改名 = 全库改名，走 vf_rename_tag）；没维护权限 / sql/027 没执行时是只读文本
       const zhCell = editable
         ? '<input class="tv-zh" data-tv-zh="' + escapeAttr(row.id) + '" value="' + escapeAttr(row.name_zh) + '" title="'
             + escapeAttr(zh ? '改这里 = 全库改名（所有挂了它的物料一起改），不可撤销' : 'Rename everywhere (every asset using it), cannot be undone') + '"'
-            + (busy ? ' disabled' : '') + '>'
-        : '<span class="tv-zh-text">' + escapeHtml(row.name_zh) + '</span>';
+            + (busy ? ' disabled' : '') + '>' + usageMark
+        : '<span class="tv-zh-text">' + escapeHtml(row.name_zh) + '</span>' + usageMark;
       const opsCell = editable
         ? '<button type="button" class="tv-btn tv-danger" data-tv-delete="' + escapeAttr(row.id) + '" title="'
             + escapeAttr(zh ? '把这个词从所有物料上摘掉，并从词表移除' : 'Remove this tag from every asset and from the vocabulary') + '"'
@@ -17039,7 +17120,9 @@ function libraryTagsForForm(formData, kind) {
     return ''
       + (tagVocabularyMessage ? '<div class="tv-message">' + escapeHtml(tagVocabularyMessage) + '</div>' : '')
       + (tagVocabularyRelatedReady === true ? '' : '<div class="tv-message">' + (zh ? '相关词这一列还读不到：请在 Supabase SQL Editor 执行 sql/024_tag_vocabulary_related.sql，再点「刷新」。' : 'Related words need sql/024_tag_vocabulary_related.sql; run it, then refresh.') + '</div>')
-      + (tagVocabularyManageReady === false ? '<div class="tv-message">' + (zh ? '改名 / 删除不可用：需要先在 Supabase 执行 sql/027_tag_manage.sql，再点「刷新」。' : 'Rename/remove needs sql/027_tag_manage.sql; run it, then refresh.') + '</div>' : '');
+      + (tagVocabularyManageReady === false ? '<div class="tv-message">' + (zh ? '改名 / 删除不可用：需要先在 Supabase 执行 sql/027_tag_manage.sql，再点「刷新」。' : 'Rename/remove needs sql/027_tag_manage.sql; run it, then refresh.') + '</div>' : '')
+      // v920：使用量视图读不到（sql/030 还没执行 / 代理没放行）⇒ 只挂一句轻提示（灰底，不是红色错误块）
+      + (tagVocabularyUsageReady === false ? '<div class="tv-message">' + (zh ? '「使用量」这个数字还读不到：需要先在 Supabase 执行 sql/030_tag_usage.sql（实时视图），再点「刷新」。' : 'Usage counts need sql/030_tag_usage.sql; run it, then refresh.') + '</div>' : '');
   }
 
   function tagVocabularyHtml() {
@@ -17070,8 +17153,8 @@ function libraryTagsForForm(formData, kind) {
       + '<th class="tv-ops">' + (zh ? '操作' : 'Actions') + '</th>'
       + '</tr></thead><tbody id="tv-table-body">' + tagVocabularyRowsHtml() + '</tbody></table>'
       + '<p class="tv-hint">' + (zh
-          ? '这张表 = 站内正在用的标签，由数据库自动同步（sql/025：上传/识别出新标签立刻进表；物料删掉后没人用的标签自动移除）。你维护三件事：① 中文名（改 = 全库改名，所有挂了这个标签的物料一起改，不可撤销；新名字若已存在，两个标签会合并）② 英文名（管双语显示和「搜英文命中中文」）③ 相关词（搜这个词时这些词也算命中，例：给「甜点」填 蛋挞、蛋糕，逗号分隔最多 8 个）。每行「删除」= 把这个标签从所有物料上摘掉（物料和图片不会被删）并从词表移除，不可撤销。'
-          : 'This table mirrors the tags in use and is synced by the database (sql/025). You maintain three things: the Chinese name (renaming applies to every asset using the tag, and cannot be undone), the English name (bilingual display + English search) and related words (comma separated, up to 8). "Remove" takes the tag off every asset (assets and images are kept) and deletes it from the vocabulary.') + '</p>'
+          ? '这张表 = 站内正在用的标签，由数据库自动同步（sql/025：上传/识别出新标签立刻进表；物料删掉后没人用的标签自动移除）。你维护三件事：① 中文名（改 = 全库改名，所有挂了这个标签的物料一起改，不可撤销；新名字若已存在，两个标签会合并）② 英文名（管双语显示和「搜英文命中中文」）③ 相关词（搜这个词时这些词也算命中，例：给「甜点」填 蛋挞、蛋糕，逗号分隔最多 8 个）。每行「删除」= 把这个标签从所有物料上摘掉（物料和图片不会被删）并从词表移除，不可撤销。中文名后面那枚小徽章 = 这个词被几个物料用到（实时算，sql/030）；标红 / 「未使用」= 一个物料都没用到，就是该清理的孤儿词；悬停看「物料 N 个 · 项目 M 个」。'
+          : 'This table mirrors the tags in use and is synced by the database (sql/025). You maintain three things: the Chinese name (renaming applies to every asset using the tag, and cannot be undone), the English name (bilingual display + English search) and related words (comma separated, up to 8). "Remove" takes the tag off every asset (assets and images are kept) and deletes it from the vocabulary. The small badge after the Chinese name is how many assets use the tag (live, sql/030); red / "unused" means nothing uses it yet — a tag to clean up; hover for "N assets · M projects".') + '</p>'
       + '</div>';
   }
 

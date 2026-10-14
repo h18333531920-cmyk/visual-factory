@@ -126,6 +126,9 @@ function loadVocabularyUi(options = {}) {
     tagVocabularySuggestingId: '',
     tagVocabularyRelatedReady: true,
     tagVocabularyManageReady: null,
+    // v920：使用量视图（sql/030）—— 这里不传 = 降级态（视图没跑时不显示数字）
+    tagVocabularyUsageMap: null,
+    tagVocabularyUsageReady: null,
     tagVocabularyCanManage: () => true,
     TAG_VOCABULARY_IGNORED: 'ignored',
     TAG_VOCABULARY_RELATED_MAX: 8,
@@ -262,7 +265,7 @@ test('v913 别弄坏：英文名 / 相关词保存、补翻译、同步、搜索
 });
 
 test('v913 版本号六处同步', () => {
-  const refs = indexSource.match(/\?v=20261014-force-dynamic-v919/g) || [];
+  const refs = indexSource.match(/\?v=20261014-tag-usage-v920/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-force-dynamic-v919'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-tag-usage-v920'/);
 });

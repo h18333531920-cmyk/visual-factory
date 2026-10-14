@@ -1,6 +1,9 @@
 import {accountFeatures} from './_account-features.js';
 import { fail } from './_account-access.js';
-const tables = new Set(['vf_profiles','vf_projects','vf_categories','vf_library_options','vf_source_files','vf_asset_previews','vf_asset_favorites','vf_asset_events','vf_team_members','vf_material_catalog','vf_preview_ai_tags','vf_tag_vocabulary']);
+// v920：vf_tag_usage 是 sql/030 建的**视图**（标签使用量，实时算）—— 对 PostgREST 就是一个可读表，
+// 所以照「固定名字」的口径放进来。⚠️ 口径不变：**只放行这几个写死的名字，绝不放宽成通配**
+// （视图中途不存在时 PostgREST 自己会返回 404，前端按"读不到就降级"处理）。
+const tables = new Set(['vf_profiles','vf_projects','vf_categories','vf_library_options','vf_source_files','vf_asset_previews','vf_asset_favorites','vf_asset_events','vf_team_members','vf_material_catalog','vf_preview_ai_tags','vf_tag_vocabulary','vf_tag_usage']);
 const ownsPath = (path,id) => typeof path === 'string' && path.startsWith(id + '/') && !path.split('/').some(p=>p==='.'||p==='..');
 const safePath = path => typeof path === 'string' && path.length > 0 && !path.startsWith('/') && !path.includes('\\') && !path.split('/').some(p=>p==='.'||p==='..');
 export function dataPlan(ctx, path, method, base, headers) {
