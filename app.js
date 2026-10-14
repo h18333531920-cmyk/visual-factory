@@ -222,6 +222,26 @@ datalist { display: none; }
 .case-drop-type[data-gallery-type-chip] { opacity: 1; }
 .case-drop-type.is-detecting { background: rgba(37, 99, 235, 0.72); }
 .case-drop-card:hover .case-drop-type, .case-drop-card:focus-within .case-drop-type { opacity: 1; }
+/* v922：上传网格里「未分类」的卡片 = 红框 + 浅红底 + 常显的红 chip（检测出分类后 is-untyped 会摘掉）。
+   红只挂在卡片的 is-untyped 上：图库那条「未分类」chip 是正常状态，不该跟着变红。 */
+.case-drop-card.is-untyped .case-drop-thumb { border: 2px solid #dc2626; background: #fff1f2; }
+.case-drop-card.is-untyped .case-drop-type { opacity: 1; }
+.case-drop-card.is-untyped .case-drop-type.untyped { background: #dc2626; }
+.case-drop-card.is-untyped-focus .case-drop-thumb { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.35); }
+/* 批量设置分类：勾选框沿用素材库详情里那套（v813）：只在批量模式下显示 */
+.case-drop-check { display: none; position: absolute; top: 6px; left: 6px; z-index: 3; width: 17px; height: 17px; border-radius: 5px; border: 1.5px solid #fff; background: rgba(15, 23, 42, 0.34); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25); }
+.case-drop-grid.is-batch-selecting .case-drop-check { display: block; }
+.case-drop-card.is-picked .case-drop-check { border-color: #16a34a; background: #16a34a; }
+.case-drop-card.is-picked .case-drop-check::after { content: ''; position: absolute; left: 4.6px; top: 1.4px; width: 4.6px; height: 8.4px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(42deg); }
+.case-drop-card.is-picked .case-drop-thumb { box-shadow: 0 0 0 2px #16a34a; }
+.case-drop-batch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 14px 0; }
+.case-drop-batch[hidden] { display: none !important; }
+.case-drop-batch-hint { font-size: 11.5px; color: #64748b; }
+.case-drop-batch-hint.is-warning { color: #dc2626; }
+.case-drop-batch-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; padding-left: 10px; border-left: 1px solid #eceff3; }
+.case-drop-batch-actions[hidden] { display: none !important; }
+.case-drop-batch-count { font-size: 11.5px; color: #64748b; white-space: nowrap; }
+.case-drop-batch-actions .case-tool-btn:disabled { color: #cbd5e1; border-color: #eef1f5; background: #fafbfc; cursor: not-allowed; }
 .case-drop-thumb .drop-thumb-del { position: absolute; top: 6px; right: 6px; display: none; width: 22px; height: 22px; border: 0; border-radius: 999px; background: rgba(15, 23, 42, 0.6); color: #fff; font-size: 13px; line-height: 1; cursor: pointer; align-items: center; justify-content: center; }
 .case-drop-card:hover .case-drop-thumb .drop-thumb-del { display: flex; }
 .case-type-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
@@ -892,7 +912,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-type-filter-drop-v921';
+const TOOL_UI_VERSION = '20261014-upload-type-required-v922';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -2794,6 +2814,18 @@ let chartLibraryPromise = null;
                   </div>
                 </div>
                 <div id="case-drop-panel" class="case-drop-grid case-drop-panel" data-case-strip hidden></div>
+                  <!-- v922：批量设置分类（有文件时才显示；未分类那张卡会被红框标出来） -->
+                  <div class="case-drop-batch" id="case-drop-batch-bar" hidden>
+                    <button type="button" class="case-tool-btn" id="case-drop-batch-toggle">${state.lang === 'zh' ? '批量设置分类' : 'Batch set type'}</button>
+                    <span class="case-drop-batch-hint" id="case-drop-batch-hint"></span>
+                    <div class="case-drop-batch-actions" id="case-drop-batch-actions" hidden>
+                      <span class="case-drop-batch-count" id="case-drop-batch-count"></span>
+                      <button type="button" class="case-tool-btn" id="case-drop-batch-untyped">${state.lang === 'zh' ? '全选未分类' : 'Select unclassified'}</button>
+                      <button type="button" class="case-tool-btn" id="case-drop-batch-all">${state.lang === 'zh' ? '全选' : 'Select all'}</button>
+                      <button type="button" class="case-tool-btn" id="case-drop-batch-clear">${state.lang === 'zh' ? '清空' : 'Clear'}</button>
+                      <button type="button" class="case-tool-btn" id="case-drop-batch-type">${state.lang === 'zh' ? '设置分类' : 'Set category'}</button>
+                    </div>
+                  </div>
               </div>
               <div data-upload-mode="template">
                 <div class="library-drop-zone" data-drop-input="library-template-input">
@@ -11349,6 +11381,85 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     });
   }
 
+  // ── v922：上传必填「物料分类」（纯逻辑，测试直接切这段跑）────────────────────
+  // 唯一口径：空串（下拉里那个「未分类」选项就是空串）与字面「未分类」都视同「还没选」——
+  // 选了它红框不消失、上传照拦；只有选中清单里的真实类型才算选好。
+  // ⇒ 这意味着「故意不分类就上传」这条路被堵掉了；用户 2026-10-14 明确要求如此。
+  function caseUploadTypeChosen(value) {
+    const text = String(value == null ? '' : value).trim();
+    return text !== '' && text !== '未分类';
+  }
+  // 没选好分类的下标（顺序同入参）；上传拦截与「全选未分类」共用这一个口径
+  function caseUploadUntypedIndexes(types) {
+    const list = Array.isArray(types) ? types : [];
+    const out = [];
+    for (let i = 0; i < list.length; i += 1) {
+      if (!caseUploadTypeChosen(list[i])) out.push(i);
+    }
+    return out;
+  }
+  // 批量设分类的纯逻辑：只改选中的那几个下标，返回新数组（不就地改）。
+  // nextType 是空串／「未分类」时一张都不动 —— 与单张那条「选了未分类等于没选」同一口径。
+  function caseUploadApplyBatchType(types, indexes, nextType) {
+    const next = (Array.isArray(types) ? types : []).slice();
+    if (!caseUploadTypeChosen(nextType)) return next;
+    (Array.isArray(indexes) ? indexes : []).forEach(function(index) {
+      if (index >= 0 && index < next.length) next[index] = String(nextType).trim();
+    });
+    return next;
+  }
+  // 上传网格一张卡的 HTML。未分类（含"还没检测出尺寸 / 检测失败"）→ is-untyped（红框 + 常显红 chip）；
+  // 检测出真实类型后由 syncTypeLabel 把 is-untyped 摘掉。勾选框常驻 DOM，靠网格的 is-batch-selecting 显隐。
+  function caseDropCardMarkup(entry, options) {
+    const opts = options || {};
+    const zh = opts.lang !== 'en';
+    const untypedText = zh ? '未分类' : 'Unclassified';
+    const pickTitle = zh ? '点击修改分类' : 'Change category';
+    const chosen = caseUploadTypeChosen(entry.type);
+    const optionsHtml = [''].concat(opts.catalogNames || []).map(function(name) {
+      return '<option value="' + escapeAttr(name) + '"' + (name === entry.type ? ' selected' : '') + '>' + escapeHtml(name || untypedText) + '</option>';
+    }).join('');
+    return '<div class="case-drop-card' + (chosen ? '' : ' is-untyped') + '" data-file-index="' + entry.index + '">' +
+        '<div class="case-drop-thumb">' +
+          entry.mediaHtml +
+          '<span class="case-drop-check" aria-hidden="true"></span>' +
+          '<button type="button" class="drop-thumb-del" data-file-index="' + entry.index + '" data-drop-input="' + escapeAttr(opts.dropInput || '') + '">&times;</button>' +
+          '<button type="button" class="case-drop-type' + (chosen ? '' : ' untyped') + '" data-case-type-label="' + entry.index + '" title="' + escapeAttr(pickTitle) + '">' + escapeHtml(entry.type || untypedText) + '</button>' +
+        '</div>' +
+        '<div class="case-drop-name" data-case-dims-index="' + entry.index + '">' + escapeHtml(entry.name) + '</div>' +
+        '<select class="case-type-chip case-type-hidden" data-case-type-index="' + entry.index + '" tabindex="-1">' + optionsHtml + '</select>' +
+      '</div>';
+  }
+  // 上传网格里每张卡当前选的分类（按下标读那个隐藏的 <select>，它才是上传真正读的值）。
+  // 没有真实网格（元素不存在 / 不是 DOM 节点）时返回 null ⇒ 调用方跳过校验：
+  // 校验只在真的画出了缩略图网格这条路里生效，别把「网格没渲染」误判成「全都没分类」。
+  function caseUploadTypeValues(count) {
+    const grid = document.getElementById('case-drop-panel');
+    if (!grid || typeof grid.querySelector !== 'function') return null;
+    const total = Number(count) || 0;
+    const values = [];
+    for (let i = 0; i < total; i += 1) {
+      const select = grid.querySelector('select[data-case-type-index="' + i + '"]');
+      values.push(select && typeof select.value === 'string' ? select.value : '');
+    }
+    return values;
+  }
+  // 拦下上传时别只说一句「还有 N 张」：把第一张未分类的卡片滚进视野，
+  // 所有未分类的卡片再闪一下（红框本来就在，这里只是指出"是哪几张"）。
+  function focusCaseDropUntyped(indexes) {
+    const grid = document.getElementById('case-drop-panel');
+    if (!grid || typeof grid.querySelector !== 'function') return;
+    (indexes || []).forEach(function(index, order) {
+      const card = grid.querySelector('.case-drop-card[data-file-index="' + index + '"]');
+      if (!card) return;
+      if (!order && typeof card.scrollIntoView === 'function') {
+        try { card.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_error) {}
+      }
+      card.classList.add('is-untyped-focus');
+      setTimeout(function() { card.classList.remove('is-untyped-focus'); }, 2400);
+    });
+  }
+
   // 案例库上传：大图预览网格。每张图一个类型下拉（初始值=尺寸自动识别，
   // 用户手选后以手选为准——select 的 dataset.touched 标记保护手动选择不被异步识别覆盖）。
   function renderCaseDropGrid(zone, fileList) {
@@ -11366,6 +11477,10 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       zone.style.removeProperty('display');
       grid.hidden = true;
       grid.innerHTML = '';
+      grid.classList.remove('is-batch-selecting');
+      grid.__caseDropBatch = null;
+      const emptyBatchBar = document.getElementById('case-drop-batch-bar');
+      if (emptyBatchBar) emptyBatchBar.hidden = true;   // v922：没文件就没有批量入口
       return;
     }
     grid.hidden = false;
@@ -11393,31 +11508,38 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         if (input) input.click();
       });
     }
-    const chipOptions = type => [''].concat(materialCatalogTypeNames(uploadCasePlatform())).map(t =>
-      `<option value="${escapeAttr(t)}"${t === type ? ' selected' : ''}>${escapeHtml(t || '未分类')}</option>`
-    ).join('');
-    grid.innerHTML = files.map((file, i) =>
-      '<div class="case-drop-card" data-file-index="' + i + '">' +
-        '<div class="case-drop-thumb">' +
-          (isCaseVideoFile(file)
-            ? '<video src="' + URL.createObjectURL(file) + '" muted playsinline preload="metadata"></video><span class="case-drop-mp4">MP4</span>'
-            : '<img src="' + URL.createObjectURL(file) + '" alt="" loading="lazy">') +
-          '<button type="button" class="drop-thumb-del" data-file-index="' + i + '" data-drop-input="' + zone.dataset.dropInput + '">&times;</button>' +
-          '<button type="button" class="case-drop-type untyped" data-case-type-label="' + i + '" title="点击修改分类">未分类</button>' +
-        '</div>' +
-        '<div class="case-drop-name" data-case-dims-index="' + i + '">' + escapeHtml(file.name) + '</div>' +
-        '<select class="case-type-chip case-type-hidden" data-case-type-index="' + i + '" tabindex="-1">' + chipOptions('') + '</select>' +
-      '</div>'
-    ).join('');
+    // v922：卡片 HTML 交给 caseDropCardMarkup（未分类 → is-untyped 红框 + 红 chip）
+    const catalogNames = materialCatalogTypeNames(uploadCasePlatform());
+    grid.innerHTML = files.map((file, i) => caseDropCardMarkup({
+      index: i,
+      name: file.name,
+      type: '',
+      mediaHtml: isCaseVideoFile(file)
+        ? '<video src="' + URL.createObjectURL(file) + '" muted playsinline preload="metadata"></video><span class="case-drop-mp4">MP4</span>'
+        : '<img src="' + URL.createObjectURL(file) + '" alt="" loading="lazy">'
+    }, {
+      lang: state.lang,
+      catalogNames: catalogNames,
+      dropInput: zone.dataset.dropInput
+    })).join('');
+    // 红框的统一同步点：异步检测出分类、单张手选、批量设置，最后都落到这里。
+    // v922 口径：value 是空串（下拉里的「未分类」）就视同「还没选」→ is-untyped 留着。
     const syncTypeLabel = (index, value) => {
+      const chosen = caseUploadTypeChosen(value);
       const label = grid.querySelector('[data-case-type-label="' + index + '"]');
-      if (!label) return;
-      label.textContent = value || '未分类';
-      label.classList.toggle('untyped', !value);
+      if (label) {
+        label.textContent = value || (state.lang === 'zh' ? '未分类' : 'Unclassified');
+        label.classList.toggle('untyped', !chosen);
+      }
+      const card = grid.querySelector('.case-drop-card[data-file-index="' + index + '"]');
+      if (card) card.classList.toggle('is-untyped', !chosen);
     };
     const syncChip = select => {
-      select.classList.toggle('untyped', !select.value);
+      select.classList.toggle('untyped', !caseUploadTypeChosen(select.value));
       syncTypeLabel(select.getAttribute('data-case-type-index'), select.value);
+      // 红框/分类变了，批量条那句「还有 N 张未分类」也要跟着变（检测出分类后自动减少）。
+      // refreshBatchBar 是函数声明（提升），下面的批量块还没初始化也不会在这里炸。
+      refreshBatchBar();
     };
     // 点击悬浮小标签 → 弹出分类菜单（原生 select 隐藏保留，作为提交数据来源）
     const closeTypeMenu = () => {
@@ -11481,6 +11603,148 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     grid.querySelectorAll('.case-type-chip').forEach(select => {
       select.addEventListener('change', function() { this.dataset.touched = '1'; syncChip(this); syncSameDimsChips(this); });
     });
+    // ── v922：批量设置分类（一次拖几十张、未分类几十张时不用逐张点）──────────────
+    // 与单张选择共用同一套状态：批量只是替用户把每张卡的 <select> 设好再派一遍 syncChip，
+    // 上传最终读的仍是那个 <select>；同时打上 dataset.touched，异步识别不再覆盖手选结果。
+    // 视觉语言沿用素材库详情里那套（勾选框 + 操作条，v813）。
+    const batchBar = document.getElementById('case-drop-batch-bar');
+    const batchToggleBtn = document.getElementById('case-drop-batch-toggle');
+    const batchHint = document.getElementById('case-drop-batch-hint');
+    const batchActions = document.getElementById('case-drop-batch-actions');
+    const batchCountEl = document.getElementById('case-drop-batch-count');
+    const batchUntypedBtn = document.getElementById('case-drop-batch-untyped');
+    const batchAllBtn = document.getElementById('case-drop-batch-all');
+    const batchClearBtn = document.getElementById('case-drop-batch-clear');
+    const batchTypeBtn = document.getElementById('case-drop-batch-type');
+    const batchZh = state.lang === 'zh';
+    const batchState = { mode: false, picked: new Set() };
+    const currentTypes = () => caseUploadTypeValues(files.length) || [];
+    const untypedIndexes = () => caseUploadUntypedIndexes(currentTypes());
+    // 函数声明（不是 const 箭头）：syncChip 在上面就要调它，靠提升避开 TDZ
+    function refreshBatchBar() {
+      if (!batchBar) return;
+      const untyped = untypedIndexes();
+      batchBar.hidden = false;
+      if (batchToggleBtn) {
+        batchToggleBtn.classList.toggle('active', batchState.mode);
+        batchToggleBtn.textContent = batchState.mode ? (batchZh ? '退出批量' : 'Exit batch') : (batchZh ? '批量设置分类' : 'Batch set type');
+      }
+      if (batchHint) {
+        batchHint.classList.toggle('is-warning', untyped.length > 0);
+        batchHint.textContent = untyped.length
+          ? (batchZh ? ('还有 ' + untyped.length + ' 张未分类') : (untyped.length + ' unclassified'))
+          : (batchZh ? '都已分类' : 'All categorized');
+      }
+      if (batchActions) batchActions.hidden = !batchState.mode;
+      if (batchCountEl) batchCountEl.textContent = batchState.picked.size
+        ? (batchZh ? ('已选 ' + batchState.picked.size + ' 张') : (batchState.picked.size + ' selected'))
+        : (batchZh ? '点缩略图选中' : 'Click thumbnails');
+      const allUntypedPicked = untyped.length > 0 && untyped.every(i => batchState.picked.has(i));
+      if (batchUntypedBtn) {
+        batchUntypedBtn.disabled = !untyped.length;
+        batchUntypedBtn.textContent = allUntypedPicked ? (batchZh ? '取消未分类' : 'Deselect unclassified') : (batchZh ? '全选未分类' : 'Select unclassified');
+      }
+      if (batchTypeBtn) batchTypeBtn.disabled = !batchState.picked.size;
+    }
+    const syncBatchPickedClass = index => {
+      const card = grid.querySelector('.case-drop-card[data-file-index="' + index + '"]');
+      if (card) card.classList.toggle('is-picked', batchState.picked.has(index));
+    };
+    const setBatchMode = on => {
+      batchState.mode = !!on;
+      batchState.picked.clear();
+      grid.classList.toggle('is-batch-selecting', batchState.mode);
+      grid.querySelectorAll('.case-drop-card.is-picked').forEach(card => card.classList.remove('is-picked'));
+      refreshBatchBar();
+    };
+    const toggleBatchPick = index => {
+      if (!Number.isFinite(index)) return;
+      if (batchState.picked.has(index)) batchState.picked.delete(index); else batchState.picked.add(index);
+      syncBatchPickedClass(index);
+      refreshBatchBar();
+    };
+    const applyBatchType = nextType => {
+      const picked = Array.from(batchState.picked);
+      if (!picked.length) return;
+      if (!caseUploadTypeChosen(nextType)) {
+        // v922 口径：下拉里的空串（=「未分类」）等于"还没选" —— 批量也一样，一张都不动、红框照留
+        showCaseToast(batchZh ? '「未分类」不算已选分类：请选一个具体类型。' : '"Unclassified" is not a category yet: pick a real type.', 3200);
+        return;
+      }
+      picked.forEach(index => {
+        const select = grid.querySelector('select[data-case-type-index="' + index + '"]');
+        if (!select) return;
+        select.value = nextType;
+        select.dataset.touched = '1';   // 与单张手选同一套状态：异步识别不再覆盖
+        syncChip(select);               // 红框在同一个地方消失、chip 换成新类型
+      });
+      batchState.picked.clear();
+      grid.querySelectorAll('.case-drop-card.is-picked').forEach(card => card.classList.remove('is-picked'));
+      refreshBatchBar();
+      showCaseToast(batchZh ? ('已把 ' + picked.length + ' 张设为「' + nextType + '」') : ('Set ' + picked.length + ' to "' + nextType + '"'));
+    };
+    const openBatchTypeMenu = () => {
+      const stale = document.getElementById('case-drop-batch-type-menu');
+      if (stale) stale.remove();
+      if (!batchTypeBtn || !batchState.picked.size) return;
+      const menu = document.createElement('div');
+      menu.id = 'case-drop-batch-type-menu';
+      menu.className = 'case-type-menu';
+      menu.innerHTML = [''].concat(catalogNames).map(value =>
+        '<button type="button" data-case-batch-type-value="' + escapeAttr(value) + '">' + escapeHtml(value || (batchZh ? '未分类' : 'Unclassified')) + '</button>'
+      ).join('');
+      document.body.append(menu);
+      const rect = batchTypeBtn.getBoundingClientRect();
+      menu.style.left = Math.max(8, Math.min(rect.left - 40, window.innerWidth - 170)) + 'px';
+      menu.style.top = Math.max(8, rect.top - menu.offsetHeight - 8) + 'px';
+      const close = () => { menu.remove(); document.removeEventListener('click', close); };
+      menu.addEventListener('click', event => {
+        const btn = event.target.closest('[data-case-batch-type-value]');
+        if (!btn) return;
+        event.stopPropagation();
+        applyBatchType(btn.getAttribute('data-case-batch-type-value'));
+        close();
+      });
+      setTimeout(() => document.addEventListener('click', close), 0);
+    };
+    if (batchToggleBtn) batchToggleBtn.onclick = event => { event.stopPropagation(); setBatchMode(!batchState.mode); };
+    if (batchUntypedBtn) batchUntypedBtn.onclick = event => {
+      event.stopPropagation();
+      const untyped = untypedIndexes();
+      const allPicked = untyped.length > 0 && untyped.every(i => batchState.picked.has(i));
+      untyped.forEach(i => { if (allPicked) batchState.picked.delete(i); else batchState.picked.add(i); });
+      untyped.forEach(syncBatchPickedClass);
+      refreshBatchBar();
+    };
+    if (batchAllBtn) batchAllBtn.onclick = event => {
+      event.stopPropagation();
+      const allOn = files.length > 0 && files.every((file, i) => batchState.picked.has(i));
+      batchState.picked.clear();
+      if (!allOn) files.forEach((file, i) => batchState.picked.add(i));
+      grid.querySelectorAll('.case-drop-card').forEach(card => card.classList.toggle('is-picked', batchState.picked.has(Number(card.getAttribute('data-file-index')))));
+      refreshBatchBar();
+    };
+    if (batchClearBtn) batchClearBtn.onclick = event => {
+      event.stopPropagation();
+      batchState.picked.clear();
+      grid.querySelectorAll('.case-drop-card.is-picked').forEach(card => card.classList.remove('is-picked'));
+      refreshBatchBar();
+    };
+    if (batchTypeBtn) batchTypeBtn.onclick = event => { event.stopPropagation(); openBatchTypeMenu(); };
+    // 批量模式下点缩略图 = 勾选（点标签改单张、点删除各自 stopPropagation，不受影响）。
+    // 监听器只挂一次，通过 grid.__caseDropBatch 读每次重画后的最新状态（避免闭包读到旧 files）。
+    grid.__caseDropBatch = { state: batchState, toggle: toggleBatchPick };
+    if (!grid.dataset.caseDropBatchBound) {
+      grid.dataset.caseDropBatchBound = '1';
+      grid.addEventListener('click', event => {
+        const batch = grid.__caseDropBatch;
+        if (!batch || !batch.state.mode) return;
+        const card = event.target && event.target.closest ? event.target.closest('.case-drop-card') : null;
+        if (!card || card.parentElement !== grid) return;
+        batch.toggle(Number(card.getAttribute('data-file-index')));
+      });
+    }
+    refreshBatchBar();
     window.caseDropDims = window.caseDropDims || {};
     const autoTagBar = document.getElementById('upload-case-tag-bar');
     const autoTagBatchKey = files.map(function(file) { return file.name + '|' + file.size + '|' + file.lastModified; }).join('||');
@@ -12454,6 +12718,22 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       throw new Error(zh
         ? '请先选择' + joined + '，再上传。'
         : 'Select ' + joined + ' before uploading.');
+    }
+    // v922：没分类的物料不许上传（用户 2026-10-14 要求）。
+    // 口径：下拉里的空串选项（=「未分类」）视同「还没选」→ 红框不消失、这里也照拦；只有选中
+    // 清单里的真实类型才放行。⇒ 以前能"故意不分类"上传，现在不行了（这是用户要的效果）。
+    // 只在上传新项目时拦：编辑已有项目走别的保存路径，不经过这个函数。
+    // caseUploadTypeValues 拿不到真实网格时返回 null（没画出缩略图网格）⇒ 跳过这条校验，
+    // 免得把「网格没渲染」误判成「全都未分类」把所有上传都堵死。
+    const typeValues = caseUploadTypeValues(previewFiles.length);
+    if (typeValues) {
+      const untyped = caseUploadUntypedIndexes(typeValues);
+      if (untyped.length) {
+        focusCaseDropUntyped(untyped);
+        throw new Error(zh
+          ? ('还有 ' + untyped.length + ' 张没识别出分类：请点缩略图上的「未分类」选择，或用下面的「批量设置分类」。')
+          : (untyped.length + ' material(s) still have no category: click the "Unclassified" chip on the thumbnail, or use "Batch set type" below.'));
+      }
     }
   }
 

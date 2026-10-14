@@ -73,7 +73,9 @@ test('v914 接线：上传拖图那条路不再挑开屏去识别，也不再清
   // 物料类型自动识别 / 缩略图网格 / 成套自动判数量必须原样保留
   assert.match(dropGrid, /detectCaseMaterialType\(file\.name, dims\.width, dims\.height, uploadCasePlatform\(\)\)/, '物料类型自动识别照旧');
   assert.match(dropGrid, /applyCaseAutoQuantity\(autoTagBar, dimensions\)/, '数量自动判定照旧');
-  assert.match(dropGrid, /case-drop-thumb/, '缩略图网格照旧');
+  // v922 起卡片 HTML 由 caseDropCardMarkup 生成（红框就是挂在它出的卡片上），标记本身一字未动
+  assert.match(dropGrid, /caseDropCardMarkup\(\{/, '缩略图网格照旧（卡片 HTML 交给 caseDropCardMarkup）');
+  assert.match(source, /'<div class="case-drop-thumb">'/, '缩略图网格标记照旧');
   // 整个标签条路径不再有 clearCaseElementSuggestions 的空调用
   assert.doesNotMatch(source, /clearCaseElementSuggestions\(document\.getElementById\('upload-case-tag-bar'\)\)/);
   // 函数本体保留备用（没删代码），端点也照旧在
@@ -95,6 +97,11 @@ function loadValidate() {
       return Array.isArray(value) ? (value[0] || '') : (value || '');
     },
     flagMissingCaseTagRows: (bar, keys) => { context.__flagged = {bar: bar, keys: keys.slice()}; },
+    // v922 起校验还要读上传网格里那个隐藏的 <select>；这里没有真实网格 ⇒ 返回 null 表示
+    // 「没画出网格」，那条新校验自动跳过（本条测试只关心标签必填，行为不变）。
+    caseUploadTypeValues: () => null,
+    caseUploadUntypedIndexes: () => [],
+    focusCaseDropUntyped: () => {},
     document: {getElementById: () => ({id: 'upload-case-tag-bar'})}
   });
   vm.runInContext(slice('  function validateCaseProjectUpload(previewFiles, formData, chipSel) {', '  function translateCaseSchemaError(error) {'), context);
@@ -325,7 +332,7 @@ test('v914 口径的源码锚点：两边都按 manual_tags 过滤（改动一�
 /* ── 5) 版本号 ──────────────────────────────────────────────────────────── */
 
 test('v914 版本号六处同步', () => {
-  const refs = indexSource.match(/\?v=20261014-type-filter-drop-v921/g) || [];
+  const refs = indexSource.match(/\?v=20261014-upload-type-required-v922/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(source, /const TOOL_UI_VERSION = '20261014-type-filter-drop-v921'/);
+  assert.match(source, /const TOOL_UI_VERSION = '20261014-upload-type-required-v922'/);
 });
