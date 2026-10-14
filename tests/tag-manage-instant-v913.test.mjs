@@ -265,7 +265,7 @@ test('v913 别弄坏：英文名 / 相关词保存、补翻译、同步、搜索
 });
 
 test('v913 版本号六处同步', () => {
-  const refs = indexSource.match(/\?v=20261014-tag-ui-cleanup-v927/g) || [];
+  const refs = indexSource.match(/\?v=20261014-chip-x-hover-v928/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-tag-ui-cleanup-v927'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-chip-x-hover-v928'/);
 });
