@@ -133,7 +133,7 @@ test('前端：读写都对全部案例项目开放（v908 步 2）',()=>{
   assert.match(appSource,/async function loadPreviewAiTagsForSource\(sourceId\) \{\s*\n\s*if \(!state\.supabase \|\| !sourceId\) return \[\];/);
   assert.doesNotMatch(appSource,/\.eq\('experiment_key'/,'前端读库不再按 experiment_key 过滤');
   assert.match(appSource,/state\.previewAiTagsByPreviewId\.set\(row\.preview_id, row\)/);
-  assert.match(appSource,/id="case-ai-recognize-all"/);
+  assert.doesNotMatch(appSource,/id="case-ai-recognize-all"/,'v927：项目弹窗里的「一键识别」按钮已去掉');
   assert.match(appSource,/case-project-fixed-tags/);
   assert.match(appSource,/id="case-preview-ai-panel"/);
   assert.match(appSource,/renderCasePreviewAiPanel\(backdrop, p, canManage\)/);

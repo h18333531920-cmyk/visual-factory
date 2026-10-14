@@ -92,9 +92,6 @@ datalist { display: none; }
 .case-project-fixed-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 10px; }
 .case-project-fixed-tags-label { font-size: 11px; color: #98a2b3; margin-right: 2px; }
 .case-fixed-tag { display: inline-flex; align-items: center; padding: 4px 8px; border: 1px solid #bbf7d0; border-radius: 999px; background: #f0fdf4; color: #166534; font-size: 11px; line-height: 1; }
-.case-ai-scan-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 88px; height: 34px; padding: 0 13px; border: 1px solid #c7d2fe; border-radius: 10px; background: #eef2ff; color: #3730a3; font-size: 12px; font-weight: 650; cursor: pointer; white-space: nowrap; }
-.case-ai-scan-btn:hover { border-color: #a5b4fc; background: #e0e7ff; }
-.case-ai-scan-btn:disabled { color: #818cf8; cursor: wait; opacity: .76; }
 .case-ai-run-progress { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; font-size: 11px; color: #64748b; }
 .case-ai-run-progress[hidden] { display: none !important; }
 .case-ai-run-progress button { border: 0; background: transparent; color: #4f46e5; font-size: 11px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
@@ -933,7 +930,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-tag-inline-add-v926';
+const TOOL_UI_VERSION = '20261014-tag-ui-cleanup-v927';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -5200,6 +5197,9 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const effectLayers = casePreviewAiEffectTagLayers(preview.id);
     const effectTags = effectLayers.manual.concat(effectLayers.ai);
     const status = casePreviewAiStatusText(row, preview);
+    // v927：底部那行小字只在**真的要注意**时才出（图片变了 / 识别失败 / 识别中 / 结果过期）；
+    // 正常的「AI直接应用」不再显示 —— 用户口径：「这个 AI 直接应用的小字去掉吧」。
+    const statusAlert = row && (stale || row.status === 'failed' || row.status === 'running' || row.status === 'expired') ? status : '';
     const excluded = row && Array.isArray(row.excluded_tags) ? row.excluded_tags.filter(Boolean) : [];
     const canEdit = canManage && previewAiTagsTableReady === true;
     const showEffectRow = effectTags.length > 0 || (canEdit && casePreviewAiDynamicPreview(preview));
@@ -5239,7 +5239,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
           }).join('')
           + (canEdit ? casePreviewAiInlineAddHtml(panel, CASE_PREVIEW_AI_INLINE_ADD.effect, state.lang) : '')
           + '</div>')
-      + '<span class="case-preview-ai-status' + (row && row.status === 'failed' ? ' is-error' : '') + '">' + escapeHtml(status) + '</span>';
+      + (statusAlert ? '<span class="case-preview-ai-status' + (row && row.status === 'failed' ? ' is-error' : '') + '">' + escapeHtml(statusAlert) + '</span>' : '');
     wireCasePreviewAiInlineAddInput(panel, CASE_PREVIEW_AI_INLINE_ADD.element);
     wireCasePreviewAiInlineAddInput(panel, CASE_PREVIEW_AI_INLINE_ADD.effect);
     wireCasePreviewAiHover(panel, manualTags, aiTags, excluded);
@@ -8782,7 +8782,6 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
             </div>
           </div>
           <div class="case-head-actions">
-            ${previewAiEnabled && canManage ? `<button type="button" class="case-ai-scan-btn" id="case-ai-recognize-all">${state.lang === 'zh' ? '一键识别' : 'Analyze all'}</button><span class="case-ai-run-progress" id="case-ai-run-progress" hidden></span>` : ''}
             ${canManage ? `<button type="button" class="icon-btn" id="case-more-btn" aria-label="${state.lang === 'zh' ? '更多操作' : 'More actions'}">⋯</button>` : ''}
             <button type="button" class="icon-btn case-project-close" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}"><svg viewBox="0 0 16 16" width="15" height="15"><path d="m4 4 8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
           </div>
@@ -8886,19 +8885,12 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       void loadPreviewAiTagsForSource(source.id).then(function() {
         if (!backdrop.isConnected) return;
         show(currentId);
-        updateCasePreviewAiRunUi(source.id);
       }).catch(function(error) {
         console.warn('Preview AI tags unavailable:', error && error.message);
       });
-      const recognizeButton = backdrop.querySelector('#case-ai-recognize-all');
-      if (recognizeButton) recognizeButton.onclick = function(event) {
-        event.stopPropagation();
-        startCasePreviewAiRun(source, materials).catch(function(error) {
-          alert(state.lang === 'zh' ? ('一键识别未开始：' + (error.message || '请重试')) : ('Analysis did not start: ' + (error.message || 'Please retry')));
-          updateCasePreviewAiRunUi(source.id);
-        });
-      };
-      updateCasePreviewAiRunUi(source.id);
+      // v927：项目弹窗里的「一键识别」按钮已去掉（用户口径）——批量识别现在跑在腾讯云的
+      // cron worker 上，前端不再需要手动入口。底层 run 机制（startCasePreviewAiRun /
+      // updateCasePreviewAiRunUi / 取消 / 重试失败项）先留着不删，将来要挂回按钮就能用。
     }
     let caseSideMode = 'grid2';
     let caseSideLang = 'all';

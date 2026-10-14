@@ -332,6 +332,6 @@ test('v924/v926 端点 manual-add：老格式 key 不做内容比对、图片真
 /* ── 6) 版本号六处同步（index.html 5 处 + app.js 1 处） ───────────────── */
 
 test('v924 版本号六处同步（index.html 5 处 + app.js 1 处）', () => {
-  assert.equal((indexSource.match(/\?v=20261014-tag-inline-add-v926/g) || []).length, 5);
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-tag-inline-add-v926'/);
+  assert.equal((indexSource.match(/\?v=20261014-tag-ui-cleanup-v927/g) || []).length, 5);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-tag-ui-cleanup-v927'/);
 });

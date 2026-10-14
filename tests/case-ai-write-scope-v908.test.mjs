@@ -79,11 +79,11 @@ test('v908 前端门禁：非实验项目的案例项目也启用（不再只看
 
 test('v908 前端门禁：门禁函数改判 isCaseProject，且面板/一键识别都用它', () => {
   assert.match(appSource, /function casePreviewAiEnabledFor\(source\) \{\s*\n\s*return isCaseProject\(source\);/);
-  assert.match(appSource, /if \(!casePreviewAiEnabledFor\(source\)\) return;/, '一键识别的入口仍受门禁保护');
+  assert.match(appSource, /if \(!casePreviewAiEnabledFor\(source\)\) return;/, '批量识别的门禁仍在（v927 去掉按钮后只剩 startCasePreviewAiRun 这一处）');
   assert.match(appSource, /const previewAiEnabled = casePreviewAiEnabledFor\(source\);/);
   assert.match(appSource, /if \(previewAiEnabled\) renderCasePreviewAiPanel\(backdrop, p, canManage\);/);
   assert.match(appSource, /if \(previewAiEnabled\) \{[\s\S]{0,120}loadPreviewAiTagsForSource\(source\.id\)/, '浮窗只在门禁通过时才拉这个项目的逐图标签');
-  assert.match(appSource, /previewAiEnabled && canManage \? `<button type="button" class="case-ai-scan-btn" id="case-ai-recognize-all">/);
+  assert.doesNotMatch(appSource, /case-ai-scan-btn/, 'v927：一键识别按钮已去掉（批量识别改由腾讯云 cron worker 跑）');
 });
 
 // ── 服务端：去掉来源锁，但仍只认请求里的那一张 ────────────────────────────
