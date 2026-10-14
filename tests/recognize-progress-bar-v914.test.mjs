@@ -161,6 +161,9 @@ function loadRenderer(options = {}) {
     }, options.state || {}),
     escapeHtml: (value) => String(value == null ? '' : value),
     escapeAttr: (value) => String(value == null ? '' : value),
+    // v925：渲染层要取清单行的缩略图，走的就是素材库卡片那两个函数 —— 这里给最小桩（既有断言不变）
+    libraryThumbnailPathForPreview: (preview) => (preview && preview.preview_path ? ('thumbs/' + preview.id + '.jpg') : ''),
+    libraryThumbUnavailable: () => false,
     localStorage: {
       getItem: (key) => (stored.has(key) ? stored.get(key) : null),
       setItem: (key, value) => stored.set(key, String(value)),
@@ -391,6 +394,6 @@ test('v914 别搞混：#library-status（列表上方那行计数）不许被这
 });
 
 test('v914 版本号（index.html 5 处 + app.js 1 处）', () => {
-  assert.equal((indexSource.match(/\?v=20261014-content-key-v924/g) || []).length, 5);
-  assert.match(source, /const TOOL_UI_VERSION = '20261014-content-key-v924'/);
+  assert.equal((indexSource.match(/\?v=20261014-progress-detail-v925/g) || []).length, 5);
+  assert.match(source, /const TOOL_UI_VERSION = '20261014-progress-detail-v925'/);
 });

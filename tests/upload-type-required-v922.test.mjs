@@ -533,7 +533,7 @@ test('v922 接线：校验真的调了这条检查，且只在上传新项目那
 /* ── 5) 版本号 ───────────────────────────────────────────────────────────── */
 
 test('v922 版本号六处同步', () => {
-  const refs = indexSource.match(/\?v=20261014-content-key-v924/g) || [];
+  const refs = indexSource.match(/\?v=20261014-progress-detail-v925/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(source, /const TOOL_UI_VERSION = '20261014-content-key-v924'/);
+  assert.match(source, /const TOOL_UI_VERSION = '20261014-progress-detail-v925'/);
 });

@@ -328,6 +328,6 @@ test('v924 端点 manual-add：库里是老格式 key 时不许清空已有标�
 /* ── 6) 版本号六处同步（index.html 5 处 + app.js 1 处） ───────────────── */
 
 test('v924 版本号六处同步（index.html 5 处 + app.js 1 处）', () => {
-  assert.equal((indexSource.match(/\?v=20261014-content-key-v924/g) || []).length, 5);
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-content-key-v924'/);
+  assert.equal((indexSource.match(/\?v=20261014-progress-detail-v925/g) || []).length, 5);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-progress-detail-v925'/);
 });

@@ -671,14 +671,27 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-tag-ai-bulk { border: 0; background: transparent; color: #7c3aed; font-size: 11.5px; line-height: 1; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
 .case-tag-ai-bulk:hover { background: #f3e8ff; }
 .case-tag-ai-bulk:disabled { color: #c4b5d9; background: transparent; cursor: default; }
-/* v914 后台识别进度条：素材库页最顶上的一条细带，占位（非 fixed 覆盖），不挡检索栏 */
-.recognize-progress { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 6px 10px; border: 1px solid #bae6fd; background: #f0f9ff; border-radius: 10px; font-size: 12px; line-height: 1.3; color: #075985; }
+/* v914 后台识别进度条：素材库页最顶上的一条细带，占位（非 fixed 覆盖），不挡检索栏。
+   v925 起多了一行可展开的待识别清单 ⇒ 外层改成纵向排列（head 一行 + detail 一块）。 */
+.recognize-progress { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 10px 0 0; padding: 6px 10px; border: 1px solid #bae6fd; background: #f0f9ff; border-radius: 10px; font-size: 12px; line-height: 1.3; color: #075985; }
 .recognize-progress[hidden] { display: none !important; }
+.recognize-progress-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .recognize-progress-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 999px; background: #0ea5e9; }
 .recognize-progress[data-kind="running"] .recognize-progress-dot { animation: recognize-progress-pulse 1.2s ease-in-out infinite; }
 .recognize-progress-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recognize-progress-text[data-recognize-progress-toggle] { cursor: pointer; }
 .recognize-progress-close { flex: 0 0 auto; border: 0; background: transparent; color: #0369a1; font-size: 14px; line-height: 1; padding: 2px 5px; border-radius: 6px; cursor: pointer; }
 .recognize-progress-close:hover { background: #e0f2fe; }
+/* v925 展开清单：内部滚动（上限 50 行由 JS 截断），不撑高整页 */
+.recognize-progress-toggle { flex: 0 0 auto; border: 1px solid #bae6fd; background: #fff; color: #0369a1; font-size: 11px; line-height: 1; padding: 3px 7px; border-radius: 6px; cursor: pointer; }
+.recognize-progress-toggle:hover { background: #e0f2fe; }
+.recognize-progress-detail { list-style: none; margin: 0; padding: 4px 0 0; border-top: 1px dashed #bae6fd; max-height: 216px; overflow-y: auto; overscroll-behavior: contain; }
+.recognize-progress-detail-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.recognize-progress-detail-thumb { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; background: #e0f2fe; overflow: hidden; }
+.recognize-progress-detail-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.recognize-progress-detail-file { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #0c4a6e; }
+.recognize-progress-detail-project { flex: 0 0 auto; max-width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #0369a1; }
+.recognize-progress-detail-more { padding: 3px 0; color: #0369a1; opacity: .8; }
 @keyframes recognize-progress-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .recognize-progress[data-kind="running"] .recognize-progress-dot { animation: none; } }
 .case-tag-bubble { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #86efac; background: #dcfce7; color: #166534; font-size: 12px; line-height: 1; padding: 6px 10px; border-radius: 999px; cursor: pointer; }
@@ -912,7 +925,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-content-key-v924';
+const TOOL_UI_VERSION = '20261014-progress-detail-v925';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4583,9 +4596,15 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
      ② queued（没有 running，但还有物料没有 status='success' 的逐图标签行，带剩余张数）
      ③ 其余 → 整条隐藏。
      状态只能来自数据库：数据复用素材库已经加载的那两份（state.libraryPreviews /
-     state.previewAiTagsByPreviewId），轮询时重读逐图标签行（loadAllPreviewAiTags()，不新增端点）。 */
+     state.previewAiTagsByPreviewId），轮询时重读逐图标签行（loadAllPreviewAiTags()，不新增端点）。
+     v925：光说"还剩 N 张"用户看不出**是哪一张、属于哪个项目** ⇒ queued 态再算一份待识别清单
+     （items：文件名 + 项目名），文案里列前 3 张，点开看全部（内部滚动、上限 50 行）。
+     清单同样只从上面那两份已加载数据里算，不新增端点、不额外发请求。 */
   const RECOGNIZE_PROGRESS_POLL_MS = 20000;   // ≥15 秒；只在素材库页跑，不做全站轮询
   const RECOGNIZE_PROGRESS_HIDDEN_KEY = 'vf_recognize_progress_hidden_v1';
+  const RECOGNIZE_PROGRESS_EXPANDED_KEY = 'vf_recognize_progress_expanded_v1';
+  const RECOGNIZE_PROGRESS_TEXT_LIMIT = 3;    // v925 文案里最多列 3 张，其余折成「还有 N 张」
+  const RECOGNIZE_PROGRESS_ITEM_LIMIT = 50;   // v925 展开清单最多画 50 行（再多写一句「仅显示前 50 条」）
   // 与 scripts/recognize-case-tags.mjs 的 NON_IMAGE_EXTENSIONS 同口径：
   // 这些后缀脚本一律跳过（源文件 / 矢量图 / 压缩包 / 字体，以及 m4v/avi/mkv 这几种本轮不抽帧的容器），
   // 不算"待识别"，否则"还剩 N 张"永远清不到零。
@@ -4603,6 +4622,15 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return RECOGNIZE_PROGRESS_SKIP_EXT.includes(match[1].toLowerCase());
   }
 
+  // v925：清单里显示的文件名 —— 与项目详情里的物料名同源（preview_filename），
+  // 没有就退回预览路径的最后一段（预览路径在库里一定是有的，否则上面那步已经把它剔掉了）。
+  function recognizeProgressPreviewFilename(preview) {
+    const named = String((preview && preview.preview_filename) || '').trim();
+    if (named) return named;
+    const parts = String((preview && preview.preview_path) || '').split('/');
+    return parts[parts.length - 1] || '';
+  }
+
   // 纯逻辑：只吃「库里读到的数据」，同一份数据必须算出同一个结果（刷新后重算要一致）。
   // 案例项目 = source_path 为空（与脚本 isCaseLibrarySource / app.js isCaseProject 同口径）。
   function recognizeProgressState(input) {
@@ -4614,7 +4642,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const rows = Array.isArray(rawRows) ? rawRows
       : (rawRows && typeof rawRows.values === 'function' ? Array.from(rawRows.values()) : []);
     const sources = Array.isArray(opts.sources) ? opts.sources : [];
-    const idle = {visible: false, kind: 'idle', projectTitle: '', remaining: 0};
+    const idle = {visible: false, kind: 'idle', projectTitle: '', filename: '', remaining: 0, items: []};
     const titleById = new Map();
     sources.forEach(function(source) {
       if (!source || source.id == null) return;
@@ -4627,20 +4655,28 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (!row || row.preview_id == null) return;
       statusByPreview.set(String(row.preview_id), String(row.status || ''));
     });
-    // ① 正在识别：库里存在 running 行（判定只看这一列本身；项目名能查到就带上，查不到就匿名显示）
+    // ① 正在识别：库里存在 running 行（判定只看这一列本身；项目名能查到就带上，查不到就匿名显示）。
+    // v925：那一行的物料在本页数据里找得到时，顺手把文件名也带上；找不到就只报项目名（不硬做）。
     const runningRow = rows.find(function(candidate) {
       return !!candidate && String(candidate.status) === 'running';
     });
     if (runningRow) {
+      const runningPreview = previews.find(function(item) { return item && String(item.id) === String(runningRow.preview_id || ''); });
       let title = titleById.get(String(runningRow.source_file_id || '')) || '';
-      if (!title) {
-        const preview = previews.find(function(item) { return item && String(item.id) === String(runningRow.preview_id || ''); });
-        if (preview) title = titleById.get(String(preview.source_file_id || '')) || '';
-      }
-      return {visible: true, kind: 'running', projectTitle: title, remaining: 0};
+      if (!title && runningPreview) title = titleById.get(String(runningPreview.source_file_id || '')) || '';
+      return {
+        visible: true,
+        kind: 'running',
+        projectTitle: title,
+        filename: runningPreview ? recognizeProgressPreviewFilename(runningPreview) : '',
+        remaining: 0,
+        items: []
+      };
     }
-    // ② 排队中：还没有 status='success' 的物料还剩几张（失败 / 没跑过都算）
+    // ② 排队中：还没有 status='success' 的物料还剩几张（失败 / 没跑过都算）。
+    // v925：同一趟把"是谁"（文件名 + 项目名）记进 pending，供文案与展开清单用。
     let remaining = 0;
+    const pending = [];
     previews.forEach(function(preview) {
       if (!preview || preview.id == null) return;
       if (!titleById.has(String(preview.source_file_id || ''))) return;
@@ -4648,23 +4684,65 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (recognizeProgressSkipExtension(preview)) return;  // 源文件/矢量图：脚本直接跳过（v917 起 gif/mp4/mov/webm 会抽帧识别 ⇒ 算剩余）
       if (statusByPreview.get(String(preview.id)) === 'success') return;
       remaining += 1;
+      pending.push({
+        previewId: String(preview.id),
+        filename: recognizeProgressPreviewFilename(preview),
+        projectTitle: titleById.get(String(preview.source_file_id || '')) || ''
+      });
     });
-    if (remaining > 0) return {visible: true, kind: 'queued', projectTitle: '', remaining};
+    if (remaining > 0) {
+      // 排序口径 = 脚本的取数顺序（scripts/recognize-case-tags.mjs 读 vf_asset_previews 用 order=id.asc）：
+      // 让"排在最前面的那几张"就是下一轮真正会先跑的那几张；同时保证同一份数据永远算出同一个顺序。
+      pending.sort(function(a, b) {
+        if (a.previewId < b.previewId) return -1;
+        if (a.previewId > b.previewId) return 1;
+        return 0;
+      });
+      return {
+        visible: true,
+        kind: 'queued',
+        projectTitle: '',
+        filename: '',
+        remaining: remaining,
+        items: pending.slice(0, RECOGNIZE_PROGRESS_ITEM_LIMIT)
+      };
+    }
     return idle;
+  }
+
+  // 一条清单项的显示名：「项目名」文件名（项目名查不到就只显示文件名）
+  function recognizeProgressItemLabel(item, lang) {
+    const filename = String((item && item.filename) || '');
+    const title = String((item && item.projectTitle) || '');
+    if (!title) return filename;
+    return (lang === 'en' ? ('"' + title + '" ') : ('「' + title + '」')) + filename;
   }
 
   function recognizeProgressText(info, lang) {
     const en = lang === 'en';
     if (!info || !info.visible) return '';
     if (info.kind === 'running') {
-      if (!info.projectTitle) return en ? 'Background analysis in progress…' : '后台识别中 · 正在分析物料…';
-      return en
-        ? ('Background analysis in progress · "' + info.projectTitle + '"')
-        : ('后台识别中 ·「' + info.projectTitle + '」');
+      // 保持 v914 的老文案（zh 的「」前不加空格、en 的引号前有空格），只在已知文件名时追加
+      const head = en ? 'Background analysis in progress' : '后台识别中';
+      const title = String(info.projectTitle || '');
+      const filename = String(info.filename || '');
+      if (title) return head + (en ? (' · "' + title + '"') : (' ·「' + title + '」')) + (filename ? (en ? ' ' : '') + filename : '');
+      if (filename) return head + ' · ' + filename;
+      return en ? 'Background analysis in progress…' : '后台识别中 · 正在分析物料…';
     }
-    return en
+    const head = en
       ? ('Background analysis queued · ' + info.remaining + ' left')
       : ('后台识别排队中 · 还剩 ' + info.remaining + ' 张');
+    const items = Array.isArray(info.items) ? info.items : [];
+    const labels = items.slice(0, RECOGNIZE_PROGRESS_TEXT_LIMIT)
+      .map(function(item) { return recognizeProgressItemLabel(item, lang); })
+      .filter(Boolean);
+    if (!labels.length) return head;
+    // zh 的「」紧跟着分隔符（·「项目名」文件名，与 v914 的 running 文案同风格）；en 的引号前留空格
+    let text = head + (en ? ' · ' : ' ·') + labels.join(en ? ', ' : '、');
+    const rest = info.remaining - labels.length;
+    if (rest > 0) text += en ? (' · ' + rest + ' more') : (' · 还有 ' + rest + ' 张');
+    return text;
   }
 
   function recognizeProgressInfo() {
@@ -4688,6 +4766,76 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     } catch (_error) {}
   }
 
+  // v925 展开清单：只记一个开关（不记展开了哪一条、也不记滚动位置 —— 不过度设计）。
+  function recognizeProgressExpanded() {
+    try { return localStorage.getItem(RECOGNIZE_PROGRESS_EXPANDED_KEY) === '1'; } catch (_error) { return false; }
+  }
+  function rememberRecognizeProgressExpanded(expanded) {
+    try {
+      if (expanded) localStorage.setItem(RECOGNIZE_PROGRESS_EXPANDED_KEY, '1');
+      else localStorage.removeItem(RECOGNIZE_PROGRESS_EXPANDED_KEY);
+    } catch (_error) {}
+  }
+
+  // 清单行的缩略图：**沿用素材库卡片那一套**（libraryThumbnailPathForPreview + 已签好的 URL），
+  // 只认缩略图路径 —— 没有缩略图就留空（不退回原图：展开 50 行时下原图太重），
+  // 物料找不到 / 签名还没下来 / 已被标记不可用，一律留空，不抛错。
+  function recognizeProgressThumbUrl(preview, source) {
+    if (!preview) return '';
+    const thumbPath = libraryThumbnailPathForPreview(preview, source);
+    if (!thumbPath || libraryThumbUnavailable(thumbPath)) return '';
+    const urls = state.libraryPreviewUrls || {};
+    return urls[thumbPath] || '';
+  }
+
+  // 只算一次：把清单里每一行的缩略图 URL 解析出来（上面那套逻辑只跑一遍，渲染与签名复用同一份结果）
+  function recognizeProgressThumbUrls(items) {
+    const previewById = new Map();
+    (Array.isArray(state.libraryPreviews) ? state.libraryPreviews : []).forEach(function(preview) {
+      if (preview && preview.id != null) previewById.set(String(preview.id), preview);
+    });
+    const sourceById = new Map();
+    (Array.isArray(state.librarySources) ? state.librarySources : []).forEach(function(source) {
+      if (source && source.id != null) sourceById.set(String(source.id), source);
+    });
+    return (Array.isArray(items) ? items : []).map(function(item) {
+      const preview = previewById.get(String((item && item.previewId) || ''));
+      const source = preview ? sourceById.get(String(preview.source_file_id || '')) : null;
+      return recognizeProgressThumbUrl(preview, source);
+    });
+  }
+
+  // 展开后的清单：一行 = 缩略图 + 文件名 + 项目名（行本身不可点，第一版只做"看得到"）。
+  function recognizeProgressDetailHtml(info, thumbUrls) {
+    const items = Array.isArray(info.items) ? info.items : [];
+    if (!items.length) return '';
+    const rows = items.map(function(item, index) {
+      const url = (thumbUrls && thumbUrls[index]) || '';
+      const thumb = url
+        ? '<img class="recognize-progress-detail-img" src="' + escapeAttr(url) + '" alt="" loading="lazy" decoding="async">'
+        : '';
+      return '<li class="recognize-progress-detail-row">'
+        + '<span class="recognize-progress-detail-thumb" aria-hidden="true">' + thumb + '</span>'
+        + '<span class="recognize-progress-detail-file">' + escapeHtml(item.filename) + '</span>'
+        + '<span class="recognize-progress-detail-project">' + escapeHtml(item.projectTitle) + '</span>'
+        + '</li>';
+    }).join('');
+    const capped = info.remaining > items.length
+      ? '<li class="recognize-progress-detail-more">'
+        + escapeHtml(state.lang === 'zh' ? ('仅显示前 ' + items.length + ' 条') : ('Showing first ' + items.length))
+        + '</li>'
+      : '';
+    return '<ul class="recognize-progress-detail" data-recognize-progress-detail>' + rows + capped + '</ul>';
+  }
+
+  // 渲染签名：这一轮和上一轮画的东西一样就不重画 —— 20 秒一轮若无条件重画，
+  // 展开清单的滚动位置每轮被顶回顶部，缩略图 <img> 也会被白白重建一次。
+  // 缩略图 URL 是要等签名的，所以把"签好了几张"也算进签名：签名下来后会补画一次。
+  function recognizeProgressSignature(info, expanded, thumbReady) {
+    return [info.kind, info.remaining, expanded ? '1' : '0', state.lang, thumbReady,
+      (Array.isArray(info.items) ? info.items : []).map(function(item) { return item.previewId; }).join(',')].join('|');
+  }
+
   // 画到顶部细条上；条不在 DOM（首页 / 别的页）就什么都不做。
   function renderRecognizeProgress() {
     const bar = document.getElementById('recognize-progress');
@@ -4696,23 +4844,44 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const hiddenKind = recognizeProgressHiddenKind();
     if (!info.visible) {
       if (hiddenKind) rememberRecognizeProgressHidden('');
+      recognizeProgressRenderSignature = '';
       bar.hidden = true;
       bar.innerHTML = '';
       return info;
     }
     if (hiddenKind === info.kind) {
+      recognizeProgressRenderSignature = '';
       bar.hidden = true;
       bar.innerHTML = '';
       return info;
     }
+    const items = Array.isArray(info.items) ? info.items : [];
+    const canExpand = items.length > 0;
+    const expanded = canExpand && recognizeProgressExpanded();
+    const thumbUrls = expanded ? recognizeProgressThumbUrls(items) : [];
+    const thumbReady = thumbUrls.reduce(function(count, url) { return url ? count + 1 : count; }, 0);
+    const signature = recognizeProgressSignature(info, expanded, thumbReady);
+    if (!bar.hidden && recognizeProgressRenderSignature === signature) return info;
     bar.hidden = false;
     bar.dataset.kind = info.kind;
-    bar.innerHTML = '<span class="recognize-progress-dot" aria-hidden="true"></span>'
-      + '<span class="recognize-progress-text">' + escapeHtml(recognizeProgressText(info, state.lang)) + '</span>'
-      + '<button type="button" class="recognize-progress-close" data-recognize-progress-close title="' + escapeAttr(state.lang === 'zh' ? '收起' : 'Hide') + '" aria-label="' + escapeAttr(state.lang === 'zh' ? '收起' : 'Hide') + '">×</button>';
+    const closeLabel = state.lang === 'zh' ? '收起' : 'Hide';
+    const toggleLabel = expanded
+      ? (state.lang === 'zh' ? '收起清单' : 'Hide list')
+      : (state.lang === 'zh' ? '详情' : 'Details');
+    bar.innerHTML = '<div class="recognize-progress-head">'
+      + '<span class="recognize-progress-dot" aria-hidden="true"></span>'
+      + '<span class="recognize-progress-text"' + (canExpand ? ' data-recognize-progress-toggle' : '') + '>' + escapeHtml(recognizeProgressText(info, state.lang)) + '</span>'
+      + (canExpand
+        ? '<button type="button" class="recognize-progress-toggle" data-recognize-progress-toggle aria-expanded="' + (expanded ? 'true' : 'false') + '">' + escapeHtml(toggleLabel) + '</button>'
+        : '')
+      + '<button type="button" class="recognize-progress-close" data-recognize-progress-close title="' + escapeAttr(closeLabel) + '" aria-label="' + escapeAttr(closeLabel) + '">×</button>'
+      + '</div>'
+      + (expanded ? recognizeProgressDetailHtml(info, thumbUrls) : '');
+    recognizeProgressRenderSignature = signature;
     return info;
   }
 
+  let recognizeProgressRenderSignature = '';
   let recognizeProgressCloseBound = false;
   function bindRecognizeProgressClose() {
     if (recognizeProgressCloseBound) return;
@@ -4720,11 +4889,19 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     document.addEventListener('click', function(event) {
       const target = event.target;
       if (!target || typeof target.closest !== 'function') return;
-      if (!target.closest('[data-recognize-progress-close]')) return;
+      // 先判「× 收起」（它在 head 里，别被展开开关抢走），再判展开 / 收起清单
+      if (target.closest('[data-recognize-progress-close]')) {
+        event.preventDefault();
+        const bar = document.getElementById('recognize-progress');
+        rememberRecognizeProgressHidden(bar ? String(bar.dataset.kind || '') : '');
+        if (bar) { bar.hidden = true; bar.innerHTML = ''; }
+        recognizeProgressRenderSignature = '';
+        return;
+      }
+      if (!target.closest('[data-recognize-progress-toggle]')) return;
       event.preventDefault();
-      const bar = document.getElementById('recognize-progress');
-      rememberRecognizeProgressHidden(bar ? String(bar.dataset.kind || '') : '');
-      if (bar) { bar.hidden = true; bar.innerHTML = ''; }
+      rememberRecognizeProgressExpanded(!recognizeProgressExpanded());
+      renderRecognizeProgress();
     });
   }
 
