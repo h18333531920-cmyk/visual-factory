@@ -112,14 +112,14 @@ const baseForm = {title: '项目', owner_name: '小王'};
 const formDataOf = (values) => ({get: (key) => values[key] || ''});
 const previews = [{name: 'a.png', type: 'image/png'}];
 
-test('v914 必填：只缺活动主题 ⇒ 拦下上传，提示点名「活动主题」并把那一行标红', () => {
+test('v914/v934 必填：只缺活动主题 ⇒ 拦下上传，提示点名「活动主题」并把那一行标红', () => {
   const context = loadValidate();
-  const chipSel = {tag1: 'C端', country: '沙特阿拉伯'};
+  const chipSel = {tag1: 'C端', country: '沙特阿拉伯', strategy: 'picks'};
   assert.throws(
     () => context.validateCaseProjectUpload(previews, formDataOf(baseForm), chipSel),
     (error) => {
       assert.match(error.message, /活动主题/, '提示要说清缺的是活动主题');
-      assert.doesNotMatch(error.message, /平台|国家/, '已选的不要一起报出来');
+      assert.doesNotMatch(error.message, /平台|国家|业务策略/, '已选的不要一起报出来');
       return true;
     }
   );
@@ -127,21 +127,34 @@ test('v914 必填：只缺活动主题 ⇒ 拦下上传，提示点名「活动�
   assert.equal(context.__flagged.bar.id, 'upload-case-tag-bar', '标红画在上传标签面板上');
 });
 
-test('v914 必填：三项都没选 ⇒ 三项一起点名；国家 + 活动主题缺 ⇒ 报这两项', () => {
+test('v914/v934 必填：四项都没选 ⇒ 四项一起点名；国家 + 活动主题缺 ⇒ 报这两项', () => {
   const context = loadValidate();
-  assert.throws(() => context.validateCaseProjectUpload(previews, formDataOf(baseForm), {}), /平台、国家和活动主题/);
-  assert.deepEqual(Array.from(context.__flagged.keys), ['tag1', 'country', 'activity']);
-  assert.throws(() => context.validateCaseProjectUpload(previews, formDataOf(baseForm), {tag1: 'C端'}), /请先选择国家和活动主题，再上传。/);
-  assert.deepEqual(Array.from(context.__flagged.keys), ['country', 'activity']);
+  assert.throws(() => context.validateCaseProjectUpload(previews, formDataOf(baseForm), {}), /平台、国家、活动主题和业务策略/);
+  assert.deepEqual(Array.from(context.__flagged.keys), ['tag1', 'country', 'activity', 'strategy']);
+  assert.throws(() => context.validateCaseProjectUpload(previews, formDataOf(baseForm), {tag1: 'C端'}), /请先选择国家、活动主题和业务策略，再上传。/);
+  assert.deepEqual(Array.from(context.__flagged.keys), ['country', 'activity', 'strategy']);
 });
 
-test('v914 必填：三项选齐就放行，且清掉红标（不再有缺项）', () => {
+test('v914/v934 必填：四项选齐就放行，且清掉红标（不再有缺项）', () => {
   const context = loadValidate();
-  context.validateCaseProjectUpload(previews, formDataOf(baseForm), {tag1: 'C端', country: '沙特阿拉伯', activity: '足球'});
+  context.validateCaseProjectUpload(previews, formDataOf(baseForm), {tag1: 'C端', country: '沙特阿拉伯', activity: '足球', strategy: 'picks'});
   assert.deepEqual(Array.from(context.__flagged.keys), [], '没有缺项 ⇒ 标红列表为空');
   // 多选形态（活动主题是数组）也要认
-  context.validateCaseProjectUpload(previews, formDataOf(baseForm), {tag1: 'C端', country: '沙特阿拉伯', activity: ['足球']});
+  context.validateCaseProjectUpload(previews, formDataOf(baseForm), {tag1: 'C端', country: '沙特阿拉伯', activity: ['足球'], strategy: ['picks']});
   assert.deepEqual(Array.from(context.__flagged.keys), []);
+});
+
+test('v934 必填：**只缺业务策略**也要拦，并把「业务策略」这一行标红、文案点名它', () => {
+  const context = loadValidate();
+  assert.throws(
+    () => context.validateCaseProjectUpload(previews, formDataOf(baseForm), {tag1: 'C端', country: '沙特阿拉伯', activity: '足球'}),
+    (error) => {
+      assert.match(error.message, /业务策略/, '提示要说清缺的是业务策略');
+      assert.doesNotMatch(error.message, /平台|国家|活动主题/, '已选的不要一起报出来');
+      return true;
+    }
+  );
+  assert.deepEqual(Array.from(context.__flagged.keys), ['strategy'], '只标业务策略那一行');
 });
 
 test('v914 必填：只在上传新项目时拦 —— 编辑已有项目走的是别的保存路径', () => {
@@ -333,7 +346,7 @@ test('v914 口径的源码锚点：两边都按 manual_tags 过滤（改动一�
 /* ── 5) 版本号 ──────────────────────────────────────────────────────────── */
 
 test('v914 版本号六处同步', () => {
-  const refs = indexSource.match(/\?v=20261014-chip-x-no-gap-v933/g) || [];
+  const refs = indexSource.match(/\?v=20261014-strategy-required-v934/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(source, /const TOOL_UI_VERSION = '20261014-chip-x-no-gap-v933'/);
+  assert.match(source, /const TOOL_UI_VERSION = '20261014-strategy-required-v934'/);
 });

@@ -940,7 +940,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-chip-x-no-gap-v933';
+const TOOL_UI_VERSION = '20261014-strategy-required-v934';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -13173,20 +13173,23 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     previewFiles.forEach(file => {
       if (!isCasePreviewFile(file)) throw new Error(zh ? '物料预览图仅支持 JPG / PNG / WEBP / GIF / MP4。' : 'Preview must be JPG / PNG / WEBP / GIF / MP4.');
     });
-    // v914：平台 / 国家 / 活动主题三个都必填：缺了就标红标签面板对应行 + 弹提醒，不上传。
+    // v914：平台 / 国家 / 活动主题必填；v934：**业务策略也必填**（用户口径：「这个业务策略也应该是上传时必选的」）。
+    // 缺了就标红标签面板对应行 + 弹提醒，不上传。
     // 只在上传新项目时拦（编辑已有项目走别的保存路径，不受这条约束）。
     const missing = [];
     if (!caseTagSelFirst(chipSel, 'tag1')) missing.push('tag1');
     if (!caseTagSelFirst(chipSel, 'country')) missing.push('country');
     if (!caseTagSelFirst(chipSel, 'activity')) missing.push('activity');
+    if (!caseTagSelFirst(chipSel, 'strategy')) missing.push('strategy');
     flagMissingCaseTagRows(document.getElementById('upload-case-tag-bar'), missing);
     if (missing.length) {
       const labels = missing.map(function(key) {
         if (key === 'tag1') return zh ? '平台' : 'Platform';
         if (key === 'country') return zh ? '国家' : 'Country';
+        if (key === 'strategy') return zh ? '业务策略' : 'Strategy';
         return zh ? '活动主题' : 'Theme';
       });
-      // 两项仍读作「平台和国家」（v809 原样）；三项一起缺时读作「平台、国家和活动主题」
+      // 两项仍读作「平台和国家」（v809 原样）；三项以上一起缺时读作「平台、国家、活动主题和业务策略」
       const joined = labels.length > 2
         ? (zh ? labels.slice(0, -1).join('、') + '和' + labels[labels.length - 1]
           : labels.slice(0, -1).join(', ') + ' and ' + labels[labels.length - 1])

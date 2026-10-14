@@ -21,9 +21,11 @@ test('案例库上传：平台和国家没选就不放行，并说明缺哪一�
   assert.match(validate, /caseTagSelFirst\(chipSel, 'tag1'\)/, '平台＝标签一，必填');
   assert.match(validate, /caseTagSelFirst\(chipSel, 'country'\)/, '国家必填');
   assert.match(validate, /caseTagSelFirst\(chipSel, 'activity'\)/, 'v914 起活动主题也必填');
+  assert.match(validate, /caseTagSelFirst\(chipSel, 'strategy'\)/, 'v934 起业务策略也必填（用户要求）');
   assert.match(validate, /flagMissingCaseTagRows\(document\.getElementById\('upload-case-tag-bar'\), missing\)/, '缺项要在标签面板上标出来');
   assert.match(validate, /请先选择' \+ joined \+ '，再上传。/, '中文提醒要说清缺哪一项');
   assert.match(validate, /return zh \? '活动主题' : 'Theme';/, '缺活动主题时提示文案要认得出这一项');
+  assert.match(validate, /if \(key === 'strategy'\) return zh \? '业务策略' : 'Strategy';/, '缺业务策略时提示文案也要认得出这一项');
   assert.match(source, /validateCaseProjectUpload\(previewFiles, formData, chipSel\)/, '校验必须拿到标签选择');
 });
 

@@ -400,7 +400,7 @@ function loadValidate(selectValues, options) {
 
 const formDataOf = values => ({get: key => values[key] || ''});
 const baseForm = {title: '项目', owner_name: '小王'};
-const tagsOk = {tag1: 'C端', country: '沙特阿拉伯', activity: '足球'};
+const tagsOk = {tag1: 'C端', country: '沙特阿拉伯', activity: '足球', strategy: 'picks'};
 const previews = count => Array.from({length: count}, (_, i) => ({name: 'p' + i + '.png', type: 'image/png'}));
 
 test('v922 校验：每张都选了清单里的真实类型 ⇒ 放行', () => {
@@ -443,9 +443,9 @@ test('v922 校验：拿不到真实网格就不拦（别把"网格没渲染"当�
   assert.equal(context.__focused.length, 0);
 });
 
-test('v922 校验：标签必填（v809/v914）照旧先报，顺序没变', () => {
+test('v922 校验：标签必填（v809/v914/v934）照旧先报，顺序没变', () => {
   const context = loadValidate(['']);
-  assert.throws(() => context.validateCaseProjectUpload(previews(1), formDataOf(baseForm), {}), /平台、国家和活动主题/);
+  assert.throws(() => context.validateCaseProjectUpload(previews(1), formDataOf(baseForm), {}), /平台、国家、活动主题和业务策略/);
 });
 
 /* ── 3) 批量逻辑（纯函数） ───────────────────────────────────────────────── */
@@ -533,7 +533,7 @@ test('v922 接线：校验真的调了这条检查，且只在上传新项目那
 /* ── 5) 版本号 ───────────────────────────────────────────────────────────── */
 
 test('v922 版本号六处同步', () => {
-  const refs = indexSource.match(/\?v=20261014-chip-x-no-gap-v933/g) || [];
+  const refs = indexSource.match(/\?v=20261014-strategy-required-v934/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(source, /const TOOL_UI_VERSION = '20261014-chip-x-no-gap-v933'/);
+  assert.match(source, /const TOOL_UI_VERSION = '20261014-strategy-required-v934'/);
 });
