@@ -940,7 +940,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-strategy-required-v934';
+const TOOL_UI_VERSION = '20261014-library-hot-update-v935';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -6595,6 +6595,70 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     await loadLibraryData();
   }
 
+  // v935：上传 / 删除之后**就地生效**，不再整库重拉。
+  // 起因（用户实测）：「不管删除项目还是上传项目，结束之后都要等 8、9 秒才刷新整个页面」——
+  // 那 8–9 秒来自 reloadLibraryData()：它把全部 source、全部 preview、**整张 vf_preview_ai_tags（1900+ 行）**
+  // 重拉一遍、所有签名 URL 重签一遍、整页重画一遍。而这一次操作其实只影响**一个项目**。
+  // 这里的做法：① 删除 → 本地摘掉这一个项目（含它的物料行与标签缓存），连查都不用查；
+  //              ② 上传 → 只重拉这一个项目的源文件行 + 它的物料行（同一套 select 字段与降级路径），
+  //                 合进本地后只重画。查不到那一行时返回 false，调用方退回整库重拉兜底。
+  async function fetchLibrarySourceWithPreviews(sourceId) {
+    const sourceRes = await caseAwareQuery(full => state.supabase
+      .from('vf_source_files')
+      .select('id,title,country_id,activity_id,category_id,tags,visibility,source_path,source_filename,source_mime_type,source_size_bytes,source_ext,uploaded_by' + (full ? ',owner_name,owner_contact,project_note,download_link' : '') + ',created_at,updated_at')
+      .eq('id', sourceId)
+      .limit(1));
+    if (sourceRes.error) throw translateCaseSchemaError(sourceRes.error);
+    const source = (sourceRes.data || [])[0] || null;
+    const previews = [];
+    if (source) {
+      let from = 0;
+      for (;;) {
+        const res = await previewAwareQuery(full => state.supabase
+          .from('vf_asset_previews')
+          .select(previewSelectFields(full))
+          .eq('source_file_id', sourceId)
+          .order('sort_order', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, from + LIBRARY_PREVIEW_PAGE_SIZE - 1));
+        if (res.error) throw translateCaseSchemaError(res.error);
+        const rows = res.data || [];
+        previews.push(...rows);
+        if (rows.length < LIBRARY_PREVIEW_PAGE_SIZE) break;
+        from += LIBRARY_PREVIEW_PAGE_SIZE;
+      }
+    }
+    return { source: source, previews: previews };
+  }
+
+  async function applyLocalLibraryChange(sourceId, removed) {
+    if (!sourceId) return false;
+    if (removed) {
+      const gone = state.libraryPreviews.filter(item => item.source_file_id === sourceId);
+      state.librarySources = state.librarySources.filter(item => item.id !== sourceId);
+      state.libraryPreviews = state.libraryPreviews.filter(item => item.source_file_id !== sourceId);
+      gone.forEach(function(item) { state.previewAiTagsByPreviewId.delete(String(item.id)); });
+    } else {
+      const fetched = await fetchLibrarySourceWithPreviews(sourceId);
+      if (!fetched.source) return false;
+      state.librarySources = [fetched.source]
+        .concat(state.librarySources.filter(item => item.id !== sourceId))
+        .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+      state.libraryPreviews = sortLibraryPreviewsBySourceOrder(
+        state.libraryPreviews.filter(item => item.source_file_id !== sourceId).concat(fetched.previews)
+      );
+      try {
+        await signVisibleLibraryUrls(fetched.previews.map(preview => ({ source: fetched.source, preview: preview })));
+      } catch (signError) {
+        // 签名失败只是缩略图晚一步出来，不该把"上传成功"变成失败
+        console.warn('Sign new preview URLs failed:', signError && signError.message);
+      }
+    }
+    notePreviewAiTagsChanged();
+    refreshLibraryLoadedUi();
+    return true;
+  }
+
   // case_activity 是 v738 新增的类型值：数据库约束（sql/017 放宽前仍拦 23514）不允许时
   // 整页退回 activity 存放，与 v736 行为一致；约束放宽后下一次加载自动改型。
   let caseActivityTypeReady = null;
@@ -6749,8 +6813,16 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         });
       }
     });
+    state.libraryPreviews = sortLibraryPreviewsBySourceOrder(previews);
+  }
+
+  // v935：物料行的排序口径（先按所属项目在 state.librarySources 里的顺序，再 sort_order，最后 created_at 倒序）。
+  // 抽成函数是为了让"只重拉一个项目"的局部更新（applyLocalLibraryChange）与整库加载**共用同一份排序**，
+  // 免得两处各写一遍、将来改了排序只改一处。
+  function sortLibraryPreviewsBySourceOrder(rows) {
+    const list = Array.isArray(rows) ? rows.slice() : [];
     const sourceOrder = new Map(state.librarySources.map((source, index) => [source.id, index]));
-    state.libraryPreviews = previews.sort((a, b) => {
+    return list.sort((a, b) => {
       const sourceDiff = (sourceOrder.get(a.source_file_id) ?? 999999) - (sourceOrder.get(b.source_file_id) ?? 999999);
       if (sourceDiff) return sourceDiff;
       const sortDiff = (a.sort_order || 0) - (b.sort_order || 0);
@@ -12735,7 +12807,9 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       setUploadProgress(100);
       setMessage(message, state.lang === 'zh' ? '上传成功，已入库。' : 'Uploaded.', false, true);
       setTimeout(closeLibraryUploadModal, 600);
-      await reloadLibraryData();
+      // v935：只把刚入库的这一个项目合进本地状态（原来整库重拉，用户实测要等 8–9 秒）；合不进去才退回整库重拉
+      const appliedLocally = await applyLocalLibraryChange(sourceId);
+      if (!appliedLocally) await reloadLibraryData();
       if (isCaseProject) {
         rememberLastCaseUploadCountry(chipSel.country);
         rememberLastCaseUploadPlatform(caseTagSelFirst(chipSel, 'tag1'));
@@ -15216,7 +15290,10 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       alert(error.message);
       return;
     }
-    await reloadLibraryData();
+    // v935：就地摘掉这一个项目（原来整库重拉，用户实测要等 8–9 秒）；摘不动才退回整库重拉
+    const removedLocally = await applyLocalLibraryChange(sourceId, true);
+    if (!removedLocally) await reloadLibraryData();
+    showCaseToast(state.lang === 'zh' ? ('已删除项目「' + String(source.title || '') + '」') : ('Project "' + String(source.title || '') + '" deleted'));
     // 通知静态DIY iframe 同步删除
     notifyStaticIframe({ type: 'vf:template-deleted', sourceId: sourceId });
     void logAssetEvent('delete', { source: source, preview: relatedPreviews[0] || null });
