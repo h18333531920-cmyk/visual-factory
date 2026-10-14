@@ -892,7 +892,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-tag-usage-v920';
+const TOOL_UI_VERSION = '20261014-type-filter-drop-v921';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -12738,6 +12738,36 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     ].join(' ').toLowerCase();
     return !!text && tokens.every(function(token) { return text.includes(token); });
   }
+  // 项目自身信息命中（v921）：只看「项目自己」的元数据，**绝不看项目里任何一张物料的逐图标签**。
+  // 起因（用户实测）：搜「kiki」+ 选中「弹窗」，结果里冒出一张跟 kiki 毫无关系的弹窗封面 —— 那张
+  // 弹窗的 ai_tags 里根本没有 kiki，命中的是同一项目里两张「未分类」老虎图的逐图标签；旧逻辑见
+  // 「项目级命中就出一张该类型封面卡」的分支，于是拿类别筛选过的封面顶上了。判定文本必须与
+  // 物料级文本隔离，否则换个写法还是会把别的物料的标签混进来。
+  // 候选字段（口径：这些字段**合并成一段文本**，关键词按空白分词、大小写不敏感，每个词都要在
+  // 这段文本里命中（AND）—— 与 caseMaterialMatchesQuery 同一套分词/AND 口径；允许跨字段命中，
+  // 但只在项目自身的字段之间跨，不越到任何一张物料的类型/文件名/逐图标签）：
+  //   项目标题 + 所有者 + 原始文件名 + 国家 / 活动 / 类别选项名 + 项目级标签（visibleLibraryTags）。
+  // 受控词表条目照 libraryItemSearchText 的做法挂拼音 / 英文别名（搜「shate」能命中「沙特」）。
+  function caseProjectMetaMatchesQuery(source, query) {
+    if (!source) return false;
+    const tokens = String(query || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!tokens.length) return false;
+    const vocab = [
+      optionNameById(source.country_id),
+      optionNameById(source.activity_id),
+      optionNameById(source.category_id),
+    ].concat(visibleLibraryTags(source));
+    const parts = [source.title, source.owner_name, source.source_filename].concat(vocab);
+    vocab.forEach(function(term) {
+      const key = String(term || '').trim();
+      if (!key) return;
+      if (LIBRARY_SEARCH_PINYIN[key]) parts.push(LIBRARY_SEARCH_PINYIN[key]);
+      if (LIBRARY_SEARCH_EN_EXTRA[key]) parts.push(LIBRARY_SEARCH_EN_EXTRA[key]);
+      if (LIBRARY_LABELS_EN[key]) parts.push(LIBRARY_LABELS_EN[key]);
+    });
+    const text = parts.map(function(part) { return String(part || ''); }).join(' ').toLowerCase();
+    return tokens.every(function(token) { return text.includes(token); });
+  }
   // ── 同款多语言版配对（v906）───────────────────────────────────────
   // 用户痛点：同一设计的 EN 版和 AR 版各识别一次，两版标签不一致，搜索结果里同款重复占位。
   // 这里的配对**故意保守**：只在「一张 en + 一张 ar」语言互补时成组，语言判不出来的一律各自单飞。
@@ -12850,6 +12880,12 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
           });
           return;
         }
+        // v921：选了「物料类别」筛选 + 有关键词，却一张「该类别且命中关键词」的物料都没有时，
+        // 只有关键词命中的是**项目自身的信息**（项目名 / 项目级标签 / 国家 / 活动 / 类别）才允许
+        // 回落成一张该类型的项目封面卡（搜项目名是常见需求）；项目自身也没命中 ⇒ 这个项目整个不出现在
+        // 结果里 —— 否则就会出现「搜 kiki 冒出一张跟 kiki 无关的弹窗封面」（v909 有意保留、现已否定的语义）。
+        // 没选类别筛选（typeFilters 为空）时这条不生效，行为同 v904/v909 逐字一致。
+        if (typeFilters.length && !caseProjectMetaMatchesQuery(item.source, query)) return;
       }
       // 项目级命中（项目名/标签/国家/活动等）但一张物料都没命中：照旧出一张项目卡。
       // 逐图标签：关键词直接命中某张物料的 AI 标签时，项目卡临时使用

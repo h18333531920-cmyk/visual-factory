@@ -34,6 +34,9 @@ function loadCollapse(options = {}) {
       return name && catalogTypes.indexOf(name) >= 0 ? [name] : null;
     },
     selectedLibraryTagValues: options.selectedLibraryTagValues || (() => []),
+    // v921 起「没选类别就没命中」时还要看关键词命不命中项目自身信息（caseProjectMetaMatchesQuery）
+    optionNameById: options.optionNameById || (() => ''),
+    visibleLibraryTags: options.visibleLibraryTags || ((s) => (s && s.tags) || []),
     projectMatchesType: options.projectMatchesType || (() => false),
     caseCoverFor: (src, typeValue) => {
       calls.push({coverFor: [src.id, typeValue]});
@@ -104,7 +107,11 @@ test('v909 项目里没有该类别命中物料：不铺开，也不拿非该类
     {id: 'splash', preview_filename: 'a.png', material_type: '开机海报', preview_path: 'a.png'},
     {id: 'popup', preview_filename: 'b.png', material_type: '弹窗', preview_path: 'b.png'},
   ];
-  // 关键词只被弹窗的逐图标签命中；开机海报自己什么都不沾
+  // 关键词只被弹窗的逐图标签命中；开机海报自己什么都不沾。
+  // v921 补丁：项目级命中的项目名里必须真的有这个词，卡片才会出现（v921 起
+  // 「选了类别 + 该类别没有命中物料 + 项目自身也没命中」= 项目整个不出现，见 tests/type-filter-drop-v921.test.mjs）。
+  // 这条 v909 的断言保留的是后半段：回落时用**该类别**的封面，不拿那张别的类别的命中图。
+  const project = {id: 'p1', title: 'World Cup 足球', tags: [], caseProject: true};
   const {context, calls} = loadCollapse({
     previews,
     tagsById: {popup: ['足球']},
@@ -112,11 +119,11 @@ test('v909 项目里没有该类别命中物料：不铺开，也不拿非该类
     selectedLibraryTagValues: () => ['开机海报'],
     cover: {cover: previews[0], group: previews},
   });
-  const out = context.collapseCaseProjectItems(itemsFor({id: 'p1', title: 'World Cup', tags: [], caseProject: true}, previews));
+  const out = context.collapseCaseProjectItems(itemsFor(project, previews));
 
   assert.deepEqual(Array.from(out, (item) => item.preview.id), ['splash'], '回落项目卡，且是开机海报封面，不是那张弹窗');
   assert.equal(calls.filter((call) => call.coverFor).length, 1, '退回一次 caseCoverFor 挑封面');
-  assert.equal(calls[0].coverFor.length >= 0, true);
+  assert.deepEqual(calls[0].coverFor, ['p1', '开机海报'], '挑封面时仍带当前类别');
 });
 
 test('v909 源码：铺开与封面替换两处都过了 passTypeFilter', () => {
