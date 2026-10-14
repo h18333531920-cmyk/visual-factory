@@ -7,12 +7,13 @@
 //
 // 背景：v926 删「编辑 / 完成」两个按钮时，把 × 的显隐规则一起拆了（`display: inline-flex` 直接挪进基础规则），
 // 于是每个标签右边常挂一个 ×；v925 时它本来是 `.case-preview-ai-tag.is-editing button { ... }`
-// （只有编辑态才显示）。现在的口径：
-//   **× 默认 opacity:0（位置照旧占着，所以亮起来时整行不跳）；
-//     只有点了这一行末尾的「＋」（面板进入 dataset.adding = 'element' / 'effect'）才 opacity:1；
-//     收起小输入框（Esc / 空框失焦）就跟着灭。**
-//   不再用 hover 触发（用户嫌"扫过去就亮、旁边就是标签本体，太容易误删"），
-//   触屏也没关系：中点 ＋ 一样能进加号态。
+// （只有编辑态才显示）。现在的口径（v929 定触发条件、**v933 定"不占位"**）：
+//   **× 默认 `display: none`（不参与布局 ⇒ 标签后面不会空出一小块）；
+//     只有点了这一行末尾的「＋」（面板进入 dataset.adding = 'element' / 'effect'）才 `display: inline-flex`；
+//     收起小输入框（Esc / 空框失焦）就跟着消失。**
+//   v929–v932 用的是 `opacity: 0`（位置照旧占着）——用户实测反馈「常态标签后面会空出一小块空间」，v933 改成 display。
+//   不用 hover 触发（用户嫌"扫过去就亮、旁边就是标签本体，太容易误删"）；
+//   触屏也没关系：点 ＋ 一样能进加号态。
 //
 // 本文件锁住三件事：
 //   ① 元素标签与动效标签的 × 默认藏着；`is-adding` 时才亮；**没有 hover / focus-within 触发**、
@@ -31,7 +32,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261014-faster-tag-write-v932';
+const VERSION = '20261014-chip-x-no-gap-v933';
 
 const escapeHtml = (value) => String(value == null ? '' : value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -71,10 +72,11 @@ function renderPanel({lang = 'zh', manual = [], ai = [], effectManual = [], addi
   return panel.innerHTML;
 }
 
-test('v929 ①：元素标签的 × 默认藏着，只有加号态才亮', () => {
-  assert.match(chipCss, /\.case-preview-ai-tag button \{[^}]*opacity: 0;/, '× 默认必须是 opacity:0');
-  assert.match(chipCss, /\.case-preview-ai-tag button \{[^}]*display: inline-flex;[^}]*opacity: 0;/, '别改成 display:none —— 那样亮起来时整行会跳（占位要留着）');
-  assert.match(chipCss, /\.case-preview-ai-chips\.is-adding \.case-preview-ai-tag button \{ opacity: 1; \}/, '加号态才把 × 亮出来');
+test('v929/v933 ①：元素标签的 × 默认**不占位**，只有加号态才出现', () => {
+  assert.match(chipCss, /\.case-preview-ai-tag button \{ display: none;/, '× 默认必须是 display:none —— 留着占位会在每个标签后面空出一小块（用户实测反馈过）');
+  assert.match(chipCss, /\.case-preview-ai-chips\.is-adding \.case-preview-ai-tag button \{ display: inline-flex; \}/, '加号态才让 × 参与布局（那时行本来就会变）');
+  assert.doesNotMatch(chipCss, /\.case-preview-ai-tag button \{[^}]*opacity: 0;/, '别再退回"opacity:0 占位"——那正是空出一小块的原因');
+  assert.doesNotMatch(chipCss, /\.case-preview-ai-tag button \{[^}]*opacity: 1;/, '也不许常显');
 });
 
 test('v929 ①：不再用 hover / focus-within 触发（用户嫌扫过去就亮、太容易误删）', () => {
@@ -83,9 +85,10 @@ test('v929 ①：不再用 hover / focus-within 触发（用户嫌扫过去就�
   assert.doesNotMatch(chipCss, /@media \(hover: none\)/, '触屏那条"一直亮"的兜底要去掉，否则 × 在 iPad 上又常驻');
 });
 
-test('v929 ①：人工动效标签的 × 同一口径', () => {
-  assert.match(chipCss, /\.case-preview-ai-effect-tag button \{[^}]*opacity: 0;/, '动效标签的 × 默认也要藏着');
-  assert.match(chipCss, /\.case-preview-ai-effect\.is-adding \.case-preview-ai-effect-tag button \{ opacity: 1; \}/, '动效行的加号态才亮它自己的 ×');
+test('v929/v933 ①：人工动效标签的 × 同一口径', () => {
+  assert.match(chipCss, /\.case-preview-ai-effect-tag button \{ display: none;/, '动效标签的 × 默认也不占位');
+  assert.match(chipCss, /\.case-preview-ai-effect\.is-adding \.case-preview-ai-effect-tag button \{ display: inline-flex; \}/, '动效行的加号态才让它出现');
+  assert.doesNotMatch(chipCss, /\.case-preview-ai-effect-tag button \{[^}]*opacity: 0;/, '同样不许用 opacity 占位');
   assert.doesNotMatch(chipCss, /\.case-preview-ai-effect-tag:hover button/, '动效标签也不该 hover 触发');
 });
 

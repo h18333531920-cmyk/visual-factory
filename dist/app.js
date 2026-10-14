@@ -720,12 +720,14 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-preview-ai-tag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 5px 8px; border: 1px solid #fdba74; border-radius: 999px; background: #fff7ed; color: #9a3412; font-size: 11px; line-height: 1; cursor: default; }
 .case-preview-ai-tag.is-manual { border-color: #86efac; background: #f0fdf4; color: #166534; }
 /* v926：× 就是删除入口（「编辑 / 完成」两个按钮已删掉）。
-   v928：× 改成不常驻。**v929：只在「加号态」出现** —— 点了行末尾的「＋」才亮、收起小输入框就灭。
-   用户口径：「这样太容易误删了，要点加号的情况下才出现叉」。
-   位置照旧占着（opacity 而不是 display），所以亮起来时整行不会跳。 */
-.case-preview-ai-tag button { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #c2410c; font-size: 13px; line-height: 12px; cursor: pointer; opacity: 0; transition: opacity .12s ease; }
+   v928：× 改成不常驻。v929：只在「加号态」出现（点了行末尾的 ＋ 才亮）。
+   v933：**不在加号态时直接 display:none，别留空位** —— 用户实测反馈「标签后面会空出一小块空间」
+   （v929-v932 用的是 opacity:0，位置照旧占着，所以每个标签右边挂着一块 ~18px 的空白）。
+   进加号态时按钮回到 display:inline-flex：那时行本来就要变（小输入框会出现），
+   这一点点位移发生在"用户自己按下 ＋"的瞬间，不碍事。 */
+.case-preview-ai-tag button { display: none; align-items: center; justify-content: center; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #c2410c; font-size: 13px; line-height: 12px; cursor: pointer; }
 .case-preview-ai-tag.is-manual button { color: #15803d; }
-.case-preview-ai-chips.is-adding .case-preview-ai-tag button { opacity: 1; }
+.case-preview-ai-chips.is-adding .case-preview-ai-tag button { display: inline-flex; }
 .case-preview-ai-tag button:hover { background: #fed7aa; }
 .case-preview-ai-tag.is-manual button:hover { background: #bbf7d0; }
 .case-preview-ai-excluded { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 4px 7px; border-radius: 999px; background: #f1f5f9; color: #94a3b8; font-size: 10.5px; text-decoration: line-through; }
@@ -755,10 +757,10 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-preview-ai-effect-title { font-size: 11px; font-weight: 650; color: #7c3aed; white-space: nowrap; }
 .case-preview-ai-effect-tag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 5px 8px; border: 1px solid #c4b5fd; border-radius: 999px; background: #f5f3ff; color: #5b21b6; font-size: 11px; line-height: 1; }
 /* v926：人工动效标签（manual_effect_tags）沿用元素人工标签那套绿色小 chip，带 × 可删
-   v928/v929：× 与元素标签同一口径 —— 默认藏着，**点了这一行的「＋」才亮** */
+   v928/v929：× 与元素标签同一口径 —— 默认不占位，**点了这一行的「＋」才出现**（v933 同元素行） */
 .case-preview-ai-effect-tag.is-manual { border-color: #86efac; background: #f0fdf4; color: #166534; }
-.case-preview-ai-effect-tag button { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #15803d; font-size: 13px; line-height: 12px; cursor: pointer; opacity: 0; transition: opacity .12s ease; }
-.case-preview-ai-effect.is-adding .case-preview-ai-effect-tag button { opacity: 1; }
+.case-preview-ai-effect-tag button { display: none; align-items: center; justify-content: center; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #15803d; font-size: 13px; line-height: 12px; cursor: pointer; }
+.case-preview-ai-effect.is-adding .case-preview-ai-effect-tag button { display: inline-flex; }
 .case-preview-ai-effect-tag button:hover { background: #bbf7d0; }
 .case-foot-tool-btn { flex: 0 0 auto; display: inline-flex; align-items: center; padding: 5px 11px; border: 1px dashed #b7c2d4; background: #fff; color: #475569; font-size: 12px; line-height: 1; border-radius: 999px; cursor: pointer; white-space: nowrap; }
 .case-foot-tool-btn:hover { border-color: #64748b; color: #0f172a; background: #f1f5f9; }
@@ -938,7 +940,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-faster-tag-write-v932';
+const TOOL_UI_VERSION = '20261014-chip-x-no-gap-v933';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
