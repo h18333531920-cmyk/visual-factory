@@ -426,8 +426,8 @@ test('v918 词表页：kind=effect 的行看得见（动效小标记），且不
 
 test('v918 版本号（index.html 5 处 + app.js 1 处）', () => {
   const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-  assert.equal((indexSource.match(/\?v=20261014-effect-tags-v918/g) || []).length, 5);
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-effect-tags-v918'/);
+  assert.equal((indexSource.match(/\?v=20261014-force-dynamic-v919/g) || []).length, 5);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-force-dynamic-v919'/);
 });
 
 /* ── 8) 脚本文案：dry-run 能看出"会请求效果标签的有几张" ─────────────────── */

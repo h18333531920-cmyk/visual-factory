@@ -30,6 +30,7 @@ import {
   skipSummary,
   formatQueueComposition,
   pendingKindCounts,
+  formatPendingSummary,
   mimeForImagePath,
   cleanTags,
   buildSuccessRow,
@@ -214,7 +215,7 @@ test('待处理清单：没行要跑、成功且内容没变跳过、内容变�
   assert.deepEqual(plan.skipped.map(item => item.preview.id), ['p-fresh']);
   assert.deepEqual(plan.stats, {
     materials: 4, pendingTotal: 3, pending: 3, skipped: 1,
-    reasons: {noRow: 1, notSuccess: 1, contentChanged: 1, force: 0}
+    reasons: {noRow: 1, notSuccess: 1, contentChanged: 1, force: 0, forceDynamic: 0}
   });
 
   // --force：连内容没变的那张也重跑
@@ -591,4 +592,127 @@ test('v918 sql/028 没执行时的降级：认出缺列错，并把 effect_tags 
   // 写库通道只有一条：降级也要落在同一个 upsert 里（不许另开一条写路径）
   assert.match(scriptSource, /return post\(withoutEffectTags\(row\)\)/);
   assert.equal(scriptSource.split("method: 'POST'").length - 1, 1);
+});
+
+/* ── v919 --force-dynamic：只强制重跑「动态物料」那一类（补 v918 的效果标签用）──── */
+
+test('v919 --force-dynamic：动态物料「已成功且内容没变」也重跑，静态图照旧跳过', () => {
+  // 场景就是任务书的原话：库里这些动态物料的行是 v918 之前生成的（status=success、
+  // content_key 没变、effect_tags 是空的），要补效果标签只能重跑；但**不能连静态图一起重跑**
+  // —— 一千多张静态图纯属白跑，用户明确不想要。
+  const gif = previewOf('p-gif', {path: 'u1/s1/a.gif'});
+  const jpg = previewOf('p-jpg', {path: 'u1/s1/a.jpg'});
+  const mp4 = previewOf('p-mp4', {path: 'u1/s1/v.mp4'});
+  const webp = previewOf('p-webp', {path: 'u1/s1/a.webp'});
+  const previews = [gif, jpg, mp4, webp];
+  const existingRows = [tagRow(gif), tagRow(jpg), tagRow(mp4), tagRow(webp)];   // 四行都 success + 内容没变
+
+  // 默认（不加开关）：全是"已成功且内容没变" ⇒ 一张都不跑，行为与 v918 逐字一致
+  const plain = planWorkItems({previews, existingRows});
+  assert.deepEqual(plain.pending, [], '默认不许碰它们');
+  assert.equal(plain.stats.skipped, 4);
+  assert.equal(plain.stats.reasons.forceDynamic, 0);
+
+  // 加 --force-dynamic：只有动态物料（gif / mp4）进计划，静态图（jpg / webp）仍跳过
+  const forced = planWorkItems({previews, existingRows, forceDynamic: true});
+  assert.deepEqual(forced.pending.map(item => item.preview.id), ['p-gif', 'p-mp4']);
+  assert.deepEqual(forced.pending.map(item => item.reason), ['force-dynamic', 'force-dynamic']);
+  assert.deepEqual(forced.skipped.map(item => item.preview.id), ['p-jpg', 'p-webp'],
+    '静态图不受这个开关影响 —— 这是这个开关存在的唯一理由');
+  assert.equal(forced.stats.reasons.forceDynamic, 2);
+  assert.equal(forced.stats.reasons.force, 0, '--force-dynamic 不许冒充 --force');
+  assert.equal(forced.stats.pending, 2);
+  assert.equal(forced.stats.skipped, 2);
+
+  // 关键断言（写错就是白跑一千多张静态图）：进计划的每一张都必须是动态物料
+  assert.equal(forced.pending.every(item => previewKind(item.preview) === KIND_DYNAMIC), true);
+
+  // 内容真变了的动态物料照旧算 content-changed（不冒充开关的功劳）
+  const changed = previewOf('p-gif-changed', {path: 'u1/s1/c.gif'});
+  const changedPlan = planWorkItems({
+    previews: [changed],
+    existingRows: [tagRow(changed, {contentKey: previewContentKey({...changed, updated_at: '2026-10-01T00:00:00Z'})})],
+    forceDynamic: true
+  });
+  assert.equal(changedPlan.pending[0].reason, 'content-changed');
+
+  // 动态**失败过**的行本来就是待处理（not-success），开关加不加都一样
+  const failedGif = previewOf('p-gif-failed', {path: 'u1/s1/d.gif'});
+  const failedRows = [tagRow(failedGif, {status: 'failed'})];
+  assert.deepEqual(planWorkItems({previews: [failedGif], existingRows: failedRows}).pending.map(i => i.reason), ['not-success']);
+  assert.deepEqual(
+    planWorkItems({previews: [failedGif], existingRows: failedRows, forceDynamic: true}).pending.map(i => i.reason),
+    ['not-success'], '失败行仍走 not-success，不因开关改名');
+
+  // 没有行的动态物料照旧 no-row（开关不改变这一条）
+  assert.equal(planWorkItems({previews: [gif], existingRows: [], forceDynamic: true}).pending[0].reason, 'no-row');
+});
+
+test('v919 CLI 与接线：--force-dynamic 默认关、传了开；两个一起传时 --force 优先', () => {
+  assert.equal(parseArgs([]).forceDynamic, false, '默认必须是关的（不然静态图会被白跑一遍）');
+  assert.equal(parseArgs(['--force-dynamic']).forceDynamic, true);
+  assert.equal(parseArgs(['--force-dynamic']).force, false, '别把 --force-dynamic 误当成 --force');
+  assert.equal(parseArgs(['--dry-run', '--force-dynamic']).forceDynamic, true, 'dry-run 也要能带上它看效果');
+
+  // 两个一起传：语义上 --force 优先（全都强制），planWorkItems 的结果与"只传 --force"逐字段一致
+  const both = parseArgs(['--force', '--force-dynamic']);
+  assert.equal(both.force, true);
+  assert.equal(both.forceDynamic, true, '两个开关可以共存，不报错');
+
+  const gif = previewOf('p-gif', {path: 'u1/s1/a.gif'});
+  const jpg = previewOf('p-jpg', {path: 'u1/s1/a.jpg'});
+  const planArgs = {previews: [gif, jpg], existingRows: [tagRow(gif), tagRow(jpg)]};
+  const forceOnly = planWorkItems({...planArgs, force: true});
+  const forceBoth = planWorkItems({...planArgs, force: true, forceDynamic: true});
+  assert.deepEqual(forceBoth.stats, forceOnly.stats, '两个一起传 == 只传 --force');
+  assert.equal(forceOnly.stats.reasons.forceDynamic, 0, '--force 优先时，动态那两张按 force 算，不按 forceDynamic');
+  assert.equal(forceOnly.stats.reasons.force, 2);
+  assert.equal(forceOnly.stats.skipped, 0);
+
+  // 接线与文案：main 真的把开关传下去了；dry-run 要写清开关的效果；USAGE 要写清优先级
+  assert.match(scriptSource, /planWorkItems\(\{previews, existingRows, force: options\.force, forceDynamic: options\.forceDynamic, limit: options\.limit\}\)/);
+  assert.match(scriptSource, /console\.log\(formatPendingSummary\(plan, pendingKinds, options\)\)/, '「待处理」那行必须走这个纯函数（文案才被测试锁得住）');
+  assert.match(scriptSource, /其中 --force-dynamic 强制重跑动态物料 /, 'dry-run 的「待处理」行要能看出这个开关干了什么');
+  assert.match(scriptSource, /--force 优先/, 'USAGE 要写清两个开关一起传时谁优先');
+  assert.match(scriptSource, /forceDynamic && !force/,
+    '与 --force 同时传时不重复报 forceDynamic 的账（--force 已经覆盖全部）');
+  assert.match(scriptSource, /forceDynamic && previewKind\(preview\) === KIND_DYNAMIC/,
+    '判据必须带 KIND_DYNAMIC，静态图才不会被误伤');
+});
+
+test('v919 dry-run「待处理」那一行：加不加开关各长什么样（把开关的效果写在输出里）', () => {
+  // 场景：库里 1800 张静态图 + 40 张动态物料全都是「已成功且内容没变」，另有 3 张从没跑过。
+  const jpgs = Array.from({length: 1800}, (_, i) => previewOf('p-jpg-' + i, {path: 'u1/s1/' + i + '.jpg'}));
+  const gifs = Array.from({length: 40}, (_, i) => previewOf('p-gif-' + i, {path: 'u1/s1/' + i + '.gif'}));
+  const fresh = previewOf('p-new', {path: 'u1/s1/new.jpg'});
+  const previews = [...jpgs, ...gifs, fresh];
+  const existingRows = [...jpgs, ...gifs].map(preview => tagRow(preview));
+
+  // 不加开关：与 v918 逐字一致（多出来的「--force-dynamic」那段不出现）
+  const plainPlan = planWorkItems({previews, existingRows});
+  const plainLine = formatPendingSummary(plainPlan, pendingKindCounts(plainPlan.pending), {});
+  assert.match(plainLine, /^待处理：1 张（其中直接送图 1 张 · 抽帧送 0 张）/);
+  assert.match(plainLine, /（新增 1 \/ 未成功 0 \/ 内容变了 0）/, '没有 --force / --force-dynamic 时这一行一个字都不该变');
+  assert.equal(plainLine.includes('--force-dynamic'), false);
+  assert.equal(plainLine.includes('--force '), false);
+
+  // 加 --force-dynamic：40 张动态物料被强行拎出来（静态图一张都不加）
+  const plan = planWorkItems({previews, existingRows, forceDynamic: true});
+  const line = formatPendingSummary(plan, pendingKindCounts(plan.pending), {forceDynamic: true});
+  assert.match(line, /^待处理：41 张（其中直接送图 1 张 · 抽帧送 40 张）/);
+  assert.match(line, /（其中 --force-dynamic 强制重跑动态物料 40 张）/, '任务书点名要有的那句');
+  assert.match(line, /（新增 1 \/ 未成功 0 \/ 内容变了 0）/, '开关不该影响其它三个计数');
+  assert.match(line, /，跳过 1800 张（已成功且内容没变）$/, '1800 张静态图仍跳过 —— 没被开关带跑');
+
+  // 两个一起传：--force 优先，不再重复报 forceDynamic 的账（动态那几张已算进 --force 重跑）
+  const forcePlan = planWorkItems({previews, existingRows, force: true, forceDynamic: true});
+  const forceLine = formatPendingSummary(forcePlan, pendingKindCounts(forcePlan.pending), {force: true, forceDynamic: true});
+  assert.match(forceLine, /^待处理：1841 张/);
+  assert.match(forceLine, /\/ --force 重跑 1840）/);
+  assert.equal(forceLine.includes('--force-dynamic 强制重跑'), false, '--force 优先时不重复报账');
+
+  // --limit 的行也照旧
+  const limitedPlan = planWorkItems({previews, existingRows, forceDynamic: true, limit: 5});
+  const limitedLine = formatPendingSummary(limitedPlan, pendingKindCounts(limitedPlan.pending), {forceDynamic: true});
+  assert.match(limitedLine, /，另有 36 张被 --limit 留到下一轮$/);
 });

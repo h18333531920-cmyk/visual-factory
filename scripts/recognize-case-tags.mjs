@@ -22,8 +22,10 @@
 //      kind='effect' 的行（受控词表，见 sql/028），与元素词表**分开传**（两个数组，不混一个）；
 //      模型只许从这份词表里挑，写进 vf_preview_ai_tags.effect_tags。
 //      ⚠️ 断点续跑只认 content_key + status（见 planWorkItems），**不认 effect_tags 是不是空的** ——
-//      所以库里 v918 之前识别过的动态物料（status=success、内容没变）不会被自动补上效果标签，
-//      要补就加 --force（或先删掉那些行的 status）跑一批。
+//      所以库里 v918 之前识别过的动态物料（status=success、内容没变）不会被自动补上效果标签。
+//      v919 `--force-dynamic` 就是为补这一批加的：**只**把「已成功且内容没变」的**动态物料**放进计划，
+//      静态图照旧跳过（不然一千多张静态图会被白跑一遍 —— 用户明确不想要那个）。`--force` 仍是"所有都强制"，
+//      且**优先于 --force-dynamic**（两个一起传 = 全都强制）。
 //      **抽帧**是 v917 的核心：GLM 视觉通道吃不下动图（2026-10-13 全量实测：93 张 gif 只成功 6 张），
 //      所以先用 ffmpeg 把动态物料抽成「中间帧 + 最后一帧」两张静态 PNG 再送模型。
 //      取自中间帧和末帧而不是首帧，是因为**用户实测反馈**：动态弹窗的第一帧往往还没弹出来（空状态）。
@@ -247,6 +249,29 @@ export function pendingKindCounts(items) {
   return out;
 }
 
+// 「待处理：N 张」那一行（dry-run 与正式跑都打，这就是用户判断"这次跑什么、为什么"的入口）。
+// 抽成纯函数才好锁文案：**加了 --force-dynamic 时要把"其中有几张是被这个开关强行拎出来的"写清楚**，
+// 不加时这一行与 v918 逐字一致（forceDynamic 计入 0、多出来的那段不出现）。
+// 两个开关一起传时 --force 优先：那时动态那几张已经算在 "--force 重跑" 里，这里不再重复报账。
+export function formatPendingSummary(plan, pendingKinds, {force = false, forceDynamic = false} = {}) {
+  const stats = plan?.stats || {};
+  const reasons = stats.reasons || {};
+  const kinds = pendingKinds || {direct: 0, dynamic: 0};
+  return '待处理：' + (stats.pending || 0) + ' 张'
+    + '（其中直接送图 ' + (kinds.direct || 0) + ' 张 · 抽帧送 ' + (kinds.dynamic || 0) + ' 张）'
+    + (forceDynamic && !force
+      ? '（其中 --force-dynamic 强制重跑动态物料 ' + (reasons.forceDynamic || 0) + ' 张）'
+      : '')
+    + '（新增 ' + (reasons.noRow || 0)
+    + ' / 未成功 ' + (reasons.notSuccess || 0)
+    + ' / 内容变了 ' + (reasons.contentChanged || 0)
+    + (force ? ' / --force 重跑 ' + (reasons.force || 0) : '')
+    + '），跳过 ' + (stats.skipped || 0) + ' 张（已成功且内容没变）'
+    + ((stats.pendingTotal || 0) > (stats.pending || 0)
+      ? '，另有 ' + ((stats.pendingTotal || 0) - (stats.pending || 0)) + ' 张被 --limit 留到下一轮'
+      : '');
+}
+
 export function mimeForImagePath(path) {
   const match = String(path || '').match(/\.([a-z0-9]+)$/i);
   return (match && MIME_BY_EXT[match[1].toLowerCase()]) || 'image/jpeg';
@@ -321,15 +346,20 @@ export function buildFailureRow({preview, error, current = null, experimentKey =
 }
 
 // 断点续跑的核心：只有「没有行 / 状态不是 success / content_key 变了」才重跑。
-// content_key 一致 = 画面没变过，标签直接可用（--force 才重跑）。
-export function planWorkItems({previews = [], existingRows = [], force = false, limit = 0} = {}) {
+// content_key 一致 = 画面没变过，标签直接可用（--force / --force-dynamic 才重跑）。
+// v919 --force-dynamic：**只**把「已成功且内容没变」的**动态物料**（gif/mp4/mov/webm，抽帧那一类）
+// 也放进计划 —— 那些行是 v918 之前生成的，effect_tags 是空的，得重跑一次才补得上效果标签。
+// 静态图**不受这个开关影响**：已成功且内容没变的照旧跳过（这就是这个开关存在的唯一理由 ——
+// 只重跑动态物料，不把一千多张静态图再跑一遍）。
+// force（--force）是"所有都强制"，且**优先级高于 forceDynamic**：两个一起传 = 只按 force 算。
+export function planWorkItems({previews = [], existingRows = [], force = false, forceDynamic = false, limit = 0} = {}) {
   const existing = new Map();
   for (const row of existingRows) {
     if (row?.preview_id) existing.set(row.preview_id, row);
   }
   const pending = [];
   const skipped = [];
-  const reasons = {noRow: 0, notSuccess: 0, contentChanged: 0, force: 0};
+  const reasons = {noRow: 0, notSuccess: 0, contentChanged: 0, force: 0, forceDynamic: 0};
   for (const preview of previews) {
     const current = existing.get(preview.id) || null;
     const contentKey = previewContentKey(preview);
@@ -338,6 +368,8 @@ export function planWorkItems({previews = [], existingRows = [], force = false, 
     else if (force) { reason = 'force'; reasons.force += 1; }
     else if (String(current.status || '') !== 'success') { reason = 'not-success'; reasons.notSuccess += 1; }
     else if (String(current.content_key || '') !== contentKey) { reason = 'content-changed'; reasons.contentChanged += 1; }
+    // 走到这里 = 已成功 + 内容没变：只有「动态物料 + 开了 --force-dynamic」才重跑，其余照旧跳过。
+    else if (forceDynamic && previewKind(preview) === KIND_DYNAMIC) { reason = 'force-dynamic'; reasons.forceDynamic += 1; }
     if (reason) pending.push({preview, current, reason, contentKey});
     else skipped.push({preview, current});
   }
@@ -585,6 +617,7 @@ export function createOptions() {
     concurrency: DEFAULT_CONCURRENCY,
     rate: DEFAULT_RATE,
     force: false,
+    forceDynamic: false,
     dryRun: false,
     yes: false,
     markFailed: true,
@@ -633,6 +666,7 @@ export function parseArgs(argv = process.argv.slice(2)) {
       i = taken.next; continue;
     }
     if (arg === '--force') { options.force = true; continue; }
+    if (arg === '--force-dynamic') { options.forceDynamic = true; continue; }
     if (arg === '--dry-run') { options.dryRun = true; continue; }
     if (arg === '--skip-dynamic') { options.skipDynamic = true; continue; }
     if (arg === '--include-gif') {
@@ -694,7 +728,10 @@ const USAGE = `案例库逐图 AI 标签 · 本机批量识别
   --limit <N>                 本轮最多处理 N 张（断点续跑友好：跑一批看一批）
   --concurrency <N>           同时几张，默认 ${DEFAULT_CONCURRENCY}，上限 ${CONCURRENCY_MAX}
   --rate <N>                  每秒最多发起几次模型调用，默认 ${DEFAULT_RATE}（免费档限流未知，先保守）
-  --force                     连「已成功且内容没变」的行也重跑（默认跳过它们）
+  --force                     连「已成功且内容没变」的行也重跑（默认跳过它们；所有物料一律重跑）
+  --force-dynamic             只强制重跑动态物料（gif/mp4/mov/webm，抽帧那一类）：它们即便已成功、
+                              内容没变也重跑一遍（补 v918 的效果标签）；静态图**不受影响**，
+                              已成功且内容没变的照旧跳过。与 --force 一起传时 **--force 优先**（= 全都强制）
   --dry-run                   只列队列构成（直接送 / 抽帧送 / 跳过各多少张）与待处理分布，不调模型、不写库
   --skip-dynamic              动态物料（gif/mp4/mov/webm）一律跳过，不抽帧（退回 v916 的老行为）
   --yes                       跳过开始前的确认（非 dry-run 且无 TTY 时必须加）
@@ -715,7 +752,9 @@ const USAGE = `案例库逐图 AI 标签 · 本机批量识别
   候选词只从 vf_tag_vocabulary 里 kind='effect' 的受控词表挑（见 sql/028_effect_tags.sql），
   模型挑了词表外的词一律丢掉（效果这一维要能稳定筛，不许在词表里裂出近义词）。
   ⚠️ 断点续跑只认「内容没变 + 已成功」，**不看 effect_tags 空不空** ——
-     v918 之前识别过的动态物料不会被自动补上效果标签，要补就加 --force（建议配合 --project 小批跑）。
+     v918 之前识别过的动态物料不会被自动补上效果标签。
+     补齐就用 **--force-dynamic**（只重跑动态物料，静态图一张都不动；建议配合 --project 小批跑）——
+     正是为了不把一千多张静态图再白跑一遍才加的它；真要全量重跑才用 --force。
 
 凭证（缺了会提示；二选一，别写进代码）：
   环境变量：SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / GLM_API_KEY（ZHIPU_API_KEY 也认）
@@ -1498,7 +1537,7 @@ async function main() {
   const vocabulary = elementVocabularyFromRows(vocabularyRows);
   // v918：效果词表与元素词表**分开读、分开传**（同一份表按 kind 分流，别合成一个数组）
   const effectVocabulary = effectVocabularyFromRows(vocabularyRows);
-  const plan = planWorkItems({previews, existingRows, force: options.force, limit: options.limit});
+  const plan = planWorkItems({previews, existingRows, force: options.force, forceDynamic: options.forceDynamic, limit: options.limit});
   const pendingKinds = pendingKindCounts(plan.pending);
   const effectRequested = effectRequestCount({dynamicPending: pendingKinds.dynamic, effectVocabularySize: effectVocabulary.length});
 
@@ -1506,14 +1545,7 @@ async function main() {
   console.log('范围：' + (options.project ? '项目「' + options.project + '」→ ' + sources.length + ' 个' : '全部案例项目 ' + sources.length + ' 个')
     + '；物料 ' + casePreviews.length + ' 张，预览表共 ' + previewTotal + ' 行');
   console.log(formatQueueComposition(skipped, queueOptions));
-  console.log('待处理：' + plan.stats.pending + ' 张'
-    + '（其中直接送图 ' + pendingKinds.direct + ' 张 · 抽帧送 ' + pendingKinds.dynamic + ' 张）'
-    + '（新增 ' + plan.stats.reasons.noRow
-    + ' / 未成功 ' + plan.stats.reasons.notSuccess
-    + ' / 内容变了 ' + plan.stats.reasons.contentChanged
-    + (options.force ? ' / --force 重跑 ' + plan.stats.reasons.force : '')
-    + '），跳过 ' + plan.stats.skipped + ' 张（已成功且内容没变）'
-    + (plan.stats.pendingTotal > plan.stats.pending ? '，另有 ' + (plan.stats.pendingTotal - plan.stats.pending) + ' 张被 --limit 留到下一轮' : ''));
+  console.log(formatPendingSummary(plan, pendingKinds, options));
   if (pendingKinds.dynamic) {
     console.log('  抽帧那 ' + pendingKinds.dynamic + ' 张：每张用 ffmpeg 抽「中间帧 + 最后一帧」两张 PNG，'
       + '当一组送 ' + FRAMES_MODEL + '（一条消息看两张，拿回一套统一标签）。');
@@ -1526,17 +1558,18 @@ async function main() {
       : '；⚠ 效果词表为空 ⇒ 一张都不会请求，请先在 Supabase 执行 sql/028_effect_tags.sql'));
   if (effectRequested < pendingKinds.dynamic && effectVocabulary.length === 0 && pendingKinds.dynamic > 0) {
     console.warn('⚠ 效果词表读不到（vf_tag_vocabulary 里没有 kind=effect 的行）⇒ 本轮动态物料只写元素标签，'
-      + 'effect_tags 写空数组。执行 sql/028_effect_tags.sql 后再跑一次（这些行已经 success，要 --force 才重跑）。');
+      + 'effect_tags 写空数组。执行 sql/028_effect_tags.sql 后再跑一次（这些行已经 success，'
+      + '加 --force-dynamic 才能重跑它们，静态图不受影响）。');
   }
 
   if (options.dryRun) {
     if (plan.pending.length) printProjectDistribution(plan.pending, id => projectTitles.get(id) || '');
-    else console.log('没有需要处理的图片（该跳过的都在上面按原因列了）。');
+    else console.log('没有需要处理的图片（该跳过的都在上面按原因列了）。要强制重跑动态物料（补效果标签）加 --force-dynamic。');
     console.log('--dry-run：没有调模型、没有写库、也没有真的抽帧（只探测了 ffmpeg/ffprobe 在不在、会不会用）。');
     return 0;
   }
   if (!plan.pending.length) {
-    console.log('没有需要处理的图片（都是最新的）。要强制重跑就加 --force。');
+    console.log('没有需要处理的图片（都是最新的）。要强制重跑就加 --force；只补动态物料的效果标签用 --force-dynamic。');
     return 0;
   }
 
