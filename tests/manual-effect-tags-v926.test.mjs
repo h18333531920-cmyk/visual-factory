@@ -26,7 +26,7 @@ const endpointSource = readFileSync(join(ROOT, 'functions', 'api', 'case-preview
 const scriptSource = readFileSync(join(ROOT, 'scripts', 'recognize-case-tags.mjs'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
 const sqlSource = readFileSync(join(ROOT, 'sql', '031_manual_effect_tags.sql'), 'utf8');
-const VERSION = '20261014-inline-add-focus-guard-v931';
+const VERSION = '20261014-faster-tag-write-v932';
 
 const previewId = '11111111-1111-4111-8111-111111111111';
 const userId = '22222222-2222-4222-8222-222222222222';
@@ -168,14 +168,16 @@ test('v926 端点 manual-effect-remove：只从人工动效层摘掉那个词', 
   assert.equal(bad.status, 400);
 });
 
-test('v926 端点 save：effect_tags 刨掉人工动效层，manual_effect_tags 原样保留绝不覆盖', async (t) => {
+test('v926 端点 save：effect_tags 刨掉人工动效层；manual_effect_tags 干脆不写（v932 起）', async (t) => {
   const saved = await callEndpoint(t, {
     action: 'save', previewId, tags: ['汉堡', '餐桌'], effectTags: ['爆炸', '缩放', '烟雾'], model: 'glm-4v-flash-frames', contentKey: 'p.gif|12'
   }, {current: CURRENT});
   assert.equal(saved.status, 200);
   const row = saved.writes.at(-1);
-  assert.deepEqual(row.effect_tags, ['爆炸', '烟雾'], '「缩放」在人工动效层里 ⇒ 不进 AI 层');
-  assert.deepEqual(row.manual_effect_tags, ['缩放'], '人工动效层原样保留');
+  assert.deepEqual(row.effect_tags, ['爆炸', '烟雾'], '「缩放」在人工动效层里 ⇒ 不进 AI 层（这一层还是照旧读库里的值来去重）');
+  // v932：**payload 里不带这一列** —— upsert 不带 = 库里原样保留，比"写回原值"更硬，
+  // 还省掉"sql/031 没跑时每次写都被拒再摘列重试"的那一个白跑往返（那正是"点一下要等好几秒"的一大块）。
+  assert.equal('manual_effect_tags' in row, false, '识别流程根本不碰人工动效层这一列');
   assert.deepEqual(row.ai_tags, ['餐桌'], '元素 AI 层照旧刨掉人工元素标签「汉堡」');
   assert.deepEqual(row.manual_tags, ['汉堡']);
   assert.deepEqual(row.excluded_tags, []);
@@ -191,9 +193,10 @@ test('v926 端点：两个可选列都缺时，写库降级成"摘一列重试�
     action: 'save', previewId, tags: ['餐桌'], effectTags: ['爆炸'], contentKey: 'p.gif|12'
   }, {current: null, rejectPost: missing});
   assert.equal(result.status, 200, '降级要成功，不许把整条写入判失败');
-  assert.equal(result.writes.length, 3, '第一次带两列被拒 → 摘一列再试 → 再摘一列才成功');
-  assert.ok('manual_effect_tags' in result.writes[0] && 'effect_tags' in result.writes[0]);
-  assert.ok(!('manual_effect_tags' in result.writes.at(-1)) && !('effect_tags' in result.writes.at(-1)));
+  assert.equal(result.writes.length, 2, 'v932：载荷不再带人工动效层 ⇒ 只剩 effect_tags 一列要摘（一次重试就够）');
+  assert.equal('manual_effect_tags' in result.writes[0], false, 'v932：识别流程的载荷里根本没有这一列');
+  assert.ok('effect_tags' in result.writes[0]);
+  assert.ok(!('effect_tags' in result.writes.at(-1)));
   assert.deepEqual(result.writes.at(-1).ai_tags, ['餐桌'], '其余列一字不动');
   assert.deepEqual(OPTIONAL_TAG_COLUMNS, ['effect_tags', 'manual_effect_tags']);
   assert.equal(withoutMissingOptionalColumns({ai_tags: []}, {message: 'HTTP 500'}), null);

@@ -29,7 +29,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261014-inline-add-focus-guard-v931';
+const VERSION = '20261014-faster-tag-write-v932';
 
 const escapeHtml = (value) => String(value == null ? '' : value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -45,10 +45,16 @@ function makeDom({kind = 'element', value = ''} = {}) {
     effect: {inputId: 'case-preview-ai-effect-add-input', plusId: 'case-preview-ai-effect-add-plus', confirmId: 'case-preview-ai-effect-add-confirm'}
   }[kind];
   const rows = {element: {scrollLeft: 120}, effect: {scrollLeft: 120}};
+  const confirmClasses = new Set();
+  const confirm = {
+    id: ids.confirmId, disabled: false, textContent: '✓', isConnected: true,
+    classList: {add: (name) => { confirmClasses.add(name); }, remove: (name) => { confirmClasses.delete(name); }}
+  };
   const panel = {
     dataset: {previewId: 'p1', adding: kind},
     innerHTML: '',
     querySelector: (selector) => {
+      if (String(selector) === '#' + ids.confirmId) return confirm;
       if (String(selector).indexOf('.case-preview-ai-effect') === 0) return rows.effect;
       if (String(selector).indexOf('.case-preview-ai-chips') === 0) return rows.element;
       return null;
@@ -63,14 +69,16 @@ function makeDom({kind = 'element', value = ''} = {}) {
     closest: (selector) => (String(selector).indexOf('case-preview-ai-panel') >= 0 ? panel : (String(selector).indexOf('case-project-backdrop') >= 0 ? backdrop : null)),
     focus() { this.focusCount += 1; }
   };
-  return {input, panel, backdrop, rows};
+  return {input, panel, backdrop, rows, confirm, confirmClasses};
 }
 
-function load({lang = 'zh', reject = ''} = {}) {
+function load({lang = 'zh', reject = '', manual = false} = {}) {
   const start = source.indexOf(SLICE_START);
   const end = source.indexOf(SLICE_END);
   assert.ok(start > 0 && end > start, 'v926 的「＋」片段必须切得出来');
   const calls = {posts: [], toasts: [], alerts: [], refreshes: 0, grid: 0};
+  let releasePost = null;
+  const pendingPost = manual ? new Promise((resolve) => { releasePost = resolve; }) : null;
   const context = vm.createContext({
     state: {lang},
     console: {warn() {}},
@@ -91,12 +99,14 @@ function load({lang = 'zh', reject = ''} = {}) {
     renderLibraryGrid: () => { calls.grid += 1; },
     postCasePreviewAiTagAction: (payload) => {
       calls.posts.push(payload);
-      return reject ? Promise.reject(new Error(reject)) : Promise.resolve({preview_id: payload.previewId});
+      if (reject) return Promise.reject(new Error(reject));
+      if (pendingPost) return pendingPost;
+      return Promise.resolve({preview_id: payload.previewId});
     }
   });
   const api = vm.runInContext(source.slice(start, end) + '\n' + EXPORTS, context, {filename: 'app-v930-add.js'});
   // 重画计数：面板上的 __casePreviewAiRefresh 是渲染函数挂的，这里直接给一个计数桩
-  return {api, calls, context};
+  return {api, calls, context, releasePost: () => { if (releasePost) releasePost({preview_id: 'p1'}); }};
 }
 
 test('v930 ①：空框点 ✓ 不再"悄悄收起"，改成提示 + 留住输入框', () => {
@@ -197,6 +207,50 @@ test('v931：面板里的按钮挡住 mousedown 默认行为 —— 别让输入
   assert.equal(fire('.something-else'), 0, '别的元素别乱挡');
   // 渲染函数里真的调了它（而不是定义了没人用）
   assert.match(source, /panel\.__casePreviewAiRefresh = function\(\) \{ renderCasePreviewAiPanel\(backdrop, preview, canManage\); \};\s*\n\s*wireCasePreviewAiPanelPointerGuard\(panel\);/);
+});
+
+test('v932：正在添加时不重复发请求，✓ 显示"进行中"，失败后恢复', async () => {
+  const {api, calls, releasePost} = load({manual: true});
+  const {input, panel, confirm, confirmClasses} = makeDom({value: '足球场'});
+  panel.__casePreviewAiRefresh = () => { calls.refreshes += 1; };
+  const first = api.submitCasePreviewAiInlineAdd(input);
+  // 用户实测「点了没反应，我连续点好几次」——连点不能再发请求
+  api.submitCasePreviewAiInlineAdd(input);
+  api.submitCasePreviewAiInlineAdd(input);
+  assert.equal(calls.posts.length, 1, '在途期间连点只发一次');
+  assert.equal(input.disabled, true, '等待期间输入框锁住');
+  assert.equal(confirm.textContent, '…', '✓ 要显示"进行中"');
+  assert.equal(confirmClasses.has('is-busy'), true, '✓ 要有 is-busy 样式');
+  releasePost();
+  await first;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls.refreshes, 1, '成功后照旧重画面板');
+  assert.deepEqual(calls.toasts, ['已添加标签「足球场」']);
+  // 收尾：busy 清掉（成功后面板重画，旧按钮已经 detached，这里只是别让标志位卡住）
+  const again = makeDom({value: '披萨'});
+  again.panel.__casePreviewAiRefresh = () => { calls.refreshes += 1; };
+  await api.submitCasePreviewAiInlineAdd(again.input);
+  assert.equal(calls.posts.length, 2, '加完之后还能继续加（busy 没卡死）');
+});
+
+test('v932：失败时 ✓ 要恢复可用（不然下一次点不动）', async () => {
+  const {api, calls} = load({reject: '标签无效'});
+  const {input, panel, confirm, confirmClasses} = makeDom({value: '足球场'});
+  panel.__casePreviewAiRefresh = () => { calls.refreshes += 1; };
+  await api.submitCasePreviewAiInlineAdd(input);
+  assert.match(calls.alerts.join('|'), /添加失败/);
+  assert.equal(input.disabled, false);
+  assert.equal(confirm.textContent, '✓', '✓ 要恢复原样');
+  assert.equal(confirmClasses.has('is-busy'), false);
+  assert.equal(confirm.disabled, false);
+});
+
+test('v932：端点少跑一个往返 —— 两个读并行 + 非动效动作的载荷不带 manual_effect_tags', () => {
+  const endpoint = readFileSync(join(ROOT, 'functions', 'api', 'case-preview-ai-tags.js'), 'utf8');
+  assert.match(endpoint, /await Promise\.all\(\[previewFor\(env, previewId\), currentFor\(env, previewId\)\]\)/, '两个读要并行（串行是两个往返）');
+  assert.match(endpoint, /const currentManualEffectTags = cleanTags\(current\?\.manual_effect_tags\);/, '人工动效层只读到变量');
+  assert.doesNotMatch(endpoint, /^\s+manual_effect_tags: cleanTags\(current\?\.manual_effect_tags\),/m, 'base 里不许默认带上这一列（sql/031 没跑时它每次都被拒再重试）');
+  assert.match(endpoint, /base\.manual_effect_tags = cleanTags\(currentManualEffectTags\.concat\(tag\)\)/, '只有 manual-effect-add 才显式写它');
 });
 
 test('v930 ⑤：版本号六处同步', () => {

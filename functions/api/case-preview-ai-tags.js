@@ -124,10 +124,16 @@ export async function handleCasePreviewAiTags(request, env) {
     const body = await request.json().catch(() => ({}));
     const previewId = String(body.previewId || '');
     if (!UUID.test(previewId)) return json({success: false, message: '物料标识无效'}, 400);
-    const preview = await previewFor(env, previewId);
-    const current = await currentFor(env, previewId);
+    // v932：两个读**并行**（以前是串行的两个往返；这个端点是"点一下就要等"的热路径，省一个是一个）
+    const [preview, current] = await Promise.all([previewFor(env, previewId), currentFor(env, previewId)]);
     const action = String(body.action || '');
     const expectedContentKey = previewContentKey(preview);
+    // v932：人工动效层（manual_effect_tags，sql/031）**只读到变量里，默认不写回**：
+    //   ① sql/031 没执行时，payload 里带这一列会被 PostgREST 拒（42703）⇒ saveRow 摘列重试 ⇒
+    //      **每一次写都白跑一个失败的往返**（实测：这是"点一下要等好几秒"的一大块）；
+    //   ② upsert 不带这一列 = "保持库里原值"，正好就是我们要的「识别流程绝不覆盖人工层」。
+    //   只有 manual-effect-add / manual-effect-remove 这两个动作才显式把它放进 payload。
+    const currentManualEffectTags = cleanTags(current?.manual_effect_tags);
     const base = {
       experiment_key: EXPERIMENT_KEY,
       preview_id: preview.id,
@@ -135,9 +141,6 @@ export async function handleCasePreviewAiTags(request, env) {
       ai_tags: cleanTags(current?.ai_tags),
       manual_tags: cleanTags(current?.manual_tags),
       excluded_tags: cleanTags(current?.excluded_tags),
-      // v926：人工动效层（sql/031 加列）。读不到这一列（迁移没跑）时是 [] + 写被拒 ⇒ saveRow 摘掉重写，
-      // 别的列照常。**识别流程绝不能覆盖它** —— 它只由 manual-effect-* 两个动作改动。
-      manual_effect_tags: cleanTags(current?.manual_effect_tags),
       status: current?.status || 'idle',
       model: String(current?.model || ''),
       content_key: String(current?.content_key || ''),
@@ -167,7 +170,7 @@ export async function handleCasePreviewAiTags(request, env) {
       const manual = new Set(base.manual_tags);
       // v926：**人工动效标签也是一条"人工"的**（manual_effect_tags）—— effect_tags 里若出现同一个词，
       // 不进 AI 层（同一条铁律：人工的不进 AI 层，AI 层每次整体覆盖）。它是独立一维，因此**不**并进 ai_tags 的过滤。
-      const manualEffect = new Set(base.manual_effect_tags);
+      const manualEffect = new Set(currentManualEffectTags);
       base.ai_tags = cleanTags(body.tags).filter(tag => !excluded.has(tag) && !manual.has(tag));
       // v918 效果标签（动态物料的"效果类型"，独立一维）：与 ai_tags **同一条去重口径**。
       // **只在调用方真的带了这个字段时才写**（静态物料传 effectTags: []，就是显式清空）：
@@ -175,8 +178,7 @@ export async function handleCasePreviewAiTags(request, env) {
       if (Object.prototype.hasOwnProperty.call(body, 'effectTags') || Object.prototype.hasOwnProperty.call(body, 'effect_tags')) {
         base.effect_tags = cleanTags(body.effectTags || body.effect_tags).filter(tag => !excluded.has(tag) && !manual.has(tag) && !manualEffect.has(tag));
       }
-      // 人工动效层原样保留（base 里带的就是库里那一条），这一行只是把"绝不覆盖"写明白
-      base.manual_effect_tags = cleanTags(base.manual_effect_tags);
+      // v932：人工动效层**不写回**（payload 里没有这一列 = 库里原样保留，见上面 currentManualEffectTags）
       base.status = 'success';
       base.model = String(body.model || 'glm-4v-flash').slice(0, 80);
       base.content_key = contentKey;
@@ -231,7 +233,7 @@ export async function handleCasePreviewAiTags(request, env) {
       if (Array.isArray(current?.effect_tags)) {
         base.effect_tags = cleanTags(current.effect_tags).filter(value => value !== tag);
       }
-      base.manual_effect_tags = cleanTags(base.manual_effect_tags.concat(tag));
+      base.manual_effect_tags = cleanTags(currentManualEffectTags.concat(tag));
       base.excluded_tags = base.excluded_tags.filter(value => value !== tag);
       return json({success: true, row: await saveRow(env, base)});
     }
@@ -239,7 +241,7 @@ export async function handleCasePreviewAiTags(request, env) {
     if (action === 'manual-effect-remove') {
       const tag = String(body.tag || '').trim();
       if (!tag || tag.length > 12) return json({success: false, message: '标签无效'}, 400);
-      base.manual_effect_tags = base.manual_effect_tags.filter(value => value !== tag);
+      base.manual_effect_tags = currentManualEffectTags.filter(value => value !== tag);
       return json({success: true, row: await saveRow(env, base)});
     }
 

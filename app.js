@@ -742,6 +742,8 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-preview-ai-effect .case-preview-ai-add-input:focus { border-color: #7c3aed; }
 .case-preview-ai-add-confirm { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 999px; background: #f97316; color: #fff; font-size: 11px; line-height: 1; cursor: pointer; }
 .case-preview-ai-add-confirm:hover { background: #ea580c; }
+/* v932：添加中 —— 等写库的那几秒要让用户看见"在跑"，而且这时候点它不再有反应（挡住连点） */
+.case-preview-ai-add-confirm.is-busy { opacity: .55; cursor: progress; }
 .case-preview-ai-effect .case-preview-ai-add-confirm { background: #7c3aed; }
 .case-preview-ai-effect .case-preview-ai-add-confirm:hover { background: #6d28d9; }
 .case-preview-ai-pop { position: fixed; z-index: 300; display: none; flex-direction: column; gap: 4px; max-width: min(520px, 90vw); max-height: 260px; overflow: auto; padding: 10px 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14); }
@@ -936,7 +938,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-inline-add-focus-guard-v931';
+const TOOL_UI_VERSION = '20261014-faster-tag-write-v932';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -5057,6 +5059,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   const casePreviewAiInlineAddDraft = {};
   // 刚点开 ＋ / 刚加完一条：下一次重画把光标放回输入框（连加好几个）
   const casePreviewAiInlineAddFocus = {};
+  // v932：这一行是不是正有一个"添加中"的请求在飞（挡住连点 + 让 ✓ 显示进行中）
+  const casePreviewAiInlineAddBusy = {};
 
   function casePreviewAiInlineAddConfig(value) {
     const id = String(value || '');
@@ -5141,8 +5145,29 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       alert(state.lang === 'zh' ? '标签最长 12 个字符' : 'Tags can be at most 12 characters.');
       return null;
     }
+    // v932：写库要等几秒（端点要过鉴权 + 读两行 + 写一行）——这段等待必须**让用户看见"在跑"**，
+    // 而且要挡住连点。用户实测原话：「点了对号以后没反应，我连续点了好几次，过了一会儿才添加上」。
+    if (casePreviewAiInlineAddBusy[dom.config.kind]) return null;
+    casePreviewAiInlineAddBusy[dom.config.kind] = true;
     input.disabled = true;
+    const confirmButton = dom.panel.querySelector && dom.panel.querySelector('#' + dom.config.confirmId);
+    const confirmLabel = confirmButton ? String(confirmButton.textContent || '✓') : '';
+    if (confirmButton && confirmButton.classList) {
+      confirmButton.disabled = true;
+      confirmButton.classList.add('is-busy');
+      confirmButton.textContent = '…';
+    }
+    const finishBusy = function() {
+      casePreviewAiInlineAddBusy[dom.config.kind] = false;
+      // 成功后面板会被重画（这颗按钮已经换掉了），只有失败那条路需要把它恢复原样
+      if (confirmButton && confirmButton.isConnected && confirmButton.classList) {
+        confirmButton.disabled = false;
+        confirmButton.classList.remove('is-busy');
+        confirmButton.textContent = confirmLabel;
+      }
+    };
     return postCasePreviewAiTagAction({action: dom.config.action, previewId: previewId, tag: tag}).then(function() {
+      finishBusy();
       casePreviewAiInlineAddDraft[dom.config.kind] = '';
       casePreviewAiInlineAddFocus[dom.config.kind] = true;
       refreshCasePreviewAiPanel(dom.backdrop, dom.panel);
@@ -5162,6 +5187,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       renderLibraryGrid();
       return null;
     }).catch(function(error) {
+      finishBusy();
       input.disabled = false;
       alert(state.lang === 'zh' ? ('添加失败：' + (error.message || '请重试')) : ('Add failed: ' + (error.message || 'Please retry')));
       return null;
