@@ -24,7 +24,7 @@ const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
 const endpointSource = readFileSync(join(ROOT, 'functions', 'api', 'case-preview-ai-tags.js'), 'utf8');
-const VERSION = '20261014-chip-x-add-mode-v929';
+const VERSION = '20261014-tag-add-feedback-v930';
 
 /* ── 切片：从「＋」那一整套（v926 块）一直切到面板渲染函数结束 ───────────────── */
 
@@ -42,7 +42,7 @@ function loadInlineAdd({lang = 'zh', row = null, tags = [], reject = '', effectM
   const start = source.indexOf(SLICE_START);
   const end = source.indexOf(SLICE_END);
   assert.ok(start > 0 && end > start, 'v926 的「＋」片段必须切得出来');
-  const calls = {posts: [], alerts: [], refreshes: 0, grid: 0};
+  const calls = {posts: [], alerts: [], toasts: [], refreshes: 0, grid: 0};
   const context = vm.createContext({
     state: {lang},
     console: {warn() {}},
@@ -60,6 +60,8 @@ function loadInlineAdd({lang = 'zh', row = null, tags = [], reject = '', effectM
     wireCasePreviewAiHover: () => {},
     document: {getElementById: () => null},
     alert: (message) => { calls.alerts.push(String(message)); },
+    // v930：提交成功后会弹一条 toast（"看得见的反应"）；空框也会提示一句
+    showCaseToast: (text) => { calls.toasts.push(String(text)); },
     renderLibraryGrid: () => { calls.grid += 1; },
     postCasePreviewAiTagAction: (payload) => {
       calls.posts.push(payload);
@@ -195,7 +197,7 @@ test('v926 ✓ 按钮与回车走同一个提交入口（源码锁死只有一�
   assert.equal((source.match(/action: 'manual-add'/g) || []).length, 1, '全仓只留一处 manual-add 调用（就在提交函数里）');
 });
 
-test('v926 Esc = 取消收起（不写库）；空输入回车 = 收起', () => {
+test('v926 Esc = 取消收起（不写库）；空输入回车 = 提示 + 留住输入框（v930 改）', () => {
   const {api, calls} = loadInlineAdd();
   const panel = fakePanel({adding: 'element'});
   panel.__casePreviewAiRefresh = () => {};
@@ -209,11 +211,14 @@ test('v926 Esc = 取消收起（不写库）；空输入回车 = 收起', () => 
   empty.__casePreviewAiRefresh = () => {};
   api.submitCasePreviewAiInlineAdd(fakeInput({value: '   ', panel: empty}));
   assert.equal(calls.posts.length, 0, '空输入不提交');
-  assert.equal(empty.dataset.adding, undefined, '空输入回车 = 收起');
+  // v930：空框点 ✓ / 回车以前是"悄悄收起"，用户以为点了没反应 ⇒ 现在留着框 + 提示一句
+  assert.equal(empty.dataset.adding, 'element', '空输入不再收起，输入框要留着');
+  assert.match(calls.toasts.join('|'), /先输入标签/, '空输入要有提示');
 
   // Esc / 回车都要 stopPropagation：不然文档级 caseProjectKeyHandler 会把整个项目浮窗关掉
   assert.match(source, /if \(event\.key === 'Escape'\) \{\s*\n\s*event\.preventDefault\(\);\s*\n\s*event\.stopPropagation\(\);/);
-  assert.match(source, /if \(event\.key === 'Enter'\) \{\s*\n\s*event\.preventDefault\(\);\s*\n\s*event\.stopPropagation\(\);/);
+  // v930：回车分支前面多了一道"输入法拼词中不处理"的守卫（isComposing / keyCode 229）
+  assert.match(source, /if \(event\.key === 'Enter'\) \{[\s\S]{0,200}?if \(event\.isComposing \|\| event\.keyCode === 229\) return false;[\s\S]{0,120}?event\.preventDefault\(\);\s*\n\s*event\.stopPropagation\(\);/);
   // 文档级那个 handler 里不再管回车（免得同一件事两处实现、按一次写两次库）
   assert.doesNotMatch(source, /caseProjectKeyHandler = function\(event\) \{[\s\S]{0,600}?event\.key === 'Enter'/);
 });
@@ -251,7 +256,9 @@ test('v926 真渲：人工标签就在行里、带 × 可删（复用 data-previ
   const panel = fakePanel();
   api.renderCasePreviewAiPanel({querySelector: (s) => (s === '#case-preview-ai-panel' ? panel : null)}, {id: 'p1'}, true);
   assert.match(panel.innerHTML, /class="case-preview-ai-tag is-manual" title="人工标签">汉堡<button type="button" data-preview-manual-remove="汉堡"/);
-  assert.match(source, /postCasePreviewAiTagAction\(\{action: dom\.config\.action, previewId: previewId, tag: tag\}\)[\s\S]{0,260}?renderLibraryGrid\(\)/,
+  // v930：成功分支里多了"滚到最左 + 弹 toast"这段收尾（含中文注释），所以窗口放宽
+  // （要点仍是同一分支里重画面板 + 刷列表，不是精确字符距离）
+  assert.match(source, /postCasePreviewAiTagAction\(\{action: dom\.config\.action, previewId: previewId, tag: tag\}\)[\s\S]{0,1800}?renderLibraryGrid\(\)/,
     '「加完立刻出现在行里」靠提交成功后重画面板 + 刷列表');
 });
 

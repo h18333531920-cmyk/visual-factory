@@ -936,7 +936,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-chip-x-add-mode-v929';
+const TOOL_UI_VERSION = '20261014-tag-add-feedback-v930';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -5119,11 +5119,22 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
 
   // 把输入框里的词提交成人工标签 —— 回车与 ✓ 共用这一个入口（唯一写库路径）。
   // 成功后清草稿、**保持输入框打开**、光标回输入框；失败只提示，草稿留着让用户重试。
+  // v930：**每次点击/回车都要有"看得见的反应"** —— 用户实测反馈「输入完以后点对号一点反应没有」。
+  //   实测（2026-10-14，真浏览器 + 查库）：写库与刷新本来就是好的，坏在**没有任何反馈**：
+  //   ① 空框点 ✓ 以前是"悄悄把框收起来"，看着就像点击无效；
+  //   ② 加成功的词如果本来就在标签行里（已存在的 AI 标签被转成人工标签），整行**一个字都不变**；
+  //   ③ 新加的人工标签排在**行首**，而标签行是横向滚动的（`overflow-x:auto`）——行被滚到右边时，
+  //      新词出现在左边看不见的地方，于是"什么都没有发生"。
+  //   现在：空框 → 提示 + 留住输入框；成功 → 弹一条「已添加标签「X」」+ 把那一行滚回最左。
   function submitCasePreviewAiInlineAdd(input) {
     const dom = casePreviewAiInlineAddDom(input);
     if (!dom) return null;
     const tag = String(input.value || '').trim();
-    if (!tag) { closeCasePreviewAiInlineAdd(input); return null; }
+    if (!tag) {
+      if (typeof input.focus === 'function') input.focus();
+      showCaseToast(state.lang === 'zh' ? '先输入标签，再点 ✓ 或按回车' : 'Type a tag first, then press ✓ or Enter', 2200);
+      return null;
+    }
     const previewId = dom.panel.dataset.previewId;
     if (!previewId) return null;
     if (tag.length > 12) {
@@ -5135,6 +5146,19 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       casePreviewAiInlineAddDraft[dom.config.kind] = '';
       casePreviewAiInlineAddFocus[dom.config.kind] = true;
       refreshCasePreviewAiPanel(dom.backdrop, dom.panel);
+      // 写库已经成功了 —— 下面这两件是"让用户看得见"的收尾，任何一件出问题都**不能**反过来报成添加失败
+      try {
+        // 新加的人工标签排在这一行的最前面（人工层在前），把行滚回最左才看得见它
+        const row = dom.panel.querySelector && dom.panel.querySelector(dom.config.kind === 'effect' ? '.case-preview-ai-effect' : '.case-preview-ai-chips');
+        if (row && typeof row.scrollLeft === 'number') row.scrollLeft = 0;
+        if (typeof showCaseToast === 'function') {
+          showCaseToast(state.lang === 'zh'
+            ? ('已添加' + (dom.config.kind === 'effect' ? '动效标签' : '标签') + '「' + tag + '」')
+            : ('Added ' + (dom.config.kind === 'effect' ? 'motion tag ' : 'tag ') + '"' + tag + '"'), 2200);
+        }
+      } catch (feedbackError) {
+        console.warn('Inline add feedback failed:', feedbackError && feedbackError.message);
+      }
       renderLibraryGrid();
       return null;
     }).catch(function(error) {
@@ -5156,6 +5180,9 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       return true;
     }
     if (event.key === 'Enter') {
+      // v930：输入法（拼音/中文）正在拼词时的回车是"上屏"，不是"提交"——
+      // 以前会把没拼完的词当成标签提交（或提交个空框把输入框收起来）。
+      if (event.isComposing || event.keyCode === 229) return false;
       event.preventDefault();
       event.stopPropagation();
       submitCasePreviewAiInlineAdd(input);
