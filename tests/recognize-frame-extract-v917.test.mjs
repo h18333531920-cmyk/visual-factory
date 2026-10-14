@@ -504,8 +504,9 @@ test('v917 接线：筛选、队列构成、抽帧、多图接口、模型名、
   assert.match(scriptSource, /const prepared = await prepareDynamicImages\(\{/);
   assert.match(scriptSource, /runner: options\.runner/, '执行器可注入（默认在 prepareDynamicImages 里取 defaultCommandRunner）');
   assert.match(scriptSource, /declaredBytes > FRAMES_MAX_INPUT_BYTES/, '能用 preview_size_bytes 提前拦的就不下载');
-  assert.match(scriptSource, /analyzeFrameImages\(\{images, env: \{GLM_API_KEY: creds\.glmKey\}, vocabulary, activities: CASE_ACTIVITY_VALUES\}\)/);
-  assert.match(scriptSource, /buildSuccessRow\(\{preview: item\.preview, tags, model, runId, current: fresh\}\)/, 'model 跟着走：抽帧那批写成 -frames');
+  // v918 起这个调用多了 effectVocabulary 一行（只有动态物料才传效果词表），前几项一字未动
+  assert.match(scriptSource, /analyzeFrameImages\(\{\s*\n\s*images,\s*\n\s*env: \{GLM_API_KEY: creds\.glmKey\},\s*\n\s*vocabulary,\s*\n\s*activities: CASE_ACTIVITY_VALUES,/);
+  assert.match(scriptSource, /buildSuccessRow\(\{preview: item\.preview, tags, effects, model, runId, current: fresh\}\)/, 'model 跟着走：抽帧那批写成 -frames');
   assert.match(scriptSource, /\} finally \{[\s\S]{0,120}cleanupTempDir\(workDir\);/, '不管成功失败都要删临时文件');
   // 逃生开关改名 + 老开关给一句明确的话（别让人以为是打错了）
   assert.match(scriptSource, /if \(arg === '--skip-dynamic'\) \{ options\.skipDynamic = true; continue; \}/);

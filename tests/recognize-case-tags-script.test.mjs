@@ -36,6 +36,12 @@ import {
   buildFailureRow,
   planWorkItems,
   elementVocabularyFromRows,
+  effectVocabularyFromRows,
+  effectRequestCount,
+  isMissingEffectTagsColumnError,
+  withoutEffectTags,
+  analyzeFrameImages,
+  EFFECT_VOCABULARY_MAX,
   matchProjectSources,
   parseEnvText,
   resolveCredentials,
@@ -251,16 +257,31 @@ test('写库合并：manual_tags / excluded_tags 不被覆盖，excluded 里的�
   assert.equal(row.experiment_key, EXPERIMENT_KEY);
   assert.equal(row.preview_id, 'p1');
   assert.equal(row.source_file_id, 'src-1');
+  assert.deepEqual(row.effect_tags, [], 'v918：没给 effects（静态物料）就是空数组');
 
   // 没有行时不许拿 undefined 起底（照端点的空数组默认）
   const plain = buildSuccessRow({preview, tags: ['汉堡'], current: null});
   assert.deepEqual(plain.manual_tags, []);
   assert.deepEqual(plain.excluded_tags, []);
   assert.deepEqual(plain.ai_tags, ['汉堡']);
+  assert.deepEqual(plain.effect_tags, []);
+
+  // v918 效果标签：与 ai_tags 同一条去重口径（excluded / manual 里已有的词不再进 effect_tags），
+  // 而元素标签这边**不受影响**（两维各自独立、互不掏空）
+  const withEffects = buildSuccessRow({
+    preview,
+    tags: ['汉堡', '爆炸'],
+    effects: ['爆炸', '缩放', '人工补的词', '手机'],
+    current
+  });
+  assert.deepEqual(withEffects.ai_tags, ['汉堡', '爆炸'], '元素标签照旧：刨掉 excluded 与 manual');
+  assert.deepEqual(withEffects.effect_tags, ['爆炸', '缩放'], '效果标签同样刨掉 manual「人工补的词」与 excluded「手机」');
+  assert.deepEqual(withEffects.manual_tags, ['人工补的词']);
+  assert.deepEqual(withEffects.excluded_tags, ['手机']);
 
   // 表里的字段名与端点 saveRow 的入参完全一致（别自创列名）
   assert.deepEqual(Object.keys(row).sort(), [
-    'ai_tags', 'content_key', 'error_message', 'excluded_tags', 'experiment_key',
+    'ai_tags', 'content_key', 'effect_tags', 'error_message', 'excluded_tags', 'experiment_key',
     'manual_tags', 'model', 'preview_id', 'run_id', 'source_file_id', 'status'
   ]);
 });
@@ -431,7 +452,7 @@ test('v917 接线：main 的筛选、计数、跳过文案都走同一处判据�
   // model 字段要能区分来源：抽帧那批写成 -frames，别写成 -group（那是浏览器按组那条路的标记）
   assert.equal(FRAMES_MODEL, 'glm-4v-flash-frames');
   assert.doesNotMatch(FRAMES_MODEL, /-group/);
-  assert.match(scriptSource, /buildSuccessRow\(\{preview: item\.preview, tags, model, runId, current: fresh\}\)/);
+  assert.match(scriptSource, /buildSuccessRow\(\{preview: item\.preview, tags, effects, model, runId, current: fresh\}\)/);
 });
 
 test('项目筛选：认 uuid 也认标题片段；案例项目 = source_path 为空', () => {
@@ -468,4 +489,106 @@ test('脚本源码：没有硬编码密钥，只写 vf_preview_ai_tags', () => {
   // 分区名不许改：现有 28 行都挂在这个 key 下
   assert.equal(EXPERIMENT_KEY, 'augpicks-v1');
   assert.match(scriptSource, /experiment_key: experimentKey/);
+});
+
+/* ── v918 效果标签（只有动态物料才请求；与元素词表分开；写 effect_tags）────────── */
+
+const EFFECT_ROWS = [
+  {name_zh: '汉堡', kind: 'element', source: 'auto'},
+  {name_zh: '爆炸', kind: 'effect', source: 'auto'},
+  {name_zh: '缩放', kind: 'effect', source: 'manual'},
+  {name_zh: ' 缩放 ', kind: 'effect', source: 'manual'},
+  {name_zh: '氛围营造', kind: 'effect', source: 'manual'},
+  {name_zh: '弹窗', kind: 'material_type', source: 'auto'}
+];
+
+test('v918 效果词表：只收 kind=effect，与元素词表分开（互不串味）', () => {
+  assert.deepEqual(effectVocabularyFromRows(EFFECT_ROWS), ['缩放', '氛围营造', '爆炸'], '人工维护的排前面，再是自动词');
+  assert.ok(!effectVocabularyFromRows(EFFECT_ROWS).includes('汉堡'), '元素词不进效果词表');
+  assert.ok(!effectVocabularyFromRows(EFFECT_ROWS).includes('弹窗'), '物料类型词不进效果词表');
+  const elements = elementVocabularyFromRows(EFFECT_ROWS);
+  assert.ok(!elements.includes('爆炸') && !elements.includes('缩放'),
+    '效果词**不许**进元素词表（否则提示词会把「爆炸/缩放」当元素推荐给模型）');
+  assert.ok(elements.includes('汉堡'));
+  assert.deepEqual(effectVocabularyFromRows([]), []);
+  assert.deepEqual(effectVocabularyFromRows(EFFECT_ROWS, 2), ['缩放', '氛围营造'], '上限可注入');
+  assert.equal(EFFECT_VOCABULARY_MAX, 60);
+  // 表里必须把 kind 读回来，否则分不出哪一维
+  assert.match(scriptSource, /select=name_zh,name_en,source,kind/);
+  assert.match(scriptSource, /const effectVocabulary = effectVocabularyFromRows\(vocabularyRows\)/);
+});
+
+test('v918 请求口径：动态物料才请求效果标签，静态图不请求（effectVocabulary 传空）', async () => {
+  const EV = ['爆炸', '缩放'];
+  const seen = [];
+  // 动态物料是「2 张帧 → 多图接口」，调用方把效果词表原样传下去
+  const grouped = await analyzeFrameImages({
+    images: [{url: 'data:image/png;base64,AAA'}, {url: 'data:image/png;base64,BBB'}],
+    env: {GLM_API_KEY: 'x'},
+    vocabulary: ['汉堡'],
+    activities: ['聚餐'],
+    effectVocabulary: EV,
+    analyzeGroup: async (env, images, vocabulary, activities, effectVocabulary) => {
+      seen.push({api: 'group', effectVocabulary, activities});
+      return {elements: ['汉堡'], activity: '聚餐', effects: ['爆炸'], sameDesign: true};
+    },
+    analyzeSingle: async () => { throw new Error('两张帧不该走单图接口'); }
+  });
+  assert.deepEqual(seen[0].effectVocabulary, EV, '动态物料：效果词表要真的传到模型那一层');
+  assert.deepEqual(grouped.effects, ['爆炸']);
+  assert.deepEqual(grouped.elements, ['汉堡'], '元素标签照旧');
+
+  // 静态图：调用方传空数组（main 里就是 `dynamic ? effectVocabulary : []`），模型也不会返回 effects
+  const single = await analyzeFrameImages({
+    images: [{url: 'data:image/png;base64,ZZZ'}],
+    env: {GLM_API_KEY: 'x'},
+    vocabulary: ['汉堡'],
+    activities: ['聚餐'],
+    effectVocabulary: [],
+    analyzeSingle: async (env, image, vocabulary, activities, effectVocabulary) => {
+      seen.push({api: 'single', effectVocabulary});
+      return {elements: ['餐桌'], activity: '', effects: []};
+    },
+    analyzeGroup: async () => { throw new Error('一张图不该走多图接口'); }
+  });
+  assert.deepEqual(seen[1].effectVocabulary, [], '静态图：效果词表是空的 ⇒ 提示词里没有那一段');
+  assert.deepEqual(single.effects, []);
+  // 一行都不给 effectVocabulary（老调用方式）也不能炸，行为退回 v917
+  const legacy = await analyzeFrameImages({
+    images: [{url: 'data:image/png;base64,ZZZ'}],
+    env: {GLM_API_KEY: 'x'},
+    vocabulary: ['汉堡'],
+    activities: [],
+    analyzeSingle: async () => ({elements: ['餐桌'], activity: ''})
+  });
+  assert.deepEqual(legacy.effects, []);
+  // 接线：main 里就是"只有动态物料才给效果词表"
+  assert.match(scriptSource, /effectVocabulary: dynamic \? effectVocabulary : \[\]/);
+});
+
+test('v918 dry-run：能看出"这次会请求效果标签的有 N 张"，词表为空时是 0', () => {
+  assert.equal(effectRequestCount({dynamicPending: 7, effectVocabularySize: 15}), 7);
+  assert.equal(effectRequestCount({dynamicPending: 7, effectVocabularySize: 0}), 0, '没有效果词表 ⇒ 一张都不请求');
+  assert.equal(effectRequestCount({}), 0);
+  assert.equal(effectRequestCount({dynamicPending: -3, effectVocabularySize: 5}), 0);
+  assert.match(scriptSource, /效果标签：这次会请求效果标签的 /);
+  assert.match(scriptSource, /const effectRequested = effectRequestCount\(\{dynamicPending: pendingKinds\.dynamic, effectVocabularySize: effectVocabulary\.length\}\)/);
+  assert.match(scriptSource, /kind=effect/, '提示词表为空时要说清是 kind=effect 读不到 + 该跑 sql/028');
+});
+
+test('v918 sql/028 没执行时的降级：认出缺列错，并把 effect_tags 从载荷里摘掉重写', () => {
+  assert.equal(isMissingEffectTagsColumnError({
+    message: "Could not find the 'effect_tags' column of 'vf_preview_ai_tags' in the schema cache"
+  }), true);
+  assert.equal(isMissingEffectTagsColumnError({message: 'column vf_preview_ai_tags.effect_tags does not exist'}), true);
+  assert.equal(isMissingEffectTagsColumnError({message: 'relation "public.vf_preview_ai_tags" does not exist'}), false);
+  assert.equal(isMissingEffectTagsColumnError(new Error('HTTP 500 服务繁忙')), false);
+  assert.equal(isMissingEffectTagsColumnError(null), false);
+  const stripped = withoutEffectTags({ai_tags: ['汉堡'], effect_tags: ['爆炸']});
+  assert.deepEqual(Object.keys(stripped), ['ai_tags'], '只摘 effect_tags，别的列一个不动');
+  assert.deepEqual(withoutEffectTags({ai_tags: []}), {ai_tags: []});
+  assert.deepEqual(withoutEffectTags(null), null);
+  // 写库通道只有一条：降级也要落在同一个 upsert 里（不许另开一条写路径）
+  assert.match(scriptSource, /return post\(withoutEffectTags\(row\)\)/);
+  assert.equal(scriptSource.split("method: 'POST'").length - 1, 1);
 });

@@ -59,10 +59,11 @@ test('Keeta 老虎吉祥物统一归一为 kiki，普通老虎不误改', () => 
 
 test('v828 活动主题自由识别：不再限词表、限 8 字，并从元素建议中去重', () => {
   const activities = ['聚餐','足球','夏日','新年','开斋节','宰牲节','国庆节'];
-  assert.deepEqual(parseCaseTagSuggestions('{"elements":["足球","球员"],"activity":"足球"}', VOCAB, activities), { elements: ['球员'], activity: '足球' });
+  // v918：返回值多了 effects（没给效果词表时恒为空数组，其余语义一字不动）
+  assert.deepEqual(parseCaseTagSuggestions('{"elements":["足球","球员"],"activity":"足球"}', VOCAB, activities), { elements: ['球员'], activity: '足球', effects: [] });
   // 词表外的主题也原样带出（前端作为建议 chip，点采纳才写入）
-  assert.deepEqual(parseCaseTagSuggestions('{"elements":["灯笼"],"activity":"圣诞节"}', VOCAB, activities), { elements: ['灯笼'], activity: '圣诞节' });
-  assert.deepEqual(parseCaseTagSuggestions('{"elements":["餐桌"],"activity":""}', VOCAB, activities), { elements: ['餐桌'], activity: '' });
+  assert.deepEqual(parseCaseTagSuggestions('{"elements":["灯笼"],"activity":"圣诞节"}', VOCAB, activities), { elements: ['灯笼'], activity: '圣诞节', effects: [] });
+  assert.deepEqual(parseCaseTagSuggestions('{"elements":["餐桌"],"activity":""}', VOCAB, activities), { elements: ['餐桌'], activity: '', effects: [] });
   // 超长主题截到 8 字
   assert.deepEqual(parseCaseTagSuggestions('{"elements":[],"activity":"斋月开斋节促销活动"}', VOCAB, activities).activity, '斋月开斋节促销活');
 });

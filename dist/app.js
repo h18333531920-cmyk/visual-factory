@@ -451,7 +451,10 @@ html body .library-page:not(.library-page-home) .library-pin-strip::before {
 .tag-vocabulary-section .tv-message { margin-bottom: 10px; padding: 8px 10px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 12.5px; color: #475569; }
 .tag-vocabulary-section .tv-hint { margin: 10px 0 0; font-size: 11.5px; color: #94a3b8; line-height: 1.6; }
 .tag-vocabulary-section .tv-en-cell { position: relative; }
+.tag-vocabulary-section .tv-zh-cell { position: relative; }
 .tag-vocabulary-section .tv-mark { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 10.5px; color: #94a3b8; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 999px; padding: 0 6px; pointer-events: none; }
+/* v918：kind='effect' 的行在中文名后面挂个「动效」小标记（效果词表是人工维护的受控词表） */
+.tag-vocabulary-section .tv-mark-effect { color: #6d28d9; background: #f5f3ff; border-color: #ddd6fe; }
 .tag-vocabulary-section .tv-btn.tv-danger { color: #b91c1c; border-color: #fecaca; }
 .tag-vocabulary-section .tv-btn.tv-danger:hover { background: #fef2f2; border-color: #fca5a5; }
 .tag-vocabulary-section .tv-btn[disabled] { opacity: .55; cursor: default; }
@@ -700,6 +703,10 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-preview-ai-add-row input:focus { border-color: #f97316; }
 .case-preview-ai-add-row button { flex: 0 0 auto; padding: 5px 12px; border: 0; border-radius: 6px; background: #f97316; color: #fff; font-size: 12px; cursor: pointer; }
 .case-preview-ai-add-row button:hover { background: #ea580c; }
+/* v918 动效标签那一行（独立一维，与元素标签分开显示；没有值时整行不出现） */
+.case-preview-ai-effect { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.case-preview-ai-effect-title { font-size: 11px; font-weight: 650; color: #7c3aed; white-space: nowrap; }
+.case-preview-ai-effect-tag { display: inline-flex; align-items: center; flex: 0 0 auto; padding: 5px 8px; border: 1px solid #c4b5fd; border-radius: 999px; background: #f5f3ff; color: #5b21b6; font-size: 11px; line-height: 1; }
 .case-foot-tool-btn { flex: 0 0 auto; display: inline-flex; align-items: center; padding: 5px 11px; border: 1px dashed #b7c2d4; background: #fff; color: #475569; font-size: 12px; line-height: 1; border-radius: 999px; cursor: pointer; white-space: nowrap; }
 .case-foot-tool-btn:hover { border-color: #64748b; color: #0f172a; background: #f1f5f9; }
 .case-foot-tool-btn:disabled { color: #cbd5e1; border-color: #e2e8f0; background: #fafbfc; cursor: not-allowed; }
@@ -878,7 +885,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261013-frame-recognize-v917';
+const TOOL_UI_VERSION = '20261014-effect-tags-v918';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3369,6 +3376,18 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
     return out;
   }
 
+  // v918 动效标签同款聚合（与 caseProjectElementTags 同一套思路，但取的是另一个字段）：
+  // 案例项目卡吃整个项目所有物料的效果标签，单图素材只看自己那张 ⇒ 搜「爆炸」能命中所有爆炸动效的物料。
+  function caseProjectEffectTags(materials) {
+    const out = [];
+    (materials || []).forEach(function(material) {
+      casePreviewAiEffectTags(material && material.id).forEach(function(tag) {
+        if (out.indexOf(tag) < 0) out.push(tag);
+      });
+    });
+    return out;
+  }
+
   function libraryItemSearchText(item) {
     const source = item.source;
     const preview = item.preview;
@@ -3381,12 +3400,16 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
     const elementTags = projectMaterials
       ? caseProjectElementTags(projectMaterials)
       : casePreviewAiTags(preview.id);
+    // v918：动效标签也要进搜索文本（搜「爆炸」「缩放」能命中这些动态物料），与元素标签并列、分开取
+    const effectTags = projectMaterials
+      ? caseProjectEffectTags(projectMaterials)
+      : casePreviewAiEffectTags(preview.id);
     const vocab = [
       libraryKindLabel(libraryKindOfSource(source)),
       optionNameById(source.country_id),
       optionNameById(source.activity_id),
       optionNameById(source.category_id),
-    ].concat(materialTypes, visibleLibraryTags(source), elementTags);
+    ].concat(materialTypes, visibleLibraryTags(source), elementTags, effectTags);
     const parts = [
       source.title,
       source.owner_name,
@@ -4354,6 +4377,16 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return Array.from(new Set(manualTags.concat(aiTags)));
   }
 
+  // v918：动效标签（effect_tags）—— 与元素标签**分开取**，不并进 casePreviewAiTags：
+  // 元素筛选 chips 那一行用的是元素标签，效果不能混进去（用户口径：效果不进元素筛选那一维）。
+  // content_key 过期时同样作废（画面换过了，旧的动效描述不算数）。
+  function casePreviewAiEffectTags(previewId) {
+    const row = casePreviewAiRow(previewId);
+    const preview = state.libraryPreviews.find(function(item) { return item.id === previewId; });
+    if (row && preview && row.content_key && row.content_key !== casePreviewAiContentKey(preview)) return [];
+    return row && Array.isArray(row.effect_tags) ? row.effect_tags.filter(Boolean) : [];
+  }
+
   function caseProjectFixedTagsHtml(source) {
     const sel = caseChipSelectionOf(source);
     const chips = [];
@@ -4378,25 +4411,45 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return /manual_tags/i.test(message) && /column|does not exist|schema cache/i.test(message);
   }
 
-  // 逐图标签的字段清单（单项目读与分页读共用）；旧库里没有 manual_tags 列时退回第二份。
-  const PREVIEW_AI_TAGS_SELECT = 'experiment_key,preview_id,source_file_id,ai_tags,manual_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at';
+  // v918：`effect_tags` 列缺失（sql/028 还没执行）单独认一次 —— 它的降级**不改 previewAiTagsTableReady**：
+  // 这一列是纯附加的，缺了只等于"看不到动效标签"，没理由像 manual_tags 那样把整块标签编辑封住。
+  function isMissingPreviewEffectTagsColumn(error) {
+    const message = String(error && error.message || error || '');
+    return /effect_tags/i.test(message) && /column|does not exist|schema cache/i.test(message);
+  }
+
+  // 逐图标签的字段清单（单项目读与分页读共用）；两道降级各退回一份更短的：
+  //   ① sql/028 没执行（没有 effect_tags）→ 去掉那一列（有 manual_tags）
+  //   ② 再不行（老库连 manual_tags 都没有）→ LEGACY，并标记需补执行 sql/021
+  const PREVIEW_AI_TAGS_SELECT = 'experiment_key,preview_id,source_file_id,ai_tags,manual_tags,excluded_tags,effect_tags,status,model,content_key,run_id,error_message,updated_at';
+  const PREVIEW_AI_TAGS_SELECT_NO_EFFECT = 'experiment_key,preview_id,source_file_id,ai_tags,manual_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at';
   const PREVIEW_AI_TAGS_SELECT_LEGACY = 'experiment_key,preview_id,source_file_id,ai_tags,excluded_tags,status,model,content_key,run_id,error_message,updated_at';
   const PREVIEW_AI_TAGS_PAGE_SIZE = 1000;
   const PREVIEW_AI_TAGS_MAX_PAGES = 20;   // 硬上限 2 万行，防异常时分页死循环
 
-  // 两条降级必须保留：① `manual_tags` 列缺失 → 退回不带该列的读法（并标记需补执行 sql/021）；
-  // ② 表不可用 → previewAiTagsTableReady = false 并返回空，页面其余部分照常。
+  // 三条降级必须保留：① `effect_tags` 列缺失 → 退回不带该列的读法（**不**改 previewAiTagsTableReady：
+  // 它只是少了动效标签这一行，标签编辑照旧可用）；② `manual_tags` 列缺失 → 退回不带该列的读法
+  // （并标记需补执行 sql/021）；③ 表不可用 → previewAiTagsTableReady = false 并返回空，页面其余部分照常。
   async function readPreviewAiTagsRows(buildQuery, applyRange) {
     const runQuery = function(select) {
       const query = buildQuery(select);
       return applyRange ? applyRange(query) : query;
     };
     let result = await runQuery(PREVIEW_AI_TAGS_SELECT);
+    if (result.error && isMissingPreviewEffectTagsColumn(result.error)) {
+      result = await runQuery(PREVIEW_AI_TAGS_SELECT_NO_EFFECT);
+      if (!result.error) {
+        previewAiTagsTableReady = true;
+        return { rows: (result.data || []).map(function(row) { return Object.assign({effect_tags: []}, row); }) };
+      }
+    }
     if (result.error && isMissingPreviewManualTagsColumn(result.error)) {
       result = await runQuery(PREVIEW_AI_TAGS_SELECT_LEGACY);
       if (!result.error) {
         previewAiTagsTableReady = 'needs-manual-tags-column';
-        return { rows: (result.data || []).map(function(row) { return Object.assign({manual_tags: []}, row); }) };
+        return {
+          rows: (result.data || []).map(function(row) { return Object.assign({manual_tags: [], effect_tags: []}, row); })
+        };
       }
     }
     if (result.error) {
@@ -4708,6 +4761,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const aiTags = !stale && row && Array.isArray(row.ai_tags) ? row.ai_tags.filter(Boolean) : [];
     const manualTags = !stale && row && Array.isArray(row.manual_tags) ? row.manual_tags.filter(Boolean) : [];
     const tags = casePreviewAiTags(preview.id);
+    // v918 动效标签（只有动态物料才有；静态物料写的是空数组）—— 与元素标签分开显示，有值才出行
+    const effectTags = casePreviewAiEffectTags(preview.id);
     const status = casePreviewAiStatusText(row, preview);
     const excluded = row && Array.isArray(row.excluded_tags) ? row.excluded_tags.filter(Boolean) : [];
     const canEdit = canManage && previewAiTagsTableReady === true;
@@ -4733,6 +4788,14 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       + (canEdit && !isEditing ? '<button type="button" class="case-preview-ai-edit-btn" id="case-preview-ai-edit-toggle">' + (state.lang === 'zh' ? '编辑' : 'Edit') + '</button>' : '')
       + (canEdit && isEditing ? '<button type="button" class="case-preview-ai-edit-btn" id="case-preview-ai-edit-done">' + (state.lang === 'zh' ? '完成' : 'Done') + '</button>' : '')
       + (canManage && previewAiTagsTableReady === 'needs-manual-tags-column' ? '<span class="case-preview-ai-status is-error">需补执行 sql/021</span>' : '')
+      // v918：动效标签独立成行（只在有值时显示），中英双语跟 state.lang
+      + (!effectTags.length ? '' : '<div class="case-preview-ai-effect">'
+          + '<span class="case-preview-ai-effect-title">' + (state.lang === 'zh' ? '动效标签' : 'Motion tags') + '</span>'
+          + effectTags.map(function(tag) {
+            return '<span class="case-preview-ai-effect-tag" title="' + (state.lang === 'zh' ? '动效/弹窗效果类型（AI 识别）' : 'Motion / effect type (AI)') + '">'
+              + escapeHtml(libraryDisplayLabel(tag)) + '</span>';
+          }).join('')
+          + '</div>')
       + '<span class="case-preview-ai-status' + (row && row.status === 'failed' ? ' is-error' : '') + '">' + escapeHtml(status) + '</span>';
     wireCasePreviewAiHover(panel, manualTags, aiTags, excluded);
   }
@@ -14892,6 +14955,8 @@ function libraryTagsForForm(formData, kind) {
       push(preview && preview.material_type);
       // 逐图 AI 标签（vf_preview_ai_tags）也纳入收集，否则只出现在逐图标签里的新词在英文界面会退回中文
       (casePreviewAiTags(preview && preview.id) || []).forEach(push);
+      // v918 动效标签同理（爆炸 / 缩放…）：英文界面要显示英文名，同样得有补翻候选
+      (casePreviewAiEffectTags(preview && preview.id) || []).forEach(push);
     });
     return out;
   }
@@ -16875,7 +16940,8 @@ function libraryTagsForForm(formData, kind) {
     return hay.indexOf(q) >= 0;
   }
 
-  // 「不做标签」的行（kind=ignored）不进表：只占位，不显示、不翻译，也不删
+  // 「不做标签」的行（kind=ignored）不进表：只占位，不显示、不翻译，也不删。
+  // v918：**只排除 ignored** —— kind='effect'（动效词）照常进表，只是多挂一个「动效」标记（见行渲染）。
   function tagVocabularyTableRows() {
     const rows = Array.isArray(tagVocabularyRows) ? tagVocabularyRows : [];
     return rows.filter(function(row) { return row.kind !== TAG_VOCABULARY_IGNORED; });
@@ -16946,8 +17012,13 @@ function libraryTagsForForm(formData, kind) {
             + (zh ? '删除' : 'Remove') + '</button>'
             + (rowBusy ? '<span class="tv-busy">' + (zh ? '处理中…' : 'working…') + '</span>' : '')
         : '';
+      // v918：动效词（kind='effect'）在中文名后面挂个小标记 —— 效果词表是人工维护的受控词表，
+      // 与自动长出来的元素词区分开（行本身照常显示、可翻译、可改名，不进 ignored 那类过滤）。
+      const kindMark = String(row.kind || '') === 'effect'
+        ? '<span class="tv-mark tv-mark-effect" title="' + escapeAttr(zh ? '动效/效果类型词（受控词表，sql/028）' : 'Motion / effect term (curated list, sql/028)') + '">' + (zh ? '动效' : 'motion') + '</span>'
+        : '';
       return '<tr>'
-        + '<td class="tv-zh-cell">' + zhCell + '</td>'
+        + '<td class="tv-zh-cell">' + zhCell + kindMark + '</td>'
         + '<td class="tv-en-cell"><input class="tv-en" data-tv-en="' + escapeAttr(row.id) + '" value="' + escapeAttr(row.name_en || '') + '" placeholder="' + (zh ? '点这里填英文' : 'type English') + '">'
           + (row.source === 'manual' ? '<span class="tv-mark">' + (zh ? '人工' : 'manual') + '</span>' : '')
           + '</td>'

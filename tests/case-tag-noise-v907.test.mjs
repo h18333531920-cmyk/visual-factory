@@ -36,7 +36,7 @@ test('v907 不误伤：颜色字开头的正常食材、含数字的型号词照
 
 test('v907 组识别（多图）与活动主题走同一条黑名单', () => {
   const out = parseCaseTagSuggestions('{"elements":["文字","餐桌","绿色背景"],"activity":"聚餐"}', VOCAB, ['聚餐']);
-  assert.deepEqual(out, { elements: ['餐桌'], activity: '聚餐' });
+  assert.deepEqual(out, { elements: ['餐桌'], activity: '聚餐', effects: [] });   // v918：多返回一个 effects（未给效果词表时为空）
 });
 
 test('v907 isNoiseElementTag 可直接调用，黑名单可导出复用', () => {

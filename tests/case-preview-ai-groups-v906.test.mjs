@@ -15,7 +15,8 @@ const ACTIVITIES = ['聚餐', '开斋节', '夏日'];
 // ── 1. 解析：多图组识别只多返回一个 sameDesign，elements / activity 与逐图同一口径 ──
 test('v906 解析：正常 JSON 给出 elements / activity / sameDesign', () => {
   const out = parseCaseTagGroups('{"sameDesign":true,"elements":["餐桌","牛排"],"activity":"聚餐"}', VOCAB, ACTIVITIES);
-  assert.deepEqual(out, {elements: ['餐桌', '牛排'], activity: '聚餐', sameDesign: true});
+  // v918：返回值多了 effects（没给效果词表时恒为空数组）
+  assert.deepEqual(out, {elements: ['餐桌', '牛排'], activity: '聚餐', effects: [], sameDesign: true});
 });
 
 test('v906 解析：代码块 / 前后夹解释都认；sameDesign 明确 false 照实返回', () => {
@@ -69,15 +70,16 @@ test('v906 端点源码：images 多图分支 + 体积上限 + 单图老路径�
 });
 
 test('v906 _ai.js 源码：多图提示词要求先判同设计再给一套共同标签，最多 4 张', () => {
-  assert.match(aiSource, /export async function analyzeCaseTagGroupsWithGlm\(env, images, vocabulary, activityVocabulary = \[\]\)/);
-  assert.match(aiSource, /export function parseCaseTagGroups\(text, vocabulary = \[\], activities = \[\]\)/);
+  // v918 在这两个签名**末尾**各加了一个可选参数（effectVocabulary），前四个参数与语义不变
+  assert.match(aiSource, /export async function analyzeCaseTagGroupsWithGlm\(env, images, vocabulary, activityVocabulary = \[\], effectVocabulary = \[\]\)/);
+  assert.match(aiSource, /export function parseCaseTagGroups\(text, vocabulary = \[\], activities = \[\], effectVocabulary = \[\]\)/);
   assert.match(aiSource, /同一条物料的不同语言版本/);
   assert.match(aiSource, /一套覆盖这些图的共同元素标签/);
   assert.match(aiSource, /"sameDesign":true,"elements":\["餐桌","牛排"\],"activity":"聚餐"/);
   assert.match(aiSource, /CASE_TAG_GROUP_MAX_IMAGES = 4/);
   assert.equal(CASE_TAG_GROUP_MAX_IMAGES, 4);
-  // 逐图那套提示词与解析调用不许被改
-  assert.match(aiSource, /parseCaseTagSuggestions\(text, words, activities\)/);
+  // 逐图那套提示词与解析调用不许被改（v918 只多挂了一个效果词表参数）
+  assert.match(aiSource, /parseCaseTagSuggestions\(text, words, activities, effectWords\)/);
 });
 
 function mockGlm(content, capture) {

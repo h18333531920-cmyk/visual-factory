@@ -1376,6 +1376,10 @@ export async function suggestRelatedTagsWithGlm(env, term, vocabulary = []) {
 const GLM_VISION_MODEL = 'glm-4v-flash';
 export const ELEMENT_TAG_MAX_CHARS = 5;
 export const ELEMENT_TAG_MAX_COUNT = 12;
+// v918 效果标签（动效/弹窗效果类型）：**独立一维**，与元素标签并列，不进 ai_tags。
+// 上限比元素紧得多（效果是"这段动效在做什么"，通常 1-3 个词就够，多了会稀释搜索精度）。
+export const EFFECT_TAG_MAX_CHARS = 5;
+export const EFFECT_TAG_MAX_COUNT = 3;
 const KIKI_ELEMENT_ALIASES = new Set(['卡通老虎', '老虎吉祥物', '黄色老虎']);
 
 export function elementTagApiKey(env) {
@@ -1473,7 +1477,60 @@ export function parseElementSuggestions(text, vocabulary = []) {
   return out;
 }
 
-export function parseCaseTagSuggestions(text, elementVocabulary = [], activityVocabulary = []) {
+// v918：效果标签（动效/弹窗的效果类型）—— 与 parseElementSuggestions 的**关键区别**：
+//   元素：词表只是"优先采用它的写法"，词表外的新词照常保留（元素是开放的，库里会自己长词）；
+//   效果：**只收词表内的词**（受控词表，15 个种子词，人工维护）。模型挑了词表外的词一律丢掉。
+//   理由（用户口径）："效果类型"这一维要能稳定地筛（爆炸 / 缩放 / 利益点凸显…），
+//   放任模型自由发挥就会像元素那样在词表里裂出一堆近义词，搜索精度反而更差。
+export function parseEffectSuggestions(text, effectVocabulary = []) {
+  const raw = String(text || '');
+  let list = [];
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(parsed?.effects)) list = parsed.effects;
+    } catch { /* 没有 effects 就当空 */ }
+  }
+  const words = (Array.isArray(effectVocabulary) ? effectVocabulary : []).filter(Boolean);
+  if (!list.length || !words.length) return [];
+  // 归一化与 parseElementSuggestions 同款：去空格 + 小写比较，返回**词表自己的写法**
+  const compact = (value) => String(value == null ? '' : value).replace(/\s+/g, '').toLowerCase();
+  const byCompact = new Map();
+  for (const word of words) {
+    const key = compact(word);
+    if (key && !byCompact.has(key)) byCompact.set(key, word);
+  }
+  const containedIn = (word) => {
+    const key = compact(word);
+    let best = '';
+    for (const candidate of words) {
+      const candidateKey = compact(candidate);
+      if (candidateKey.length < 2 || candidateKey === key) continue;
+      if (!key.includes(candidateKey)) continue;
+      if (candidateKey.length > compact(best).length) best = candidate;   // 命中多个取最长的
+    }
+    return best;
+  };
+  const seen = new Set();
+  const out = [];
+  for (const item of list) {
+    let word = String(item == null ? '' : item).trim();
+    if (!word) continue;
+    word = word.replace(/[（(].*?[)）]/g, '').trim();          // 「爆炸（粒子）」→「爆炸」
+    if (!word || word.length > EFFECT_TAG_MAX_CHARS) continue;  // 每条 ≤5 字
+    const finalWord = byCompact.get(compact(word)) || containedIn(word);
+    if (!finalWord) continue;                                   // 词表外的词一律丢（不编造）
+    if (isNoiseElementTag(finalWord)) continue;                 // v907 噪音黑名单同样兜底
+    if (seen.has(finalWord)) continue;
+    seen.add(finalWord);
+    out.push(finalWord);
+    if (out.length >= EFFECT_TAG_MAX_COUNT) break;
+  }
+  return out;
+}
+
+export function parseCaseTagSuggestions(text, elementVocabulary = [], activityVocabulary = [], effectVocabulary = []) {
   const elements = parseElementSuggestions(text, elementVocabulary);
   // v828 主题不限词表：AI 自由识别一个短主题词，前端作为建议 chip 展示（点采纳才写入）
   let activity = '';
@@ -1484,10 +1541,26 @@ export function parseCaseTagSuggestions(text, elementVocabulary = [], activityVo
       activity = String(parsed?.activity || '').replace(/[「」"'。\s]/g, '').slice(0, 8);
     } catch { /* 活动无效就保持未选择 */ }
   }
-  return { elements: activity ? elements.filter(word => word !== activity) : elements, activity };
+  // v918 效果标签：没给 effectVocabulary（例如浏览器上传那条路）时恒为空数组，与原行为一致
+  return {
+    elements: activity ? elements.filter(word => word !== activity) : elements,
+    activity,
+    effects: parseEffectSuggestions(text, effectVocabulary)
+  };
 }
 
-export async function analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, activityVocabulary = []) {
+// v918：效果标签那一段提示词（逐图与按组共用同一段文字，避免两处各写一份）。
+// **只有调用方真的给了效果词表才加这一句**（不传 = 退回 v917 行为，提示词一字不变）。
+// 口径照 v907：只从这份词表里挑、挑不到就返回空数组、不要编造词表外的词。
+function effectTagPromptLine(effectWords) {
+  if (!effectWords.length) return '';
+  return '这段物料是**动态的**（动图/视频，识别时抽的是它的中间帧与最后一帧）：除了画面元素，再判断它的**效果类型**。'
+    + `只从这份效果词表里挑，挑不到就返回空数组，不要编造词表外的词：${effectWords.join('、')}。`
+    + '例如「价格从下方弹出放大」→ 利益点凸显 / 缩放；「金币爆炸四溅」→ 爆炸 / 粒子。'
+    + `最多 ${EFFECT_TAG_MAX_COUNT} 条，每条不超过 ${EFFECT_TAG_MAX_CHARS} 个字。`;
+}
+
+export async function analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, activityVocabulary = [], effectVocabulary = []) {
   const key = elementTagApiKey(env);
   if (!key) throw new Error('元素识别未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY（智谱开放平台）。');
   const raw = String(imageBase64 || '');
@@ -1496,6 +1569,7 @@ export async function analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, activ
   if (base64.length > 6 * 1024 * 1024) throw new Error('图片过大，请改用缩略图识别。');
   const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean).slice(0, 160);
   const activities = (Array.isArray(activityVocabulary) ? activityVocabulary : []).filter(Boolean).slice(0, 30);
+  const effectWords = (Array.isArray(effectVocabulary) ? effectVocabulary : []).filter(Boolean).slice(0, 60);
   const lines = [
     '你在帮案例库物料打搜索标签。看图，只描述画面里看得见的实体：食物、饮品、动物、人物、角色或吉祥物、餐具与道具、餐桌桌面、背景场景与节日布置（挂旗、气球、桌布等）。',
     '不要把图片里的文字当成元素输出，但判断活动主题时可以用上文字信息（节日祝福语、活动名、问候语等）。标语、价格、水印、LOGO 仍然忽略。',
@@ -1504,7 +1578,10 @@ export async function analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, activ
     activities.length ? `同时推断这张物料的核心活动主题：从画面内容和文字信息（节日祝福语、活动名等）自由归纳一个词，2-8 个字，例如：开学、世界杯、夏日、开斋节、宰牲节、聚餐、新年、国庆节、游戏、生日、万圣节、圣诞、情人节等，不限于以上例子；主题词要简短通用。画面和文字都推不出主题时才返回空字符串。` : '',
     '画面里没有可辨认的实体时（整张只有文字/色块/图形/纯背景/版式装饰），elements 必须返回空数组，宁可为空也不要凑数。',
     `每条 1-${ELEMENT_TAG_MAX_CHARS} 个汉字，按「主体优先、再补场景与次要物体」尽量列满，最多 ${ELEMENT_TAG_MAX_COUNT} 条；不要颜色、风格、形容词，不要解释、不要重复；也不要把「文字」「阿拉伯文」「数字3」「绿色背景」「横幅」这类版式/文字类词当作元素。`,
-    '只输出 JSON，不要代码块：{"elements":["汉堡","餐桌"],"activity":"聚餐"}'
+    effectTagPromptLine(effectWords),
+    '只输出 JSON，不要代码块：{"elements":["汉堡","餐桌"],"activity":"聚餐"'
+      + (effectWords.length ? ',"effects":["缩放","利益点凸显"]' : '')
+      + '}'
   ].filter(Boolean);
   const data = await postJson(GLM_VISION_URL, {
     model: GLM_VISION_MODEL,
@@ -1523,7 +1600,7 @@ export async function analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, activ
   const text = typeof content === 'string'
     ? content
     : Array.isArray(content) ? content.map(part => part?.text || '').join('') : '';
-  return parseCaseTagSuggestions(text, words, activities);
+  return parseCaseTagSuggestions(text, words, activities, effectWords);
 }
 
 // 按组识别（v906）：同款的 2–4 张（例如同一设计的 EN / AR 版）**一次喂给视觉模型**，
@@ -1533,8 +1610,8 @@ export async function analyzeCaseTagsWithGlm(env, imageBase64, vocabulary, activ
 // 组图，并多返回 sameDesign。sameDesign 只作参考：拿不准就 false，宁可漏合并不要错合并。
 export const CASE_TAG_GROUP_MAX_IMAGES = 4;
 
-export function parseCaseTagGroups(text, vocabulary = [], activities = []) {
-  const base = parseCaseTagSuggestions(text, vocabulary, activities);
+export function parseCaseTagGroups(text, vocabulary = [], activities = [], effectVocabulary = []) {
+  const base = parseCaseTagSuggestions(text, vocabulary, activities, effectVocabulary);
   let sameDesign = false;
   const objectMatch = String(text || '').match(/\{[\s\S]*\}/);
   if (objectMatch) {
@@ -1546,10 +1623,10 @@ export function parseCaseTagGroups(text, vocabulary = [], activities = []) {
       // 缺字段 / 解析不出 / 其它值一律 false = 拿不准，当不同组。
     } catch { /* 解析不出 = 拿不准 → 保持 false */ }
   }
-  return { elements: base.elements, activity: base.activity, sameDesign };
+  return { elements: base.elements, activity: base.activity, effects: base.effects, sameDesign };
 }
 
-export async function analyzeCaseTagGroupsWithGlm(env, images, vocabulary, activityVocabulary = []) {
+export async function analyzeCaseTagGroupsWithGlm(env, images, vocabulary, activityVocabulary = [], effectVocabulary = []) {
   const key = elementTagApiKey(env);
   if (!key) throw new Error('元素识别未配置：请在 Cloudflare Pages 项目里添加环境变量 GLM_API_KEY（智谱开放平台）。');
   const list = (Array.isArray(images) ? images : [])
@@ -1559,6 +1636,7 @@ export async function analyzeCaseTagGroupsWithGlm(env, images, vocabulary, activ
   if (!list.length) throw new Error('缺少待识别的图片。');
   const words = (Array.isArray(vocabulary) ? vocabulary : []).filter(Boolean).slice(0, 160);
   const activities = (Array.isArray(activityVocabulary) ? activityVocabulary : []).filter(Boolean).slice(0, 30);
+  const effectWords = (Array.isArray(effectVocabulary) ? effectVocabulary : []).filter(Boolean).slice(0, 60);
   // 版本标记（EN / AR）只有调用方真的给了才写进提示词，免得白写一句「第 1 张、第 2 张」干扰模型
   const labels = list.map(item => String(item.label || '').trim());
   const labelLine = labels.some(Boolean)
@@ -1576,7 +1654,10 @@ export async function analyzeCaseTagGroupsWithGlm(env, images, vocabulary, activ
     activities.length ? `同时推断这组物料的核心活动主题：从画面内容和文字信息（节日祝福语、活动名等）自由归纳一个词，2-8 个字，例如：开学、世界杯、夏日、开斋节、宰牲节、聚餐、新年、国庆节、游戏、生日、万圣节、圣诞、情人节等，不限于以上例子；主题词要简短通用。画面和文字都推不出主题时才返回空字符串。` : '',
     '画面里没有可辨认的实体时（整张只有文字/色块/图形/纯背景/版式装饰），elements 必须返回空数组，宁可为空也不要凑数。',
     `每条 1-${ELEMENT_TAG_MAX_CHARS} 个汉字，按「主体优先、再补场景与次要物体」尽量列满，最多 ${ELEMENT_TAG_MAX_COUNT} 条；不要颜色、风格、形容词，不要解释、不要重复；也不要把「文字」「阿拉伯文」「数字3」「绿色背景」「横幅」这类版式/文字类词当作元素。`,
-    '只输出 JSON，不要代码块：{"sameDesign":true,"elements":["餐桌","牛排"],"activity":"聚餐"}'
+    effectTagPromptLine(effectWords),
+    '只输出 JSON，不要代码块：{"sameDesign":true,"elements":["餐桌","牛排"],"activity":"聚餐"'
+      + (effectWords.length ? ',"effects":["缩放","利益点凸显"]' : '')
+      + '}'
   ].filter(Boolean);
   const content = list.map(item => ({ type: 'image_url', image_url: { url: String(item.url) } }));
   content.push({ type: 'text', text: lines.join('\n') });
@@ -1585,7 +1666,7 @@ export async function analyzeCaseTagGroupsWithGlm(env, images, vocabulary, activ
     temperature: 0.2,
     messages: [{ role: 'user', content }]
   }, { Authorization: `Bearer ${key}` });
-  return parseCaseTagGroups(parseResponseContent(data), words, activities);
+  return parseCaseTagGroups(parseResponseContent(data), words, activities, effectWords);
 }
 
 export async function analyzeElementsWithGlm(env, imageBase64, vocabulary) {

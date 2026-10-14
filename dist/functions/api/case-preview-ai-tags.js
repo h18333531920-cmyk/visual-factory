@@ -3,6 +3,9 @@ import {json, requireAdmin, supabaseFetch} from '../_shared.js';
 // 逐图 AI 标签是所有案例项目共用的功能（前端门禁 = isCaseProject，v908 起写入范围已放开）。
 // EXPERIMENT_KEY 现在只是分区名：库里已有的行都挂在这个 key 下，新项目的行也写这里，
 // 改名 = 现有数据全部读不到，所以不要动它。
+// v918：save 动作额外接收并写入 effect_tags（动效/弹窗的"效果类型"，与 ai_tags 并列的独立一维，
+// 由「动态物料抽帧识别」那条路产出，见 scripts/recognize-case-tags.mjs）；静态物料传空数组。
+// sql/028 没执行（列不存在）时自动降级为"不写这一列"，不报错 —— 见 isMissingEffectTagsColumn。
 const EXPERIMENT_KEY = 'augpicks-v1';
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[1-5][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
 const STATUSES = new Set(['running', 'failed', 'expired']);
@@ -32,6 +35,15 @@ function previewContentKey(preview) {
   return [preview.preview_path || '', preview.preview_size_bytes || 0, preview.updated_at || ''].join('|');
 }
 
+// v918：sql/028 还没执行时表里没有 effect_tags 列，带这一列写会被 PostgREST 整条拒掉
+// （PGRST204「Could not find the 'effect_tags' column…」/ 42703）。识别出这种错就**降级**：
+// 去掉这一列重写一次，别的列照常 —— 不报错、只是这轮不写效果标签。
+// `select=*` 读那一侧本来就列无关（列不存在只是读回来没有这个字段），不用改。
+export function isMissingEffectTagsColumn(error) {
+  const message = String(error && error.message || error || '');
+  return /effect_tags/i.test(message) && /column|does not exist|schema cache|Could not find/i.test(message);
+}
+
 async function currentFor(env, previewId) {
   const rows = await supabaseFetch(env,
     `/rest/v1/vf_preview_ai_tags?experiment_key=eq.${EXPERIMENT_KEY}&preview_id=eq.${encodeURIComponent(previewId)}&select=*`,
@@ -40,13 +52,23 @@ async function currentFor(env, previewId) {
 }
 
 async function saveRow(env, row) {
-  const rows = await supabaseFetch(env, '/rest/v1/vf_preview_ai_tags?on_conflict=experiment_key,preview_id', {
-    method: 'POST',
-    headers: {Prefer: 'resolution=merge-duplicates,return=representation'},
-    body: JSON.stringify(row)
-  }, true);
-  if (!Array.isArray(rows) || rows.length !== 1) throw new Error('逐图标签保存失败');
-  return rows[0];
+  const post = async (payload) => {
+    const rows = await supabaseFetch(env, '/rest/v1/vf_preview_ai_tags?on_conflict=experiment_key,preview_id', {
+      method: 'POST',
+      headers: {Prefer: 'resolution=merge-duplicates,return=representation'},
+      body: JSON.stringify(payload)
+    }, true);
+    if (!Array.isArray(rows) || rows.length !== 1) throw new Error('逐图标签保存失败');
+    return rows[0];
+  };
+  if (!Object.prototype.hasOwnProperty.call(row || {}, 'effect_tags')) return post(row);
+  try {
+    return await post(row);
+  } catch (error) {
+    if (!isMissingEffectTagsColumn(error)) throw error;
+    const {effect_tags, ...rest} = row;   // eslint-disable-line no-unused-vars
+    return post(rest);
+  }
 }
 
 export async function handleCasePreviewAiTags(request, env) {
@@ -95,6 +117,12 @@ export async function handleCasePreviewAiTags(request, env) {
       const excluded = new Set(base.excluded_tags);
       const manual = new Set(base.manual_tags);
       base.ai_tags = cleanTags(body.tags).filter(tag => !excluded.has(tag) && !manual.has(tag));
+      // v918 效果标签（动态物料的"效果类型"，独立一维）：与 ai_tags **同一条去重口径**。
+      // **只在调用方真的带了这个字段时才写**（静态物料传 effectTags: []，就是显式清空）：
+      // 浏览器那条识别路（v917 起不抽帧）根本没产出效果标签，不带这个字段 ⇒ 这一列不被它清掉。
+      if (Object.prototype.hasOwnProperty.call(body, 'effectTags') || Object.prototype.hasOwnProperty.call(body, 'effect_tags')) {
+        base.effect_tags = cleanTags(body.effectTags || body.effect_tags).filter(tag => !excluded.has(tag) && !manual.has(tag));
+      }
       base.status = 'success';
       base.model = String(body.model || 'glm-4v-flash').slice(0, 80);
       base.content_key = contentKey;
@@ -116,6 +144,8 @@ export async function handleCasePreviewAiTags(request, env) {
       if (!tag || tag.length > 12) return json({success: false, message: '标签无效'}, 400);
       if (base.content_key && base.content_key !== expectedContentKey) {
         base.ai_tags = [];
+        // 画面变过 ⇒ 旧的动效效果标签同样作废（与 ai_tags 一起清，别留着上一版的动效描述）
+        base.effect_tags = [];
         base.manual_tags = [];
         base.excluded_tags = [];
         base.status = 'idle';

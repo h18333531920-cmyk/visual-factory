@@ -14,7 +14,8 @@ const loadEnd = source.indexOf('  async function postCasePreviewAiTagAction(');
 assert.ok(loadStart > 0 && loadEnd > loadStart, '逐图标签读取代码块必须存在');
 
 // 把搜索文本函数切出来跑：外层依赖（案例判定 / 物料 / 逐图标签 / 词表）全部用假的塞进去
-function loadSearch(previews, tagsById) {
+// effectTagsById 是 v918 的动效标签桩（不传就是"这张没有动效标签"）；它是**独立一维**，与元素标签不共用桩。
+function loadSearch(previews, tagsById, effectTagsById = {}) {
   const context = vm.createContext({
     state: {libraryPreviews: previews},
     LIBRARY_SEARCH_PINYIN: {汉堡: 'hanbao'},
@@ -27,8 +28,9 @@ function loadSearch(previews, tagsById) {
     isCaseProject: (s) => !!s && s.caseProject === true,
     caseMaterialsOf: (s) => previews.filter((p) => p.source_file_id === s.id),
     casePreviewAiTags: (id) => tagsById[id] || [],
+    casePreviewAiEffectTags: (id) => effectTagsById[id] || [],
   });
-  vm.runInContext(source.slice(searchStart, searchEnd) + ';({ libraryItemSearchText, caseProjectElementTags })', context);
+  vm.runInContext(source.slice(searchStart, searchEnd) + ';({ libraryItemSearchText, caseProjectElementTags, caseProjectEffectTags })', context);
   return context;
 }
 

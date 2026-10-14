@@ -17,6 +17,13 @@
 //      analyzeCaseTagGroupsWithGlm()（一条消息看多张），提示词同样在那边、这里也不改。
 //   ④ 哪些物料"能识别"只有一处判据：previewSkipReason()（见下），物料分三类 ——
 //      ① 直接送（静态图，行为不变）② 抽帧后送（gif/mp4/mov/webm，v917）③ 跳过（源文件/无预览路径）。
+//   ⑤ v918 效果标签：**只有动态物料（抽帧那一类）**才额外请求「效果类型」标签，静态图一律写空数组
+//      （用户口径：「动态弹窗跟静态物料的标签识别要有区别」）。候选词来自 vf_tag_vocabulary 里
+//      kind='effect' 的行（受控词表，见 sql/028），与元素词表**分开传**（两个数组，不混一个）；
+//      模型只许从这份词表里挑，写进 vf_preview_ai_tags.effect_tags。
+//      ⚠️ 断点续跑只认 content_key + status（见 planWorkItems），**不认 effect_tags 是不是空的** ——
+//      所以库里 v918 之前识别过的动态物料（status=success、内容没变）不会被自动补上效果标签，
+//      要补就加 --force（或先删掉那些行的 status）跑一批。
 //      **抽帧**是 v917 的核心：GLM 视觉通道吃不下动图（2026-10-13 全量实测：93 张 gif 只成功 6 张），
 //      所以先用 ffmpeg 把动态物料抽成「中间帧 + 最后一帧」两张静态 PNG 再送模型。
 //      取自中间帧和末帧而不是首帧，是因为**用户实测反馈**：动态弹窗的第一帧往往还没弹出来（空状态）。
@@ -60,6 +67,7 @@ export const STORAGE_TIMEOUT_MS = 30000;
 export const PAGE_SIZE = 1000;
 export const MAX_PAGES = 50;               // 5 万行的保险丝，防查询写错时无限翻页
 export const VOCABULARY_MAX = 160;         // 与 app.js caseElementVocabulary() / _ai.js 的截断一致
+export const EFFECT_VOCABULARY_MAX = 60;   // v918 效果词表（kind='effect'）的截断，与 _ai.js 的 slice(0,60) 一致
 
 // ── 抽帧（ffmpeg）参数（v917）──────────────────────────────────────────────
 // 服务器上实测已装好 `/usr/bin/ffmpeg` + `/usr/bin/ffprobe`（ffmpeg 6.1.1）；本机 Mac 上没有，
@@ -260,8 +268,10 @@ export function cleanTags(values) {
 
 // 成功行：ai_tags 里刨掉 excluded_tags **和 manual_tags**（端点的 save 就是这个顺序，v914 起两边同口径），
 // 人工两列原样带回。同一个词不再 AI 一份、人工一份。
+// v918：effect_tags 用**同一条去重口径**（excluded_tags / manual_tags 里已有的词不再重复进效果标签），
+// 人工两列照旧原样保留、绝不覆盖；静态物料 effects 传空数组 ⇒ effect_tags 写 '{}'。
 // `current` 必须是**写之前刚读到的**那一行，绝不拿空数组起底（v864 那次的教训）。
-export function buildSuccessRow({preview, tags, model = MODEL, runId = null, current = null, experimentKey = EXPERIMENT_KEY}) {
+export function buildSuccessRow({preview, tags, effects = [], model = MODEL, runId = null, current = null, experimentKey = EXPERIMENT_KEY}) {
   const excluded = cleanTags(current?.excluded_tags);
   const excludedSet = new Set(excluded);
   const manualTags = cleanTags(current?.manual_tags);
@@ -271,6 +281,7 @@ export function buildSuccessRow({preview, tags, model = MODEL, runId = null, cur
     preview_id: preview.id,
     source_file_id: preview.source_file_id,
     ai_tags: cleanTags(tags).filter(tag => !excludedSet.has(tag) && !manualSet.has(tag)),
+    effect_tags: cleanTags(effects).filter(tag => !excludedSet.has(tag) && !manualSet.has(tag)),
     manual_tags: manualTags,
     excluded_tags: excluded,
     status: 'success',
@@ -279,6 +290,20 @@ export function buildSuccessRow({preview, tags, model = MODEL, runId = null, cur
     run_id: runId,
     error_message: ''
   };
+}
+
+// sql/028 没执行时（vf_preview_ai_tags 里还没有 effect_tags 列）PostgREST 会拒整条写入
+// （PGRST204 / 42703，报文里带列名）。这时**降级**：去掉这一列重写一次，别的照常写 ——
+// 与端点 functions/api/case-preview-ai-tags.js 的降级同口径。
+export function isMissingEffectTagsColumnError(error) {
+  const message = String(error?.message || error || '');
+  return /effect_tags/i.test(message) && /column|does not exist|schema cache|Could not find/i.test(message);
+}
+
+export function withoutEffectTags(row) {
+  if (!row || typeof row !== 'object') return row;
+  const {effect_tags, ...rest} = row;   // eslint-disable-line no-unused-vars
+  return rest;
 }
 
 // 失败行**只带状态列**：不带 ai_tags / manual_tags / excluded_tags，
@@ -338,6 +363,9 @@ export function elementVocabularyFromRows(rows, staticValues = CASE_ELEMENT_STAT
   for (const row of Array.isArray(rows) ? rows : []) {
     const name = String(row?.name_zh || '').trim();
     if (!name) continue;
+    // v918：效果词（kind='effect'）**不进元素词表** —— 两维分开，否则提示词会把「爆炸/缩放」
+    // 当元素词推荐给模型，识别结果里就会冒出"效果当元素"的脏标签。
+    if (String(row?.kind || '') === 'effect') continue;
     (String(row?.source || '') === 'manual' ? manual : others).push(name);
   }
   const out = [];
@@ -348,6 +376,29 @@ export function elementVocabularyFromRows(rows, staticValues = CASE_ELEMENT_STAT
     seen.add(key);
     out.push(String(word).trim());
     if (out.length >= VOCABULARY_MAX) break;
+  }
+  return out;
+}
+
+// v918 效果词表（与元素词表**并列、分开**的一份）：只取 vf_tag_vocabulary 里 kind='effect' 的 name_zh。
+// 人工维护的排前面，再去重（大小写/空格不同但同一个词的只留一个）；空 = 本轮不请求效果标签。
+export function effectVocabularyFromRows(rows, max = EFFECT_VOCABULARY_MAX) {
+  const manual = [];
+  const others = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (String(row?.kind || '') !== 'effect') continue;
+    const name = String(row?.name_zh || '').trim();
+    if (!name) continue;
+    (String(row?.source || '') === 'manual' ? manual : others).push(name);
+  }
+  const out = [];
+  const seen = new Set();
+  for (const word of manual.concat(others)) {
+    const key = String(word).replace(/\s+/g, '').toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(String(word).trim());
+    if (out.length >= max) break;
   }
   return out;
 }
@@ -658,12 +709,22 @@ const USAGE = `案例库逐图 AI 标签 · 本机批量识别
   **机器上没有可用的 ffmpeg/ffprobe、或某个文件抽帧失败时，只影响这些动态物料**（跳过并记原因 / 记失败），
   静态图照常跑，脚本不会整轮挂掉。抽帧的临时 PNG 放在系统临时目录，用完即删。
 
+效果标签（v918，只有动态物料才有）：
+  动态物料除了元素标签，还会请模型判断「这段动效/弹窗是什么**效果类型**」（爆炸 / 缩放 / 利益点凸显…），
+  写进 vf_preview_ai_tags.effect_tags —— 与元素标签**分开一维**，静态图一律写空数组。
+  候选词只从 vf_tag_vocabulary 里 kind='effect' 的受控词表挑（见 sql/028_effect_tags.sql），
+  模型挑了词表外的词一律丢掉（效果这一维要能稳定筛，不许在词表里裂出近义词）。
+  ⚠️ 断点续跑只认「内容没变 + 已成功」，**不看 effect_tags 空不空** ——
+     v918 之前识别过的动态物料不会被自动补上效果标签，要补就加 --force（建议配合 --project 小批跑）。
+
 凭证（缺了会提示；二选一，别写进代码）：
   环境变量：SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / GLM_API_KEY（ZHIPU_API_KEY 也认）
   或文件：  .local/recognize.env（KEY=VALUE 行式，该目录不进 git）
 
 写库说明：只写 vf_preview_ai_tags（experiment_key=${EXPERIMENT_KEY}，分区名而已，别改），
 不碰 vf_source_files / vf_asset_previews；manual_tags / excluded_tags 原样保留。
+effect_tags 与 ai_tags 同一条去重口径（excluded_tags / manual_tags 里已有的词不再重复进效果标签）。
+sql/028 没执行（表里没有 effect_tags 列）时自动降级为「不写效果标签」，其余照常，不报错。
 
 退出码：0 = 全部成功（或没有要跑的） 1 = 有失败 2 = 脚本自身出错 3 = 缺凭证
         4 = 项目没匹配上 130 = 被 Ctrl-C 中断（已完成的不会白跑）
@@ -755,8 +816,9 @@ async function fetchExistingTagRows(creds) {
   return rows;
 }
 
+// v918：多读一个 kind —— 效果词表就是靠它（kind='effect'）与元素词表分开的，别删。
 async function fetchVocabularyRows(creds) {
-  const {rows} = await fetchRows(creds, 'vf_tag_vocabulary', 'select=name_zh,name_en,source&order=name_zh.asc');
+  const {rows} = await fetchRows(creds, 'vf_tag_vocabulary', 'select=name_zh,name_en,source,kind&order=name_zh.asc');
   return rows;
 }
 
@@ -770,13 +832,27 @@ async function fetchCurrentTagRow(creds, previewId) {
 
 // 唯一的写入口。on_conflict + merge-duplicates 与端点 saveRow() 完全一致；
 // 只送 buildSuccessRow / buildFailureRow 产出的列，其它列（updated_by / created_at）保持原样。
+// v918 降级：sql/028 还没跑时表里没有 effect_tags 列，带这一列会被整条拒掉（PGRST204）——
+// 那时去掉这一列重写一次（只等于"这轮不写效果标签"，识别结果本身照常入库）。
+let effectTagsColumnMissing = false;
 async function upsertTagRow(creds, row) {
-  const {data} = await supabaseRequest(creds, '/rest/v1/vf_preview_ai_tags?on_conflict=experiment_key,preview_id', {
-    method: 'POST',
-    headers: {Prefer: 'resolution=merge-duplicates,return=minimal'},
-    body: JSON.stringify(row)
-  });
-  return data;
+  const post = async (payload) => {
+    const {data} = await supabaseRequest(creds, '/rest/v1/vf_preview_ai_tags?on_conflict=experiment_key,preview_id', {
+      method: 'POST',
+      headers: {Prefer: 'resolution=merge-duplicates,return=minimal'},
+      body: JSON.stringify(payload)
+    });
+    return data;
+  };
+  const payload = effectTagsColumnMissing ? withoutEffectTags(row) : row;
+  try {
+    return await post(payload);
+  } catch (error) {
+    if (effectTagsColumnMissing || !isMissingEffectTagsColumnError(error)) throw error;
+    effectTagsColumnMissing = true;
+    console.warn('⚠ vf_preview_ai_tags 里没有 effect_tags 列（sql/028 还没执行）⇒ 本轮降级为「不写效果标签」，元素标签照常写。');
+    return post(withoutEffectTags(row));
+  }
 }
 
 /* ───────────────────────── 取图 + 识别 ───────────────────────── */
@@ -1058,20 +1134,23 @@ export function framesToImagePayloads(frames) {
 
 // 「1 张走单图接口、2 张走多图接口」这一步抽成可注入的函数：测试里把两个真实调用的包装换成假的，
 // 就能验"2 张 → analyzeCaseTagGroupsWithGlm、1 张 → analyzeCaseTagsWithGlm"，不需要联网。
-// 只看 elements（activity 库里没有这列，与逐图那条路一致）；sameDesign 忽略 —— 那是浏览器按组那条路的信号。
+// 只看 elements / effects（activity 库里没有这列，与逐图那条路一致）；sameDesign 忽略 —— 那是浏览器按组那条路的信号。
+// v918 的 effectVocabulary 是**第 5 个参数**，不传（或传空数组）就走 v917 的老行为（不请求效果标签）。
 export async function analyzeFrameImages({
-  images, env, vocabulary, activities,
+  images, env, vocabulary, activities, effectVocabulary = [],
   analyzeSingle = analyzeCaseTagsWithGlm, analyzeGroup = analyzeCaseTagGroupsWithGlm
 }) {
   const list = Array.isArray(images) ? images.filter(item => item && item.url) : [];
   if (!list.length) throw new Error('没有可识别的帧');
+  const effects = (Array.isArray(effectVocabulary) ? effectVocabulary : []).filter(Boolean);
   const result = list.length >= 2
-    ? await analyzeGroup(env, list, vocabulary, activities)
-    : await analyzeSingle(env, list[0].url, vocabulary, activities);
+    ? await analyzeGroup(env, list, vocabulary, activities, effects)
+    : await analyzeSingle(env, list[0].url, vocabulary, activities, effects);
   return {
     api: list.length >= 2 ? 'group' : 'single',
     elements: Array.isArray(result?.elements) ? result.elements : [],
     activity: String(result?.activity || ''),
+    effects: Array.isArray(result?.effects) ? result.effects : [],
     sameDesign: result?.sameDesign === true
   };
 }
@@ -1128,6 +1207,16 @@ function printConfig(creds, options, extra = {}) {
   console.log('  动态物料   : ' + formatDynamicMode(options, extra.mediaTools));
   for (const message of (extra.mediaTools?.errors || [])) console.log('    ⚠ ' + message);
   if (extra.vocabularySize) console.log('  元素词表   : ' + extra.vocabularySize + ' 个词（库内标签 + 静态元素词）');
+  // v918：效果词表为空 = 本轮不会请求效果标签（多半是 sql/028 还没执行），这句要让人看见
+  console.log('  效果词表   : ' + (extra.effectVocabularySize
+    ? extra.effectVocabularySize + ' 个词（vf_tag_vocabulary 里 kind=effect）'
+    : '空 —— 本轮不请求效果标签（在 Supabase 执行 sql/028_effect_tags.sql 后重跑）'));
+}
+
+// v918：本轮**会请求效果标签**的物料数 = 待处理里的动态物料数（静态图一律不请求）。
+// 效果词表为空时恒为 0：没词表就没法"只从词表里挑"，这一维干脆不请求。
+export function effectRequestCount({dynamicPending = 0, effectVocabularySize = 0} = {}) {
+  return effectVocabularySize > 0 ? Math.max(0, Number(dynamicPending) || 0) : 0;
 }
 
 // 动态物料这一行要能一眼看出"到底会不会抽帧"（用户要靠它判断 ffmpeg 有没有生效）。
@@ -1183,12 +1272,12 @@ async function confirm(question) {
   }
 }
 
-async function runBatch(creds, plan, options, vocabulary, log) {
+async function runBatch(creds, plan, options, vocabulary, effectVocabulary, log) {
   const total = plan.pending.length;
   const limiter = createRateLimiter(options.rate);
   const runId = (globalThis.crypto?.randomUUID?.() || '') || null;
   const startedAt = Date.now();
-  const stats = {ok: 0, fail: 0, done: 0, fallbackImages: 0, dynamicItems: 0, frames: 0};
+  const stats = {ok: 0, fail: 0, done: 0, fallbackImages: 0, dynamicItems: 0, frames: 0, effectRequests: 0, effectItems: 0};
   const failureKinds = new Map();
   const failures = [];
   let cursor = 0;
@@ -1278,18 +1367,28 @@ async function runBatch(creds, plan, options, vocabulary, log) {
       }
       await limiter();
       // 2 张帧 → 一条消息看多张（拿一套统一标签）；1 张 → 单图接口。两者都不改提示词（在 _ai.js 里）。
+      // v918：**只有动态物料**才把效果词表传下去（静态图传空数组 ⇒ 提示词里没有那一段、effect_tags 写 {}）。
       const analyzed = await withRetry(
         () => withTimeout(
-          analyzeFrameImages({images, env: {GLM_API_KEY: creds.glmKey}, vocabulary, activities: CASE_ACTIVITY_VALUES}),
+          analyzeFrameImages({
+            images,
+            env: {GLM_API_KEY: creds.glmKey},
+            vocabulary,
+            activities: CASE_ACTIVITY_VALUES,
+            effectVocabulary: dynamic ? effectVocabulary : []
+          }),
           MODEL_TIMEOUT_MS,
           '模型超过 ' + MODEL_TIMEOUT_MS + 'ms 未返回'
         ),
         {attempts: RETRY_ATTEMPTS, baseDelayMs: RETRY_BASE_MS, onRetry: ({attempt, kind: errorKind, delay}) => log.line('· 第 ' + attempt + ' 次失败（' + errorKind + '），等 ' + delay + 'ms 重试')}
       );
       const tags = analyzed.value.elements;
+      const effects = analyzed.value.effects;
+      if (dynamic && effectVocabulary.length) stats.effectRequests += 1;
+      if (effects.length) stats.effectItems += 1;
       // 写之前重读一次：人工可能刚在 app 里给这张补过标签 / 排除过词，拿计划阶段的旧快照去写会覆盖掉它。
       const fresh = await fetchCurrentTagRow(creds, item.preview.id);
-      await upsertTagRow(creds, buildSuccessRow({preview: item.preview, tags, model, runId, current: fresh}));
+      await upsertTagRow(creds, buildSuccessRow({preview: item.preview, tags, effects, model, runId, current: fresh}));
     } finally {
       // 抽出来的临时 PNG 一律删干净：成功 / 抽帧失败 / 模型失败 / 中断都走这里。
       cleanupTempDir(workDir);
@@ -1324,6 +1423,10 @@ async function runBatch(creds, plan, options, vocabulary, log) {
     + '，平均 ' + (stats.done / Math.max(0.001, elapsedMs / 1000)).toFixed(1) + '/s');
   if (stats.fallbackImages) log.line('缩略图缺失、退回原图：' + stats.fallbackImages + ' 张（见上面的逐条日志）');
   if (stats.dynamicItems) log.line('抽帧识别：' + stats.dynamicItems + ' 张动态物料（gif/mp4/mov/webm），共送出 ' + stats.frames + ' 帧');
+  if (stats.effectRequests) {
+    log.line('效果标签：向模型请求了 ' + stats.effectRequests + ' 张（动态物料），其中 ' + stats.effectItems
+      + ' 张挑到了词表内的效果词；静态图一律不请求（写空数组）。');
+  }
   if (failureKinds.get('frame-extract')) {
     log.line('其中抽帧失败 ' + failureKinds.get('frame-extract') + ' 张（没送模型：ffmpeg 探测/抽帧全试过都没拿到帧，原因见失败清单）');
   }
@@ -1391,11 +1494,15 @@ async function main() {
   const skipped = skipSummary(casePreviews, queueOptions);
 
   const existingRows = await fetchExistingTagRows(creds);
-  const vocabulary = elementVocabularyFromRows(await fetchVocabularyRows(creds));
+  const vocabularyRows = await fetchVocabularyRows(creds);
+  const vocabulary = elementVocabularyFromRows(vocabularyRows);
+  // v918：效果词表与元素词表**分开读、分开传**（同一份表按 kind 分流，别合成一个数组）
+  const effectVocabulary = effectVocabularyFromRows(vocabularyRows);
   const plan = planWorkItems({previews, existingRows, force: options.force, limit: options.limit});
   const pendingKinds = pendingKindCounts(plan.pending);
+  const effectRequested = effectRequestCount({dynamicPending: pendingKinds.dynamic, effectVocabularySize: effectVocabulary.length});
 
-  printConfig(creds, options, {vocabularySize: vocabulary.length, mediaTools});
+  printConfig(creds, options, {vocabularySize: vocabulary.length, effectVocabularySize: effectVocabulary.length, mediaTools});
   console.log('范围：' + (options.project ? '项目「' + options.project + '」→ ' + sources.length + ' 个' : '全部案例项目 ' + sources.length + ' 个')
     + '；物料 ' + casePreviews.length + ' 张，预览表共 ' + previewTotal + ' 行');
   console.log(formatQueueComposition(skipped, queueOptions));
@@ -1410,6 +1517,16 @@ async function main() {
   if (pendingKinds.dynamic) {
     console.log('  抽帧那 ' + pendingKinds.dynamic + ' 张：每张用 ffmpeg 抽「中间帧 + 最后一帧」两张 PNG，'
       + '当一组送 ' + FRAMES_MODEL + '（一条消息看两张，拿回一套统一标签）。');
+  }
+  // v918：dry-run 也要能一眼看出「这次会请求效果标签的有 N 张」及其依据
+  console.log('  效果标签：这次会请求效果标签的 ' + effectRequested + ' 张（= 待处理里的动态物料 '
+    + pendingKinds.dynamic + ' 张；静态图 ' + pendingKinds.direct + ' 张一律不请求）'
+    + (effectVocabulary.length
+      ? '；候选词表 ' + effectVocabulary.length + ' 个（kind=effect）'
+      : '；⚠ 效果词表为空 ⇒ 一张都不会请求，请先在 Supabase 执行 sql/028_effect_tags.sql'));
+  if (effectRequested < pendingKinds.dynamic && effectVocabulary.length === 0 && pendingKinds.dynamic > 0) {
+    console.warn('⚠ 效果词表读不到（vf_tag_vocabulary 里没有 kind=effect 的行）⇒ 本轮动态物料只写元素标签，'
+      + 'effect_tags 写空数组。执行 sql/028_effect_tags.sql 后再跑一次（这些行已经 success，要 --force 才重跑）。');
   }
 
   if (options.dryRun) {
@@ -1436,7 +1553,7 @@ async function main() {
     projectTitles,
     ffmpegPath: mediaTools.ffmpegPath,
     ffprobePath: mediaTools.ffprobePath
-  }, vocabulary, log);
+  }, vocabulary, effectVocabulary, log);
   if (result.failures.length) return 1;
   return result.aborted ? 130 : 0;   // 130 = 被 Ctrl-C 中断（跟 shell 惯例一致，便于外面写重跑循环）
 }

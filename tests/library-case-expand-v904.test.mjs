@@ -267,6 +267,8 @@ test('v904 端到端：真实搜索文本 + 排名 + 铺开，项目内第 1、3
     isCaseProject: (s) => !!s && s.caseProject === true,
     caseMaterialsOf: (s) => previews.filter((p) => p.source_file_id === s.id),
     casePreviewAiTags: (id) => tagsById[id] || [],
+    // v918 动效标签是**独立一维**（未传就是"没有动效标签"），与 casePreviewAiTags 不共用桩
+    casePreviewAiEffectTags: () => [],
     // 同 loadCollapse：这批物料没有语言证据 ⇒ 不配组
     caseMaterialLanguage: () => '',
     selectedLibraryTagValues: () => [],
