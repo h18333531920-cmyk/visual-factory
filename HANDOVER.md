@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | `9dc6e063-f3a9-4e50-8b35-a8521abffc2f`，版本标识 `20261010-ai-tag-ui-v2`，2026-10-10 15:18 手动直发 | 实测（部署清单 + 线上文件比对） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20260924-preview-ai-experiment-v870'`（与上面标识不一致，属历史遗留） | 实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261014-strategy-required-v934`（**上传时「业务策略」也必选（与平台/国家/活动主题同档）**；往上叠 v933 的**标签后面的空位去掉**、v932 的**点✓没反应真根因 + 等待看得见 + 写库少跑两个往返**、v929 的**× 只在加号态出现**、v928 的**× 不再常驻**、v927 的**去掉「一键识别」按钮 + 底部不再显示「AI直接应用」**、v926 的**标签「＋」内联新增 + 动效标签手工加**、v925 的**进度条显示具体哪几张**、v924 的**内容指纹去掉 updated_at**、v923 的**黑名单补价格/百分比**、v922 的**上传未分类红框+拦截+批量**、v918 的**效果类型标签**、v917 的**动态物料抽帧识别**）。`sql/031` 已由用户执行（实测列已建好）；部署 `7de1965b`，2026-10-14 本机 wrangler 直发 | 实测 2026-10-14 |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261014-library-hot-update-v935`（**上传 / 删除项目后就地生效（热更新）—— 不再整库重拉**；往上叠 v934 的**上传时「业务策略」也必选**、v933 的**标签后面的空位去掉**、v932 的**点✓没反应真根因 + 等待看得见 + 写库少跑两个往返**、v929 的**× 只在加号态出现**、v928 的**× 不再常驻**、v927 的**去掉「一键识别」按钮 + 底部不再显示「AI直接应用」**、v926 的**标签「＋」内联新增 + 动效标签手工加**、v925 的**进度条显示具体哪几张**、v924 的**内容指纹去掉 updated_at**、v923 的**黑名单补价格/百分比**、v922 的**上传未分类红框+拦截+批量**、v918 的**效果类型标签**、v917 的**动态物料抽帧识别**）。`sql/031` 已由用户执行（实测列已建好）；部署 `0234caef`，2026-10-14 本机 wrangler 直发 | 实测 2026-10-14 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true`。**实测延迟 1.7–2.9 秒**（Pages Function 冷启动 + 上游调用是这个项目的基线，"点一下要等几秒"多半来在这） | 实测 2026-10-14 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
-| 本地工作区 | 分支 `tmp-deploy-v871`，HEAD `61e33e2`（v934，含 `dist/`；v931/v930/v929/v928/v927/v926 在其前六个提交）；**已跟踪文件无未提交改动**（`tests/` 下有 51 个从未入库的旧测试文件，一直如此，本轮未动）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-14 |
-| 自动化测试 | `node --test tests/` → **810/810 通过**（v934 把上传必填从三项扩到四项，v922/v914/v809 三处断言跟着更新；v932 新增 3 条：在途不重复发请求 + 失败恢复 ✓ + 端点少跑往返；v930/v931 共 8 条在 `tests/tag-add-feedback-v930.test.mjs`；v929 7 条；v928 起 5 条；v927 7 条；v926 33 条；v925 25 条 + 更早的都在） | 实测 2026-10-14 |
+| 本地工作区 | 分支 `tmp-deploy-v871`，HEAD `d8e3a5b`（v935，含 `dist/`；v934/v933/v932/v931/v930/v929/v928/v927/v926 在其前九个提交）；**已跟踪文件无未提交改动**（`tests/` 下有 51 个从未入库的旧测试文件，一直如此，本轮未动）；测试站走**本机 wrangler 直发**（GitHub Actions 那条通道发不出 `dist/functions/api/*` 里未跟踪的端点，见 §8.3） | 实测 2026-10-14 |
+| 自动化测试 | `node --test tests/` → **815/815 通过**（v935 新增 `library-hot-update-v935` 5 条；v934 把上传必填从三项扩到四项，v922/v914/v809 三处断言跟着更新；v932 新增 3 条：在途不重复发请求 + 失败恢复 ✓ + 端点少跑往返；v930/v931 共 8 条在 `tests/tag-add-feedback-v930.test.mjs`；v929 7 条；v928 起 5 条；v927 7 条；v926 33 条；v925 25 条 + 更早的都在） | 实测 2026-10-14 |
 | 后台识别 worker | **腾讯云已装好并跑通**：`/opt/case-tags/`（脚本 + `_ai.js` + `.local/recognize.env` 0600），主机已装 Node 20.20.2 与 ffmpeg 6.1.1，cron 每 5 分钟一批。⚠️ **worker 上仍是 v924 版脚本**（v926 又改过它、加了 `manual_effect_tags` 保护，需用户重传，见 §11 v926 条） | 实测 2026-10-14 |
 | 逐图 AI 标签覆盖 | **已铺满全库**：`vf_preview_ai_tags` **1942 行 / 98 个案例项目**，**全部 `status='success'`（失败 0）** —— v924 换脚本后原先那 87 张 `.gif` 已全部识别完；`effect_tags` 非空 83 行；**`manual_tags` / `excluded_tags` 非空行仍是 0 行**（人工加标签从未成功落库，见 §11 v926 条） | 实测 2026-10-14（查库） |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
@@ -798,6 +798,19 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
     - 版本号 → `20261014-strategy-required-v934`（`TOOL_UI_VERSION`、`index.html` 5 处 `?v=`、20 个测试文件里的旧版本断言一起换）。`npm run build:pages` 已跑、`diff -q` 三处一致。
     - 测试 **810/810**：`tests/upload-autotag-v914.test.mjs` 里三条必填用例改成四项口径（含新增**只缺业务策略**那条：文案要点名「业务策略」、标红只标这一行），`tests/case-upload-required-tags-v809.test.mjs` 加两条源码断言（`strategy` 必填 + 文案映射），`tests/upload-type-required-v922.test.mjs` 的 `tagsOk` 夹具补上 `strategy`、顺序断言文案改成四项。
     - ⚠️ **未核实**：真机上传一遍看标红与文案（只有源码/真跑校验函数这一级证据）。
+
+  - **✅ v935（2026-10-14，已发测试站，部署 `0234caef`）—— 上传 / 删除项目后"就地生效"，不再整库重拉**。用户诉求原话：「我发现不管是删除项目还是上传项目，结束后都会延迟大概 8、9 秒后才会对整个页面进行刷新，没法及时生效吗，并且不要刷新的冷更新吗」。
+    - **那 8–9 秒是 `reloadLibraryData()`**：它清空全部本地状态后重新 `loadLibraryData()` —— 重拉**全部 source + 全部 preview + 整张 `vf_preview_ai_tags`（1900+ 行）**、所有签名 URL 重签、整页重画。而一次上传/删除其实**只影响一个项目**。两条路（`deleteLibrarySource` 尾部、上传成功那一刻）原来都是这一句。
+    - **改法**：新增 `applyLocalLibraryChange(sourceId, removed)`：
+      - **删除** → 纯本地摘掉（`librarySources` 去掉那一行、`libraryPreviews` 去掉它的物料、顺手清 `previewAiTagsByPreviewId` 里那些物料），**连查都不用查**；删完弹一条 `已删除项目「X」`。
+      - **上传** → 只重拉**这一个项目**：`fetchLibrarySourceWithPreviews(sourceId)`（一条 `eq('id')` 的 source 查询 + 按页拉该 source 的物料，**沿用整库加载那套 select 字段与 `caseAwareQuery`/`previewAwareQuery` 降级路径**，免得两边形状不一致），合进本地后签名它自己的 URL、重排、重画。
+      - 两条路都以 `refreshLibraryLoadedUi()`（= 重画下拉/计数/网格）收尾 —— **只重画，不重拉**。
+      - **兜底**：返回值 `false`（比如查不到那一行）时调用方退回 `reloadLibraryData()`，不许静默什么都不做。
+    - **顺手抽了一份排序**：`sortLibraryPreviewsBySourceOrder(rows)`（项目顺序 → `sort_order` → `created_at` 倒序），整库加载与局部更新**共用同一份**，不再各写一遍。
+    - **没改的地方（要知道）**：图库 / 模板库的上传（`uploadGalleryAssets` / `uploadTemplateAsset` 之后）**仍然是整库重拉** —— 它们的入库路径与案例项目不同，这轮没动（用户反馈的是案例项目的上传和删除；删除是共用的，所以图库/模板的**删除**也已经是热更新了）。
+    - 版本号 → `20261014-library-hot-update-v935`（`TOOL_UI_VERSION`、`index.html` 5 处 `?v=`、20 个测试文件里的旧版本断言一起换）。`npm run build:pages` 已跑、`diff -q` 三处一致。
+    - 测试 **815/815**：新增 `tests/library-hot-update-v935.test.mjs`（5 条：删除走上局部摘除且不再无条件整库重拉；上传成功走局部合入 + 兜底；局部更新里**不许**出现 `loadLibrarySources`/`loadLibraryPreviews`/`loadAllPreviewAiTags`/`reloadLibraryData`；`fetchLibrarySourceWithPreviews` 只按 id / source_file_id 单查；**真跑排序纯函数**验序 + 不许就地改传入数组；版本号六处）。
+    - ⚠️ **未核实**：真机上"传完立刻出现 / 删完立刻消失"的体感没量过（只有源码与纯函数这一级证据）；**没有量过新路径的实际耗时**（预期 < 1 秒，但没测）；局部更新后与"整库重拉"的**结果一致性**只在形状层面保证（同一套 select），边界情况（例如筛选项变化、书签分组）未逐一验证 —— 一旦发现哪里不对，兜底路径保证还能退回整库重拉。
 
   - **🚧 用户 2026-10-13 追加的核心痛点：同款的英/阿版本在结果里重复占位**（搜「牛排」出英文版那张、搜「烤肉」出**同一设计的**阿语版那张；根因是逐图各识别一次，同款两版的标签不一致）。规划稿早有对应章节：**§3 设计分组**（分组证据与防连锁误合并）+ **§5 逐图识别如何支持语言版本去重**。
     - **口径（按规划稿，不要改成"硬统一标签"）**：① **结果按"设计组"占位** —— 同款多语言版在结果里只占一个位置（默认展示有证据的 EN 版），组内可展开看其他版本；② **证据分层** —— 其他版本标"同组待核验"，人工确认后才进直接命中。规划稿 §5 明确「**不能让已完成的 EN 标签自动替代失败的 AR 结果**」；硬复制标签会造成假命中（搜烤肉结果里那张其实是牛排版）。
