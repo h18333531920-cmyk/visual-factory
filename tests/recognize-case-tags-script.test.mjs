@@ -69,15 +69,17 @@ function tagRow(preview, {status = 'success', contentKey = previewContentKey(pre
   return {preview_id: preview.id, source_file_id: preview.source_file_id, status, content_key: contentKey, manual_tags: manual, excluded_tags: excluded};
 }
 
-test('content_key 与端点 previewContentKey 逐字段同口径', () => {
+test('content_key 与端点 previewContentKey 逐字段同口径（v924 起只有路径 + 字节数）', () => {
   const preview = {preview_path: 'u1/s1/preview-1.png', preview_size_bytes: 12345, updated_at: '2026-10-13T01:02:03.123Z'};
-  assert.equal(previewContentKey(preview), 'u1/s1/preview-1.png|12345|2026-10-13T01:02:03.123Z');
-  // 缺字段时的兜底（空串 / 0 / 空串）也必须跟端点一致，否则同一张图在脚本与 app 里判断结果相反
-  assert.equal(previewContentKey({id: 'x'}), '|0|');
-  assert.equal(previewContentKey(null), '|0|');
+  assert.equal(previewContentKey(preview), 'u1/s1/preview-1.png|12345');
+  // updated_at 不在指纹里：改它（触发器会刷）不该让一张图变成"内容变了"
+  assert.equal(previewContentKey({...preview, updated_at: '2026-10-14T09:00:00Z'}), 'u1/s1/preview-1.png|12345');
+  // 缺字段时的兜底（空串 / 0）也必须跟端点一致，否则同一张图在脚本与 app 里判断结果相反
+  assert.equal(previewContentKey({id: 'x'}), '|0');
+  assert.equal(previewContentKey(null), '|0');
   // 锁住端点那一行：脚本抄的就是它，端点改了这里必须跟着响
-  assert.match(endpointSource, /\[preview\.preview_path \|\| '', preview\.preview_size_bytes \|\| 0, preview\.updated_at \|\| ''\]\.join\('\|'\)/);
-  assert.match(scriptSource, /preview_size_bytes \|\| 0[\s\S]{0,80}\.join\('\|'\)/);
+  assert.match(endpointSource, /\[preview\.preview_path \|\| '', preview\.preview_size_bytes \|\| 0\]\.join\('\|'\)/);
+  assert.match(scriptSource, /\[preview\?\.preview_path \|\| '', preview\?\.preview_size_bytes \|\| 0\]\.join\('\|'\)/);
 });
 
 test('缩略图路径推导：同级 _thumb.jpg，无目录/无路径都不炸', () => {
@@ -205,7 +207,8 @@ test('待处理清单：没行要跑、成功且内容没变跳过、内容变�
   const previews = [fresh, stale, failed, missing];
   const existingRows = [
     tagRow(fresh),
-    tagRow(stale, {contentKey: previewContentKey({...stale, updated_at: '2026-10-01T00:00:00Z'})}),
+    // v924：内容就是**图片本身**（路径 + 字节数）—— updated_at 不再算数（见本文件 v924 那组测试）
+    tagRow(stale, {contentKey: previewContentKey({...stale, preview_size_bytes: stale.preview_size_bytes + 1})}),
     tagRow(failed, {status: 'failed'})
   ];
 
@@ -631,7 +634,7 @@ test('v919 --force-dynamic：动态物料「已成功且内容没变」也重跑
   const changed = previewOf('p-gif-changed', {path: 'u1/s1/c.gif'});
   const changedPlan = planWorkItems({
     previews: [changed],
-    existingRows: [tagRow(changed, {contentKey: previewContentKey({...changed, updated_at: '2026-10-01T00:00:00Z'})})],
+    existingRows: [tagRow(changed, {contentKey: previewContentKey({...changed, preview_size_bytes: changed.preview_size_bytes + 1})})],
     forceDynamic: true
   });
   assert.equal(changedPlan.pending[0].reason, 'content-changed');

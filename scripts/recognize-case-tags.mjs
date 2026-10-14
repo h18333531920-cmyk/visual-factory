@@ -10,8 +10,10 @@
 //      ai_tags = 模型新标签 去掉 excluded_tags 与 manual_tags 里已有的（v914 起同口径：同一个词不存两份）；
 //      manual_tags / excluded_tags 原样保留不许覆盖；
 //      status='success' + model + content_key + error_message=''。
-//   ② content_key 照抄端点 previewContentKey()（preview_path | preview_size_bytes | updated_at）——
+//   ② content_key 照抄端点 previewContentKey()（**v924 起 = preview_path | preview_size_bytes**，
+//      不再含 updated_at —— 原因见下面的 previewContentKey() 注释）——
 //      对不上就说明画面变过，那张得重跑，这也是断点续跑判断「已完成」的唯一依据。
+//      比对一律走 contentKeyUnchanged()（只比前两段），历史 3 段老 key 才算得上"没变"。
 //   ③ 识别口径复用 functions/_ai.js 的 analyzeCaseTagsWithGlm()（提示词、≤5 字 / ≤12 条、词表归一、
 //      KIKI 别名都在那边），这里绝不重写提示词；动态物料的一两组帧走同一个文件里的
 //      analyzeCaseTagGroupsWithGlm()（一条消息看多张），提示词同样在那边、这里也不改。
@@ -134,8 +136,27 @@ const runState = {aborted: false};
 /* ───────────────────────── 纯逻辑（单测覆盖，别把可测的东西塞进 main） ───────────────────────── */
 
 // 与端点 previewContentKey() 逐字一致。任何一个字段对不上，这张图的标签就算过期。
+// v924：**去掉 updated_at** —— 内容指纹只看图片本身（路径 + 字节数）。
+// 起因（2026-10-14 实测事故）：updated_at 是数据库触发器（vf_touch_updated_at）在**任何** UPDATE 时都会
+// 刷新的字段，所以给 525 张补 language、给 78 张补 material_type 这种**跟图片内容无关的编辑**也把它刷了，
+// 于是这 ~600 张的指纹全变 ⇒ 腾讯云上的 cron 把它们全部重跑了一遍（约 20 张/5 分钟），图根本没换、
+// 白烧 600 次模型调用。代价：**同路径 + 同字节数、但内容真的换过**的图检测不出来（见 contentKeyUnchanged）。
 export function previewContentKey(preview) {
-  return [preview?.preview_path || '', preview?.preview_size_bytes || 0, preview?.updated_at || ''].join('|');
+  return [preview?.preview_path || '', preview?.preview_size_bytes || 0].join('|');
+}
+
+// 「这张图的内容变没变」的**唯一比对入口** —— 所有比较点都必须走这里，别再在别处直接 !== 比字符串。
+//
+// 为什么不能直接比：库里**已经存着的** content_key 是 v923 及以前的 **3 段格式**
+// （`path|size|updated_at`，全库 1941 张都是），v924 起新写进去的才是 2 段（`path|size`）。
+// 拿新值跟老值直接 `!==` 比永远不相等 ⇒ **整库会被判成"内容变了"、全部重跑一遍**，正是这次要避免的浪费。
+// 所以这里只比**前两段**：把库里那个字符串按 '|' 切开取前两段，与新的 previewContentKey() 比 ——
+// 3 段老格式与 2 段新格式因此等价，老行自然"内容没变"（它们下次被写入时自动升级成 2 段）。
+// 没存过 key（空串）⇒ 没得比，当"变了"（与 v923 之前的老行为一致）。
+export function contentKeyUnchanged(storedKey, preview) {
+  const stored = String(storedKey || '');
+  if (!stored) return false;
+  return stored.split('|').slice(0, 2).join('|') === previewContentKey(preview);
 }
 
 // 缩略图约定：静态缩略图与预览图同目录，所以只换文件名（同 app.js 里那套 replace）。
@@ -367,7 +388,7 @@ export function planWorkItems({previews = [], existingRows = [], force = false, 
     if (!current) { reason = 'no-row'; reasons.noRow += 1; }
     else if (force) { reason = 'force'; reasons.force += 1; }
     else if (String(current.status || '') !== 'success') { reason = 'not-success'; reasons.notSuccess += 1; }
-    else if (String(current.content_key || '') !== contentKey) { reason = 'content-changed'; reasons.contentChanged += 1; }
+    else if (!contentKeyUnchanged(current.content_key, preview)) { reason = 'content-changed'; reasons.contentChanged += 1; }
     // 走到这里 = 已成功 + 内容没变：只有「动态物料 + 开了 --force-dynamic」才重跑，其余照旧跳过。
     else if (forceDynamic && previewKind(preview) === KIND_DYNAMIC) { reason = 'force-dynamic'; reasons.forceDynamic += 1; }
     if (reason) pending.push({preview, current, reason, contentKey});

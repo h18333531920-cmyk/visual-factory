@@ -31,8 +31,22 @@ async function previewFor(env, previewId) {
   return rows[0];
 }
 
+// 与 scripts/recognize-case-tags.mjs 的 previewContentKey() 逐字一致。
+// v924：**去掉 updated_at** —— 内容指纹只看图片本身（路径 + 字节数）。updated_at 会被数据库触发器在
+// 任何 UPDATE（改 language / material_type 这类跟图片无关的编辑）时刷新，拿它当"内容变了"的判据，
+// 会把没换过的图全部判成过期（2026-10-14 实测事故：~600 张被 cron 白跑一遍），见脚本里的同一处注释。
 function previewContentKey(preview) {
-  return [preview.preview_path || '', preview.preview_size_bytes || 0, preview.updated_at || ''].join('|');
+  return [preview.preview_path || '', preview.preview_size_bytes || 0].join('|');
+}
+
+// 「这张图的内容变没变」的**唯一比对入口**（所有比较点都走这里，别在别处直接 !== 比字符串）。
+// 库里存量的 content_key 是 v923 及以前的 3 段格式（`path|size|updated_at`），v924 起写的是 2 段。
+// 直接比会永远不相等 ⇒ 整库判成"内容变了"。所以**只比前两段**：老格式与新格式因此等价。
+// 空 key ⇒ 没得比，当"变了"（与老行为一致）。
+function contentKeyUnchanged(storedKey, preview) {
+  const stored = String(storedKey || '');
+  if (!stored) return false;
+  return stored.split('|').slice(0, 2).join('|') === previewContentKey(preview);
 }
 
 // v918：sql/028 还没执行时表里没有 effect_tags 列，带这一列写会被 PostgREST 整条拒掉
@@ -103,7 +117,7 @@ export async function handleCasePreviewAiTags(request, env) {
       base.status = status;
       base.run_id = UUID.test(String(body.runId || '')) ? body.runId : base.run_id;
       const contentKey = String(body.contentKey || '').slice(0, 500);
-      if (contentKey !== expectedContentKey) return json({success: false, message: '物料内容已变化，请刷新后重试'}, 409);
+      if (!contentKeyUnchanged(contentKey, preview)) return json({success: false, message: '物料内容已变化，请刷新后重试'}, 409);
       base.content_key = contentKey;
       base.error_message = status === 'failed' ? String(body.error || '识别失败').slice(0, 500) : '';
       return json({success: true, row: await saveRow(env, base)});
@@ -111,7 +125,7 @@ export async function handleCasePreviewAiTags(request, env) {
 
     if (action === 'save') {
       const contentKey = String(body.contentKey || '').slice(0, 500);
-      if (contentKey !== expectedContentKey) return json({success: false, message: '物料内容已变化，请刷新后重试'}, 409);
+      if (!contentKeyUnchanged(contentKey, preview)) return json({success: false, message: '物料内容已变化，请刷新后重试'}, 409);
       // v914 去重：人工标签（manual_tags）不再作为 AI 标签存第二份 —— 同一个词只留在 manual_tags。
       // manual_tags / excluded_tags 本身照旧原样保留、绝不覆盖。
       const excluded = new Set(base.excluded_tags);
@@ -142,7 +156,9 @@ export async function handleCasePreviewAiTags(request, env) {
     if (action === 'manual-add') {
       const tag = String(body.tag || '').trim();
       if (!tag || tag.length > 12) return json({success: false, message: '标签无效'}, 400);
-      if (base.content_key && base.content_key !== expectedContentKey) {
+      // 库里还没存过 key（老行 / 从没识别过）⇒ 不作废，与 v923 之前的行为一致；
+      // 存过 key 才走 contentKeyUnchanged()（只比前两段，老格式 3 段 key 因此算"内容没变"）。
+      if (base.content_key && !contentKeyUnchanged(base.content_key, preview)) {
         base.ai_tags = [];
         // 画面变过 ⇒ 旧的动效效果标签同样作废（与 ai_tags 一起清，别留着上一版的动效描述）
         base.effect_tags = [];

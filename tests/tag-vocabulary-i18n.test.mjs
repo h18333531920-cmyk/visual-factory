@@ -45,10 +45,10 @@ test('前端：英文界面查词表译名，缺表时永久退回原文', () =>
 
 test('新表与新端点：代理白名单已登记、版本号六处同步', () => {
   assert.match(policySource, /'vf_tag_vocabulary'/, '非维护账号要能读词表');
-  assert.match(indexSource, /app\.js\?v=20261014-price-noise-v923/);
-  const refs = indexSource.match(/\?v=20261014-price-noise-v923/g) || [];
+  assert.match(indexSource, /app\.js\?v=20261014-content-key-v924/);
+  const refs = indexSource.match(/\?v=20261014-content-key-v924/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-price-noise-v923'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-content-key-v924'/);
 });
 
 test('标签词表：自动更新（中文界面也补翻，不阻塞渲染）', () => {

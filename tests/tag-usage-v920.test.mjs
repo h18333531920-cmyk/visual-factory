@@ -348,7 +348,7 @@ test('v920 样式：徽章轻一点，0 标红', () => {
 });
 
 test('v920 版本号六处同步', () => {
-  const refs = indexSource.match(/\?v=20261014-price-noise-v923/g) || [];
+  const refs = indexSource.match(/\?v=20261014-content-key-v924/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-price-noise-v923'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261014-content-key-v924'/);
 });

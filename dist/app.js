@@ -912,7 +912,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-price-noise-v923';
+const TOOL_UI_VERSION = '20261014-content-key-v924';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4410,7 +4410,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   function casePreviewAiTags(previewId) {
     const row = casePreviewAiRow(previewId);
     const preview = state.libraryPreviews.find(function(item) { return item.id === previewId; });
-    if (row && preview && row.content_key && row.content_key !== casePreviewAiContentKey(preview)) return [];
+    if (row && preview && row.content_key && !casePreviewAiContentKeyUnchanged(row.content_key, preview)) return [];
     const aiTags = row && Array.isArray(row.ai_tags) ? row.ai_tags.filter(Boolean) : [];
     const manualTags = row && Array.isArray(row.manual_tags) ? row.manual_tags.filter(Boolean) : [];
     return Array.from(new Set(manualTags.concat(aiTags)));
@@ -4422,7 +4422,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   function casePreviewAiEffectTags(previewId) {
     const row = casePreviewAiRow(previewId);
     const preview = state.libraryPreviews.find(function(item) { return item.id === previewId; });
-    if (row && preview && row.content_key && row.content_key !== casePreviewAiContentKey(preview)) return [];
+    if (row && preview && row.content_key && !casePreviewAiContentKeyUnchanged(row.content_key, preview)) return [];
     return row && Array.isArray(row.effect_tags) ? row.effect_tags.filter(Boolean) : [];
   }
 
@@ -4437,8 +4437,21 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     }).join('');
   }
 
+  // v924：内容指纹**只看图片本身**（路径 + 字节数），**去掉 updated_at**。
+  // updated_at 会被数据库触发器在**任何** UPDATE 时刷新（改 language / material_type 这种跟图片无关的编辑
+  // 也会刷），拿它判"内容变了"会把没换过的图全判成过期 —— 2026-10-14 实测事故：~600 张被 cron 白跑一遍。
+  // 口径与 scripts/recognize-case-tags.mjs / functions/api/case-preview-ai-tags.js 逐字一致（测试锁住）。
   function casePreviewAiContentKey(preview) {
-    return [preview?.preview_path || '', preview?.preview_size_bytes || 0, preview?.updated_at || ''].join('|');
+    return [preview?.preview_path || '', preview?.preview_size_bytes || 0].join('|');
+  }
+
+  // 「内容变没变」的唯一比对入口（别在别处直接 !== 比字符串）。
+  // 库里存量的 content_key 是 v923 及以前的 3 段格式（path|size|updated_at），v924 起写的是 2 段，
+  // 直接比会永远不相等 ⇒ 整库判成"内容变了"。所以**只比前两段**：老格式与新格式因此等价。
+  function casePreviewAiContentKeyUnchanged(storedKey, preview) {
+    const stored = String(storedKey || '');
+    if (!stored) return false;
+    return stored.split('|').slice(0, 2).join('|') === casePreviewAiContentKey(preview);
   }
 
   function isPreviewAiTagsUnavailableError(error) {
@@ -4778,7 +4791,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
 
   function casePreviewAiStatusText(row, preview) {
     if (!row) return state.lang === 'zh' ? '未识别' : 'Not analyzed';
-    if (preview && row.content_key && row.content_key !== casePreviewAiContentKey(preview)) return state.lang === 'zh' ? '图片已变化，标签待重新识别' : 'Image changed; re-analysis needed';
+    if (preview && row.content_key && !casePreviewAiContentKeyUnchanged(row.content_key, preview)) return state.lang === 'zh' ? '图片已变化，标签待重新识别' : 'Image changed; re-analysis needed';
     if (row.status === 'running') return state.lang === 'zh' ? '识别中…' : 'Analyzing…';
     if (row.status === 'failed') return state.lang === 'zh' ? '识别失败' : 'Failed';
     if (row.status === 'expired') return state.lang === 'zh' ? '结果已过期' : 'Expired';
@@ -4796,7 +4809,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const openPop = document.getElementById('case-preview-ai-pop');
     if (openPop) openPop.classList.remove('is-visible');
     const row = casePreviewAiRow(preview.id);
-    const stale = !!(row && row.content_key && row.content_key !== casePreviewAiContentKey(preview));
+    const stale = !!(row && row.content_key && !casePreviewAiContentKeyUnchanged(row.content_key, preview));
     const aiTags = !stale && row && Array.isArray(row.ai_tags) ? row.ai_tags.filter(Boolean) : [];
     const manualTags = !stale && row && Array.isArray(row.manual_tags) ? row.manual_tags.filter(Boolean) : [];
     const tags = casePreviewAiTags(preview.id);

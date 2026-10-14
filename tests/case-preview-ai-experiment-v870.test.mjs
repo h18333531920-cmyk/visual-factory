@@ -72,7 +72,8 @@ test('服务端：图片变化后人工新增会清理旧内容证据并绑定�
   assert.deepEqual(mock.writes.at(-1).ai_tags,[]);
   assert.deepEqual(mock.writes.at(-1).manual_tags,['新标签']);
   assert.deepEqual(mock.writes.at(-1).excluded_tags,[]);
-  assert.equal(mock.writes.at(-1).content_key,contentKey);
+  // v924：绑定的 key 是服务端按当前图片算出来的（2 段格式），不再是调用方传来的那个字符串
+  assert.equal(mock.writes.at(-1).content_key,'p.png|12');
 });
 
 test('服务端：重新识别直接应用，但人工排除词不会被加回',async t=>{
