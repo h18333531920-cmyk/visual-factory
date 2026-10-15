@@ -33,20 +33,31 @@ const VALIDATE_TO = '  function translateCaseSchemaError(error) {';
 /* ── 1) 真渲卡片 HTML：未分类红框 / 已分类不红 ─────────────────────────────── */
 
 // 把生产里的 caseDropCardMarkup + 三个纯函数切进 vm 真跑（不是源码断言）
-function loadCardMarkup() {
+function loadCardMarkup({lang = 'zh'} = {}) {
   const context = vm.createContext({
+    state: {lang: lang},
     escapeHtml: value => String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
-    escapeAttr: value => String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    escapeAttr: value => String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/"/g, '&quot;'),
+    // v943：物料类型在英文界面下要翻（真实现走词表；这里给个等价的桩，词表没有英文名就原样）
+    caseTypeLabel: value => {
+      const raw = String(value == null ? '' : value);
+      if (!raw || raw === '未分类') return lang === 'zh' ? '未分类' : 'Unclassified';
+      return raw;
+    }
   });
   vm.runInContext(slice(PURE_FROM, PURE_TO), context);
   return context;
 }
 
 const CATALOG = ['开机海报', '弹窗'];
-const cardOf = (type, options) => loadCardMarkup().caseDropCardMarkup(
-  {index: 0, name: 'a.png', type: type, mediaHtml: '<img src="blob:x" alt="">'},
-  Object.assign({lang: 'zh', catalogNames: CATALOG, dropInput: 'library-preview-input'}, options || {})
-);
+const cardOf = (type, options) => {
+  const opts = Object.assign({lang: 'zh', catalogNames: CATALOG, dropInput: 'library-preview-input'}, options || {});
+  // v943：显示语言由 state.lang 经 caseTypeLabel() 决定 ⇒ 建上下文时也要按语言来
+  return loadCardMarkup({lang: opts.lang}).caseDropCardMarkup(
+    {index: 0, name: 'a.png', type: type, mediaHtml: '<img src="blob:x" alt="">'},
+    opts
+  );
+};
 
 test('v922 渲染：未分类的卡带 is-untyped（红框钩子），chip 是红系那个 untyped 类，标记常显', () => {
   const html = cardOf('');
@@ -75,8 +86,9 @@ test('v922 渲染：隐藏的 <select> 仍是唯一数据来源，空串选项 =
 });
 
 test('v922 渲染：中英双语（state.lang）', () => {
+  // v943：显示语言现在由 state.lang 经 caseTypeLabel() 决定 ⇒ vm 也要按语言建上下文
   const zh = cardOf('', {lang: 'zh'});
-  const en = cardOf('', {lang: 'en'});
+  const en = cardOf('', {lang: 'en'}) ;
   assert.match(zh, /未分类/);
   assert.match(en, /Unclassified/, '英文界面显示 Unclassified');
   assert.match(en, /title="Change category"/);
@@ -217,6 +229,12 @@ function loadGridRender() {
     },
     escapeHtml: value => String(value == null ? '' : value),
     escapeAttr: value => String(value == null ? '' : value),
+    // v943：物料类型英文界面要翻（真实现走词表；这里等价桩：词表没有英文名就原样）
+    caseTypeLabel: value => {
+      const raw = String(value == null ? '' : value);
+      if (!raw || raw === '未分类') return '未分类';
+      return raw;
+    },
     isCasePreviewFile: () => true,
     isCaseVideoFile: file => /\.(mp4|mov|webm|gif)$/i.test(file.name),
     collectDroppedFiles: () => [],
@@ -386,6 +404,12 @@ function loadValidate(selectValues, options) {
     flagMissingCaseTagRows: () => {},
     setTimeout: () => 0,
     document: {getElementById: id => (id === 'case-drop-panel' ? grid : {id: id})},
+    // v943：物料类型英文界面要翻（等价桩）
+    caseTypeLabel: value => {
+      const raw = String(value == null ? '' : value);
+      if (!raw || raw === '未分类') return '未分类';
+      return raw;
+    },
     __focused: focused,
     __cards: cards
   });
@@ -533,7 +557,7 @@ test('v922 接线：校验真的调了这条检查，且只在上传新项目那
 /* ── 5) 版本号 ───────────────────────────────────────────────────────────── */
 
 test('v922 版本号六处同步', () => {
-  const refs = indexSource.match(/\?v=20261015-tag-pop-wrap-v942/g) || [];
+  const refs = indexSource.match(/\?v=20261015-type-i18n-v943/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(source, /const TOOL_UI_VERSION = '20261015-tag-pop-wrap-v942'/);
+  assert.match(source, /const TOOL_UI_VERSION = '20261015-type-i18n-v943'/);
 });

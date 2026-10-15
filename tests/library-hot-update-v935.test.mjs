@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-tag-pop-wrap-v942';
+const VERSION = '20261015-type-i18n-v943';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -187,6 +187,21 @@ test('v942：溢出时的标签浮窗横向流式换行（不再一行一个）'
   assert.doesNotMatch(source, /\.case-preview-ai-pop \{ position: fixed; z-index: 300; display: none; flex-direction: column;/, '不许退回一行一个');
   assert.match(source, /\.case-preview-ai-pop\.is-visible \{ display: flex; \}/, '显示态不变');
   assert.match(source, /\.case-preview-ai-pop \.case-preview-ai-tag button \{ display: none; \}/, '浮窗里的标签仍然不显示 ×');
+});
+
+test('v943：英文界面下物料类型要翻（会场楼层 → Venue Floor），值仍写中文', () => {
+  const helper = slice('  function caseTypeLabel(value) {', '  // ── 搜索归一 + 相关词展开');
+  assert.match(helper, /return libraryDisplayLabel\(raw\);/, '翻法复用 libraryDisplayLabel（词表 name_en + LIBRARY_LABELS_EN 兜底）');
+  assert.match(helper, /if \(!raw\) return state\.lang === 'zh' \? '未分类' : 'Unclassified';/, '空类型按语言给未分类');
+  assert.match(helper, /if \(raw === '未分类'\) return state\.lang === 'zh' \? '未分类' : 'Unclassified';/, '未分类同理');
+  // 渲染点都要过它；值（data-* / option value）保持中文
+  assert.match(source, /escapeHtml\(caseTypeLabel\(def\.type\)\)/, '弹窗右侧物料类型 chip');
+  assert.match(source, /escapeAttr\(caseTypeLabel\(def\.type\)\)/, 'chip 的 title');
+  assert.match(source, /'<option value="' \+ escapeAttr\(name\) \+ '"' \+ \(name === entry\.type \? ' selected' : ''\) \+ '>' \+ escapeHtml\(caseTypeLabel\(name\)\)/, '上传时类型下拉：value 中文、显示翻译');
+  assert.match(source, /escapeHtml\(caseTypeLabel\(entry\.type\)\) \+ '<\/button>'/, '上传卡片上的类型 chip');
+  assert.match(source, /data-case-batch-type-value/, '批量改类型菜单的值仍是中文');
+  assert.match(source, /escapeHtml\(caseTypeLabel\(p\.material_type\)\)/, '悬停浮窗里的类型');
+  assert.doesNotMatch(source, /caseTypeLabel\([^)]*\)\) \+ '"' \+ \(name === entry\.type/, '别把翻译结果写进 value');
 });
 
 test('v935 ⑤：版本号六处同步', () => {

@@ -971,7 +971,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-tag-pop-wrap-v942';
+const TOOL_UI_VERSION = '20261015-type-i18n-v943';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -8727,7 +8727,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         const thumb = document.createElement('div');
         thumb.className = 'case-pop-thumb';
         thumb.setAttribute('data-case-pop-path', p.preview_path || '');
-        thumb.innerHTML = casePopMediaWithRatio(p, source) + '<small>' + escapeHtml(p.material_type || '未分类') + '</small>';
+        thumb.innerHTML = casePopMediaWithRatio(p, source) + '<small>' + escapeHtml(caseTypeLabel(p.material_type)) + '</small>';
         block.append(thumb);
       });
       pop.append(block);
@@ -9174,7 +9174,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         url: state.libraryPreviewUrls[p.preview_path] || '',
         filename: String(p.preview_filename || ''),
         material: p,
-        type: p.material_type || (state.lang === 'zh' ? '未分类' : 'Unclassified'),
+        type: p.material_type || '',   // v943：留原始值（空=未分类）；显示交给 caseTypeLabel() 翻
         dims: p.width && p.height ? p.width + ' × ' + p.height : '',
         ratio: p.width && p.height ? p.height / p.width : 1.4,
         lang: caseMaterialLanguage(p)
@@ -9319,10 +9319,10 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const sideCardInner = function(def) {
       const label = def.filename || def.type;
       // 左上角常显所属类型（改类型/换端识别后一眼能看到），未分类走灰色
-      const typeChip = `<span class="case-side-type${def.type && def.type !== '未分类' ? '' : ' untyped'}" data-case-side-type>${escapeHtml(def.type || '未分类')}</span>`;
+      const typeChip = `<span class="case-side-type${def.type && def.type !== '未分类' ? '' : ' untyped'}" data-case-side-type>${escapeHtml(caseTypeLabel(def.type))}</span>`;
       // 多选模式下右上角出勾选框（此时隐藏单张删除按钮，避免同一角落两个按钮打架）
       const selectBox = caseSelectMode ? `<span class="case-side-check${caseSelected.has(def.id) ? ' is-on' : ''}" aria-hidden="true"></span>` : '';
-      return `<div class="case-side-imgwrap" title="${escapeAttr(def.type)}${def.dims ? ' · ' + escapeAttr(def.dims) : ''}">${casePreviewMedia(def.material, source)}${typeChip}${selectBox}<div class="case-side-overlay"><span>${escapeHtml(label)}</span></div>${canManage && !caseSelectMode ? `<button type="button" class="case-side-del" data-case-del="${def.id}" title="${state.lang === 'zh' ? '删除这张物料' : 'Delete'}">×</button>` : ''}</div>`;
+      return `<div class="case-side-imgwrap" title="${escapeAttr(caseTypeLabel(def.type))}${def.dims ? ' · ' + escapeAttr(def.dims) : ''}">${casePreviewMedia(def.material, source)}${typeChip}${selectBox}<div class="case-side-overlay"><span>${escapeHtml(label)}</span></div>${canManage && !caseSelectMode ? `<button type="button" class="case-side-del" data-case-del="${def.id}" title="${state.lang === 'zh' ? '删除这张物料' : 'Delete'}">×</button>` : ''}</div>`;
     };
     // 当前列表里实际显示的条目（受语言筛选影响）：多选「全选」也只选看得见的
     const visibleSideDefs = function() {
@@ -9352,7 +9352,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
           const row = document.createElement('div');
           row.className = 'case-side-row' + (caseSelectMode && caseSelected.has(def.id) ? ' is-selected' : '');
           row.setAttribute('data-case-side', def.id);
-          row.innerHTML = sideCardInner(def) + `<div class="case-side-rowmeta"><span class="case-side-file">${escapeHtml(def.filename || def.type)}</span><span class="case-side-type-text">${escapeHtml(def.type || '未分类')}</span>${def.dims ? `<span class="case-side-dims">${escapeHtml(def.dims)}</span>` : ''}</div>`;
+          row.innerHTML = sideCardInner(def) + `<div class="case-side-rowmeta"><span class="case-side-file">${escapeHtml(def.filename || caseTypeLabel(def.type))}</span><span class="case-side-type-text">${escapeHtml(caseTypeLabel(def.type))}</span>${def.dims ? `<span class="case-side-dims">${escapeHtml(def.dims)}</span>` : ''}</div>`;
           gridEl.append(row);
         });
         gridEl.scrollTop = keepScrollTop;
@@ -12229,14 +12229,14 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const pickTitle = zh ? '点击修改分类' : 'Change category';
     const chosen = caseUploadTypeChosen(entry.type);
     const optionsHtml = [''].concat(opts.catalogNames || []).map(function(name) {
-      return '<option value="' + escapeAttr(name) + '"' + (name === entry.type ? ' selected' : '') + '>' + escapeHtml(name || untypedText) + '</option>';
+      return '<option value="' + escapeAttr(name) + '"' + (name === entry.type ? ' selected' : '') + '>' + escapeHtml(caseTypeLabel(name)) + '</option>';
     }).join('');
     return '<div class="case-drop-card' + (chosen ? '' : ' is-untyped') + '" data-file-index="' + entry.index + '">' +
         '<div class="case-drop-thumb">' +
           entry.mediaHtml +
           '<span class="case-drop-check" aria-hidden="true"></span>' +
           '<button type="button" class="drop-thumb-del" data-file-index="' + entry.index + '" data-drop-input="' + escapeAttr(opts.dropInput || '') + '">&times;</button>' +
-          '<button type="button" class="case-drop-type' + (chosen ? '' : ' untyped') + '" data-case-type-label="' + entry.index + '" title="' + escapeAttr(pickTitle) + '">' + escapeHtml(entry.type || untypedText) + '</button>' +
+          '<button type="button" class="case-drop-type' + (chosen ? '' : ' untyped') + '" data-case-type-label="' + entry.index + '" title="' + escapeAttr(pickTitle) + '">' + escapeHtml(caseTypeLabel(entry.type)) + '</button>' +
         '</div>' +
         '<div class="case-drop-name" data-case-dims-index="' + entry.index + '">' + escapeHtml(entry.name) + '</div>' +
         '<select class="case-type-chip case-type-hidden" data-case-type-index="' + entry.index + '" tabindex="-1">' + optionsHtml + '</select>' +
@@ -12503,7 +12503,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       menu.id = 'case-drop-batch-type-menu';
       menu.className = 'case-type-menu';
       menu.innerHTML = [''].concat(catalogNames).map(value =>
-        '<button type="button" data-case-batch-type-value="' + escapeAttr(value) + '">' + escapeHtml(value || (batchZh ? '未分类' : 'Unclassified')) + '</button>'
+        '<button type="button" data-case-batch-type-value="' + escapeAttr(value) + '">' + escapeHtml(caseTypeLabel(value)) + '</button>'
       ).join('');
       document.body.append(menu);
       const rect = batchTypeBtn.getBoundingClientRect();
@@ -16210,6 +16210,16 @@ function libraryTagsForForm(formData, kind) {
     if (!label) return label;
     if (state.lang === 'zh') return tagVocabularyByEn.get(label.toLowerCase()) || label;
     return tagVocabularyByName.get(label) || LIBRARY_LABELS_EN[label] || label;
+  }
+
+  // v943：**物料类型**在英文界面下也要翻（会场楼层 → Venue Floor）。用户实测反馈：
+  // 「英文模式下这些标签还是中文，没翻译」（项目弹窗右侧物料类型 chip / 上传表单里的类型选择）。
+  // ⚠️ 只翻**显示**：值仍然是中文（写库、筛选、识别都按中文走），别在 data-value / 逻辑判断上用这个结果。
+  function caseTypeLabel(value) {
+    const raw = String(value == null ? '' : value);
+    if (!raw) return state.lang === 'zh' ? '未分类' : 'Unclassified';
+    if (raw === '未分类') return state.lang === 'zh' ? '未分类' : 'Unclassified';
+    return libraryDisplayLabel(raw);
   }
 
   // ── 搜索归一 + 相关词展开（v891：上位词 parent_id、别名都不再参与，相关词取代它们）──
