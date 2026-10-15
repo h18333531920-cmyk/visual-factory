@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-validate-before-progress-v945';
+const TOOL_UI_VERSION = '20261015-pending-card-same-column-v946';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -6808,9 +6808,15 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const grid = document.getElementById('library-grid');
     if (!grid || !entry) return;
     const html = libraryPendingCardHtml(entry);
-    // 案例墙是按列排的（.library-column），插进去得跟它同款，否则布局会歪
-    if (grid.querySelector('.library-column')) grid.insertAdjacentHTML('afterbegin', '<div class="library-column">' + html + '</div>');
-    else grid.insertAdjacentHTML('afterbegin', html);
+    // v946：**插进第一列的最前面，不要另起一列**。用户实测反馈：「新增的项目封面在瀑布流里单独加了
+    // 一个竖行显示，原来 4 列的图变成了 5 列」（截图里第 1 列只有这一张、下面空一大片）。
+    // 素材库是「按列排」的布局（.library-column），新项目本来就该落在第一列顶部，另起一列会把列数撑多。
+    const firstColumn = grid.querySelector('.library-column');
+    if (firstColumn) {
+      firstColumn.insertAdjacentHTML('afterbegin', html);
+      return;
+    }
+    grid.insertAdjacentHTML('afterbegin', html);
   }
 
   // 先在本机显示一张占位卡（图＝本地文件，零网络）。返回条目，调用方拿它来收尾。

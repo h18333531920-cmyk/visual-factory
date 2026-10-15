@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-validate-before-progress-v945';
+const VERSION = '20261015-pending-card-same-column-v946';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -114,7 +114,10 @@ test('v938：上传"先在本地显示" —— 占位卡用本机文件的 blob 
   assert.match(source, /images: \[\{url: URL\.createObjectURL\(coverFile\)/, '占位卡的图来自本机 File（零网络）');
   assert.match(pending, /revokeLibraryPendingUploadUrls/, '退场时要释放 blob URL（不然一直占内存）');
   assert.match(pending, /grid\.insertAdjacentHTML\('afterbegin'/, '插在素材库最前面');
-  assert.match(pending, /if \(grid\.querySelector\('\.library-column'\)\)/, '案例墙按列排时要包一层 .library-column');
+  // v946：不许另起一列（那会让 4 列变 5 列）；要插进第一列的最前面
+  assert.match(pending, /const firstColumn = grid\.querySelector\('\.library-column'\);/, '先找第一列');
+  assert.match(pending, /firstColumn\.insertAdjacentHTML\('afterbegin', html\);/, '插进第一列顶部');
+  assert.doesNotMatch(pending, /'<div class="library-column">' \+ html/, '不许再包一层新列');
   assert.match(pending, /data-pending-source=/, '占位卡带上将来那个 sourceId（入库完成靠它对上号）');
   assert.match(pending, /entry\.done \? '' : '<span class="library-pending-badge">/, 'done 之后不再画「上传中」角标');
   assert.match(source, /renderLibraryPendingUploadCards\(\);/, '重画网格时要把占位卡补回来');
