@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-optimistic-ux-v938';
+const VERSION = '20261015-pending-cover-v939';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -84,7 +84,7 @@ test('v936：高亮只加/去一个 class，认卡片的两个属性，6 秒后�
   assert.match(hl, /window\.setTimeout\([\s\S]{0,200}card\.classList\.remove\('is-just-uploaded'\)/, '几秒后自己摘掉');
   assert.match(hl, /data-case-project/, '案例卡按项目 id 认');
   assert.match(hl, /data-preview-id/, '其余卡片按物料 id 认');
-  assert.match(source, /\.library-card\.is-just-uploaded \{ outline: 3px solid #f97316;/, '高亮样式（封面边缘橙圈）要在 app.js 里注入');
+  assert.match(source, /\.library-card\.is-just-uploaded \{ outline: 3px solid #3b82f6;/, 'v939：高亮样式（封面边缘**蓝**圈，用户要求不要红的）要在 app.js 里注入');
   assert.match(source, /@keyframes library-fresh-pulse/, '要有个呼吸感的动画');
   // v892 那条守卫（app.js 里不许再有搜索用的 is-fresh）不能被这次改动踩到 —— 类名故意避开
   assert.doesNotMatch(source, /is-fresh/);
@@ -144,6 +144,18 @@ test('v938：占位卡 HTML 真跑 —— 有本地图 + 角标，done 后角标
   const doneHtml = render({id: 'pending-abc', sourceId: 'src-1', title: '测试项目', count: 3, done: true, images: []});
   assert.doesNotMatch(doneHtml, /上传中/, 'done 之后没有角标');
   assert.match(doneHtml, /is-just-uploaded/, 'done 之后给高亮（原地转正）');
+});
+
+test('v939：占位卡的类名必须和真实案例卡一致（少了就被灰色占位层盖住）+ 入库后换成真图', () => {
+  const html = slice('  function libraryPendingCardHtml(entry) {', '  function insertLibraryPendingCard(entry) {');
+  assert.match(html, /class="library-card library-case-card library-pending-card/, '要带 library-case-card（案例卡那套样式）');
+  assert.match(html, /library-preview-shell img-loaded is-preview-ready/, '要带"封面已就绪"的两个类，否则被 .library-preview-shell::before 那层灰盖住');
+  assert.match(html, /class="library-progressive-image"/, 'img 要有 library-progressive-image（它是 z-index 1 那层）');
+  const finish = slice('  function finishLibraryPendingUpload(sourceId) {', '  // 每次重画网格都调一次');
+  assert.match(finish, /const landed = state\.libraryPreviews\.find\(item => String\(item\.source_file_id\) === String\(sourceId\)\);/, '入库后要找到真封面');
+  assert.match(finish, /const landedUrl = landed \? \(state\.libraryPreviewUrls\[landed\.preview_path\] \|\| ''\) : '';/, '用签名地址');
+  assert.match(finish, /if \(image && landedUrl\) image\.src = landedUrl;/, '把封面换成真图（否则一直空着，用户实测过）');
+  assert.match(finish, /revokeLibraryPendingUploadUrls\(entry\);/, '换完再释放本地 blob');
 });
 
 test('v935 ⑤：版本号六处同步', () => {

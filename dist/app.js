@@ -754,13 +754,14 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 /* v932：添加中 —— 等写库的那几秒要让用户看见"在跑"，而且这时候点它不再有反应（挡住连点） */
 .case-preview-ai-add-confirm.is-busy { opacity: .55; cursor: progress; }
 /* v936：上传成功后把新入库的卡片**高亮几秒**提醒上传者（用户要求）。
-   用 outline + box-shadow（不依赖卡片自身的定位，也不用改各套卡片的模板），色是这套 UI 的橙。
-   6 秒后由 highlightFreshLibraryCards() 把 class 摘掉。 */
+   用 outline + box-shadow（不依赖卡片自身的定位，也不用改各套卡片的模板）。
+   6 秒后由 highlightFreshLibraryCards() 把 class 摘掉。
+   v939：颜色由橙改**蓝**（用户口径：「这个高亮不要用红框换成蓝框吧」）。 */
 @keyframes library-fresh-pulse {
-  0%, 100% { outline-color: rgba(249, 115, 22, 1); box-shadow: 0 0 0 7px rgba(249, 115, 22, .30); }
-  50% { outline-color: rgba(249, 115, 22, .45); box-shadow: 0 0 0 3px rgba(249, 115, 22, .12); }
+  0%, 100% { outline-color: rgba(59, 130, 246, 1); box-shadow: 0 0 0 7px rgba(59, 130, 246, .30); }
+  50% { outline-color: rgba(59, 130, 246, .45); box-shadow: 0 0 0 3px rgba(59, 130, 246, .12); }
 }
-.library-card.is-just-uploaded { outline: 3px solid #f97316; outline-offset: 2px; animation: library-fresh-pulse 1.1s ease-in-out infinite; }
+.library-card.is-just-uploaded { outline: 3px solid #3b82f6; outline-offset: 2px; animation: library-fresh-pulse 1.1s ease-in-out infinite; }
 /* v938：上传时"先在本地显示"的占位卡 —— 图来自本机文件（blob URL），角标表示还在入库。
    入库完成后角标撤掉（见 finishLibraryPendingUpload），卡片原地转正、网格不重画。 */
 .library-card.library-pending-card { position: relative; }
@@ -961,7 +962,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-optimistic-ux-v938';
+const TOOL_UI_VERSION = '20261015-pending-cover-v939';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -6761,9 +6762,13 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   function libraryPendingCardHtml(entry) {
     const cover = (entry.images || [])[0] || null;
     const ratioStyle = previewAspectStyle({width: (cover && cover.width) || 0, height: (cover && cover.height) || 0});
-    return '<article class="library-card library-pending-card' + (entry.done ? ' is-just-uploaded' : '') + '" id="' + escapeAttr(entry.id) + '" data-pending-source="' + escapeAttr(entry.sourceId) + '" data-preview-id="pending:' + escapeAttr(entry.id) + '">'
-      + '<div class="library-thumb-wrap"><div class="library-thumb" style="' + ratioStyle + '">'
-      + (cover ? '<img src="' + escapeAttr(cover.url) + '" alt="' + escapeAttr(entry.title) + '" decoding="async">' : '')
+    // v939：**类名要和真实案例卡一致** —— 少了 library-case-card / library-preview-shell /
+    // library-progressive-image 这些，封面就会被 .library-preview-shell::before 那层灰色占位盖住
+    // （用户实测：「上传物料会显示一个空白的封面」）。img-loaded / is-preview-ready 是"图已就绪"
+    // 的那两个类（平时由懒加载管线加上），这里直接给上。
+    return '<article class="library-card library-case-card library-pending-card' + (entry.done ? ' is-just-uploaded' : '') + '" id="' + escapeAttr(entry.id) + '" data-pending-source="' + escapeAttr(entry.sourceId) + '">'
+      + '<div class="library-thumb-wrap"><div class="library-thumb library-preview-shell img-loaded is-preview-ready" style="' + ratioStyle + '">'
+      + (cover ? '<img src="' + escapeAttr(cover.url) + '" alt="' + escapeAttr(entry.title) + '" loading="eager" decoding="async" class="library-progressive-image">' : '')
       + '</div>'
       + '<div class="case-card-overlay"><strong>' + escapeHtml(entry.title) + '</strong>'
       + '<div class="case-card-chips"><span class="case-card-count">' + escapeHtml(state.lang === 'zh' ? (entry.count + ' 个物料') : (entry.count + ' materials')) + '</span></div></div>'
@@ -6795,7 +6800,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return entry;
   }
 
-  // 入库成功：只把角标撤掉 + 给个高亮，网格不重画
+  // 入库成功：把封面换成真图（签名地址，这样即使本地 blob 有问题也不会一直空着）、撤角标、高亮
   function finishLibraryPendingUpload(sourceId) {
     const entry = libraryPendingUploads.find(item => String(item.sourceId) === String(sourceId));
     if (!entry) return false;
@@ -6804,6 +6809,13 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     if (node) {
       const badge = node.querySelector('.library-pending-badge');
       if (badge && badge.parentNode) badge.parentNode.removeChild(badge);
+      // v939：**换成真图** —— 用户实测「会一直是空白封面，只有手动刷新才出现」。
+      // 现在入库完成后把封面指向签名地址（本地 blob 只是"先看到"，最终以云上那份为准）。
+      const landed = state.libraryPreviews.find(item => String(item.source_file_id) === String(sourceId));
+      const image = node.querySelector('img');
+      const landedUrl = landed ? (state.libraryPreviewUrls[landed.preview_path] || '') : '';
+      if (image && landedUrl) image.src = landedUrl;
+      revokeLibraryPendingUploadUrls(entry);
       node.classList.add('is-just-uploaded');
       window.setTimeout(function() {
         if (node.isConnected) node.classList.remove('is-just-uploaded');
