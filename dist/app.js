@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-canonical-query-v950';
+const TOOL_UI_VERSION = '20261015-canonical-query-v951';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3586,19 +3586,24 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
   var libraryExpansionRevalidated = {};
   function revalidateLibraryExpansionCache(query) {
     const q = String(query || '').trim();
-    if (!q || libraryExpansionRevalidated[q]) return;
+    if (!q) return;
+    // v951：重问按**规范词**去重（原来按原词）——「桌子」和「table」是同一个概念，一次会话只重问一次、共用一份结果，
+    // 否则两种写法各重问一次、各拿一个 AI 答案，用户看到的就还是"同一个概念两次数量不一样"。
+    // v949：问 AI 也用规范词（v950 起索引没就绪时会先补上）
+    const aiQuery = libraryCanonicalQueryTerm(q);
+    if (libraryExpansionRevalidated[aiQuery]) return;
     const token = (state.session && state.session.access_token) || '';
     if (!token) return;
-    libraryExpansionRevalidated[q] = true;
-    // v949：问 AI 用规范词（界面态比较仍用原文 q）—— 同一个概念换个写法搜，重问的也是同一个词
-    const aiQuery = libraryCanonicalQueryTerm(q);
+    libraryExpansionRevalidated[aiQuery] = true;
     fetch('/api/expand-query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({ query: aiQuery, vocabulary: librarySearchVocabulary() })
     }).then(r => r.json()).then(function(data) {
       // 静默重问：已经换词、或没拿到结果，就什么都不动（界面保持缓存那份）
-      if (String(state.libraryFilters.query || '').trim() !== q) return;
+      // v951：这里比的是**规范词**（原来比原词）—— 搜「桌子」时重问回来的结果，用户改成搜「table」
+      // 也照样该生效：两次问的是同一个规范词、写的是同一个缓存键，没有理由不认。
+      if (libraryCanonicalQueryTerm(String(state.libraryFilters.query || '').trim()) !== aiQuery) return;
       if (!data || !data.success) return;
       const inUse = libraryLabelsInUseSet();
       const kept = [];

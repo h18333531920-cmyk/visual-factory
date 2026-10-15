@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-canonical-query-v950';
+const VERSION = '20261015-canonical-query-v951';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -327,10 +327,22 @@ test('v949：三处问 AI 的入口 + 缓存读写都换用规范词；界面态
   assert.equal((source.match(/writeLibraryExpansionCache\(aiQuery,/g) || []).length, 3, '三处写缓存都用规范词');
   assert.equal((source.match(/writeLibraryExpansionCache\(q,/g) || []).length, 0, '不许再按原词写缓存');
   // 界面态/防抖这类比较仍必须用原词 q（换了就等于拿规范词去和搜索框内容比，永远不相等）
-  assert.match(source, /libraryExpansionRevalidated\[q\] = true;/, '重问去重仍按原词');
-  assert.match(source, /if \(String\(state\.libraryFilters\.query \|\| ''\)\.trim\(\) !== q\) return;/, '重问结果回填前仍和原词比');
   assert.match(source, /live\.value\.trim\(\) === q/, '搜索框内容比较仍用原词');
   assert.match(source, /libraryExpansionPendingQuery = q;/, '"AI 联想中"的态仍挂在原词上');
+});
+
+test('v951：后台重问也按规范词去重 + 回填只看"还是不是同一个概念"', () => {
+  // 起因：重问原来按**原词**去重 —— 搜「桌子」重问一次、改成搜「table」又重问一次，
+  // 两次各拿一个 AI 答案，用户看到的就还是"同一个概念两次数量不一样"。
+  const revalidate = slice('  var libraryExpansionRevalidated = {};', '  // v843 筛选标签的 AI 扩展');
+  assert.match(revalidate, /const aiQuery = libraryCanonicalQueryTerm\(q\);/, '先把原词归一成规范词');
+  assert.match(revalidate, /if \(libraryExpansionRevalidated\[aiQuery\]\) return;/, '去重按规范词（一个概念一次会话只重问一次）');
+  assert.match(revalidate, /libraryExpansionRevalidated\[aiQuery\] = true;/, '标记也按规范词');
+  assert.equal((revalidate.match(/libraryExpansionRevalidated\[q\]/g) || []).length, 0, '不该再有按原词去重的地方');
+  assert.match(revalidate, /if \(libraryCanonicalQueryTerm\(String\(state\.libraryFilters\.query \|\| ''\)\.trim\(\)\) !== aiQuery\) return;/, '回填看的是"还搜着不是同一个概念"，不是"还搜着同一个写法"');
+  // 写缓存/问 AI 仍然用规范词（v949 的口径不变），而且重问的结果落在同一个缓存键上
+  assert.match(revalidate, /body: JSON\.stringify\(\{ query: aiQuery, vocabulary: librarySearchVocabulary\(\) \}\)/);
+  assert.match(revalidate, /writeLibraryExpansionCache\(aiQuery, kept, termsEn\);/);
 });
 
 test('v949：提示词补一条幻觉反例（搜桌子不该给窗帘/装饰灯）', () => {
