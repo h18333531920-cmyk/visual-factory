@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-canonical-query-v949';
+const VERSION = '20261015-canonical-query-v950';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -337,4 +337,38 @@ test('v949：提示词补一条幻觉反例（搜桌子不该给窗帘/装饰灯
   const prompt = readFileSync(join(ROOT, 'functions', '_ai.js'), 'utf8');
   assert.match(prompt, /搜「桌子」返回「窗帘」「装饰灯」也是错的/, '把这次实测到的幻觉写成反例');
   assert.match(prompt, /同一间屋子里的东西[\s\S]{0,40}同场景/, '并说清"同场景 ≠ 相关"这个判断依据');
+});
+
+test('v950：索引没读好时，搜索会主动把词表读起来，读好后对同一个词再跑一次', async () => {
+  // 起因（真机实测 2026-10-15）：整页刷新后去搜「桌子」/「table」，两次拿到两套不同的 AI 关联词、
+  // 且「词表设定」那一组不出现 ⇒ tagVocabularyReady 还不是 true，规范词退化成原词，v949 在冷启动下失效。
+  const block = slice('  var libraryVocabularyLoadPended = {};', '  // v895：判断「库内到底有没有这个词」');
+  const make = function() {
+    const context = vm.createContext({ tagVocabularyReady: null });
+    // loadTagVocabulary 是记忆化的：有 tagVocabularyPromise 就直接复用（和线上一样）
+    vm.runInContext('var tagVocabularyPromise = null; var calls = 0;'
+      + 'function loadTagVocabulary(){ if (tagVocabularyPromise) return tagVocabularyPromise; calls += 1; tagVocabularyPromise = Promise.resolve(false); return tagVocabularyPromise; }'
+      + block, context, {filename: 'app-v950-vocab-load.js'});
+    return context;
+  };
+  const failing = make();
+  assert.equal(await failing.ensureTagVocabularyLoaded(), false, '读失败就返回 false');
+  assert.equal(failing.calls, 1);
+  assert.equal(failing.tagVocabularyPromise, null, '失败后要清掉记忆化的 promise（否则这个会话永远归一不了）');
+  await failing.ensureTagVocabularyLoaded();
+  await failing.ensureTagVocabularyLoaded();
+  assert.equal(failing.calls, 3, '允许再试，最多 3 次');
+  await failing.ensureTagVocabularyLoaded();
+  assert.equal(failing.calls, 3, '超过 3 次就不再打接口（真断了也不刷屏）');
+  const ready = make();
+  ready.tagVocabularyReady = true;
+  assert.equal(await ready.ensureTagVocabularyLoaded(), true, '索引已经好了就直接返回');
+  assert.equal(ready.calls, 0, '索引好了不该再读一次表');
+  // 接线：搜索时索引没就绪 ⇒ 读表 + 同一个词再跑一次
+  const apply = slice('  function applyLibraryQueryExpansion(query) {', '  // v856 手动刷新');
+  assert.match(apply, /if \(tagVocabularyReady !== true && !libraryVocabularyLoadPended\[q\]\) \{/, '只在"没就绪 + 这个词还没补过"时补');
+  assert.match(apply, /void ensureTagVocabularyLoaded\(\)\.then\(function \(ok\) \{[\s\S]{0,240}applyLibraryQueryExpansion\(q\);/, '读好后对同一个搜索词再跑一次');
+  assert.match(apply, /if \(String\(state\.libraryFilters\.query \|\| ''\)\.trim\(\) !== q\) return;[\s\S]{0,80}applyLibraryQueryExpansion\(q\);/, '用户已经换词就别补了');
+  // 补跑这件事必须排在「算规范词」之前，否则那次补跑还是会用原词
+  assert.ok(apply.indexOf('void ensureTagVocabularyLoaded()') < apply.indexOf('const aiQuery = libraryCanonicalQueryTerm(q);'), '先补索引、再算规范词');
 });

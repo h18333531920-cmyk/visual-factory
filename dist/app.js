@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-canonical-query-v949';
+const TOOL_UI_VERSION = '20261015-canonical-query-v950';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3819,6 +3819,26 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return tagVocabularyByEn.get(term.toLowerCase()) || term;
   }
 
+  // v950：规范词要靠词表索引，而**索引可能还没读进来** —— 真机实测（2026-10-15）：整页刷新后
+  // 去搜「桌子」/「table」，面板里连「词表设定」那一组都不出现、两次搜索拿到两套不一样的 AI 关联词，
+  // 说明那一刻 tagVocabularyReady 还不是 true ⇒ 归一退化成「原词」，v949 修的 bug 在冷启动下照旧复现。
+  // （索引到位的会话里是好的：真机验过「桌子」和「table」拿到同一份缓存、同一套标签。）
+  // 所以搜索时主动把词表读起来；读好之后对同一个搜索词再跑一次，那次才会用规范词问 AI、按规范词写缓存。
+  var libraryVocabularyLoadPended = {};
+  var libraryVocabularyLoadAttempts = 0;
+  function ensureTagVocabularyLoaded() {
+    if (tagVocabularyReady === true) return Promise.resolve(true);
+    if (libraryVocabularyLoadAttempts >= 3) return Promise.resolve(false);   // 真断了就不再打接口
+    return loadTagVocabulary().then(function (ok) {
+      if (ok) return true;
+      // 这一次读失败（网络抖 / 表暂时读不到）不能拖死整个会话：把记忆化的 promise 清掉，
+      // 下次搜索还能再试一次（最多 3 次）
+      libraryVocabularyLoadAttempts += 1;
+      tagVocabularyPromise = null;
+      return false;
+    });
+  }
+
   // v895：判断「库内到底有没有这个词」，不能只看 vf_tag_vocabulary —— 那张表是增量长出来的
   // （标签要经过一次翻译落库才会进表），有的标签已经在用但还没进表。所以词表 ∪ 库内在用的标签/物料类型/筛选项。
   function libraryLabelsInUseSet() {
@@ -3919,6 +3939,15 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       libraryExpansionLastQuery = q;
       renderLibraryExpansionChips();
       return;
+    }
+    // v950：索引还没读好就先把它读起来，读好后对同一个搜索词再跑一次（这次才是用规范词问 AI）
+    if (tagVocabularyReady !== true && !libraryVocabularyLoadPended[q]) {
+      libraryVocabularyLoadPended[q] = true;
+      void ensureTagVocabularyLoaded().then(function (ok) {
+        if (!ok) return;
+        if (String(state.libraryFilters.query || '').trim() !== q) return;   // 用户已经换词了，这次不补
+        applyLibraryQueryExpansion(q);
+      });
     }
     // v949：缓存键与问 AI 都用**规范词** —— 搜「桌子」和搜「table」共用同一份结果，
     // 中英界面（以及同一个概念的不同中文写法）拿到的关联标签数量与内容才会一致。
