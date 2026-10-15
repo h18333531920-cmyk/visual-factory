@@ -302,8 +302,8 @@ test('v921 端到端：同样的链路里，kiki 真的在弹窗那张上时就�
 
 test('v921 版本号六处同步（index.html 5 处 + app.js 1 处）', () => {
   const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  assert.equal((indexSource.match(/\?v=20261015-canonical-query-v955/g) || []).length, 5);
-  assert.match(source, /const TOOL_UI_VERSION = '20261015-canonical-query-v955'/);
+  assert.equal((indexSource.match(/\?v=20261015-canonical-query-v956/g) || []).length, 5);
+  assert.match(source, /const TOOL_UI_VERSION = '20261015-canonical-query-v956'/);
 });
 
 test('v921 源码：这道闸在 collapseCaseProjectItems 里、且在「回落封面卡」之前；没选类别时不生效', () => {

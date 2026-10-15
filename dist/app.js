@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-canonical-query-v955';
+const TOOL_UI_VERSION = '20261015-canonical-query-v956';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3580,6 +3580,48 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
     catch (_error) {}
   }
 
+  // v956：**同一个概念的两种写法，AI 的答案都算数**。
+  // 起因（用户口径）：「现在的搜索还不如...之前那版，太烂了」。真机对齐（v955 诊断行）后看清了：
+  // v949 起改成只问「规范词」，而 AI 对原词和规范词给的答案**不一样** —— 搜「桌子」它给 窗帘/装饰灯，
+  // 搜「餐桌」它给 餐盘/餐具/椅子/餐巾纸…，库里恰好只认其中一套 ⇒ 换了问法反而一条都搜不到。
+  // 现在**两种写法都问**（规范词 + 原词，去重合并），缓存仍然写在**规范词**那一格
+  // ⇒ 中英/别名共用同一份结果（v949 要的一致性还在），但结果更全（不会因为换了问法而变少）。
+  function libraryExpansionQueryWords(q, aiQuery) {
+    const raw = String(q || '').trim();
+    const canonical = String(aiQuery || '').trim();
+    if (!canonical || canonical === raw) return raw ? [raw] : [];
+    return [canonical, raw];
+  }
+
+  function fetchLibraryExpansionAnswers(words, token) {
+    const list = (words || []).map(function (value) { return String(value || '').trim(); })
+      .filter(function (value, index, all) { return value && all.indexOf(value) === index; })
+      .slice(0, 2);
+    const merged = { terms: [], fresh: [], termsEn: {} };
+    if (!list.length) return Promise.resolve(merged);
+    return Promise.all(list.map(function (word) {
+      return fetch('/api/expand-query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ query: word, vocabulary: librarySearchVocabulary() })
+      }).then(function (response) { return response.json(); }).catch(function () { return null; });
+    })).then(function (answers) {
+      let anyOk = false;
+      answers.forEach(function (data) {
+        if (!data || !data.success) return;
+        anyOk = true;
+        (Array.isArray(data.terms) ? data.terms : []).concat(Array.isArray(data.fresh) ? data.fresh : []).forEach(function (term) {
+          if (term && merged.terms.indexOf(term) < 0) merged.terms.push(term);
+        });
+        if (data.termsEn && typeof data.termsEn === 'object') {
+          Object.keys(data.termsEn).forEach(function (key) { if (!merged.termsEn[key]) merged.termsEn[key] = data.termsEn[key]; });
+        }
+      });
+      merged.success = anyOk;
+      return merged;
+    });
+  }
+
   // v898：缓存只负责"立刻显示"，后台再静默问一次；答案不一样就用新的替换（同一个词一次会话只问一次）。
   // 起因（用户反馈）：某次 AI 答得不对，那个词之后每次搜都错——因为错的答案被缓存了 7 天，
   // 只有手动点"重新查找"才会重问。现在每次搜到缓存时都会在后台重问一遍，让它自己纠错。
@@ -3595,11 +3637,8 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
     const token = (state.session && state.session.access_token) || '';
     if (!token) return;
     libraryExpansionRevalidated[aiQuery] = true;
-    fetch('/api/expand-query', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ query: aiQuery, vocabulary: librarySearchVocabulary() })
-    }).then(r => r.json()).then(function(data) {
+    // v956：两种写法都问（规范词 + 原词），合并后的词条更全
+    fetchLibraryExpansionAnswers(libraryExpansionQueryWords(q, aiQuery), token).then(function(data) {
       // 静默重问：已经换词、或没拿到结果，就什么都不动（界面保持缓存那份）
       // v951：这里比的是**规范词**（原来比原词）—— 搜「桌子」时重问回来的结果，用户改成搜「table」
       // 也照样该生效：两次问的是同一个规范词、写的是同一个缓存键，没有理由不认。
@@ -4003,11 +4042,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     libraryExpansionTerms = libraryDeterministicRelatedTerms(q);
     libraryExpansionPendingQuery = q;
     renderLibraryExpansionChips();
-    fetch('/api/expand-query', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ query: aiQuery, vocabulary: librarySearchVocabulary() })
-    }).then(r => r.json()).then(function(data) {
+    // v956：规范词 + 原词都问一次，合并（缓存仍写规范词那一格）
+    fetchLibraryExpansionAnswers(libraryExpansionQueryWords(q, aiQuery), token).then(function(data) {
       if (libraryExpansionRequestKey !== requestKey) return;         // 已换搜索词，旧结果作废
       const terms = data && data.success && Array.isArray(data.terms) ? data.terms.filter(Boolean) : [];
       const fresh = data && data.success && Array.isArray(data.fresh) ? data.fresh.filter(Boolean) : [];
@@ -4054,11 +4090,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     libraryExpansionRequestKey = q + ':refresh:' + Date.now();   // 作废在途的自动请求，避免旧结果后到覆盖
     const requestKey = libraryExpansionRequestKey;
     renderLibraryExpansionChips();
-    fetch('/api/expand-query', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ query: aiQuery, vocabulary: librarySearchVocabulary() })
-    }).then(r => r.json()).then(function(data) {
+    fetchLibraryExpansionAnswers(libraryExpansionQueryWords(q, aiQuery), token).then(function(data) {
       if (libraryExpansionRequestKey !== requestKey) return;
       libraryExpansionRefreshing = false;
       libraryExpansionPendingQuery = '';

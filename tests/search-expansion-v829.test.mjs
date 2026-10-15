@@ -282,7 +282,9 @@ test('v856 手动刷新：词条区尾部刷新按钮，追加不覆盖，优先
   assert.match(fn, /if \(libraryExpansionIsLibraryTerm\(term\) === false\) return;/);
   assert.match(fn, /writeLibraryExpansionCache\(aiQuery, merged, libraryExpansionTermsEn\);/, '合并结果写回缓存');
   // 匹配优先库内标签：请求仍带全量词表（服务端词表锚定规则不变）
-  assert.match(fn, /vocabulary: librarySearchVocabulary\(\)/);
+  // v956：手动刷新也统一走 fetchLibraryExpansionAnswers（规范词 + 原词都问、合并）
+  assert.match(fn, /fetchLibraryExpansionAnswers\(libraryExpansionQueryWords\(q, aiQuery\), token\)/, '刷新走统一入口');
+  assert.match(appSource, /body: JSON\.stringify\(\{ query: word, vocabulary: librarySearchVocabulary\(\) \}\)/, '请求仍带全量词表');
   // 按钮随浮窗内容重建，用一次性事件委托绑定
   assert.match(appSource, /__vfLibraryExpansionRefreshBound/);
   assert.match(appSource, /target\.closest\('#library-expansion-refresh'\)/);

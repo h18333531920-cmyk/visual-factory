@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-canonical-query-v955';
+const VERSION = '20261015-canonical-query-v956';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -319,9 +319,12 @@ test('v949：搜索词先归一到「规范词」再问 AI —— 中英/别名�
 
 test('v949：三处问 AI 的入口 + 缓存读写都换用规范词；界面态比较仍用原词', () => {
   // 三处 fetch body 一律发规范词（否则同一个概念换个写法问的还是两个词，缓存也分裂成两份）
-  const fetchBodies = source.match(/body: JSON\.stringify\(\{ query: aiQuery, vocabulary: librarySearchVocabulary\(\) \}\)/g) || [];
-  assert.equal(fetchBodies.length, 3, '三处（自动查询 / 后台重问 / 手动刷新）都要发规范词');
+  // v956：三处问 AI 的入口统一走 fetchLibraryExpansionAnswers()（规范词 + 原词都问、合并），
+  // 缓存键仍是规范词
+  const fetchBodies = source.match(/fetchLibraryExpansionAnswers\(libraryExpansionQueryWords\(q, aiQuery\), token\)/g) || [];
+  assert.equal(fetchBodies.length, 3, '三处（自动查询 / 后台重问 / 手动刷新）都要走这个统一入口');
   assert.equal((source.match(/query: q, vocabulary: librarySearchVocabulary\(\)/g) || []).length, 0, '不许再有直接发原词的地方');
+  assert.equal((source.match(/body: JSON\.stringify\(\{ query: word, vocabulary: librarySearchVocabulary\(\) \}\)/g) || []).length, 1, '只剩 fetchLibraryExpansionAnswers 里那一处 fetch');
   // 缓存键 = 规范词
   assert.equal((source.match(/readLibraryExpansionCache\(aiQuery\)/g) || []).length, 1, '读缓存用规范词');
   assert.equal((source.match(/writeLibraryExpansionCache\(aiQuery,/g) || []).length, 3, '三处写缓存都用规范词');
@@ -341,7 +344,7 @@ test('v951：后台重问也按规范词去重 + 回填只看"还是不是同一
   assert.equal((revalidate.match(/libraryExpansionRevalidated\[q\]/g) || []).length, 0, '不该再有按原词去重的地方');
   assert.match(revalidate, /if \(libraryCanonicalQueryTerm\(String\(state\.libraryFilters\.query \|\| ''\)\.trim\(\)\) !== aiQuery\) return;/, '回填看的是"还搜着不是同一个概念"，不是"还搜着同一个写法"');
   // 写缓存/问 AI 仍然用规范词（v949 的口径不变），而且重问的结果落在同一个缓存键上
-  assert.match(revalidate, /body: JSON\.stringify\(\{ query: aiQuery, vocabulary: librarySearchVocabulary\(\) \}\)/);
+  assert.match(revalidate, /fetchLibraryExpansionAnswers\(libraryExpansionQueryWords\(q, aiQuery\), token\)/, 'v956：规范词 + 原词都问、合并');
   assert.match(revalidate, /writeLibraryExpansionCache\(aiQuery, kept, termsEn\);/);
 });
 
