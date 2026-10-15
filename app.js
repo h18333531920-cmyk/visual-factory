@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-canonical-query-v954';
+const TOOL_UI_VERSION = '20261015-canonical-query-v955';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -8388,6 +8388,29 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
           (state.lang === 'zh' ? '库类型：' : 'Kind: ') + state.libraryFilters.kind,
           (state.lang === 'zh' ? '筛选：' : 'Filters: ') + filterCount
         ];
+        // v955：再加一档体检 —— 直接列出"本库里实际能搜到的标签样本"。用户报"搜什么都搜不到"时，
+        // 看这行就知道是不是"这批物料身上根本没有对应的标签"（数据问题）还是匹配链路问题。
+        try {
+          const kindWanted = state.libraryFilters.kind;
+          const kindItems = state.libraryPreviews.filter(function (preview) {
+            const src = sourcesById.get(preview.source_file_id);
+            if (!src) return false;
+            return kindWanted === 'all' || libraryKindOfSource(src) === kindWanted;
+          });
+          let withTags = 0;
+          const tagSample = [];
+          kindItems.forEach(function (preview) {
+            const tags = casePreviewAiTags(preview.id).concat(casePreviewAiEffectTags(preview.id));
+            if (tags.length) withTags += 1;
+            tags.forEach(function (tag) {
+              const text = String(tag || '').trim();
+              if (text && tagSample.length < 12 && tagSample.indexOf(text) < 0) tagSample.push(text);
+            });
+          });
+          bits.push((state.lang === 'zh' ? '本库物料 ' : 'Items ') + kindItems.length
+            + (state.lang === 'zh' ? ' · 带AI标签的 ' : ' · with AI tags ') + withTags
+            + (tagSample.length ? (state.lang === 'zh' ? ' · 标签样本：' : ' · sample: ') + tagSample.join('、') : (state.lang === 'zh' ? ' · 一个 AI 标签都没有' : ' · no AI tags at all')));
+        } catch (_error) {}
         return '<span class="muted" style="margin-top:6px;font-size:11.5px;line-height:1.7">' + escapeHtml(bits.join(' · ')) + '</span>';
       })();
       grid.innerHTML = `<div class="empty-card">
