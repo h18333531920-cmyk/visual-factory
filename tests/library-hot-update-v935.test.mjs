@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-canonical-query-v953';
+const VERSION = '20261015-canonical-query-v954';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -383,4 +383,40 @@ test('v950：索引没读好时，搜索会主动把词表读起来，读好后�
   assert.match(apply, /if \(String\(state\.libraryFilters\.query \|\| ''\)\.trim\(\) !== q\) return;[\s\S]{0,80}applyLibraryQueryExpansion\(q\);/, '用户已经换词就别补了');
   // 补跑这件事必须排在「算规范词」之前，否则那次补跑还是会用原词
   assert.ok(apply.indexOf('void ensureTagVocabularyLoaded()') < apply.indexOf('const aiQuery = libraryCanonicalQueryTerm(q);'), '先补索引、再算规范词');
+});
+
+test('v954：精确层全落空时要有「软匹配」兜底（随便改个字不该啥都没有）', () => {
+  // 用户口径（原话）：「现在限制得太死了，一点软性的余地都没有，随便改个字就啥也都不到了」
+  const block = slice('  function englishSingularCandidates(text) {', '  function libraryEnglishBridgeTerms(lower) {')
+    + slice('  var libraryQueryAllowSoft = false;', '  function libraryItemQueryMatchRank(item, query, expansionTerms) {');
+  const context = vm.createContext({});
+  const soft = vm.runInContext('(function(){' + block + 'return softTokenHitsText;})()', context, {filename: 'app-v954-soft.js'});
+  const text = ' 餐桌 tableware 碗 碟 burger 开斋节 ';
+  assert.equal(soft('桌子', text), true, '共享「桌」字 → 软命中（能捞到标「餐桌」的物料）');
+  assert.equal(soft('burgers', text), true, '英文复数 → 单数也算');
+  assert.equal(soft('hamburge', text), false, '英文前缀要 4 个字母以上且真的出现；hamburge 不在文本里');
+  assert.equal(soft('burgers', 'burger 汉堡'), true);
+  assert.equal(soft('开斋节', text), true, '3 个字以上：命中 ≥2 个字就算');
+  assert.equal(soft('烤箱', text), false, '一个字都没对上就不算（软匹配不是"什么都算"）');
+  assert.equal(soft('', text), false, '空词不算');
+  // 接线：只在"精确层和关联词都没捞到"之后才打开软匹配，用完立刻关掉；状态栏要写「软匹配」
+  const grid = slice('  function renderLibraryGrid() {', '  // ── 素材库检索栏自动收起');
+  assert.match(grid, /let libraryQueryUsedSoft = false;/, '要记录"这一轮是软匹配结果"');
+  assert.match(grid, /if \(state\.libraryFilters\.query && !filteredItems\.length\) \{\s*\n\s*libraryQueryAllowSoft = true;/, '精确层 + 关联词都空了才进软匹配');
+  assert.match(grid, /libraryQueryAllowSoft = true;[\s\S]{0,1800}finally \{\s*\n\s*libraryQueryAllowSoft = false;/, '软匹配那一遍用完要关掉开关（别影响别的渲染）');
+  assert.match(source, /libraryQueryUsedSoft \? '软匹配' : libraryQueryUsedExpansion \? '关联命中' : '命中'/, '状态栏要写「软匹配」');
+  assert.match(source, /libraryQueryUsedSoft \? 'Broad' : libraryQueryUsedExpansion \? 'Related' : 'Matches'/, '英文界面同理');
+  // 零命中时空态卡要写出"这次拿什么词去搜的"，下次不用猜
+  assert.match(grid, /当前搜索|搜索词：' \+ q|'搜索词：'/, '空态卡要有诊断行');
+  assert.match(grid, /规范词：/, '诊断行要含规范词');
+  assert.match(grid, /库内关联词 /, '诊断行要含关联词个数与内容');
+});
+
+test('v954：零命中的空态卡要把"这次拿什么词去搜的"写出来', () => {
+  const grid = slice('  function renderLibraryGrid() {', '  // ── 素材库检索栏自动收起');
+  assert.match(grid, /state\.lang === 'zh' \? '搜索词：' : 'Query: '\) \+ q/, '写搜索词');
+  assert.match(grid, /state\.lang === 'zh' \? '规范词：' : 'Canonical: '\) \+ libraryCanonicalQueryTerm\(q\)/, '写规范词（能看出归一有没有生效）');
+  assert.match(grid, /terms\.length \+ \(terms\.length \? '：' \+ terms\.join\('、'\) : ''\)/, '写库内关联词');
+  assert.match(grid, /state\.lang === 'zh' \? '库类型：' : 'Kind: '\) \+ state\.libraryFilters\.kind/, '写库类型（案例库/图库/模板库）');
+  assert.match(grid, /state\.lang === 'zh' \? '筛选：' : 'Filters: '\) \+ filterCount/, '写筛选个数（是不是被筛掉了）');
 });

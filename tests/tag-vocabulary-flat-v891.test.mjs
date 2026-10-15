@@ -40,13 +40,13 @@ function loadVocabularyUi(rows, options = {}) {
 }
 
 function loadQueryTerms(rows) {
-  // v952/v953：tagVocabularyQueryTerms 现在会用 libraryCanonicalQueryTerm + tagVocabularyEnLookup 归一，
-  // 把这两段一起切进来
+  // v952/v953/v954：tagVocabularyQueryTerms 现在会用 libraryCanonicalQueryTerm + 英文写法桥接
+  // （tagVocabularyEnLookup / englishSingularCandidates / libraryEnglishBridgeTerms），把这整段一起切进来
   const slice = appSource.slice(
     appSource.indexOf('  function tagVocabularyEnLookup(lower) {'),
     appSource.indexOf('  // v950：规范词要靠词表索引')
   ) + appSource.slice(
-    appSource.indexOf('  function tagVocabularyQueryTerms(token) {'),
+    appSource.indexOf('  var libraryEnglishToZhIndex = null;'),
     appSource.indexOf('  function optionNameById(id) {')
   );
   const rowsByZh = new Map(rows.map(row => [row.name_zh, row]));
@@ -143,10 +143,36 @@ test('v953：词表索引要落本地快照（首屏第一下搜索就能归一�
   assert.equal(context.hydrateTagVocabularySnapshot(), false, '过期快照丢掉');
 });
 
+test('v954：英文写法被中文标签「包住」也要接上（hamburgers → burger → 汉堡）', () => {
+  // 起因（用户实测）：英文搜 hamburgers 一条都搜不到 —— 库里物料标的是「汉堡」，
+  // 而 item 搜索文本里的英文只有 burger / Burgers，跟 hamburgers 都不相等，只是被它"包住"。
+  const slice = appSource.slice(
+    appSource.indexOf('  var libraryEnglishToZhIndex = null;'),
+    appSource.indexOf('  function optionNameById(id) {')
+  );
+  const context = vm.createContext({
+    LIBRARY_LABELS_EN: { '汉堡': 'Burgers', '披萨': 'Pizzas', '餐桌': 'Table' },
+    LIBRARY_SEARCH_EN_EXTRA: { '汉堡': 'burger', '披萨': 'pizza', '餐桌': 'table' },
+    tagVocabularyReady: true,
+    tagVocabularyRowsByZh: new Map(),
+    tagVocabularyByEn: new Map(),
+    tagVocabularyByName: new Map(),
+    tagVocabularyRelatedToZh: new Map()
+  });
+  vm.runInContext(slice + 'var libraryCanonicalQueryTerm = function (v) { return String(v == null ? "" : v).trim(); };', context, {filename: 'app-v954-english-bridge.js'});
+  const terms = value => Array.from(context.tagVocabularyQueryTerms(value));
+  assert.deepEqual(terms('hamburgers'), ['hamburgers', 'hamburger', '汉堡'], '被英文名包住 → 接上中文标签「汉堡」');
+  assert.deepEqual(terms('burgers'), ['burgers', 'burger', '汉堡']);
+  assert.deepEqual(terms('pizza'), ['pizza', '披萨']);
+  assert.deepEqual(terms('qqqqzzz'), ['qqqqzzz'], '跟库里的英文名没关系就别乱接');
+  assert.deepEqual(terms('table'), ['table', '餐桌']);
+});
+
 test('v953：HTML 不许被浏览器死缓存（否则发版后用户拿的还是旧 app.js）', () => {
   const headers = readFileSync(join(here, '..', 'public', '_headers'), 'utf8');
   assert.match(headers, /\/index\.html\n\s+Cache-Control: no-cache, must-revalidate/, 'index.html 每次回源校验');
-  assert.match(headers, /\/app\.js\n\s+Cache-Control: public, max-age=31536000, immutable/, 'app.js 带 ?v=，可以长缓存');
+  // v954 复盘：一开始给 app.js 配了 immutable，发版时如果浏览器抓到半新/坏掉的 app.js 会一直粘住 = 只能强刷才能出来
+  assert.doesNotMatch(headers, /Cache-Control:[^\n]*immutable/, 'app.js / styles.css 不许 immutable（版本隔离靠 ?v= 参数本身）');
 });
 
 test('相关词输入：中英文逗号/顿号/分号都能分隔，去重、去空、上限 8 个', () => {

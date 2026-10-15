@@ -77,7 +77,8 @@ test('v829 后端接口：登录鉴权 + 走文本模型扩展 + 返回 terms', 
 test('v829 前端：缓存自长、秩排序精确优先、开关持久化', () => {
   // 匹配秩：-1 不命中 / 0 精确 / 1 仅扩展
   assert.match(appSource, /function libraryItemQueryMatchRank\(item, query, expansionTerms\)/);
-  assert.match(appSource, /return exact \? 0 : 1;/);
+  // v954：这里原来断言 `return exact ? 0 : 1;`；现在有软匹配兜底，秩多了一档 2（软匹配，只在精确层全空时才会出现）
+  assert.match(appSource, /return soft \? 2 : 1;/, '秩：精确 0 / 关联词命中 1 / 软匹配 2');
   // 精确命中的排前面（稳定排序，不打乱新图优先）
   assert.match(appSource, /queryRankById\.get\(a\.source\.id\) \|\| 0\) - \(queryRankById\.get\(b\.source\.id\) \|\| 0\)/);
   // 扩展词缓存：v833 起带 7 天 TTL，到期自动重新扩展；v894 键升 v7（只留库内标签那一层）

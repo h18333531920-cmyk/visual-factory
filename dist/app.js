@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-canonical-query-v953';
+const TOOL_UI_VERSION = '20261015-canonical-query-v954';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -4132,12 +4132,46 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   }
 
   // 匹配返回秩：-1 不命中；0 每个词都原文命中（精确）；1 靠扩展词才命中（排后面）
+  // v954：**软匹配**（最后一道兜底，纯本地、零 AI）。
+  // 起因（用户口径）：「限制得太死了，一点软性的余地都没有，随便改个字就啥也都不到了」。
+  // 精确层（原词 → 词表规范词 → related 相关词 → 英文桥接）一条都没命中时，才放这一层：
+  //   · 中文 token：按「任一字命中」算中（桌子 ⊃ 桌 ⇒ 能命中标「餐桌」的物料）；token 有 3 个字以上时要求命中 ≥2 个字
+  //   · 英文 token：单数/复数/去尾 s、以及前 4 个字母的前缀命中都算（hamburgers ↔ burger/Burgers）
+  // 命中排到精确命中之后（rank 2），状态栏会写「软匹配」告诉用户这不是精确结果。
+  var libraryQueryAllowSoft = false;
+  function softTokenHitsText(token, text) {
+    const t = String(token == null ? '' : token).trim().toLowerCase();
+    const source = String(text || '');
+    if (!t || !source) return false;
+    if (source.indexOf(t) >= 0) return true;
+    const stems = englishSingularCandidates(t);
+    for (let i = 0; i < stems.length; i++) if (source.indexOf(stems[i]) >= 0) return true;
+    if (/^[a-z][a-z'-]*$/.test(t)) {
+      if (t.length >= 4 && source.indexOf(t.slice(0, 4)) >= 0) return true;
+      return false;
+    }
+    const han = t.replace(/[^\u4e00-\u9fa5]/g, '');
+    if (!han) return false;
+    if (han.length <= 2) {
+      for (let i = 0; i < han.length; i++) if (source.indexOf(han[i]) >= 0) return true;
+      return false;
+    }
+    let hits = 0;
+    for (let i = 0; i < han.length; i++) {
+      if (source.indexOf(han[i]) >= 0) hits += 1;
+      if (hits >= 2) return true;
+    }
+    for (let i = 0; i + 1 < han.length; i++) if (source.indexOf(han.slice(i, i + 2)) >= 0) return true;
+    return false;
+  }
+
   function libraryItemQueryMatchRank(item, query, expansionTerms) {
     const tokens = String(query).toLowerCase().split(/\s+/).filter(Boolean);
     if (!tokens.length) return 0;
     const text = libraryItemSearchText(item);
     const terms = (expansionTerms || []).map(function(t) { return String(t || '').toLowerCase(); }).filter(Boolean);
     let exact = true;
+    let soft = false;
     for (let i = 0; i < tokens.length; i++) {
       if (text.includes(tokens[i])) continue;
       exact = false;
@@ -4148,9 +4182,13 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       const subNameTypes = (typeof materialCatalogSubNameTypes === 'function') ? materialCatalogSubNameTypes(tokens[i]) : [];
       if (subNameTypes.some(function(t) { return text.includes(t); })) continue;
       const hitByExpansion = terms.some(function(t) { return text.includes(t); });
-      if (!hitByExpansion) return -1;
+      if (hitByExpansion) continue;
+      // v954：精确层全落空后，软匹配兜底（只在 libraryQueryAllowSoft 打开时生效）
+      if (libraryQueryAllowSoft && softTokenHitsText(tokens[i], text)) { soft = true; continue; }
+      return -1;
     }
-    return exact ? 0 : 1;
+    if (exact) return 0;
+    return soft ? 2 : 1;
   }
 
   function libraryItemMatchesQuery(item, query) {
@@ -8242,6 +8280,42 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         libraryQueryUsedExpansion = true;
       }
     }
+    // v954：**软匹配兜底** —— 精确层（原词/规范词/related/英文桥接）和 AI 关联词都没捞到东西时，
+    // 再放一层宽松匹配，而不是直接给用户一个 0 条。起因（用户口径）：「限制得太死了，一点软性的余地都没有，
+    // 随便改个字就啥也都不到了」。这一遍走**完整筛选链**（尊重库类型/各种筛选），命中排 rank 2（排在精确之后）。
+    let libraryQueryUsedSoft = false;
+    if (state.libraryFilters.query && !filteredItems.length) {
+      libraryQueryAllowSoft = true;
+      try {
+        const soft = (function buildLibraryItemsForQuery(expansionTerms) {
+          queryRankById.clear();
+          return state.libraryPreviews
+            .map(function(preview) {
+              var src = sourcesById.get(preview.source_file_id);
+              return { preview: preview, source: src };
+            })
+            .filter(item => item.source)
+            .filter(item => {
+              const kind = libraryKindOfSource(item.source);
+              return state.libraryFilters.kind === 'all' || state.libraryFilters.kind === kind;
+            })
+            .filter(item => librarySourceMatchesSelectedTags(item.source))
+            .filter(item => {
+              const rank = libraryItemQueryMatchRank(item, state.libraryFilters.query, expansionTerms);
+              if (rank < 0) return false;
+              const prev = queryRankById.get(item.source.id);
+              queryRankById.set(item.source.id, prev === undefined ? rank : Math.min(prev, rank));
+              return true;
+            });
+        })(libraryExpansionTerms);
+        if (soft.length) {
+          filteredItems = soft;
+          libraryQueryUsedSoft = true;
+        }
+      } finally {
+        libraryQueryAllowSoft = false;
+      }
+    }
     // 精确命中的排在仅靠扩展词命中的前面（同一项目内任一物料精确命中就算精确；排序稳定，不打乱新图优先）
     filteredItems.sort(function(a, b) { return (queryRankById.get(a.source.id) || 0) - (queryRankById.get(b.source.id) || 0); });
     state.libraryItems = groupFontLibraryItems(collapseCaseProjectItems(filteredItems));
@@ -8285,8 +8359,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     // v948：走"关联词兜底"那一路时把口径写出来（否则用户会以为「弹出」真能直接搜到这些）
     const queryBadge = state.libraryFilters.query
       ? `<span class="library-stat"><small>${state.lang === 'zh'
-          ? (libraryQueryUsedExpansion ? '关联命中' : '命中')
-          : (libraryQueryUsedExpansion ? 'Related' : 'Matches')}</small><strong>${state.libraryItems.length}</strong><small>“${escapeHtml(state.libraryFilters.query)}”</small></span>`
+          ? (libraryQueryUsedSoft ? '软匹配' : libraryQueryUsedExpansion ? '关联命中' : '命中')
+          : (libraryQueryUsedSoft ? 'Broad' : libraryQueryUsedExpansion ? 'Related' : 'Matches')}</small><strong>${state.libraryItems.length}</strong><small>“${escapeHtml(state.libraryFilters.query)}”</small></span>`
       : '';
     // v835：扩展词不再拼进状态条，改为渲染在搜索框左侧 chips（下方 chipsHost）
     status.innerHTML = `${sourceBadge}${queryBadge}`;
@@ -8295,9 +8369,31 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     grid.classList.toggle('library-grid-cases', caseBoard);
     if (visibleItems.length === 0) {
       state.librarySelectedPreviewId = '';
+      // v954：零命中时把"这次到底拿什么词去搜的"写出来 —— 这一栏就是为了下次不用再猜：
+      // 是原词没进库、还是关联词没回来（AI 没答/被过滤）、还是筛选条件挡掉了。用户报"搜什么都搜不到"时看这一行就够。
+      const zeroDebug = (function () {
+        const q = String(state.libraryFilters.query || '').trim();
+        if (!q) return '';
+        const terms = libraryExpansionTerms.slice(0, 8);
+        const filterCount = (state.libraryFilters.selectedCountries || []).length
+          + (state.libraryFilters.selectedActivities || []).length
+          + (state.libraryFilters.selectedStrategies || []).length
+          + (state.libraryFilters.selectedElements || []).length
+          + (state.libraryFilters.selectedFormats || []).length
+          + (state.libraryFilters.selectedQuantities || []).length;
+        const bits = [
+          (state.lang === 'zh' ? '搜索词：' : 'Query: ') + q,
+          (state.lang === 'zh' ? '规范词：' : 'Canonical: ') + libraryCanonicalQueryTerm(q),
+          (state.lang === 'zh' ? '库内关联词 ' : 'Related terms ') + terms.length + (terms.length ? '：' + terms.join('、') : ''),
+          (state.lang === 'zh' ? '库类型：' : 'Kind: ') + state.libraryFilters.kind,
+          (state.lang === 'zh' ? '筛选：' : 'Filters: ') + filterCount
+        ];
+        return '<span class="muted" style="margin-top:6px;font-size:11.5px;line-height:1.7">' + escapeHtml(bits.join(' · ')) + '</span>';
+      })();
       grid.innerHTML = `<div class="empty-card">
         <strong>${state.lang === 'zh' ? '还没有符合条件的素材' : 'No matching assets'}</strong>
         <span>${state.lang === 'zh' ? '可以先上传图库图片或案例文件。模板库素材从静态设计师保存进入。' : 'Upload gallery images or case files first. Templates come from Static Designer.'}</span>
+        ${zeroDebug}
       </div>`;
       renderLibraryInspector();
       return;
@@ -16415,6 +16511,57 @@ function libraryTagsForForm(formData, kind) {
     return libraryDisplayLabel(raw);
   }
 
+  // v954：英文写法 → 中文标签的**零 AI 桥接**。
+  // 起因（用户实测）：英文搜 `hamburgers` 一条都搜不到 —— 库里物料标的是「汉堡」，而 item 的搜索文本里
+  // 只有 `burger`（LIBRARY_SEARCH_EN_EXTRA）和 `Burgers`（LIBRARY_LABELS_EN）：跟 `hamburgers` **都不相等**，
+  // 只是被它"包住"（ham|burgers），于是精确匹配、复数反查、词表反查全都落空。
+  // 规则：token 归一（小写 + 单数形式）后，在「英文名 → 中文名」索引里找**被 token 包住**的英文名
+  // （英文名 ≥4 个字母、token 自身 ≥5 个字母，如 hamburgers ⊃ burger），把它们的中文名一并当匹配词。
+  var libraryEnglishToZhIndex = null;
+  function libraryEnglishToZh() {
+    if (libraryEnglishToZhIndex) return libraryEnglishToZhIndex;
+    const index = new Map();
+    const add = function (en, zh) {
+      const key = String(en == null ? '' : en).trim().toLowerCase();
+      const name = String(zh == null ? '' : zh).trim();
+      if (key.length >= 4 && name && !index.has(key)) index.set(key, name);
+    };
+    try { Object.keys(LIBRARY_LABELS_EN || {}).forEach(function (zh) { add(LIBRARY_LABELS_EN[zh], zh); }); } catch (_error) {}
+    try {
+      Object.keys(LIBRARY_SEARCH_EN_EXTRA || {}).forEach(function (zh) {
+        String(LIBRARY_SEARCH_EN_EXTRA[zh] || '').split(/\s+/).forEach(function (word) { add(word, zh); });
+      });
+    } catch (_error) {}
+    libraryEnglishToZhIndex = index;
+    return index;
+  }
+
+  // 英文单数候选：hamburgers → hamburger；dishes → dish（class/boss 这种本身以 ss 结尾的不当复数）
+  function englishSingularCandidates(text) {
+    const key = String(text == null ? '' : text).trim().toLowerCase();
+    const out = [];
+    if (!/^[a-z][a-z'-]*s$/.test(key)) return out;
+    if (/ss$/.test(key)) return out;
+    out.push(key.slice(0, -1));
+    if (/es$/.test(key)) out.push(key.slice(0, -2));
+    return out;
+  }
+
+  function libraryEnglishBridgeTerms(lower) {
+    const out = [];
+    const index = libraryEnglishToZh();
+    if (!index.size) return out;
+    const push = function (zh) {
+      const text = String(zh == null ? '' : zh).trim();
+      if (text && out.indexOf(text) < 0) out.push(text);
+    };
+    [String(lower || '').trim().toLowerCase()].concat(englishSingularCandidates(lower)).forEach(function (candidate) {
+      if (candidate.length < 5) return;
+      index.forEach(function (zh, en) { if (candidate.indexOf(en) >= 0) push(zh); });
+    });
+    return out;
+  }
+
   // ── 搜索归一 + 相关词展开（v891：上位词 parent_id、别名都不再参与，相关词取代它们）──
   // 搜索词展开（保持极简，只有三层）：
   // ① 原词本身（子串匹配由调用方做）
@@ -16430,6 +16577,8 @@ function libraryTagsForForm(formData, kind) {
     if (!raw) return out;
     push(raw);
     const lower = raw.toLowerCase();
+    // v954：英文复数也把单数形式当匹配词（hamburgers → hamburger，物料文本里可能就是单数）
+    englishSingularCandidates(lower).forEach(push);
     // v905：反向相关词——搜「桌子」时，词表里「餐桌」那行把桌子填在相关词里，于是餐桌也参与匹配。
     // （管理员在词表里就能维护"口语说法 → 库内正式标签"的对应，零 AI、改完即时生效）
     // v952：正向也要走**规范词**。词表里「桌子」和「餐桌」是同一个概念的两种写法（name_en 都是 Table），
@@ -16444,6 +16593,8 @@ function libraryTagsForForm(formData, kind) {
     const canonicalZh = libraryCanonicalQueryTerm(raw);
     if (canonicalZh) pushRow(canonicalZh);
     pushRow(tagVocabularyRelatedToZh.get(lower));
+    // v954：英文写法被中文标签"包住"时也接上（hamburgers → burger → 汉堡）
+    libraryEnglishBridgeTerms(lower).forEach(pushRow);
     if (!rows.length) return out;
     rows.forEach(function (nameZh) {
       push(nameZh);

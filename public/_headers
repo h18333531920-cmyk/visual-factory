@@ -1,6 +1,10 @@
-# v953：HTML 必须每次回源校验，否则浏览器会把 index.html 连同它引用的 ?v= 版本号一起死缓存 ——
-# 表现就是"改了、也发了测试站，用户那边还是旧版"（用户实测：v952 修好的搜索，他那边搜「桌子」仍然 0 条）。
-# app.js / styles.css 都带 ?v= 版本参数，URL 每次发版都变，所以它们可以长缓存。
+# v953/v954：HTML 必须每次回源校验，否则浏览器会把 index.html 连同它引用的 ?v= 版本号一起死缓存 ——
+# 表现就是"改了、也发了测试站，用户那边还是旧版"。
+#
+# ⚠️ 2026-10-15 复盘：`/app.js` 一开始给了 `immutable`（1 年），**这是个坑，已经撤掉**：
+# 发版过程中如果浏览器正好抓到一份半新/坏掉的 app.js，immutable 会让它一年都不再回源，
+# 于是"搜什么都搜不到"这种坏状态会一直粘住，用户只能靠强刷才能出来。
+# 现在只对 HTML 做 no-cache；app.js / styles.css 的版本隔离继续靠 ?v= 参数本身。
 /index.html
   Cache-Control: no-cache, must-revalidate
 
@@ -9,9 +13,3 @@
 
 /*.html
   Cache-Control: no-cache, must-revalidate
-
-/app.js
-  Cache-Control: public, max-age=31536000, immutable
-
-/styles.css
-  Cache-Control: public, max-age=31536000, immutable

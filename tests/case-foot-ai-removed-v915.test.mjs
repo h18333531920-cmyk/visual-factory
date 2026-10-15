@@ -77,7 +77,7 @@ test('v915 上传表单渲染路径：没有 AI 建议 chip，也不调识别接
 /* ── 4) 版本号 ───────────────────────────────────────────────────────────── */
 
 test('v915 版本号：index.html 5 处 + app.js 1 处', () => {
-  const refs = indexSource.match(/\?v=20261015-canonical-query-v953/g) || [];
+  const refs = indexSource.match(/\?v=20261015-canonical-query-v954/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261015-canonical-query-v953'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261015-canonical-query-v954'/);
 });
