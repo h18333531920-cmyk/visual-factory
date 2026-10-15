@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-modal-scroll-lock-v941';
+const VERSION = '20261015-tag-pop-wrap-v942';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -180,6 +180,13 @@ test('v941：弹窗开着时锁住页面滚动 —— 而且锁的是 .content�
   assert.match(source, /function closeLibraryUploadModal\(\) \{[\s\S]{0,160}syncPageScrollLock\(\);/, '上传弹窗关闭要解锁');
   // 第二层保险：滚到尽头不传染给背景
   assert.match(source, /\.library-upload-scroll, \.case-project-body, \.case-side, \.case-side-grid,\s*\n\.library-bookmark-editor-list, \.case-tag-pop \{ overscroll-behavior: contain; \}/, '弹窗内的滚动容器要 overscroll-behavior: contain');
+});
+
+test('v942：溢出时的标签浮窗横向流式换行（不再一行一个）', () => {
+  assert.match(source, /\.case-preview-ai-pop \{ position: fixed; z-index: 300; display: none; flex-wrap: wrap; align-items: flex-start; gap: 6px;/, '浮窗要 row + wrap');
+  assert.doesNotMatch(source, /\.case-preview-ai-pop \{ position: fixed; z-index: 300; display: none; flex-direction: column;/, '不许退回一行一个');
+  assert.match(source, /\.case-preview-ai-pop\.is-visible \{ display: flex; \}/, '显示态不变');
+  assert.match(source, /\.case-preview-ai-pop \.case-preview-ai-tag button \{ display: none; \}/, '浮窗里的标签仍然不显示 ×');
 });
 
 test('v935 ⑤：版本号六处同步', () => {
