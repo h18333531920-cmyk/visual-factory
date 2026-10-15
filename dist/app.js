@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-canonical-query-v951';
+const TOOL_UI_VERSION = '20261015-canonical-query-v952';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -16362,12 +16362,16 @@ function libraryTagsForForm(formData, kind) {
     const lower = raw.toLowerCase();
     // v905：反向相关词——搜「桌子」时，词表里「餐桌」那行把桌子填在相关词里，于是餐桌也参与匹配。
     // （管理员在词表里就能维护"口语说法 → 库内正式标签"的对应，零 AI、改完即时生效）
+    // v952：正向也要走**规范词**。词表里「桌子」和「餐桌」是同一个概念的两种写法（name_en 都是 Table），
+    // 而库里物料标的是「餐桌」；原来只有"原词正好是词表行"这一条路，反方向带不出去 ⇒
+    // 搜「桌子」只按字面匹配，标着「餐桌」的物料一条都搜不到（用户实测：案例库搜「桌子」0 条、搜「餐桌」有）。
+    // 现在两个方向都用规范词收口，浮窗里显示的关联词和这里参与匹配的词仍然是同一套。
     const rows = [];
     const pushRow = function (nameZh) {
       const text = String(nameZh == null ? '' : nameZh).trim();
       if (text && rows.indexOf(text) < 0) rows.push(text);
     };
-    const canonicalZh = tagVocabularyRowsByZh.has(raw) ? raw : (tagVocabularyByEn.get(lower) || '');
+    const canonicalZh = libraryCanonicalQueryTerm(raw);
     if (canonicalZh) pushRow(canonicalZh);
     pushRow(tagVocabularyRelatedToZh.get(lower));
     if (!rows.length) return out;

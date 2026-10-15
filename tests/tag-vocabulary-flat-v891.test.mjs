@@ -40,7 +40,11 @@ function loadVocabularyUi(rows, options = {}) {
 }
 
 function loadQueryTerms(rows) {
+  // v952：tagVocabularyQueryTerms 现在会用 libraryCanonicalQueryTerm 归一，把这一段一起切进来
   const slice = appSource.slice(
+    appSource.indexOf('  function libraryCanonicalQueryTerm(value) {'),
+    appSource.indexOf('  // v950：规范词要靠词表索引')
+  ) + appSource.slice(
     appSource.indexOf('  function tagVocabularyQueryTerms(token) {'),
     appSource.indexOf('  function optionNameById(id) {')
   );
@@ -56,6 +60,7 @@ function loadQueryTerms(rows) {
     });
   });
   const context = vm.createContext({
+    tagVocabularyReady: true,   // v952：规范词归一要求词表就绪（没就绪时原样返回原词）
     tagVocabularyRowsByZh: rowsByZh,
     tagVocabularyByName: byName,
     tagVocabularyByEn: byEn,
@@ -64,6 +69,20 @@ function loadQueryTerms(rows) {
   vm.runInContext(slice, context);
   return context;
 }
+
+test('v952：规范词在**匹配**这一层也生效 —— 搜「桌子」要带出库内正式标签「餐桌」', () => {
+  // 词表里两行是同一个概念（name_en 都是 Table），但库里物料标的是「餐桌」。
+  // 原来正向带不出去 ⇒ 案例库搜「桌子」0 条（用户实测），只有搜「餐桌」才有。
+  const c = loadQueryTerms([
+    { name_zh: '桌子', name_en: 'Table', related: [] },
+    { name_zh: '餐桌', name_en: 'Table', related: ['桌面', '桌'] }
+  ]);
+  const terms = value => Array.from(c.tagVocabularyQueryTerms(value));
+  assert.deepEqual(terms('桌子'), ['桌子', '餐桌', 'table', '桌面', '桌'], '口语/别名要带出规范词那一行的全部词');
+  assert.deepEqual(terms('table'), ['table', '餐桌', '桌面', '桌'], '英文写法同样收敛到规范词，不许绕回「桌子」那一行');
+  assert.deepEqual(terms('餐桌'), ['餐桌', 'table', '桌面', '桌'], '规范词自己不受影响');
+  assert.deepEqual(terms('词表外的新词'), ['词表外的新词'], '词表外的词照旧只按原词匹配');
+});
 
 test('相关词输入：中英文逗号/顿号/分号都能分隔，去重、去空、上限 8 个', () => {
   const c = loadVocabularyUi([]);
