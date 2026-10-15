@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-fresh-card-remount-v940';
+const VERSION = '20261015-modal-scroll-lock-v941';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -162,6 +162,24 @@ test('v939/v940：占位卡类名要和真实案例卡一致 + 入库后**就地
   assert.match(finish, /const remounted = remountFreshLibraryCard\(sourceId\);/, '先试就地换真卡');
   assert.match(finish, /if \(!remounted\) \{[\s\S]{0,300}renderLibraryGrid\(\);/, '换不动就退回整块重画（宁可闪一下也不能一直空白）');
   assert.match(finish, /libraryPendingUploads\.splice\(index, 1\);/, '条目退场（之后由真实数据管，避免被当成占位卡再删一次）');
+});
+
+test('v941：弹窗开着时锁住页面滚动 —— 而且锁的是 .content（不是 body）', () => {
+  const lock = slice('  function syncPageScrollLock() {', '  // case_activity 是 v738 新增的类型值');
+  assert.match(lock, /document\.querySelectorAll\('\.modal-backdrop, \.case-project-backdrop'\)/, '按"有没有开着的弹窗"来判定锁定');
+  assert.match(lock, /document\.querySelectorAll\('\.content'\)\.forEach/, '**必须锁 .content** —— 这个项目的页面滚动容器是它，body 不是');
+  assert.match(lock, /node\.style\.overflowY = value/, '锁的是 .content 的 overflow-y');
+  assert.match(lock, /const value = locked \? 'hidden' : '';/, '有弹窗锁、没弹窗解锁（幂等，不用计数）');
+  // 各处开关必须换掉"只锁 body"的老写法
+  assert.doesNotMatch(source, /document\.body\.style\.overflow = 'hidden';/, '不许再到处写"只锁 body"（等于没锁）');
+  assert.doesNotMatch(source, /document\.body\.style\.overflow = '';/, '解锁同理，统一走 syncPageScrollLock()');
+  const callers = source.match(/syncPageScrollLock\(\);/g) || [];
+  assert.ok(callers.length >= 10, '所有弹窗的开关都要调它（现在 ' + callers.length + ' 处）');
+  // 上传弹窗以前根本没锁
+  assert.match(source, /document\.getElementById\('library-upload-modal'\)\.hidden = false;\s*\n\s*syncPageScrollLock\(\);/, '上传弹窗打开要锁');
+  assert.match(source, /function closeLibraryUploadModal\(\) \{[\s\S]{0,160}syncPageScrollLock\(\);/, '上传弹窗关闭要解锁');
+  // 第二层保险：滚到尽头不传染给背景
+  assert.match(source, /\.library-upload-scroll, \.case-project-body, \.case-side, \.case-side-grid,\s*\n\.library-bookmark-editor-list, \.case-tag-pop \{ overscroll-behavior: contain; \}/, '弹窗内的滚动容器要 overscroll-behavior: contain');
 });
 
 test('v935 ⑤：版本号六处同步', () => {

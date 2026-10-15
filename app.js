@@ -753,6 +753,12 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-preview-ai-add-confirm:hover { background: #ea580c; }
 /* v932：添加中 —— 等写库的那几秒要让用户看见"在跑"，而且这时候点它不再有反应（挡住连点） */
 .case-preview-ai-add-confirm.is-busy { opacity: .55; cursor: progress; }
+/* v941：弹窗里的滚动到底之后不许"传染"给后面的页面（滚轮链）。
+   配合 syncPageScrollLock()（它负责在弹窗开着时锁 .content 的滚动）—— 双保险：
+   万一某个弹窗忘了调锁，滚到它自己的尽头也不会带动背景滚。 */
+.modal-backdrop, .case-project-backdrop, .modal, .library-modal,
+.library-upload-scroll, .case-project-body, .case-side, .case-side-grid,
+.library-bookmark-editor-list, .case-tag-pop { overscroll-behavior: contain; }
 /* v936：上传成功后把新入库的卡片**高亮几秒**提醒上传者（用户要求）。
    用 outline + box-shadow（不依赖卡片自身的定位，也不用改各套卡片的模板）。
    6 秒后由 highlightFreshLibraryCards() 把 class 摘掉。
@@ -962,7 +968,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-fresh-card-remount-v940';
+const TOOL_UI_VERSION = '20261015-modal-scroll-lock-v941';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -6878,6 +6884,30 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     });
   }
 
+  // v941：弹窗打开时锁住"页面滚动"。用户口径：「在这种上传或者项目展示出现弹窗的情况下，滑动鼠标滑轮，
+  // 不要滑动弹窗背后的页面上的预览图」。
+  // ⚠️ **坑**：本项目的页面滚动容器不是 body，而是 `.content`（styles.css: `.content { overflow-y: auto }`）
+  // —— 原来各处写的 `document.body.style.overflow = 'hidden'` 等于没锁，所以弹窗后面照样能滚。
+  // 这里改成**看 DOM 里有没有开着的弹窗**来同步锁定：幂等、不计数，也不会因为某条关闭路径漏调用而永久锁死。
+  function syncPageScrollLock() {
+    const candidates = document.querySelectorAll('.modal-backdrop, .case-project-backdrop');
+    let locked = false;
+    for (let index = 0; index < candidates.length; index += 1) {
+      const node = candidates[index];
+      if (!node || node.hidden) continue;
+      if (node.getAttribute('aria-hidden') === 'true') continue;
+      const style = window.getComputedStyle ? window.getComputedStyle(node) : null;
+      if (style && (style.display === 'none' || style.visibility === 'hidden')) continue;
+      locked = true;
+      break;
+    }
+    const value = locked ? 'hidden' : '';
+    if (document.body.style.overflow !== value) document.body.style.overflow = value;
+    document.querySelectorAll('.content').forEach(function(node) {
+      if (node.style.overflowY !== value) node.style.overflowY = value;
+    });
+  }
+
   // case_activity 是 v738 新增的类型值：数据库约束（sql/017 放宽前仍拦 23514）不允许时
   // 整页退回 activity 存放，与 v736 行为一致；约束放宽后下一次加载自动改型。
   let caseActivityTypeReady = null;
@@ -9225,7 +9255,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       </div>`;
     backdrop.dataset.sourceId = source.id;
     document.body.append(backdrop);
-    document.body.style.overflow = 'hidden';
+    syncPageScrollLock();   // v941：锁住页面滚动（容器是 .content，不是 body）
     let currentId = caseModalInitialPreviewId(materials, pick.cover.id, focusPreviewId);
     const current = () => materials.find(m => m.id === currentId) || materials[0];
     const renderStage = function(p) {
@@ -10114,7 +10144,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     if (aiPop) aiPop.remove();
     if (caseFootToolsCleanup) { caseFootToolsCleanup(); caseFootToolsCleanup = null; }
     if (caseProjectKeyHandler) { document.removeEventListener('keydown', caseProjectKeyHandler); caseProjectKeyHandler = null; }
-    document.body.style.overflow = '';
+    syncPageScrollLock();   // v941：关掉最后一个弹窗才真正解锁
   }
 
   // 只刷新单个项目的源记录（编辑信息后同步标题/标签/链接等）
@@ -11067,13 +11097,13 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     }
 
     document.getElementById('library-detail-modal').hidden = false;
-    document.body.style.overflow = 'hidden';
+    syncPageScrollLock();   // v941：页面滚动容器是 .content，不是 body
   }
 
   function closeLibraryDetailModal() {
     const modal = document.getElementById('library-detail-modal');
     if (modal) modal.hidden = true;
-    document.body.style.overflow = '';
+    syncPageScrollLock();
   }
 
   /* ── 模板快捷书签：素材库卡片 + 关联模板弹窗 ── */
@@ -11132,7 +11162,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const modal = document.getElementById('library-bookmark-modal');
     if (modal) modal.hidden = true;
     hideLibraryBookmarkMemberMenu();
-    document.body.style.overflow = '';
+    syncPageScrollLock();
   }
 
   function libraryTemplateBookmarkCandidates(existingGroup) {
@@ -11197,7 +11227,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   function closeLibraryTemplateBookmarkEditor() {
     const modal = document.getElementById('library-template-bookmark-editor');
     if (modal) modal.hidden = true;
-    document.body.style.overflow = '';
+    syncPageScrollLock();
   }
 
   async function openLibraryTemplateBookmarkEditor(seedItem) {
@@ -11233,7 +11263,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     modal.innerHTML = `<section class="modal library-bookmark-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="library-bookmark-editor-title"><div class="library-bookmark-editor-header"><div><h3 id="library-bookmark-editor-title">${existingGroup ? (state.lang === 'zh' ? '编辑模板编组' : 'Edit template group') : (state.lang === 'zh' ? '模板编组' : 'Group templates')}</h3><p>${state.lang === 'zh' ? '书签只关联现有模板，不会复制或修改原模板。至少选择 1 个模板。' : 'Bookmarks only reference existing templates. Select at least one template.'}</p></div><button type="button" id="close-library-bookmark-editor" aria-label="${state.lang === 'zh' ? '关闭' : 'Close'}">×</button></div><div class="library-bookmark-editor-list">${rows}</div><div class="library-bookmark-editor-footer"><button type="button" class="library-bookmark-editor-cancel">${state.lang === 'zh' ? '取消' : 'Cancel'}</button><button type="button" class="library-bookmark-editor-save">${existingGroup ? (state.lang === 'zh' ? '保存关联' : 'Save links') : (state.lang === 'zh' ? '创建书签' : 'Create bookmark')}</button></div></section>`;
     prepareDecodedLibraryImages(modal);
     modal.hidden = false;
-    document.body.style.overflow = 'hidden';
+    syncPageScrollLock();
     modal.onclick = function(event) { if (event.target === modal) closeLibraryTemplateBookmarkEditor(); };
     modal.querySelector('#close-library-bookmark-editor').onclick = closeLibraryTemplateBookmarkEditor;
     modal.querySelector('.library-bookmark-editor-cancel').onclick = closeLibraryTemplateBookmarkEditor;
@@ -11455,7 +11485,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const listEl = document.getElementById('library-bookmark-members');
     if (!listEl) return;
     modal.hidden = false;
-    document.body.style.overflow = 'hidden';
+    syncPageScrollLock();
     prefetchLibraryBookmarkMemberSnapshots(group);
     const popupCacheKey = libraryBookmarkPopupCacheKey(group);
     const popupRenderedAt = Number(modal.dataset.bookmarkRenderedAt || 0);
@@ -11744,6 +11774,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     document.getElementById('library-upload-title').value = opts.title || '';
     document.getElementById('library-upload-message').textContent = '';
     document.getElementById('library-upload-modal').hidden = false;
+    syncPageScrollLock();   // v941：上传弹窗之前根本没锁页面滚动（容器是 .content，锁 body 没用）
     setTimeout(function() { populateUploadMetaPickers(); }, 50);
     setTimeout(function() { prefillUploadMetaSelections(); }, 120);
     document.querySelector('.library-upload-scroll')?.scrollTo({ top: 0, behavior: 'auto' });
@@ -11780,6 +11811,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   function closeLibraryUploadModal() {
     const modal = document.getElementById('library-upload-modal');
     if (modal) modal.hidden = true;
+    syncPageScrollLock();   // v941：没有别的弹窗开着才解锁
   }
 
   // 上传「本次运行」的标记：点取消 / ✕ 时用它中断后面的文件并回滚已经写进去的行，

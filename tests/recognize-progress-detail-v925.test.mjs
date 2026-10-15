@@ -18,7 +18,7 @@ const indexSource = readFileSync(join(here, '..', 'index.html'), 'utf8');
 
 const PURE_START = '  const RECOGNIZE_PROGRESS_POLL_MS =';
 const PURE_END = '  function recognizeProgressInfo() {';
-const VERSION = '20261015-fresh-card-remount-v940';
+const VERSION = '20261015-modal-scroll-lock-v941';
 
 function loadPure() {
   const start = source.indexOf(PURE_START);
@@ -414,8 +414,8 @@ test('v925 样式：清单内部滚动（有 max-height + overflow-y），细条
 });
 
 test('v925 版本号六处同步（index.html 5 处 + app.js 1 处）', () => {
-  assert.equal((indexSource.match(/\?v=20261015-fresh-card-remount-v940/g) || []).length, 5);
-  assert.match(source, /const TOOL_UI_VERSION = '20261015-fresh-card-remount-v940'/);
+  assert.equal((indexSource.match(/\?v=20261015-modal-scroll-lock-v941/g) || []).length, 5);
+  assert.match(source, /const TOOL_UI_VERSION = '20261015-modal-scroll-lock-v941'/);
   assert.doesNotMatch(indexSource, /20261014-content-key-v924/);
   assert.doesNotMatch(source, /20261014-content-key-v924/);
 });
