@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-type-i18n-v943';
+const VERSION = '20261015-pin-add-plus-v944';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -202,6 +202,19 @@ test('v943：英文界面下物料类型要翻（会场楼层 → Venue Floor）
   assert.match(source, /data-case-batch-type-value/, '批量改类型菜单的值仍是中文');
   assert.match(source, /escapeHtml\(caseTypeLabel\(p\.material_type\)\)/, '悬停浮窗里的类型');
   assert.doesNotMatch(source, /caseTypeLabel\([^)]*\)\) \+ '"' \+ \(name === entry\.type/, '别把翻译结果写进 value');
+});
+
+test('v944：行尾的「＋」要钉住；溢出浮窗里也有「＋」（点它＝点行尾那个）', () => {
+  // ① 行尾的 ＋ / 输入框 / ✓ 钉在行尾，不被横向滚动推走
+  assert.match(source, /\.case-preview-ai-chips \.case-preview-ai-add-plus \{ position: sticky; right: 0;/, '＋ 要 sticky 在行尾');
+  assert.match(source, /\.case-preview-ai-chips\.is-adding \.case-preview-ai-add-input \{ position: sticky; right: 26px;/, '加号态的输入框也要钉住');
+  assert.match(source, /\.case-preview-ai-chips\.is-adding \.case-preview-ai-add-confirm \{ position: sticky; right: 0;/, '加号态的 ✓ 也要钉住');
+  // ② 浮窗里补一个 ＋，并且点它能进加号态
+  const hover = slice('  function wireCasePreviewAiHover(panel, manualTags, aiTags, excluded) {', '  function updateCasePreviewAiRunUi(sourceId) {');
+  assert.match(hover, /\+ casePreviewAiInlineAddPlusHtml\(CASE_PREVIEW_AI_INLINE_ADD\.element, state\.lang\);/, '浮窗末尾要有 ＋');
+  assert.match(hover, /pop\.onclick = function\(event\) \{[\s\S]{0,400}target\.closest\('\.case-preview-ai-add-plus'\)/, '点浮窗里的 ＋ 要能接住');
+  assert.match(hover, /panel\.dataset\.adding = config\.kind;/, '接住之后进加号态（复用面板自己那套）');
+  assert.match(hover, /casePreviewAiInlineAddFocus\[config\.kind\] = true;/, '并把焦点交回输入框');
 });
 
 test('v935 ⑤：版本号六处同步', () => {

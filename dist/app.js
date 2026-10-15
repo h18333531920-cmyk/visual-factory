@@ -768,6 +768,12 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
   50% { outline-color: rgba(59, 130, 246, .45); box-shadow: 0 0 0 3px rgba(59, 130, 246, .12); }
 }
 .library-card.is-just-uploaded { outline: 3px solid #3b82f6; outline-offset: 2px; animation: library-fresh-pulse 1.1s ease-in-out infinite; }
+/* v944：标签一多，行末尾那个「＋」（以及展开后的输入框/✓）会被横向滚动推到看不见 ——
+   把它们钉在行尾（sticky），永远可见。用户实测反馈：「这种浮窗后面没有加号啊，那要怎么手动加词？」 */
+.case-preview-ai-chips .case-preview-ai-add-plus { position: sticky; right: 0; box-shadow: -8px 0 8px -6px rgba(255, 255, 255, .95); }
+.case-preview-ai-chips.is-adding .case-preview-ai-add-input { position: sticky; right: 26px; background: #fff; }
+.case-preview-ai-chips.is-adding .case-preview-ai-add-confirm { position: sticky; right: 0; }
+.case-preview-ai-effect .case-preview-ai-add-plus { box-shadow: none; }
 /* v938：上传时"先在本地显示"的占位卡 —— 图来自本机文件（blob URL），角标表示还在入库。
    入库完成后角标撤掉（见 finishLibraryPendingUpload），卡片原地转正、网格不重画。 */
 .library-card.library-pending-card { position: relative; }
@@ -971,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-type-i18n-v943';
+const TOOL_UI_VERSION = '20261015-pin-add-plus-v944';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -5378,7 +5384,10 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       if (!panel.isConnected || !chips.isConnected) return;
       if (chips.scrollWidth <= chips.clientWidth + 2) return;
       pop.innerHTML = (manualTags || []).map(function(tag) { return '<span class="case-preview-ai-tag is-manual">' + escapeHtml(libraryDisplayLabel(tag)) + '</span>'; }).join('')
-        + (aiTags || []).filter(function(tag) { return (manualTags || []).indexOf(tag) < 0; }).map(function(tag) { return '<span class="case-preview-ai-tag">' + escapeHtml(libraryDisplayLabel(tag)) + '</span>'; }).join('');
+        + (aiTags || []).filter(function(tag) { return (manualTags || []).indexOf(tag) < 0; }).map(function(tag) { return '<span class="case-preview-ai-tag">' + escapeHtml(libraryDisplayLabel(tag)) + '</span>'; }).join('')
+        // v944：浮窗里也给一个「＋」—— 用户实测反馈「这种浮窗后面没有加号啊，那要怎么手动加词？」。
+        // 标签一多，行末尾那个 ＋ 被横向滚动挡住，人就找不到入口了；这里补一个直通入口（点它＝点行尾的 ＋）。
+        + casePreviewAiInlineAddPlusHtml(CASE_PREVIEW_AI_INLINE_ADD.element, state.lang);
       const rect = chips.getBoundingClientRect();
       pop.style.left = rect.left + 'px';
       pop.style.top = (rect.bottom + 6) + 'px';
@@ -5390,6 +5399,16 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     };
     chips.addEventListener('mouseenter', function() { clearTimeout(timer); timer = setTimeout(showPop, 300); });
     chips.addEventListener('mouseleave', function() { clearTimeout(timer); hidePop(); });
+    // v944：浮窗里那个「＋」点下去 = 点行尾的「＋」：收起浮窗、面板进入加号态（输入框会自己出现并聚焦）
+    pop.onclick = function(event) {
+      const plus = event.target && event.target.closest ? event.target.closest('.case-preview-ai-add-plus') : null;
+      if (!plus) return;
+      hidePop();
+      const config = CASE_PREVIEW_AI_INLINE_ADD.element;
+      panel.dataset.adding = config.kind;
+      casePreviewAiInlineAddFocus[config.kind] = true;
+      if (typeof panel.__casePreviewAiRefresh === 'function') panel.__casePreviewAiRefresh();
+    };
     pop.onmouseenter = function() { clearTimeout(timer); };
     pop.onmouseleave = function() { hidePop(); };
   }
