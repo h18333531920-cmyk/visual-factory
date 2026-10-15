@@ -87,7 +87,10 @@ test('v829 前端：缓存自长、秩排序精确优先、开关持久化', () 
   assert.match(appSource, /function readLibraryExpansionCache/);
   assert.match(appSource, /writeLibraryExpansionCache\(q, kept, termsEn\)/);
   // v894：只剩「库内确实存在的标签」一层，匹配直接用它
-  assert.match(appSource, /libraryItemQueryMatchRank\(item, state\.libraryFilters\.query, libraryExpansionTerms\)/);
+  // v948：查询改成两遍 —— 第一遍只传 []（只用原词），零命中才用 libraryExpansionTerms 兜底；
+  // 这个断言改成锁「两遍都在」：构建函数拿参数，兜底那遍明确传 libraryExpansionTerms。
+  assert.match(appSource, /libraryItemQueryMatchRank\(item, state\.libraryFilters\.query, expansionTerms\)/);
+  assert.match(appSource, /\}\)\(libraryExpansionTerms\);\s*\n\s*if \(fallback\.length\) \{\s*\n\s*filteredItems = fallback;\s*\n\s*libraryQueryUsedExpansion = true;/, '零命中时要把库内关联词放进来兜底');
   assert.doesNotMatch(appSource, /libraryExpansionMatchTerms/, '两层合并的辅助函数已删');
   assert.doesNotMatch(appSource, /libraryExpansionFresh/, 'AI 新词层已停用');
   // 过期请求作废：换搜索词后旧扩展不覆盖新结果

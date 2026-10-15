@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-drop-panel-title-v947';
+const TOOL_UI_VERSION = '20261015-query-two-pass-v948';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -8104,7 +8104,9 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     if (!grid || !status) return;
     const queryRankById = new Map();
     const sourcesById = new Map(visibleLibrarySourcesForSession().map(source => [source.id, source]));
-    const filteredItems = state.libraryPreviews
+    let filteredItems = (function buildLibraryItemsForQuery(expansionTerms) {
+      queryRankById.clear();
+      return state.libraryPreviews
       .map(function(preview) {
         var src = sourcesById.get(preview.source_file_id);
         var bookmarkCoverPath = src && isBookmarkSource(src) ? libraryBookmarkCoverPreviewPath(src.id) : '';
@@ -8131,12 +8133,37 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       .filter(item => { var sel = state.libraryFilters.selectedQuantities || []; return !sel.length || sel.some(function(v) { return librarySourceMatchesFilterValue('quantity', item.source, v); }); })
       .filter(item => {
         if (!state.libraryFilters.query) return true;
-        const rank = libraryItemQueryMatchRank(item, state.libraryFilters.query, libraryExpansionTerms);
+        const rank = libraryItemQueryMatchRank(item, state.libraryFilters.query, expansionTerms);
         if (rank < 0) return false;
         const prev = queryRankById.get(item.source.id);
         queryRankById.set(item.source.id, prev === undefined ? rank : Math.min(prev, rank));
         return true;
       });
+    })(/* v948 第一遍：只用「原词」——见下面 libraryQueryUsedExpansion 的说明 */[]);
+    // v948：**查询分两遍** —— 第一遍只用「原词」（词表归一 / 中英 / 子类别映射都在这一层里），
+    // 一个都没命中时，第二遍才把「库内关联标签」（浮窗里那批 AI 挑的）放进来兜底。
+    // 起因（2026-10-15 真机实测）：AI 对「弹出」返回了 弹窗/头图/主页/横banner/会场tab… 8 个**物料类型**，
+    // 而它们原本是无条件 OR 进匹配的 ⇒ 几乎每个项目都含其中某个类型 ⇒ **搜「弹出」命中 98 条、等于没筛**；
+    // 反过来 AI 还没答完时又是 0 条（用户报的"搜不到"）。两遍法两头都治：
+    // 精确有命中就只给精确的；精确零命中才用关联词兜底 ⇒ 「弹出」才能找到「弹窗」那 47 张物料。
+    let libraryQueryUsedExpansion = false;
+    if (state.libraryFilters.query && !filteredItems.length && libraryExpansionTerms.length) {
+      const fallback = (function buildLibraryItemsForQuery(expansionTerms) {
+        queryRankById.clear();
+        return state.libraryPreviews
+          .map(function(preview) { return { preview: preview, source: sourcesById.get(preview.source_file_id) }; })
+          .filter(item => item.source)
+          .filter(item => {
+            const kind = libraryKindOfSource(item.source);
+            return state.libraryFilters.kind === 'all' || state.libraryFilters.kind === kind;
+          })
+          .filter(item => libraryItemQueryMatchRank(item, state.libraryFilters.query, expansionTerms) >= 0);
+      })(libraryExpansionTerms);
+      if (fallback.length) {
+        filteredItems = fallback;
+        libraryQueryUsedExpansion = true;
+      }
+    }
     // 精确命中的排在仅靠扩展词命中的前面（同一项目内任一物料精确命中就算精确；排序稳定，不打乱新图优先）
     filteredItems.sort(function(a, b) { return (queryRankById.get(a.source.id) || 0) - (queryRankById.get(b.source.id) || 0); });
     state.libraryItems = groupFontLibraryItems(collapseCaseProjectItems(filteredItems));
@@ -8177,8 +8204,11 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       : '';
     status.classList.remove('is-loading');
     // 有搜索词时给出命中数，避免"搜了但不知道有没有结果"（空结果时网格只有一句空态文案）
+    // v948：走"关联词兜底"那一路时把口径写出来（否则用户会以为「弹出」真能直接搜到这些）
     const queryBadge = state.libraryFilters.query
-      ? `<span class="library-stat"><small>${state.lang === 'zh' ? '命中' : 'Matches'}</small><strong>${state.libraryItems.length}</strong><small>“${escapeHtml(state.libraryFilters.query)}”</small></span>`
+      ? `<span class="library-stat"><small>${state.lang === 'zh'
+          ? (libraryQueryUsedExpansion ? '关联命中' : '命中')
+          : (libraryQueryUsedExpansion ? 'Related' : 'Matches')}</small><strong>${state.libraryItems.length}</strong><small>“${escapeHtml(state.libraryFilters.query)}”</small></span>`
       : '';
     // v835：扩展词不再拼进状态条，改为渲染在搜索框左侧 chips（下方 chipsHost）
     status.innerHTML = `${sourceBadge}${queryBadge}`;

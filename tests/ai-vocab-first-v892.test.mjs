@@ -150,7 +150,10 @@ test('v896 点标签：搜索框显示界面语言的写法，过滤仍按库内
 });
 
 test('v894 匹配与缓存：只用库内那一层，缓存键升 v7', () => {
-  assert.match(appSource, /libraryItemQueryMatchRank\(item, state\.libraryFilters\.query, libraryExpansionTerms\)/);
+  // v948：查询改成两遍 —— 第一遍只传 []（只用原词），零命中才用 libraryExpansionTerms 兜底；
+  // 这个断言改成锁「两遍都在」：构建函数拿参数，兜底那遍明确传 libraryExpansionTerms。
+  assert.match(appSource, /libraryItemQueryMatchRank\(item, state\.libraryFilters\.query, expansionTerms\)/);
+  assert.match(appSource, /\}\)\(libraryExpansionTerms\);\s*\n\s*if \(fallback\.length\) \{\s*\n\s*filteredItems = fallback;\s*\n\s*libraryQueryUsedExpansion = true;/, '零命中时要把库内关联词放进来兜底');
   assert.match(appSource, /LIBRARY_EXPANSION_CACHE_PREFIX = 'vf_library_search_expansion_v7:'/);
   assert.match(appSource, /const terms = list\.filter\(Boolean\);/);
   assert.match(appSource, /function writeLibraryExpansionCache\(query, terms, termsEn\)/);

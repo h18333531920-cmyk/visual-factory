@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-drop-panel-title-v947';
+const VERSION = '20261015-query-two-pass-v948';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -242,6 +242,18 @@ test('v947：左下角那行小字「当前物料 AI 标签」不再渲染', () 
   // 标签行与状态行都还在
   assert.match(source, /'<div class="case-preview-ai-chips' \+ \(addingKind === 'element' \? ' is-adding' : ''\) \+ '">'/, '标签行照旧');
   assert.match(source, /statusAlert \? '<span class="case-preview-ai-status/, '警示状态行照旧');
+});
+
+test('v948：搜索分两遍 —— 先精确，零命中才用「库内关联词」兜底', () => {
+  const grid = slice('  function renderLibraryGrid() {', '  // ── 素材库检索栏自动收起');
+  assert.match(grid, /const filteredItems = \(function buildLibraryItemsForQuery\(expansionTerms\) \{|let filteredItems = \(function buildLibraryItemsForQuery\(expansionTerms\) \{/, '把过滤链抽成"按给定扩展词构建"的函数');
+  assert.match(grid, /\}\)\(\/\* v948 第一遍：只用「原词」[\s\S]{0,60}\[\]\);/, '第一遍明确传空数组（只用原词）');
+  assert.match(grid, /if \(state\.libraryFilters\.query && !filteredItems\.length && libraryExpansionTerms\.length\) \{/, '零命中且有关联词才兜底');
+  assert.match(grid, /\}\)\(libraryExpansionTerms\);/, '兜底那遍才把库内关联词传进去');
+  assert.match(grid, /libraryQueryUsedExpansion = true;/, '记录"这轮是关联兜底结果"');
+  assert.match(source, /libraryQueryUsedExpansion \? '关联命中' : '命中'/, '命中数文案要区分（否则用户以为原词真能搜到）');
+  // 秩排序仍在（精确在前）
+  assert.match(grid, /filteredItems\.sort\(function\(a, b\) \{ return \(queryRankById\.get\(a\.source\.id\) \|\| 0\) - \(queryRankById\.get\(b\.source\.id\) \|\| 0\); \}\);/);
 });
 
 test('v935 ⑤：版本号六处同步', () => {
