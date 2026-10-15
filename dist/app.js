@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-query-two-pass-v948';
+const TOOL_UI_VERSION = '20261015-canonical-query-v949';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3590,10 +3590,12 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
     const token = (state.session && state.session.access_token) || '';
     if (!token) return;
     libraryExpansionRevalidated[q] = true;
+    // v949：问 AI 用规范词（界面态比较仍用原文 q）—— 同一个概念换个写法搜，重问的也是同一个词
+    const aiQuery = libraryCanonicalQueryTerm(q);
     fetch('/api/expand-query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ query: q, vocabulary: librarySearchVocabulary() })
+      body: JSON.stringify({ query: aiQuery, vocabulary: librarySearchVocabulary() })
     }).then(r => r.json()).then(function(data) {
       // 静默重问：已经换词、或没拿到结果，就什么都不动（界面保持缓存那份）
       if (String(state.libraryFilters.query || '').trim() !== q) return;
@@ -3610,7 +3612,7 @@ applyLibraryFilterExpansion();   // v843：重开时为已选筛选值补联想�
       (Array.isArray(data.terms) ? data.terms : []).concat(Array.isArray(data.fresh) ? data.fresh : []).forEach(pushKept);
       if (!kept.length) return;                       // 这次没答出来：保留旧的那份，别把面板清空
       const termsEn = data.termsEn && typeof data.termsEn === 'object' ? data.termsEn : {};
-      writeLibraryExpansionCache(q, kept, termsEn);
+      writeLibraryExpansionCache(aiQuery, kept, termsEn);
       if (kept.join('|') === libraryExpansionTerms.join('|')) return;   // 和现在显示的一样：不动界面
       libraryExpansionTerms = kept;
       libraryExpansionTermsEn = termsEn;
@@ -3801,6 +3803,22 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return tagVocabularyByEn.get(term.toLowerCase()) || term;
   }
 
+  // v949：**搜索词**归一 —— 同一个概念的多种写法（中文别名、英文）先收敛到一个「规范词」，再拿去问 AI。
+  // 起因（用户反馈）：词表里同时有「桌子」和「餐桌」两行（name_en 都是 Table），
+  // 搜「桌子」时把「桌子」原样发给 AI，搜「table」时按英文反查到「餐桌」——两边问的**不是同一个词**，
+  // 于是同一个概念在中英界面拿到数量、内容都不一样的关联标签（实测 3 个 vs 4 个，还夹着 AI 的幻觉词）。
+  // 规则：中文行先取它的 name_en，再用 name_en 反查（以反查结果为准）⇒ 两种写法都落到同一个规范词；
+  //      像「餐桌」这种自己就是反查命中项的词，结果仍是它自己（幂等，不会来回跳）。
+  function libraryCanonicalQueryTerm(value) {
+    const term = String(value == null ? '' : value).trim();
+    if (!term || tagVocabularyReady !== true) return term;
+    if (tagVocabularyRowsByZh.has(term)) {
+      const nameEn = String((tagVocabularyRowsByZh.get(term) || {}).name_en || '').trim();
+      return (nameEn && tagVocabularyByEn.get(nameEn.toLowerCase())) || term;
+    }
+    return tagVocabularyByEn.get(term.toLowerCase()) || term;
+  }
+
   // v895：判断「库内到底有没有这个词」，不能只看 vf_tag_vocabulary —— 那张表是增量长出来的
   // （标签要经过一次翻译落库才会进表），有的标签已经在用但还没进表。所以词表 ∪ 库内在用的标签/物料类型/筛选项。
   function libraryLabelsInUseSet() {
@@ -3834,12 +3852,16 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const out = [];
     const raw = String(query || '').trim();
     if (!raw) return out;
-    const canonicalZh = tagVocabularyRowsByZh.has(raw) ? raw : (tagVocabularyByEn.get(raw.toLowerCase()) || '');
+    // v949：和问 AI 用的是同一个规范词 —— 搜「桌子」和搜「table」给出的「词表设定」那一组才会一致
+    const canonicalZh = libraryCanonicalQueryTerm(raw);
     if (!canonicalZh) return out;
     const row = tagVocabularyRowsByZh.get(canonicalZh);
     (Array.isArray(row && row.related) ? row.related : []).forEach(function(word) {
       const text = String(word == null ? '' : word).trim();
       if (!text || text === raw || out.indexOf(text) >= 0) return;
+      // v949：和搜索词是同一个概念（中英互为别名）的词不算「关联标签」。
+      // 例：搜「table」时词表里「餐桌」那行填的「桌子」就是这种情况 —— 显示出来等于把搜索词自己当关联词。
+      if (libraryCanonicalQueryTerm(text) === canonicalZh) return;
       out.push(text);
     });
     return out;
@@ -3898,7 +3920,10 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       renderLibraryExpansionChips();
       return;
     }
-    const cached = readLibraryExpansionCache(q);
+    // v949：缓存键与问 AI 都用**规范词** —— 搜「桌子」和搜「table」共用同一份结果，
+    // 中英界面（以及同一个概念的不同中文写法）拿到的关联标签数量与内容才会一致。
+    const aiQuery = libraryCanonicalQueryTerm(q);
+    const cached = readLibraryExpansionCache(aiQuery);
     if (cached) {
       // v895：确定性关联词（词表 related 列）每次都在前面，缓存里的 AI 结果接在后面
       const merged = libraryDeterministicRelatedTerms(q);
@@ -3930,7 +3955,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     fetch('/api/expand-query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ query: q, vocabulary: librarySearchVocabulary() })
+      body: JSON.stringify({ query: aiQuery, vocabulary: librarySearchVocabulary() })
     }).then(r => r.json()).then(function(data) {
       if (libraryExpansionRequestKey !== requestKey) return;         // 已换搜索词，旧结果作废
       const terms = data && data.success && Array.isArray(data.terms) ? data.terms.filter(Boolean) : [];
@@ -3952,7 +3977,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       };
       libraryDeterministicRelatedTerms(q).forEach(pushKept);
       terms.concat(fresh).forEach(pushKept);
-      writeLibraryExpansionCache(q, kept, termsEn);
+      writeLibraryExpansionCache(aiQuery, kept, termsEn);
       libraryExpansionTerms = kept;
       libraryExpansionPendingQuery = '';
       renderLibraryExpansionChips();
@@ -3972,6 +3997,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     if (!q || librarySearchExactOnly() || libraryExpansionRefreshing) return;
     const token = (state.session && state.session.access_token) || '';
     if (!token) return;
+    // v949：手动刷新同样用规范词问、按规范词写缓存（和自动那条路一致，中英共用一份）
+    const aiQuery = libraryCanonicalQueryTerm(q);
     libraryExpansionRefreshing = true;
     libraryExpansionRequestKey = q + ':refresh:' + Date.now();   // 作废在途的自动请求，避免旧结果后到覆盖
     const requestKey = libraryExpansionRequestKey;
@@ -3979,7 +4006,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     fetch('/api/expand-query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ query: q, vocabulary: librarySearchVocabulary() })
+      body: JSON.stringify({ query: aiQuery, vocabulary: librarySearchVocabulary() })
     }).then(r => r.json()).then(function(data) {
       if (libraryExpansionRequestKey !== requestKey) return;
       libraryExpansionRefreshing = false;
@@ -4005,7 +4032,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       }
       libraryExpansionTerms = merged;
       libraryExpansionTermsEn = Object.assign({}, libraryExpansionTermsEn, enMap);
-      writeLibraryExpansionCache(q, merged, libraryExpansionTermsEn);
+      writeLibraryExpansionCache(aiQuery, merged, libraryExpansionTermsEn);
       renderLibraryExpansionChips();
       filterLibraryCardsInPlace();
     }).catch(function() {

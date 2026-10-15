@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-query-two-pass-v948';
+const VERSION = '20261015-canonical-query-v949';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -260,4 +260,81 @@ test('v935 ⑤：版本号六处同步', () => {
   assert.match(source, new RegExp("const TOOL_UI_VERSION = '" + VERSION + "'"));
   const refs = indexSource.match(new RegExp('\\?v=' + VERSION, 'g')) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处 ?v= 指向新版本');
+});
+
+test('v949：搜索词先归一到「规范词」再问 AI —— 中英/别名搜同一个概念，关联标签必须一致', () => {
+  // 背景（用户反馈）：词表里同时有「桌子」和「餐桌」两行（name_en 都是 Table），
+  // 搜「桌子」把原词发给 AI、搜「table」按英文反查到「餐桌」⇒ 两边问的不是同一个词，
+  // 于是关联标签数量/内容对不上（实测 3 个 vs 4 个）。这里真跑那两个纯函数验规则。
+  const canonicalBlock = slice('  function libraryCanonicalQueryTerm(value) {', '  // v895：判断「库内到底有没有这个词」');
+  const deterministicBlock = slice('  function libraryDeterministicRelatedTerms(query) {', '  // v894：搜索框下方的浮窗');
+  const build = function(ready, reversed) {
+    const context = vm.createContext({});
+    // 词表里的两行：「桌子」和「餐桌」name_en 都是 Table（线上就是这样）。
+    // 默认按「餐桌在前」灌（线上 order=name_zh 的实际结果）；reversed=true 时反过来，
+    // 用来验「不管哪一行赢下 name_en 反查，两种写法都会落到同一个规范词」这条性质。
+    const rows = [
+      '["餐桌", {name_zh: "餐桌", name_en: "Table", related: ["桌子", "餐盘"]}],',
+      '["桌子", {name_zh: "桌子", name_en: "Table", related: []}],'
+    ];
+    return vm.runInContext('(function(){'
+      + 'let tagVocabularyReady = ' + (ready ? 'true' : 'false') + ';'
+      + 'const tagVocabularyRowsByZh = new Map(['
+      + (reversed ? rows.reverse().join('') : rows.join(''))
+      + '["餐盘", {name_zh: "餐盘", name_en: "Dish plate", related: []}]'
+      + ']);'
+      + 'const tagVocabularyByEn = new Map();'
+      + 'tagVocabularyRowsByZh.forEach(function(row, nameZh){'
+      + '  const nameEn = row.name_en;'
+      + '  if (nameEn && !tagVocabularyByEn.has(nameEn.toLowerCase())) tagVocabularyByEn.set(nameEn.toLowerCase(), nameZh);'
+      + '});'
+      + canonicalBlock + deterministicBlock
+      + 'return {canonical: libraryCanonicalQueryTerm, deterministic: libraryDeterministicRelatedTerms, rows: tagVocabularyRowsByZh};'
+      + '})()', context, {filename: 'app-v949-canonical.js'});
+  };
+  const api = build(true);
+  // ① 同一个概念的三种写法归一到一个规范词（幂等，不会来回跳）
+  assert.equal(api.canonical('餐桌'), '餐桌', '反查命中项自己就是规范词');
+  assert.equal(api.canonical('桌子'), '餐桌', '中文别名 → 该行 name_en 反查出来的那行');
+  assert.equal(api.canonical('table'), '餐桌', '英文 → 反查');
+  assert.equal(api.canonical('Table'), '餐桌', '英文不分大小写');
+  assert.equal(api.canonical(api.canonical('桌子')), api.canonical('桌子'), '幂等');
+  assert.equal(api.canonical('  餐桌  '), '餐桌', '首尾空格先 trim');
+  assert.equal(api.canonical('库里没有的词'), '库里没有的词', '查不到就原样返回（调用方照旧走原词的精确匹配）');
+  assert.equal(api.canonical(''), '', '空词原样返回');
+  // ①' 谁赢下 name_en 反查无所谓，关键是「两种写法必须落到同一个词」——这条性质不依赖词表加载顺序
+  const flipped = build(true, true);
+  assert.equal(flipped.canonical('桌子'), flipped.canonical('table'), '换个加载顺序，中文与英文仍落到同一个规范词');
+  assert.equal(flipped.canonical('桌子'), flipped.canonical('餐桌'), '两个中文别名也必须落到同一个规范词');
+  // ② 「词表设定」那一组：中英两种写法必须给出同一套词，且不含搜索词自己（桌子是餐桌的别名，不算关联标签）
+  const byZh = Array.from(api.deterministic('桌子'));
+  const byEn = Array.from(api.deterministic('table'));
+  assert.deepEqual(byZh, ['餐盘'], '桌子 → 规范词「餐桌」那行的相关词，排除「桌子」自己');
+  assert.deepEqual(byEn, byZh, '中英搜同一概念必须给出同一套关联标签（这条就是用户报的那个 bug）');
+  // ③ 词表还没加载好时不许瞎归一（返回原词，行为与 v948 一致）
+  const cold = build(false);
+  assert.equal(cold.canonical('桌子'), '桌子', '词表没就绪：不归一');
+  assert.deepEqual(Array.from(cold.deterministic('桌子')), [], '词表没就绪：没有确定性关联词');
+});
+
+test('v949：三处问 AI 的入口 + 缓存读写都换用规范词；界面态比较仍用原词', () => {
+  // 三处 fetch body 一律发规范词（否则同一个概念换个写法问的还是两个词，缓存也分裂成两份）
+  const fetchBodies = source.match(/body: JSON\.stringify\(\{ query: aiQuery, vocabulary: librarySearchVocabulary\(\) \}\)/g) || [];
+  assert.equal(fetchBodies.length, 3, '三处（自动查询 / 后台重问 / 手动刷新）都要发规范词');
+  assert.equal((source.match(/query: q, vocabulary: librarySearchVocabulary\(\)/g) || []).length, 0, '不许再有直接发原词的地方');
+  // 缓存键 = 规范词
+  assert.equal((source.match(/readLibraryExpansionCache\(aiQuery\)/g) || []).length, 1, '读缓存用规范词');
+  assert.equal((source.match(/writeLibraryExpansionCache\(aiQuery,/g) || []).length, 3, '三处写缓存都用规范词');
+  assert.equal((source.match(/writeLibraryExpansionCache\(q,/g) || []).length, 0, '不许再按原词写缓存');
+  // 界面态/防抖这类比较仍必须用原词 q（换了就等于拿规范词去和搜索框内容比，永远不相等）
+  assert.match(source, /libraryExpansionRevalidated\[q\] = true;/, '重问去重仍按原词');
+  assert.match(source, /if \(String\(state\.libraryFilters\.query \|\| ''\)\.trim\(\) !== q\) return;/, '重问结果回填前仍和原词比');
+  assert.match(source, /live\.value\.trim\(\) === q/, '搜索框内容比较仍用原词');
+  assert.match(source, /libraryExpansionPendingQuery = q;/, '"AI 联想中"的态仍挂在原词上');
+});
+
+test('v949：提示词补一条幻觉反例（搜桌子不该给窗帘/装饰灯）', () => {
+  const prompt = readFileSync(join(ROOT, 'functions', '_ai.js'), 'utf8');
+  assert.match(prompt, /搜「桌子」返回「窗帘」「装饰灯」也是错的/, '把这次实测到的幻觉写成反例');
+  assert.match(prompt, /同一间屋子里的东西[\s\S]{0,40}同场景/, '并说清"同场景 ≠ 相关"这个判断依据');
 });

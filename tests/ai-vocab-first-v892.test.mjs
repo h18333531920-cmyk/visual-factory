@@ -66,15 +66,17 @@ test('v893/v895 联想词归一架：反查词表换回中文 → 用「词表 �
   assert.match(appSource, /const term = libraryExpansionCanonicalTerm\(value\);/);
   assert.match(appSource, /if \(libraryExpansionIsLibraryTerm\(term, inUse\) === false\) return;/);
   assert.match(appSource, /libraryExpansionTerms = kept;/);
-  assert.match(appSource, /writeLibraryExpansionCache\(q, kept, termsEn\)/);
+  assert.match(appSource, /writeLibraryExpansionCache\(aiQuery, kept, termsEn\)/);
 });
 
 test('v895 确定性关联：词表里那一行的「相关词」不用等 AI 就出现在浮窗里', () => {
+  // v949：搜索词要先过 libraryCanonicalQueryTerm 归一到规范词，所以这段一起切进来、并把词表标成已加载
   const slice = appSource.slice(
-    appSource.indexOf('  function libraryDeterministicRelatedTerms(query) {'),
+    appSource.indexOf('  function libraryCanonicalQueryTerm(value) {'),
     appSource.indexOf('  function renderLibraryExpansionChips() {')
   );
   const context = vm.createContext({
+    tagVocabularyReady: true,
     tagVocabularyRowsByZh: new Map([
       ['足球', { name_zh: '足球', name_en: 'Football', related: ['世界杯', '球衣', '体育赛事'] }],
       ['甜点', { name_zh: '甜点', name_en: 'Dessert', related: [] }]

@@ -85,7 +85,7 @@ test('v829 前端：缓存自长、秩排序精确优先、开关持久化', () 
   assert.match(appSource, /LIBRARY_EXPANSION_CACHE_TTL_MS/);
   assert.match(appSource, /Date\.now\(\) - parsed\.ts > LIBRARY_EXPANSION_CACHE_TTL_MS/);
   assert.match(appSource, /function readLibraryExpansionCache/);
-  assert.match(appSource, /writeLibraryExpansionCache\(q, kept, termsEn\)/);
+  assert.match(appSource, /writeLibraryExpansionCache\(aiQuery, kept, termsEn\)/);
   // v894：只剩「库内确实存在的标签」一层，匹配直接用它
   // v948：查询改成两遍 —— 第一遍只传 []（只用原词），零命中才用 libraryExpansionTerms 兜底；
   // 这个断言改成锁「两遍都在」：构建函数拿参数，兜底那遍明确传 libraryExpansionTerms。
@@ -279,7 +279,7 @@ test('v856 手动刷新：词条区尾部刷新按钮，追加不覆盖，优先
   assert.match(fn, /if \(!key \|\| merged\.length >= 12\) return;/);
   assert.match(fn, /merged\.some\(function\(existing\) \{ return normKey\(existing\) === key; \}\)/);
   assert.match(fn, /if \(libraryExpansionIsLibraryTerm\(term\) === false\) return;/);
-  assert.match(fn, /writeLibraryExpansionCache\(q, merged, libraryExpansionTermsEn\);/, '合并结果写回缓存');
+  assert.match(fn, /writeLibraryExpansionCache\(aiQuery, merged, libraryExpansionTermsEn\);/, '合并结果写回缓存');
   // 匹配优先库内标签：请求仍带全量词表（服务端词表锚定规则不变）
   assert.match(fn, /vocabulary: librarySearchVocabulary\(\)/);
   // 按钮随浮窗内容重建，用一次性事件委托绑定
