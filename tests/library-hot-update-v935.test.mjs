@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-pin-add-plus-v944';
+const VERSION = '20261015-validate-before-progress-v945';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -215,6 +215,21 @@ test('v944：行尾的「＋」要钉住；溢出浮窗里也有「＋」（点�
   assert.match(hover, /pop\.onclick = function\(event\) \{[\s\S]{0,400}target\.closest\('\.case-preview-ai-add-plus'\)/, '点浮窗里的 ＋ 要能接住');
   assert.match(hover, /panel\.dataset\.adding = config\.kind;/, '接住之后进加号态（复用面板自己那套）');
   assert.match(hover, /casePreviewAiInlineAddFocus\[config\.kind\] = true;/, '并把焦点交回输入框');
+});
+
+test('v945：校验要跑在"出现进度条"之前 + 未分类拦截要有看得见的提醒', () => {
+  const handler = slice('  async function uploadLibraryAsset(event) {', '  // 限制并发的工作队列');
+  // ① setUploadProgress(0) 不能再出现在 try 之前（否则被拦下时先挂一根 0% 进度条，像已经开传）
+  const progressBeforeTry = handler.slice(0, handler.indexOf('try {'));
+  assert.doesNotMatch(progressBeforeTry, /setUploadProgress\(0\)/, '校验之前不许先画进度条');
+  // ② 案例项目那条路：校验 → 之后才 setUploadProgress(10)
+  const casePath = handler.slice(handler.indexOf('const previewFiles = Array.from(formData.getAll'), handler.indexOf('sourceId = crypto.randomUUID();'));
+  assert.ok(casePath.indexOf('validateCaseProjectUpload(') < casePath.indexOf('setUploadProgress(10)'), '先校验、后进度条');
+  // ③ 未分类拦截要弹一条看得见的提示（不只是 footer 里那行字）
+  assert.match(source, /还有 ' \+ untyped\.length \+ ' 张未分类：先在缩略图上点「未分类」选分类/, '要有 toast 提醒');
+  assert.match(source, /focusCaseDropUntyped\(untyped\);[\s\S]{0,600}showCaseToast\(/, '先高亮那张卡、再弹提示');
+  // ④ 回滚要用的三个变量仍在 try 外面（catch 里要用）
+  assert.match(handler, /const uploadedPaths = \[\];\s*\n\s*let sourceInserted = false;\s*\n\s*let sourceId = '';\s*\n\s*try \{/, '回滚变量留在 try 外');
 });
 
 test('v935 ⑤：版本号六处同步', () => {

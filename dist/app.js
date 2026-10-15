@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-pin-add-plus-v944';
+const TOOL_UI_VERSION = '20261015-validate-before-progress-v945';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -12916,7 +12916,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         ? '<span class="upload-progress-count">' + done + '/' + total + ' 张</span>' : '';
       message.innerHTML = '<div class="upload-progress-row"><div class="upload-progress-bar-wrap"><div class="upload-progress-bar-fill" style="width:' + pct + '%"></div></div><span class="upload-progress-text">' + pct + '%</span>' + count + '</div>';
     }
-    setUploadProgress(0);
+    // v945：`uploadedPaths / sourceInserted / sourceId` 要留在 try 外面（catch 里要用它们回滚）
     const uploadedPaths = [];
     let sourceInserted = false;
     let sourceId = '';
@@ -12924,6 +12924,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       const formData = new FormData(form);
       const libraryKind = formData.get('library_kind') || 'gallery';
       if (libraryKind === 'gallery') {
+        setUploadProgress(0);
         const gallerySourceIds = await uploadGalleryAssets(formData, setUploadProgress, run);
         setUploadProgress(100);
         setMessage(message, state.lang === 'zh' ? '图库素材已上传。' : 'Gallery assets uploaded.', false, true);
@@ -13598,6 +13599,12 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       const untyped = caseUploadUntypedIndexes(typeValues);
       if (untyped.length) {
         focusCaseDropUntyped(untyped);
+        // v945：**先提醒**再拦 —— 用户实测反馈「有未分类的情况下点入库没有提醒，直接出进度条了」
+        // （根因：进度条在校验之前就显示了，看着像已经开传）。现在校验在进度条之前，另外再弹一条
+        // 看得见的提示，别让人以为"点一下就开始传了"。
+        showCaseToast(state.lang === 'zh'
+          ? ('还有 ' + untyped.length + ' 张未分类：先在缩略图上点「未分类」选分类，或用「批量设置分类」')
+          : (untyped.length + ' material(s) have no category yet — pick one on the thumbnail, or use "Batch set type".'), 3600);
         throw new Error(zh
           ? ('还有 ' + untyped.length + ' 张没识别出分类：请点缩略图上的「未分类」选择，或用下面的「批量设置分类」。')
           : (untyped.length + ' material(s) still have no category: click the "Unclassified" chip on the thumbnail, or use "Batch set type" below.'));

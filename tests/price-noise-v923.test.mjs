@@ -110,6 +110,6 @@ test('v923 效果标签走同一个 isNoiseElementTag，价格词也进不来', 
 /* ── 5) 版本号六处同步（index.html 5 处 + app.js 1 处） ───────────────── */
 
 test('v923 版本号六处同步（index.html 5 处 + app.js 1 处）', () => {
-  assert.equal((indexSource.match(/\?v=20261015-pin-add-plus-v944/g) || []).length, 5);
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261015-pin-add-plus-v944'/);
+  assert.equal((indexSource.match(/\?v=20261015-validate-before-progress-v945/g) || []).length, 5);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261015-validate-before-progress-v945'/);
 });

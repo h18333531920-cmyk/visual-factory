@@ -39,6 +39,7 @@ function loadCardMarkup({lang = 'zh'} = {}) {
     escapeHtml: value => String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
     escapeAttr: value => String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/"/g, '&quot;'),
     // v943：物料类型在英文界面下要翻（真实现走词表；这里给个等价的桩，词表没有英文名就原样）
+    showCaseToast: () => {},   // v945：未分类拦截时会弹提示；这里不需要记录
     caseTypeLabel: value => {
       const raw = String(value == null ? '' : value);
       if (!raw || raw === '未分类') return lang === 'zh' ? '未分类' : 'Unclassified';
@@ -230,6 +231,7 @@ function loadGridRender() {
     escapeHtml: value => String(value == null ? '' : value),
     escapeAttr: value => String(value == null ? '' : value),
     // v943：物料类型英文界面要翻（真实现走词表；这里等价桩：词表没有英文名就原样）
+    showCaseToast: () => {},   // v945：未分类拦截时会弹提示；这里不需要记录
     caseTypeLabel: value => {
       const raw = String(value == null ? '' : value);
       if (!raw || raw === '未分类') return '未分类';
@@ -405,6 +407,7 @@ function loadValidate(selectValues, options) {
     setTimeout: () => 0,
     document: {getElementById: id => (id === 'case-drop-panel' ? grid : {id: id})},
     // v943：物料类型英文界面要翻（等价桩）
+    showCaseToast: () => {},   // v945：未分类拦截时会弹提示；这里不需要记录
     caseTypeLabel: value => {
       const raw = String(value == null ? '' : value);
       if (!raw || raw === '未分类') return '未分类';
@@ -557,7 +560,7 @@ test('v922 接线：校验真的调了这条检查，且只在上传新项目那
 /* ── 5) 版本号 ───────────────────────────────────────────────────────────── */
 
 test('v922 版本号六处同步', () => {
-  const refs = indexSource.match(/\?v=20261015-pin-add-plus-v944/g) || [];
+  const refs = indexSource.match(/\?v=20261015-validate-before-progress-v945/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(source, /const TOOL_UI_VERSION = '20261015-pin-add-plus-v944'/);
+  assert.match(source, /const TOOL_UI_VERSION = '20261015-validate-before-progress-v945'/);
 });

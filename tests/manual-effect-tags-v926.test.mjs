@@ -26,7 +26,7 @@ const endpointSource = readFileSync(join(ROOT, 'functions', 'api', 'case-preview
 const scriptSource = readFileSync(join(ROOT, 'scripts', 'recognize-case-tags.mjs'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
 const sqlSource = readFileSync(join(ROOT, 'sql', '031_manual_effect_tags.sql'), 'utf8');
-const VERSION = '20261015-pin-add-plus-v944';
+const VERSION = '20261015-validate-before-progress-v945';
 
 const previewId = '11111111-1111-4111-8111-111111111111';
 const userId = '22222222-2222-4222-8222-222222222222';
