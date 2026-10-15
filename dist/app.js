@@ -761,6 +761,12 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
   50% { outline-color: rgba(249, 115, 22, .45); box-shadow: 0 0 0 3px rgba(249, 115, 22, .12); }
 }
 .library-card.is-just-uploaded { outline: 3px solid #f97316; outline-offset: 2px; animation: library-fresh-pulse 1.1s ease-in-out infinite; }
+/* v938：上传时"先在本地显示"的占位卡 —— 图来自本机文件（blob URL），角标表示还在入库。
+   入库完成后角标撤掉（见 finishLibraryPendingUpload），卡片原地转正、网格不重画。 */
+.library-card.library-pending-card { position: relative; }
+.library-card.library-pending-card .library-pending-badge { position: absolute; left: 8px; top: 8px; z-index: 4; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: rgba(15, 23, 42, .78); color: #fff; font-size: 11px; line-height: 1.5; }
+.library-card.library-pending-card .library-pending-badge::before { content: ''; width: 9px; height: 9px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .45); border-top-color: #fff; animation: library-pending-spin .8s linear infinite; }
+@keyframes library-pending-spin { to { transform: rotate(360deg); } }
 .case-preview-ai-effect .case-preview-ai-add-confirm { background: #7c3aed; }
 .case-preview-ai-effect .case-preview-ai-add-confirm:hover { background: #6d28d9; }
 .case-preview-ai-pop { position: fixed; z-index: 300; display: none; flex-direction: column; gap: 4px; max-width: min(520px, 90vw); max-height: 260px; overflow: auto; padding: 10px 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14); }
@@ -955,7 +961,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261014-edit-mode-hide-v937';
+const TOOL_UI_VERSION = '20261015-optimistic-ux-v938';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -6679,7 +6685,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     }, durationMs || 6000);
   }
 
-  async function applyLocalLibraryChange(sourceIds, removed) {
+  async function applyLocalLibraryChange(sourceIds, removed, options) {
+    const skipGrid = !!(options && options.skipGrid);
     const ids = (Array.isArray(sourceIds) ? sourceIds : [sourceIds]).map(String).filter(Boolean);
     if (!ids.length) return false;
     const idSet = new Set(ids);
@@ -6706,12 +6713,117 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       }
     }
     notePreviewAiTagsChanged();
-    refreshLibraryLoadedUi();
+    // v938：上传那条路 skipGrid —— 界面上已经有一张"本地先显示"的占位卡（图是本机文件），
+    // 再整块重画网格就等于白闪一下。只刷分类数字，网格不碰。
+    if (skipGrid) {
+      renderLibrarySelects();
+      refreshLibraryFilterCounts();
+    } else {
+      refreshLibraryLoadedUi();
+    }
     // 高亮要放在重画**之后**（class 得加在刚画出来的那张卡上）
-    if (!removed) {
+    if (!removed && !skipGrid) {
       highlightFreshLibraryCards(ids, state.libraryPreviews.filter(item => idSet.has(String(item.source_file_id))).map(item => item.id));
     }
     return true;
+  }
+
+  // v938：上传时**先在本地显示**。用户口径（原话）：
+  //   「删除后在当前这个网页上的预览图即刻消失，把后端和刷新这些效果不好的东西放在用户看不到的地方；
+  //     上传也是先在当前的电脑里显示，入库和刷新也放在看不到的地方。」
+  // 删除那一半见 deleteLibrarySource（本地先摘 → 后台删库 + 清存储）。这里是上传那一半：
+  //   ① 文件一通过校验，就往素材库最前面插一张"本地图 + 上传中角标"的卡片 —— 图直接用本机 File 的
+  //      blob URL，不等任何网络往返；
+  //   ② 后台照常上传 / 生成缩略图 / 入库（上传弹窗里的进度条不受影响）；
+  //   ③ 入库成功后**只把角标撤掉 + 高亮**，不重画网格（网格里那张卡就是本地那张，视觉上"凭空出现又原地转正"）；
+  //   ④ 失败 / 取消 → 把占位卡摘掉、释放 blob URL；
+  //   ⑤ 任何一次自然重画（换分类、改筛选…）时，真实卡片从 state 里画出来、占位卡自动退场并释放 URL。
+  const libraryPendingUploads = [];
+
+  function revokeLibraryPendingUploadUrls(entry) {
+    ((entry && entry.images) || []).forEach(function(image) {
+      try { URL.revokeObjectURL(image.url); } catch (_revokeError) {}
+    });
+  }
+
+  function dropLibraryPendingUploads(sourceIds) {
+    const wanted = sourceIds ? new Set((Array.isArray(sourceIds) ? sourceIds : [sourceIds]).map(String)) : null;
+    for (let index = libraryPendingUploads.length - 1; index >= 0; index -= 1) {
+      const entry = libraryPendingUploads[index];
+      if (wanted && !wanted.has(String(entry.sourceId))) continue;
+      revokeLibraryPendingUploadUrls(entry);
+      const node = document.getElementById(entry.id);
+      if (node && node.parentNode) node.parentNode.removeChild(node);
+      libraryPendingUploads.splice(index, 1);
+    }
+  }
+
+  function libraryPendingCardHtml(entry) {
+    const cover = (entry.images || [])[0] || null;
+    const ratioStyle = previewAspectStyle({width: (cover && cover.width) || 0, height: (cover && cover.height) || 0});
+    return '<article class="library-card library-pending-card' + (entry.done ? ' is-just-uploaded' : '') + '" id="' + escapeAttr(entry.id) + '" data-pending-source="' + escapeAttr(entry.sourceId) + '" data-preview-id="pending:' + escapeAttr(entry.id) + '">'
+      + '<div class="library-thumb-wrap"><div class="library-thumb" style="' + ratioStyle + '">'
+      + (cover ? '<img src="' + escapeAttr(cover.url) + '" alt="' + escapeAttr(entry.title) + '" decoding="async">' : '')
+      + '</div>'
+      + '<div class="case-card-overlay"><strong>' + escapeHtml(entry.title) + '</strong>'
+      + '<div class="case-card-chips"><span class="case-card-count">' + escapeHtml(state.lang === 'zh' ? (entry.count + ' 个物料') : (entry.count + ' materials')) + '</span></div></div>'
+      + (entry.done ? '' : '<span class="library-pending-badge">' + (state.lang === 'zh' ? '上传中…' : 'Uploading…') + '</span>')
+      + '</div></article>';
+  }
+
+  function insertLibraryPendingCard(entry) {
+    const grid = document.getElementById('library-grid');
+    if (!grid || !entry) return;
+    const html = libraryPendingCardHtml(entry);
+    // 案例墙是按列排的（.library-column），插进去得跟它同款，否则布局会歪
+    if (grid.querySelector('.library-column')) grid.insertAdjacentHTML('afterbegin', '<div class="library-column">' + html + '</div>');
+    else grid.insertAdjacentHTML('afterbegin', html);
+  }
+
+  // 先在本机显示一张占位卡（图＝本地文件，零网络）。返回条目，调用方拿它来收尾。
+  async function startLibraryPendingUpload(payload) {
+    const entry = {
+      id: 'pending-' + (payload && payload.sourceId ? payload.sourceId : String(Math.random()).slice(2)),
+      sourceId: String((payload && payload.sourceId) || ''),
+      title: String((payload && payload.title) || ''),
+      count: Number((payload && payload.count) || 1),
+      images: (payload && payload.images) || [],
+      done: false
+    };
+    libraryPendingUploads.push(entry);
+    insertLibraryPendingCard(entry);
+    return entry;
+  }
+
+  // 入库成功：只把角标撤掉 + 给个高亮，网格不重画
+  function finishLibraryPendingUpload(sourceId) {
+    const entry = libraryPendingUploads.find(item => String(item.sourceId) === String(sourceId));
+    if (!entry) return false;
+    entry.done = true;
+    const node = document.getElementById(entry.id);
+    if (node) {
+      const badge = node.querySelector('.library-pending-badge');
+      if (badge && badge.parentNode) badge.parentNode.removeChild(badge);
+      node.classList.add('is-just-uploaded');
+      window.setTimeout(function() {
+        if (node.isConnected) node.classList.remove('is-just-uploaded');
+      }, 6000);
+    }
+    return true;
+  }
+
+  // 每次重画网格都调一次：① 真卡片已经进 state 的占位条目自动退场（并释放 blob）
+  // ② 还在飞的占位卡如果被重画冲掉了，补回来
+  function renderLibraryPendingUploadCards() {
+    if (!libraryPendingUploads.length) return;
+    const landed = libraryPendingUploads.filter(function(entry) {
+      return state.librarySources.some(source => String(source.id) === String(entry.sourceId));
+    });
+    if (landed.length) dropLibraryPendingUploads(landed.map(entry => entry.sourceId));
+    libraryPendingUploads.forEach(function(entry) {
+      if (!entry.id || document.getElementById(entry.id)) return;
+      insertLibraryPendingCard(entry);
+    });
   }
 
   // case_activity 是 v738 新增的类型值：数据库约束（sql/017 放宽前仍拦 23514）不允许时
@@ -7992,6 +8104,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     visibleItems.forEach(function(item) {
       if (isCaseGifPreview(item.preview)) queueGifSmallPreviewBackfill(item.preview, item.source);
     });
+    // v938：还在上传中的占位卡要保持在最前面（重画会把它冲掉，这里补回来）
+    renderLibraryPendingUploadCards();
   }
 
   // ── 素材库检索栏自动收起（v658 / v661）──
@@ -12752,6 +12866,28 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       const countryId = isCaseProject ? libraryOptionIdByZhName('country', chipSel.country) : formData.get('country');
       const activityId = isCaseProject ? libraryOptionIdByZhName('activity', caseTagSelFirst(chipSel, 'activity')) : formData.get('activity');
       const categoryId = formData.get('category');
+      // v938：**先在本地显示**（用户口径：「上传也是先在当前的电脑里显示，入库和刷新放在看不到的地方」）。
+      // 校验已经过了、标题也有 ⇒ 立刻在素材库最前面插一张本地占位卡（图＝本机 File 的 blob URL），
+      // 后台再慢慢上传/入库。视频这种读不出尺寸的就用默认比例，别为了一个比例卡住整个流程。
+      let pendingUpload = null;
+      if (isCaseProject && previewFiles.length) {
+        try {
+          const coverFile = previewFiles[0];
+          let coverSize = {width: 0, height: 0};
+          const coverIsVideo = /^video\//i.test(coverFile.type || '');
+          if (!coverIsVideo) coverSize = await readImageDimensions(coverFile).catch(function() { return {width: 0, height: 0}; });
+          pendingUpload = await startLibraryPendingUpload({
+            sourceId: sourceId,
+            title: title,
+            count: previewFiles.length,
+            images: [{url: URL.createObjectURL(coverFile), filename: coverFile.name, width: coverSize.width, height: coverSize.height}]
+          });
+        } catch (pendingError) {
+          // 占位卡纯属体验增强，它出问题绝不能挡住上传
+          console.warn('Pending upload card failed:', pendingError && pendingError.message);
+          pendingUpload = null;
+        }
+      }
       const sourceRow = {
         id: sourceId,
         title,
@@ -12875,8 +13011,10 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       setMessage(message, state.lang === 'zh' ? '上传成功，已入库。' : 'Uploaded.', false, true);
       setTimeout(closeLibraryUploadModal, 600);
       // v935：只把刚入库的这一个项目合进本地状态（原来整库重拉，用户实测要等 8–9 秒）；合不进去才退回整库重拉
-      const appliedLocally = await applyLocalLibraryChange(sourceId);
-      if (!appliedLocally) await reloadLibraryData();
+      const appliedLocally = await applyLocalLibraryChange(sourceId, false, {skipGrid: true});
+      // v938：入库成功 = 把本地占位卡的角标撤掉、给个高亮，网格**不重画**（那张卡原地转正）
+      finishLibraryPendingUpload(sourceId);
+      if (!appliedLocally) { dropLibraryPendingUploads([sourceId]); await reloadLibraryData(); }
       if (isCaseProject) {
         rememberLastCaseUploadCountry(chipSel.country);
         rememberLastCaseUploadPlatform(caseTagSelFirst(chipSel, 'tag1'));
@@ -12884,6 +13022,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     } catch (error) {
       // 用户点了取消：同样要回滚（可能已经写进去源文件和几张图），但不当成失败来提示
       await cleanupFailedLibraryUpload(sourceId, sourceInserted, uploadedPaths);
+      // v938：上传失败/取消 → 本地那张占位卡要摘掉（连同 blob URL 一起释放）
+      if (pendingUpload) dropLibraryPendingUploads([sourceId]);
       if (error && error.message === LIBRARY_UPLOAD_CANCELLED) return;
       setMessage(message, error.message, true);
     } finally {
@@ -15346,26 +15486,42 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       ? `确定删除「${source.title}」吗？源文件和 ${relatedPreviews.length} 张预览图会一起删除。`
       : `Delete "${source.title}" and ${relatedPreviews.length} previews?`);
     if (!ok) return;
-    const paths = [source.source_path, ...relatedPreviews.map(item => item.preview_path)].filter(Boolean);
-    const folders = Array.from(new Set(paths.map(path => String(path).replace(/\/[^/]+$/, ''))));
-    try {
-      for (const folder of folders) await removeStorageFolder(folder);
-    } catch (error) {
-      alert(error.message || String(error));
-      return;
-    }
-    const { error } = await state.supabase.from('vf_source_files').delete().eq('id', sourceId);
-    if (error) {
-      alert(error.message);
-      return;
-    }
-    // v935：就地摘掉这一个项目（原来整库重拉，用户实测要等 8–9 秒）；摘不动才退回整库重拉
+    // v938：**乐观删除** —— 用户口径：「删除后在当前这个网页上的预览图即刻消失，把后端和刷新这些
+    // 效果不好的东西放在用户看不到的地方」。所以顺序整个反过来：
+    //   ① 先在本地摘掉 + 重画 + 弹提示（毫秒级，界面上立刻没了）；
+    //   ② 再去后台删库行（快）→ 清云存储（慢）。
+    // 原来相反：**先**递归清存储（列目录 → 删 100 → 再列 → 再删…一个 111 张物料的项目要 5~6 次往返，
+    // 这条线路上动辄 8–9 秒）**清完才删库行** —— 那几秒里项目还杵在屏幕上，看着就像卡死了。
     const removedLocally = await applyLocalLibraryChange(sourceId, true);
     if (!removedLocally) await reloadLibraryData();
     showCaseToast(state.lang === 'zh' ? ('已删除项目「' + String(source.title || '') + '」') : ('Project "' + String(source.title || '') + '" deleted'));
-    // 通知静态DIY iframe 同步删除
-    notifyStaticIframe({ type: 'vf:template-deleted', sourceId: sourceId });
-    void logAssetEvent('delete', { source: source, preview: relatedPreviews[0] || null });
+    const paths = [source.source_path, ...relatedPreviews.map(item => item.preview_path)].filter(Boolean);
+    const folders = Array.from(new Set(paths.map(path => String(path).replace(/\/[^/]+$/, ''))));
+    void (async function cleanupDeletedSourceInBackground() {
+      try {
+        const { error } = await state.supabase.from('vf_source_files').delete().eq('id', sourceId);
+        if (error) throw error;
+      } catch (error) {
+        // 界面上已经摘掉了，但库里还留着 —— 必须说清楚，否则用户刷新后会发现它又回来了
+        alert(state.lang === 'zh'
+          ? ('这个项目还没真正删掉：' + (error.message || error) + '\n刷新后它会重新出现，请稍后重试。')
+          : ('Not deleted: ' + (error.message || error) + '\nIt will come back after a refresh; please retry.'));
+        await reloadLibraryData();
+        return;
+      }
+      // 通知静态DIY iframe 同步删除
+      notifyStaticIframe({ type: 'vf:template-deleted', sourceId: sourceId });
+      try {
+        for (const folder of folders) await removeStorageFolder(folder);
+      } catch (folderError) {
+        // 云上文件没清干净 = 只占点存储，物料已经不在库里了，别用弹窗打断用户
+        console.warn('Storage cleanup failed for', sourceId, folderError && folderError.message);
+        showCaseToast(state.lang === 'zh'
+          ? '素材已从库里删除；云上的文件没清干净（不影响使用）'
+          : 'Deleted from the library; some cloud files were not removed.', 3200);
+      }
+      void logAssetEvent('delete', { source: source, preview: relatedPreviews[0] || null });
+    })();
   }
 
   function notifyStaticIframe(msg) {

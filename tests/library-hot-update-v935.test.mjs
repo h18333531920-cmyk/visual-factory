@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261014-edit-mode-hide-v937';
+const VERSION = '20261015-optimistic-ux-v938';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -34,29 +34,40 @@ function slice(start, end) {
   return source.slice(from, to);
 }
 
-test('v935 ①：删除项目走"本地摘掉"，不再等整库重拉', () => {
+test('v935/v938 ①：删除 = 先本地摘掉（立刻可见），后端动作挪到看不见的地方', () => {
   const del = slice('  async function deleteLibrarySource(sourceId) {', '  function notifyStaticIframe(msg) {');
-  assert.match(del, /const removedLocally = await applyLocalLibraryChange\(sourceId, true\);/, '删除要走局部摘除');
-  assert.match(del, /if \(!removedLocally\) await reloadLibraryData\(\);/, '摘不动才退回整库重拉（兜底）');
-  assert.doesNotMatch(del, /^\s+await reloadLibraryData\(\);/m, '不许再无条件整库重拉');
+  assert.match(del, /const removedLocally = await applyLocalLibraryChange\(sourceId, true\);/, '删除要走局部摘除（毫秒级，界面上立刻没了）');
   assert.match(del, /showCaseToast\(/, '删完要给一句看得见的反馈');
+  assert.match(del, /void \(async function cleanupDeletedSourceInBackground\(\)/, 'v938：删库行 + 清存储挪到后台（用户看不到）');
+  // 后台块里：先删库行，失败才 reloadLibraryData 把界面找回来；清存储失败只提示
+  const background = del.slice(del.indexOf('void (async function cleanupDeletedSourceInBackground()'));
+  assert.match(background, /from\('vf_source_files'\)\.delete\(\)\.eq\('id', sourceId\)/, '后台第一步删库行');
+  assert.match(background, /catch \(error\) \{[\s\S]{0,400}await reloadLibraryData\(\)/, '库行没删掉要把界面找回来');
+  assert.match(background, /for \(const folder of folders\) await removeStorageFolder\(folder\)/, '最后清云存储');
+  // "不许无条件整库重拉"：reloadLibraryData 只能出现在兜底/失败恢复里，不能出现在主流程
+  const reloadCalls = del.match(/await reloadLibraryData\(\);/g) || [];
+  assert.equal(reloadCalls.length, 2, '只允许两处：局部摘除失败兜底 + 后台删库失败恢复');
+  assert.doesNotMatch(del, /^\s+await reloadLibraryData\(\);\n\s+showCaseToast/m, '主流程里不许直接整库重拉');
 });
 
-test('v935 ②：上传成功走"只重拉这一个项目"，兜底仍在', () => {
+test('v935/v938 ②：上传成功走"局部合入 + 不重画网格"，兜底仍在', () => {
   const upload = slice('      setMessage(message, state.lang === \'zh\' ? \'上传成功，已入库。\'', '      if (isCaseProject) {\n        rememberLastCaseUploadCountry');
-  assert.match(upload, /const appliedLocally = await applyLocalLibraryChange\(sourceId\);/, '上传成功要局部合入');
-  assert.match(upload, /if \(!appliedLocally\) await reloadLibraryData\(\);/, '合不进去才退回整库重拉');
+  assert.match(upload, /const appliedLocally = await applyLocalLibraryChange\(sourceId, false, \{skipGrid: true\}\);/,
+    'v938：上传成功后只合入状态 + 不重画网格（界面上那张本地占位卡已经在位）');
+  assert.match(upload, /finishLibraryPendingUpload\(sourceId\);/, '把本地占位卡的角标撤掉');
+  assert.match(upload, /if \(!appliedLocally\) \{ dropLibraryPendingUploads\(\[sourceId\]\); await reloadLibraryData\(\); \}/, '合不进去才退回整库重拉');
   assert.doesNotMatch(upload, /^\s+await reloadLibraryData\(\);/m, '不许再无条件整库重拉');
 });
 
 test('v935/v936 ③④：局部更新只动本地、只重画 —— 不许偷偷再整库重拉', () => {
-  const apply = slice('  async function applyLocalLibraryChange(sourceIds, removed) {', '  // case_activity 是 v738 新增的类型值');
+  const apply = slice('  async function applyLocalLibraryChange(sourceIds, removed, options) {', '  // v938：上传时**先在本地显示**');
   assert.match(apply, /state\.librarySources = state\.librarySources\.filter\(item => !idSet\.has\(String\(item\.id\)\)\)/, '删除要摘掉源文件行');
   assert.match(apply, /state\.libraryPreviews = state\.libraryPreviews\.filter\(item => !idSet\.has\(String\(item\.source_file_id\)\)\)/, '删除要摘掉它的物料行');
   assert.match(apply, /state\.previewAiTagsByPreviewId\.delete\(String\(item\.id\)\)/, '删除要顺手清掉标签缓存');
   assert.match(apply, /const fetched = await fetchLibrarySourceWithPreviews\(ids\);/, '上传走"只读这几个项目"');
   assert.match(apply, /if \(!fetched\.sources\.length\) return false;/, '查不到就返回 false，让调用方兜底');
-  assert.match(apply, /notePreviewAiTagsChanged\(\);\s*\n\s*refreshLibraryLoadedUi\(\);/, '最后只重画当前界面');
+  assert.match(apply, /notePreviewAiTagsChanged\(\);\s*\n\s*\/\/ v938：上传那条路 skipGrid/, 'v938：上传那一路明确不重画网格');
+  assert.match(apply, /if \(skipGrid\) \{\s*\n\s*renderLibrarySelects\(\);\s*\n\s*refreshLibraryFilterCounts\(\);/, '不重画网格时也要刷分类数字');
   assert.match(apply, /highlightFreshLibraryCards\(ids,/, 'v936：重画之后把新卡片高亮几秒');
   assert.doesNotMatch(apply, /loadLibrarySources\(\)|loadLibraryPreviews\(\)|loadAllPreviewAiTags\(\)|reloadLibraryData\(\)/, '局部更新里不许再出现整库重拉的调用');
   // 只读指定的几个项目：按 id 批量查 source + 按 source_file_id 批量查 preview，不等于整库
@@ -96,6 +107,43 @@ test('v935 ⑤：排序口径只有一份，纯函数真跑验序', () => {
   const ordered = sortPreviews(rows).map(item => item.id);
   assert.deepEqual(ordered, ['p1', 'p2', 'p3', 'p9'], '项目顺序优先 → sort_order → 未知项目排最后');
   assert.deepEqual(rows.map(item => item.id), ['p3', 'p2', 'p1', 'p9'], '不许就地改调用方传进来的数组');
+});
+
+test('v938：上传"先在本地显示" —— 占位卡用本机文件的 blob URL，且在上传动手之前就挂出去', () => {
+  const pending = slice('  const libraryPendingUploads = [];', '  // case_activity 是 v738 新增的类型值');
+  assert.match(source, /images: \[\{url: URL\.createObjectURL\(coverFile\)/, '占位卡的图来自本机 File（零网络）');
+  assert.match(pending, /revokeLibraryPendingUploadUrls/, '退场时要释放 blob URL（不然一直占内存）');
+  assert.match(pending, /grid\.insertAdjacentHTML\('afterbegin'/, '插在素材库最前面');
+  assert.match(pending, /if \(grid\.querySelector\('\.library-column'\)\)/, '案例墙按列排时要包一层 .library-column');
+  assert.match(pending, /data-pending-source=/, '占位卡带上将来那个 sourceId（入库完成靠它对上号）');
+  assert.match(pending, /entry\.done \? '' : '<span class="library-pending-badge">/, 'done 之后不再画「上传中」角标');
+  assert.match(source, /renderLibraryPendingUploadCards\(\);/, '重画网格时要把占位卡补回来');
+  // 顺序：校验通过 → 本地占位卡 → 才进上传循环
+  const createAt = source.indexOf('pendingUpload = await startLibraryPendingUpload({');
+  const loopAt = source.indexOf('await mapWithConcurrency(previewFiles,');
+  assert.ok(createAt > 0, '上传流程里要创建占位卡');
+  assert.ok(loopAt > createAt, '占位卡必须在真正上传之前就挂出去（否则又变成"先等后看"）');
+  assert.match(source, /if \(pendingUpload\) dropLibraryPendingUploads\(\[sourceId\]\);/, '失败/取消要摘掉占位卡');
+});
+
+test('v938：占位卡 HTML 真跑 —— 有本地图 + 角标，done 后角标消失', () => {
+  const pendingSlice = slice('  function libraryPendingCardHtml(entry) {', '  function insertLibraryPendingCard(entry) {');
+  const context = vm.createContext({
+    state: {lang: 'zh'},
+    escapeHtml: (value) => String(value == null ? '' : value),
+    escapeAttr: (value) => String(value == null ? '' : value),
+    previewAspectStyle: (preview) => '--preview-ratio:' + (preview.height && preview.width ? (preview.height / preview.width).toFixed(4) : '1.4000') + ';'
+  });
+  const render = vm.runInContext('(function(){ ' + pendingSlice + ' return libraryPendingCardHtml; })()', context, {filename: 'app-v938-pending.js'});
+  const html = render({id: 'pending-abc', sourceId: 'src-1', title: '测试项目', count: 3, done: false, images: [{url: 'blob:http://local/xyz', filename: 'a.png', width: 1000, height: 2000}]});
+  assert.match(html, /src="blob:http:\/\/local\/xyz"/, '封面用本机 blob 地址');
+  assert.match(html, /上传中…/, '有「上传中」角标');
+  assert.match(html, /3 个物料/, '张数要写对');
+  assert.match(html, /data-pending-source="src-1"/);
+  assert.match(html, /--preview-ratio:2\.0000/, '比例来自本机读到的宽高');
+  const doneHtml = render({id: 'pending-abc', sourceId: 'src-1', title: '测试项目', count: 3, done: true, images: []});
+  assert.doesNotMatch(doneHtml, /上传中/, 'done 之后没有角标');
+  assert.match(doneHtml, /is-just-uploaded/, 'done 之后给高亮（原地转正）');
 });
 
 test('v935 ⑤：版本号六处同步', () => {
