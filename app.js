@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-canonical-query-v952';
+const TOOL_UI_VERSION = '20261015-canonical-query-v953';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -3814,14 +3814,31 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   // 于是同一个概念在中英界面拿到数量、内容都不一样的关联标签（实测 3 个 vs 4 个，还夹着 AI 的幻觉词）。
   // 规则：中文行先取它的 name_en，再用 name_en 反查（以反查结果为准）⇒ 两种写法都落到同一个规范词；
   //      像「餐桌」这种自己就是反查命中项的词，结果仍是它自己（幂等，不会来回跳）。
+  // v953：英文写法容错 —— 复数/加了 s 的写法也要能反查到中文行（用户实测：搜 `tables` 啥也搜不到）。
+  // 只做最小改动：原样 → 去尾 s → 去尾 es；都查不到就交回调用方（照旧按原词匹配）。
+  function tagVocabularyEnLookup(lower) {
+    const key = String(lower == null ? '' : lower).trim().toLowerCase();
+    if (!key || tagVocabularyReady !== true) return '';
+    const direct = tagVocabularyByEn.get(key);
+    if (direct) return direct;
+    const candidates = [];
+    if (/[^s]s$/.test(key)) candidates.push(key.slice(0, -1));
+    if (/es$/.test(key)) candidates.push(key.slice(0, -2));
+    for (let i = 0; i < candidates.length; i++) {
+      const hit = tagVocabularyByEn.get(candidates[i]);
+      if (hit) return hit;
+    }
+    return '';
+  }
+
   function libraryCanonicalQueryTerm(value) {
     const term = String(value == null ? '' : value).trim();
     if (!term || tagVocabularyReady !== true) return term;
     if (tagVocabularyRowsByZh.has(term)) {
       const nameEn = String((tagVocabularyRowsByZh.get(term) || {}).name_en || '').trim();
-      return (nameEn && tagVocabularyByEn.get(nameEn.toLowerCase())) || term;
+      return (nameEn && tagVocabularyEnLookup(nameEn)) || term;
     }
-    return tagVocabularyByEn.get(term.toLowerCase()) || term;
+    return tagVocabularyEnLookup(term) || term;
   }
 
   // v950：规范词要靠词表索引，而**索引可能还没读进来** —— 真机实测（2026-10-15）：整页刷新后
@@ -16200,8 +16217,68 @@ function libraryTagsForForm(formData, kind) {
     return /vf_tag_vocabulary|relation.*does not exist|schema cache|请求路径无效/i.test(String(error && error.message || error || ''));
   }
 
+  // ── v953：词表索引的**本地快照** ──
+  // 起因（真机实测 + 用户反馈）：索引原来只能等那次读表回来才有，于是「整页刷新后马上搜」的一两次搜索
+  // 会退化成按字面匹配 —— 搜「餐桌」（库里真有这个标签）能命中，搜「桌子」/`table` 却一条都没有
+  // （用户原话：「搜桌子不行，搜餐桌却可以？这太反直觉了」；英文 `tables` 同样啥都搜不到）。
+  // 现在每次读表成功都存一份快照，开着页面先用快照把索引灌好（第一下键盘就能归一），再在后台读表刷新。
+  const TAG_VOCABULARY_SNAPSHOT_KEY = 'vf_tag_vocabulary_snapshot_v1';
+  const TAG_VOCABULARY_SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+  // 把行灌进三张索引表（读表成功、从快照恢复，都走这一份，保证两处口径一致）
+  function fillTagVocabularyIndex(rows) {
+    (Array.isArray(rows) ? rows : []).forEach(function (row) {
+      const nameZh = String(row && row.name_zh || '').trim();
+      if (!nameZh) return;
+      tagVocabularyRowsByZh.set(nameZh, row);
+      const nameEn = String(row && row.name_en || '').trim();
+      if (nameEn) {
+        tagVocabularyByName.set(nameZh, nameEn);
+        if (!tagVocabularyByEn.has(nameEn.toLowerCase())) tagVocabularyByEn.set(nameEn.toLowerCase(), nameZh);
+      }
+      // v905：相关词反过来也认——「餐桌」那行填了 桌子，搜「桌子」也要命中「餐桌」的物料。
+      // 只建索引，不改表结构；同一相关词挂多行时保留先出现的那个（与 name_en 反查同一个策略）。
+      (Array.isArray(row && row.related) ? row.related : []).forEach(function (word) {
+        const key = String(word == null ? '' : word).trim().toLowerCase();
+        if (key && !tagVocabularyRelatedToZh.has(key)) tagVocabularyRelatedToZh.set(key, nameZh);
+      });
+    });
+  }
+
+  function saveTagVocabularySnapshot(rows) {
+    try {
+      const slim = (Array.isArray(rows) ? rows : []).slice(0, 2000).map(function (row) {
+        return {
+          name_zh: String(row && row.name_zh || ''),
+          name_en: String(row && row.name_en || ''),
+          kind: String(row && row.kind || ''),
+          related: Array.isArray(row && row.related) ? row.related : []
+        };
+      });
+      if (!slim.length) return;
+      localStorage.setItem(TAG_VOCABULARY_SNAPSHOT_KEY, JSON.stringify({ ts: Date.now(), rows: slim }));
+    } catch (_error) {}
+  }
+
+  function hydrateTagVocabularySnapshot() {
+    if (tagVocabularyReady === true) return true;
+    try {
+      const raw = localStorage.getItem(TAG_VOCABULARY_SNAPSHOT_KEY);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      const rows = parsed && Array.isArray(parsed.rows) ? parsed.rows : null;
+      if (!rows || !rows.length) return false;
+      if (typeof parsed.ts === 'number' && Date.now() - parsed.ts > TAG_VOCABULARY_SNAPSHOT_TTL_MS) return false;
+      fillTagVocabularyIndex(rows);
+      tagVocabularyReady = true;
+      return true;
+    } catch (_error) { return false; }
+  }
+
   function loadTagVocabulary() {
     if (tagVocabularyPromise) return tagVocabularyPromise;
+    // v953：先用本地快照把索引灌上（有的话），读表结果回来再覆盖/补全 —— 首屏第一下搜索就能归一
+    hydrateTagVocabularySnapshot();
     tagVocabularyPromise = (async function () {
       try {
         if (!state.supabase || !state.session) return false;
@@ -16218,28 +16295,19 @@ function libraryTagsForForm(formData, kind) {
           }
           throw result.error;
         }
+        const rows = result.data || [];
+        // v953：读回一张空表不能当"就绪" —— 那会让归一静默失效、还堵死后面的重试（用快照顶上）
+        if (!rows.length && !tagVocabularyRowsByZh.size) return false;
+        if (rows.length) {
+          fillTagVocabularyIndex(rows);
+          saveTagVocabularySnapshot(rows);
+        }
         tagVocabularyReady = true;
-        (result.data || []).forEach(function (row) {
-          const nameZh = String(row && row.name_zh || '').trim();
-          if (!nameZh) return;
-          tagVocabularyRowsByZh.set(nameZh, row);
-          const nameEn = String(row && row.name_en || '').trim();
-          if (nameEn) {
-            tagVocabularyByName.set(nameZh, nameEn);
-            if (!tagVocabularyByEn.has(nameEn.toLowerCase())) tagVocabularyByEn.set(nameEn.toLowerCase(), nameZh);
-          }
-          // v905：相关词反过来也认——「餐桌」那行填了 桌子，搜「桌子」也要命中「餐桌」的物料。
-          // 只建索引，不改表结构；同一相关词挂多行时保留先出现的那个（与 name_en 反查同一个策略）。
-          (Array.isArray(row && row.related) ? row.related : []).forEach(function (word) {
-            const key = String(word == null ? '' : word).trim().toLowerCase();
-            if (key && !tagVocabularyRelatedToZh.has(key)) tagVocabularyRelatedToZh.set(key, nameZh);
-          });
-        });
         return true;
       } catch (error) {
-        tagVocabularyReady = false;
+        tagVocabularyReady = tagVocabularyRowsByZh.size > 0 ? true : false;   // 有快照就照常用，别把已灌好的索引判死
         console.warn('标签词表不可用:', error && error.message);
-        return false;
+        return tagVocabularyRowsByZh.size > 0;
       }
     })();
     return tagVocabularyPromise;
@@ -16254,6 +16322,8 @@ function libraryTagsForForm(formData, kind) {
     tagVocabularyByEn.clear();
     tagVocabularyRowsByZh.clear();
     tagVocabularyRelatedToZh.clear();
+    // v953：快照一起清掉 —— 不然刚改完名字，下一次读表回来之前会用旧快照把旧名字又灌一遍
+    try { localStorage.removeItem(TAG_VOCABULARY_SNAPSHOT_KEY); } catch (_error) {}
   }
 
   // 当前库内实际用到的标签（去掉 vf: 内部标记），用于补翻译

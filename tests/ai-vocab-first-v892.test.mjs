@@ -70,9 +70,10 @@ test('v893/v895 联想词归一架：反查词表换回中文 → 用「词表 �
 });
 
 test('v895 确定性关联：词表里那一行的「相关词」不用等 AI 就出现在浮窗里', () => {
-  // v949：搜索词要先过 libraryCanonicalQueryTerm 归一到规范词，所以这段一起切进来、并把词表标成已加载
+  // v949/v953：搜索词要先过 libraryCanonicalQueryTerm（内部用 tagVocabularyEnLookup）归一到规范词，
+  // 所以这两段一起切进来、并把词表标成已加载
   const slice = appSource.slice(
-    appSource.indexOf('  function libraryCanonicalQueryTerm(value) {'),
+    appSource.indexOf('  function tagVocabularyEnLookup(lower) {'),
     appSource.indexOf('  function renderLibraryExpansionChips() {')
   );
   const context = vm.createContext({

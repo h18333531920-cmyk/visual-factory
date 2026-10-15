@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-canonical-query-v952';
+const VERSION = '20261015-canonical-query-v953';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -266,7 +266,7 @@ test('v949：搜索词先归一到「规范词」再问 AI —— 中英/别名�
   // 背景（用户反馈）：词表里同时有「桌子」和「餐桌」两行（name_en 都是 Table），
   // 搜「桌子」把原词发给 AI、搜「table」按英文反查到「餐桌」⇒ 两边问的不是同一个词，
   // 于是关联标签数量/内容对不上（实测 3 个 vs 4 个）。这里真跑那两个纯函数验规则。
-  const canonicalBlock = slice('  function libraryCanonicalQueryTerm(value) {', '  // v895：判断「库内到底有没有这个词」');
+  const canonicalBlock = slice('  function tagVocabularyEnLookup(lower) {', '  // v895：判断「库内到底有没有这个词」');
   const deterministicBlock = slice('  function libraryDeterministicRelatedTerms(query) {', '  // v894：搜索框下方的浮窗');
   const build = function(ready, reversed) {
     const context = vm.createContext({});

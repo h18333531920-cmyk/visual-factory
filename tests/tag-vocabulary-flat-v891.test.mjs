@@ -40,9 +40,10 @@ function loadVocabularyUi(rows, options = {}) {
 }
 
 function loadQueryTerms(rows) {
-  // v952：tagVocabularyQueryTerms 现在会用 libraryCanonicalQueryTerm 归一，把这一段一起切进来
+  // v952/v953：tagVocabularyQueryTerms 现在会用 libraryCanonicalQueryTerm + tagVocabularyEnLookup 归一，
+  // 把这两段一起切进来
   const slice = appSource.slice(
-    appSource.indexOf('  function libraryCanonicalQueryTerm(value) {'),
+    appSource.indexOf('  function tagVocabularyEnLookup(lower) {'),
     appSource.indexOf('  // v950：规范词要靠词表索引')
   ) + appSource.slice(
     appSource.indexOf('  function tagVocabularyQueryTerms(token) {'),
@@ -82,6 +83,70 @@ test('v952：规范词在**匹配**这一层也生效 —— 搜「桌子」要�
   assert.deepEqual(terms('table'), ['table', '餐桌', '桌面', '桌'], '英文写法同样收敛到规范词，不许绕回「桌子」那一行');
   assert.deepEqual(terms('餐桌'), ['餐桌', 'table', '桌面', '桌'], '规范词自己不受影响');
   assert.deepEqual(terms('词表外的新词'), ['词表外的新词'], '词表外的词照旧只按原词匹配');
+});
+
+test('v953：复数的英文写法也要能反查到中文行（搜 tables 别再啥都没有）', () => {
+  const c = loadQueryTerms([
+    { name_zh: '桌子', name_en: 'Table', related: [] },
+    { name_zh: '餐桌', name_en: 'Table', related: ['桌面', '桌'] },
+    { name_zh: '碟子', name_en: 'Dish', related: [] }
+  ]);
+  const terms = value => Array.from(c.tagVocabularyQueryTerms(value));
+  const canonical = value => c.libraryCanonicalQueryTerm(value);
+  assert.equal(canonical('TABLES'), '餐桌', '复数 + 大小写都要认');
+  assert.equal(canonical('Dish'), '碟子', '原形照旧');
+  assert.equal(canonical('dishes'), '碟子', '去尾 es 也要认');
+  assert.equal(canonical('tablespoon'), 'tablespoon', '别乱截：词表里没有就原样返回');
+  assert.equal(canonical('class'), 'class', 's 结尾但不是复数的词不许截成 clas');
+  assert.ok(terms('tables').indexOf('餐桌') >= 0, '搜 tables 要带出「餐桌」这一行');
+});
+
+test('v953：词表索引要落本地快照（首屏第一下搜索就能归一，不再等读表）', () => {
+  // 真机实测：整页刷新后马上搜「桌子」0 条、「餐桌」有 —— 那一刻索引还没读回来，归一静默失效。
+  const snapshot = appSource.slice(
+    appSource.indexOf('  const TAG_VOCABULARY_SNAPSHOT_KEY'),
+    appSource.indexOf('  function loadTagVocabulary() {')
+  );
+  assert.match(snapshot, /localStorage\.setItem\(TAG_VOCABULARY_SNAPSHOT_KEY, JSON\.stringify\(\{ ts: Date\.now\(\), rows: slim \}\)\)/, '读表成功要存快照');
+  assert.match(snapshot, /localStorage\.getItem\(TAG_VOCABULARY_SNAPSHOT_KEY\)/, '启动要先读快照');
+  assert.match(snapshot, /Date\.now\(\) - parsed\.ts > TAG_VOCABULARY_SNAPSHOT_TTL_MS/, '快照有有效期');
+  assert.match(snapshot, /function fillTagVocabularyIndex\(rows\)/, '读表与快照走同一份灌索引的代码（两处口径一致）');
+  assert.match(appSource, /localStorage\.removeItem\(TAG_VOCABULARY_SNAPSHOT_KEY\)/, '改/删标签后要连快照一起清，别把旧名字又灌回来');
+  // 真跑：快照能把三张索引表灌满
+  const context = vm.createContext({
+    localStorage: {
+      _v: JSON.stringify({ ts: Date.now(), rows: [
+        { name_zh: '餐桌', name_en: 'Table', kind: 'element', related: ['桌面', '桌'] },
+        { name_zh: '桌子', name_en: 'Table', kind: 'element', related: [] }
+      ] }),
+      getItem(k) { return k === 'vf_tag_vocabulary_snapshot_v1' ? this._v : null; },
+      setItem() {},
+      removeItem() {}
+    },
+    tagVocabularyReady: null,
+    tagVocabularyPromise: null,
+    tagVocabularyByName: new Map(),
+    tagVocabularyByEn: new Map(),
+    tagVocabularyRowsByZh: new Map(),
+    tagVocabularyRelatedToZh: new Map()
+  });
+  vm.runInContext(snapshot, context, {filename: 'app-v953-snapshot.js'});
+  assert.equal(context.hydrateTagVocabularySnapshot(), true, '有快照就要能灌上');
+  assert.equal(context.tagVocabularyReady, true, '灌上之后索引算就绪');
+  assert.equal(context.tagVocabularyRowsByZh.size, 2);
+  assert.equal(context.tagVocabularyByEn.get('table'), '餐桌', '英文反查索引一起恢复');
+  assert.equal(context.tagVocabularyRelatedToZh.get('桌'), '餐桌', '反向相关词索引也一起恢复');
+  // 过期快照不许用
+  context.localStorage._v = JSON.stringify({ ts: Date.now() - 8 * 24 * 60 * 60 * 1000, rows: [{ name_zh: '桌子', name_en: 'Table' }] });
+  context.tagVocabularyReady = null;
+  context.tagVocabularyRowsByZh.clear();
+  assert.equal(context.hydrateTagVocabularySnapshot(), false, '过期快照丢掉');
+});
+
+test('v953：HTML 不许被浏览器死缓存（否则发版后用户拿的还是旧 app.js）', () => {
+  const headers = readFileSync(join(here, '..', 'public', '_headers'), 'utf8');
+  assert.match(headers, /\/index\.html\n\s+Cache-Control: no-cache, must-revalidate/, 'index.html 每次回源校验');
+  assert.match(headers, /\/app\.js\n\s+Cache-Control: public, max-age=31536000, immutable/, 'app.js 带 ?v=，可以长缓存');
 });
 
 test('相关词输入：中英文逗号/顿号/分号都能分隔，去重、去空、上限 8 个', () => {
