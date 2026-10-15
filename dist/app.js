@@ -721,8 +721,8 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 .case-foot-tags-pop-tools { flex: 1 0 100%; display: flex; gap: 6px; margin-top: 4px; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
 .case-foot-line { flex: 1 1 auto; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .case-foot-tools { flex: 0 0 auto; display: flex; gap: 6px; }
-.case-preview-ai-panel { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; }
-.case-preview-ai-title { font-size: 11px; font-weight: 650; color: #64748b; white-space: nowrap; }
+.case-preview-ai-panel { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+/* v947：那行小字「当前物料 AI 标签」已按用户要求去掉（.case-preview-ai-title 不再渲染） */
 .case-preview-ai-chips { display: flex; align-items: center; gap: 5px; min-width: 0; overflow-x: auto; padding: 2px 0; scrollbar-width: thin; position: relative; }
 .case-preview-ai-tag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 5px 8px; border: 1px solid #fdba74; border-radius: 999px; background: #fff7ed; color: #9a3412; font-size: 11px; line-height: 1; cursor: default; }
 .case-preview-ai-tag.is-manual { border-color: #86efac; background: #f0fdf4; color: #166534; }
@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-pending-card-same-column-v946';
+const TOOL_UI_VERSION = '20261015-drop-panel-title-v947';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -5328,8 +5328,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     // 面板自己的重画入口（＋ 展开 / 回车添加 / 删除标签后都走它），带的是渲染时那一份 preview 与 canManage
     panel.__casePreviewAiRefresh = function() { renderCasePreviewAiPanel(backdrop, preview, canManage); };
     wireCasePreviewAiPanelPointerGuard(panel);
-    panel.innerHTML = '<span class="case-preview-ai-title">' + (state.lang === 'zh' ? '当前物料 AI 标签' : 'Current material AI tags') + '</span>'
-      + '<div class="case-preview-ai-chips' + (addingKind === 'element' ? ' is-adding' : '') + '">'
+    // v947：去掉左下角那行小字「当前物料 AI 标签 / Current material AI tags」（用户要求）
+    panel.innerHTML = '<div class="case-preview-ai-chips' + (addingKind === 'element' ? ' is-adding' : '') + '">'
       + manualTags.map(function(tag) {
         return '<span class="case-preview-ai-tag is-manual" title="' + (state.lang === 'zh' ? '人工标签' : 'Manual tag') + '">' + escapeHtml(libraryDisplayLabel(tag))
           + (canEdit ? '<button type="button" data-preview-manual-remove="' + escapeAttr(tag) + '" aria-label="' + escapeAttr((state.lang === 'zh' ? '删除人工标签 ' : 'Remove manual tag ') + tag) + '">×</button>' : '')

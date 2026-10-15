@@ -170,6 +170,6 @@ test('v917 脚本侧注释与实测依据留着（别把这条当成随手加的
 });
 
 test('v917 版本号（index.html 5 处 + app.js 1 处）', () => {
-  assert.equal((indexSource.match(/\?v=20261015-pending-card-same-column-v946/g) || []).length, 5);
-  assert.match(source, /const TOOL_UI_VERSION = '20261015-pending-card-same-column-v946'/);
+  assert.equal((indexSource.match(/\?v=20261015-drop-panel-title-v947/g) || []).length, 5);
+  assert.match(source, /const TOOL_UI_VERSION = '20261015-drop-panel-title-v947'/);
 });

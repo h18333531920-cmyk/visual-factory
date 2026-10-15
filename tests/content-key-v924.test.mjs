@@ -332,6 +332,6 @@ test('v924/v926 端点 manual-add：老格式 key 不做内容比对、图片真
 /* ── 6) 版本号六处同步（index.html 5 处 + app.js 1 处） ───────────────── */
 
 test('v924 版本号六处同步（index.html 5 处 + app.js 1 处）', () => {
-  assert.equal((indexSource.match(/\?v=20261015-pending-card-same-column-v946/g) || []).length, 5);
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261015-pending-card-same-column-v946'/);
+  assert.equal((indexSource.match(/\?v=20261015-drop-panel-title-v947/g) || []).length, 5);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261015-drop-panel-title-v947'/);
 });

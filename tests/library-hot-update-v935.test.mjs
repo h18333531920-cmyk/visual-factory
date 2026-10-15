@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-pending-card-same-column-v946';
+const VERSION = '20261015-drop-panel-title-v947';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -233,6 +233,15 @@ test('v945：校验要跑在"出现进度条"之前 + 未分类拦截要有看�
   assert.match(source, /focusCaseDropUntyped\(untyped\);[\s\S]{0,600}showCaseToast\(/, '先高亮那张卡、再弹提示');
   // ④ 回滚要用的三个变量仍在 try 外面（catch 里要用）
   assert.match(handler, /const uploadedPaths = \[\];\s*\n\s*let sourceInserted = false;\s*\n\s*let sourceId = '';\s*\n\s*try \{/, '回滚变量留在 try 外');
+});
+
+test('v947：左下角那行小字「当前物料 AI 标签」不再渲染', () => {
+  assert.doesNotMatch(source, /'<span class="case-preview-ai-title">'/, '标题 span 不再写进面板');
+  assert.doesNotMatch(source, /\.case-preview-ai-title \{/, '对应样式也删掉（只留一句注释说明）');
+  assert.match(source, /\.case-preview-ai-panel \{ flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: minmax\(0, 1fr\) auto;/, '面板网格改成两列（标签 | 状态）');
+  // 标签行与状态行都还在
+  assert.match(source, /'<div class="case-preview-ai-chips' \+ \(addingKind === 'element' \? ' is-adding' : ''\) \+ '">'/, '标签行照旧');
+  assert.match(source, /statusAlert \? '<span class="case-preview-ai-status/, '警示状态行照旧');
 });
 
 test('v935 ⑤：版本号六处同步', () => {
