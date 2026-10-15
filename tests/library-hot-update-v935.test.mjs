@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261015-pending-cover-v939';
+const VERSION = '20261015-fresh-card-remount-v940';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -146,16 +146,22 @@ test('v938：占位卡 HTML 真跑 —— 有本地图 + 角标，done 后角标
   assert.match(doneHtml, /is-just-uploaded/, 'done 之后给高亮（原地转正）');
 });
 
-test('v939：占位卡的类名必须和真实案例卡一致（少了就被灰色占位层盖住）+ 入库后换成真图', () => {
+test('v939/v940：占位卡类名要和真实案例卡一致 + 入库后**就地换成真卡**（不再手搓）', () => {
   const html = slice('  function libraryPendingCardHtml(entry) {', '  function insertLibraryPendingCard(entry) {');
   assert.match(html, /class="library-card library-case-card library-pending-card/, '要带 library-case-card（案例卡那套样式）');
   assert.match(html, /library-preview-shell img-loaded is-preview-ready/, '要带"封面已就绪"的两个类，否则被 .library-preview-shell::before 那层灰盖住');
   assert.match(html, /class="library-progressive-image"/, 'img 要有 library-progressive-image（它是 z-index 1 那层）');
+  // v940：收尾不再手搓图，而是用真实卡片的渲染换掉整张卡
+  const remount = slice('  function remountFreshLibraryCard(sourceId) {', '  // 入库成功：先把封面换成真卡');
+  assert.match(remount, /holder\.innerHTML = renderLibraryCard\(item\);/, '用真实卡片渲染器（类名/签名地址/图片管线全都一致）');
+  assert.match(remount, /const collapsed = collapseCaseProjectItems\(items\);/, '选封面走网格同一条口径');
+  assert.match(remount, /node\.parentNode\.replaceChild\(next, node\);/, '只换这一张卡，网格其余不动');
+  assert.match(remount, /prepareDecodedLibraryImages\(next\);/, '挂上图片管线（它负责把灰色占位层淡出）');
+  assert.match(remount, /revokeLibraryPendingUploadUrls\(entry\);/, '换完才释放本地 blob');
   const finish = slice('  function finishLibraryPendingUpload(sourceId) {', '  // 每次重画网格都调一次');
-  assert.match(finish, /const landed = state\.libraryPreviews\.find\(item => String\(item\.source_file_id\) === String\(sourceId\)\);/, '入库后要找到真封面');
-  assert.match(finish, /const landedUrl = landed \? \(state\.libraryPreviewUrls\[landed\.preview_path\] \|\| ''\) : '';/, '用签名地址');
-  assert.match(finish, /if \(image && landedUrl\) image\.src = landedUrl;/, '把封面换成真图（否则一直空着，用户实测过）');
-  assert.match(finish, /revokeLibraryPendingUploadUrls\(entry\);/, '换完再释放本地 blob');
+  assert.match(finish, /const remounted = remountFreshLibraryCard\(sourceId\);/, '先试就地换真卡');
+  assert.match(finish, /if \(!remounted\) \{[\s\S]{0,300}renderLibraryGrid\(\);/, '换不动就退回整块重画（宁可闪一下也不能一直空白）');
+  assert.match(finish, /libraryPendingUploads\.splice\(index, 1\);/, '条目退场（之后由真实数据管，避免被当成占位卡再删一次）');
 });
 
 test('v935 ⑤：版本号六处同步', () => {

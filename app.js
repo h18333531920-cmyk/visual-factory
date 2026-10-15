@@ -962,7 +962,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-pending-cover-v939';
+const TOOL_UI_VERSION = '20261015-fresh-card-remount-v940';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -6768,7 +6768,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     // 的那两个类（平时由懒加载管线加上），这里直接给上。
     return '<article class="library-card library-case-card library-pending-card' + (entry.done ? ' is-just-uploaded' : '') + '" id="' + escapeAttr(entry.id) + '" data-pending-source="' + escapeAttr(entry.sourceId) + '">'
       + '<div class="library-thumb-wrap"><div class="library-thumb library-preview-shell img-loaded is-preview-ready" style="' + ratioStyle + '">'
-      + (cover ? '<img src="' + escapeAttr(cover.url) + '" alt="' + escapeAttr(entry.title) + '" loading="eager" decoding="async" class="library-progressive-image">' : '')
+      + (cover ? '<img src="' + escapeAttr(cover.url) + '" alt="' + escapeAttr(entry.title) + '" loading="eager" decoding="async" class="library-progressive-image" onerror="this.remove()">' : '')
       + '</div>'
       + '<div class="case-card-overlay"><strong>' + escapeHtml(entry.title) + '</strong>'
       + '<div class="case-card-chips"><span class="case-card-count">' + escapeHtml(state.lang === 'zh' ? (entry.count + ' 个物料') : (entry.count + ' materials')) + '</span></div></div>'
@@ -6800,26 +6800,66 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return entry;
   }
 
-  // 入库成功：把封面换成真图（签名地址，这样即使本地 blob 有问题也不会一直空着）、撤角标、高亮
-  function finishLibraryPendingUpload(sourceId) {
+  // v940：入库完成后，把这张占位卡**就地换成真实卡片** —— 用真实卡片自己的渲染（同样的类名、
+  // 同样的签名地址、同样的图片管线），而不是我手搓一张。用户口径：「至少就算不显示，过一会要单独
+  // 刷新出来吧？…或者让这个封面单独拉取」—— 这就是"单独拉取"：只换这一张卡，网格其余部分不动。
+  // （v938/v939 连着两次因为我手搓的占位卡漏了类名而被灰色占位层盖住 ⇒ 不再手搓。）
+  function remountFreshLibraryCard(sourceId) {
+    const grid = document.getElementById('library-grid');
     const entry = libraryPendingUploads.find(item => String(item.sourceId) === String(sourceId));
-    if (!entry) return false;
-    entry.done = true;
+    if (!grid || !entry) return false;
     const node = document.getElementById(entry.id);
-    if (node) {
-      const badge = node.querySelector('.library-pending-badge');
-      if (badge && badge.parentNode) badge.parentNode.removeChild(badge);
-      // v939：**换成真图** —— 用户实测「会一直是空白封面，只有手动刷新才出现」。
-      // 现在入库完成后把封面指向签名地址（本地 blob 只是"先看到"，最终以云上那份为准）。
-      const landed = state.libraryPreviews.find(item => String(item.source_file_id) === String(sourceId));
-      const image = node.querySelector('img');
-      const landedUrl = landed ? (state.libraryPreviewUrls[landed.preview_path] || '') : '';
-      if (image && landedUrl) image.src = landedUrl;
+    if (!node || !node.parentNode) return false;
+    const source = state.librarySources.find(item => String(item.id) === String(sourceId));
+    if (!source) return false;
+    const items = state.libraryPreviews
+      .filter(item => String(item.source_file_id) === String(sourceId))
+      .map(function(preview) {
+        const displayPreviewPath = preview.preview_path || '';
+        const thumbPath = libraryThumbnailPathForPreview(preview, source);
+        return {
+          preview: preview,
+          source: source,
+          url: state.libraryPreviewUrls[displayPreviewPath] || '',
+          thumbUrl: (thumbPath && !libraryThumbUnavailable(thumbPath)) ? (state.libraryPreviewUrls[thumbPath] || '') : ''
+        };
+      });
+    if (!items.length) return false;
+    let item = items[0];
+    try {
+      // 与网格同一条"选封面"口径（同款多语言版、类别筛选都在这里）
+      const collapsed = collapseCaseProjectItems(items);
+      if (collapsed && collapsed.length) item = collapsed[0];
+    } catch (_collapseError) {}
+    const holder = document.createElement('div');
+    holder.innerHTML = renderLibraryCard(item);
+    const next = holder.firstElementChild;
+    if (!next) return false;
+    next.id = entry.id;
+    next.classList.add('is-just-uploaded');
+    window.setTimeout(function() { if (next.isConnected) next.classList.remove('is-just-uploaded'); }, 6000);
+    node.parentNode.replaceChild(next, node);
+    // 真卡用的是签名地址 ⇒ 本地 blob 可以放了
+    revokeLibraryPendingUploadUrls(entry);
+    // 跟常规卡片一样挂上图片管线（它负责在图加载好之后把灰色占位层淡出）
+    try { prepareDecodedLibraryImages(next); } catch (_prepareError) {}
+    return true;
+  }
+
+  // 入库成功：先把封面换成真卡；换不动就退回整块重画（宁可闪一下也不能一直空白）
+  function finishLibraryPendingUpload(sourceId) {
+    const index = libraryPendingUploads.findIndex(item => String(item.sourceId) === String(sourceId));
+    if (index < 0) return false;
+    const entry = libraryPendingUploads[index];
+    entry.done = true;
+    const remounted = remountFreshLibraryCard(sourceId);
+    // 条目退场：这张卡从现在起由真实数据管（下一次自然重画会画出它自己的真卡）
+    libraryPendingUploads.splice(index, 1);
+    if (!remounted) {
       revokeLibraryPendingUploadUrls(entry);
-      node.classList.add('is-just-uploaded');
-      window.setTimeout(function() {
-        if (node.isConnected) node.classList.remove('is-just-uploaded');
-      }, 6000);
+      const stale = document.getElementById(entry.id);
+      if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+      renderLibraryGrid();
     }
     return true;
   }

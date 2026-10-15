@@ -225,9 +225,9 @@ test('v912 没弄坏英文名 / 相关词的保存链路', () => {
 
 test('版本号六处同步', () => {
   const indexSource = readFileSync(join(here, '..', 'index.html'), 'utf8');
-  const refs = indexSource.match(/\?v=20261015-pending-cover-v939/g) || [];
+  const refs = indexSource.match(/\?v=20261015-fresh-card-remount-v940/g) || [];
   assert.equal(refs.length, 5, 'index.html 应有 5 处版本号');
-  assert.match(appSource, /const TOOL_UI_VERSION = '20261015-pending-cover-v939'/);
+  assert.match(appSource, /const TOOL_UI_VERSION = '20261015-fresh-card-remount-v940'/);
 });
 
 // ── 4) 纯逻辑（vm 切出来跑）：改名计划 / 撞名合并判定 ────────────────────────
