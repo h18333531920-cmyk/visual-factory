@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261015-canonical-query-v956';
+const TOOL_UI_VERSION = '20261016-uploader-delete-v958';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -7025,6 +7025,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     revokeLibraryPendingUploadUrls(entry);
     // 跟常规卡片一样挂上图片管线（它负责在图加载好之后把灰色占位层淡出）
     try { prepareDecodedLibraryImages(next); } catch (_prepareError) {}
+    // v957：补绑这张真卡的交互（点击/双击/右键/键盘 + 懒加载）—— 原来只有整网格重画会绑
+    try { wireLibraryCard(next); } catch (_wireError) {}
     return true;
   }
 
@@ -10760,71 +10762,72 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     return pair ? { width: pair[0], height: pair[1] } : { width: 0, height: 0 };
   }
 
-  function wireLibraryCards() {
-    document.querySelectorAll('.library-card').forEach(card => {
-      // 双击模板 → 跳转静态DIY编辑
-      card.addEventListener('dblclick', function(event) {
-        if (event.target.closest('button')) return; // 忽略按钮上的双击
-        var item = libraryItemByPreviewId(card.dataset.previewId);
-        if (!item || !item.source) return;
-        if (isBookmarkSource(item.source)) { openLibraryBookmarkPopup(item.source.id); return; }
-        var kind = libraryKindOfSource(item.source);
-        if (kind === 'template') {
-          openLibraryTemplate(item).catch(function(e) { alert(e.message); });
-        }
-      });
-      card.addEventListener('click', event => {
-        // 多选模式下：点击卡片=勾选切换，点击按钮照常
-        if (state.libraryMultiSelect) {
-          if (event.target.closest('button[data-action]')) {
-            const btn = event.target.closest('button[data-action]');
-            const item = libraryItemByPreviewId(card.dataset.previewId);
-            if (!item) return;
-            handleLibraryCardAction(btn.dataset.action, item);
-            return;
-          }
-          toggleMultiCard(card.dataset.previewId);
-          return;
-        }
-        const button = event.target.closest('button[data-action]');
-        if (!button) {
-          var clickItem = libraryItemByPreviewId(card.dataset.previewId);
-          if (clickItem && isBookmarkSource(clickItem.source)) { openLibraryBookmarkPopup(clickItem.source.id); return; }
-          if (clickItem && clickItem.isCaseProjectCard) { openCaseProjectModal(clickItem.source.id, clickItem.preview && clickItem.preview.material_type, clickItem.preview && clickItem.preview.id); void logAssetEvent('view', { source: clickItem.source }); return; }
-          if (clickItem && libraryKindOfSource(clickItem.source) === 'template') return; // 模版单击不弹窗，双击打开
-          selectLibraryItem(card.dataset.previewId);
-          return;
-        }
-        const item = libraryItemByPreviewId(card.dataset.previewId);
-        if (!item) return;
-        if (button.dataset.action === 'font-menu') {
-          event.stopPropagation();
-          showFontFamilyMenu(button, item);
-          return;
-        }
-        handleLibraryCardAction(button.dataset.action, item);
-      });
-      card.addEventListener('contextmenu', event => {
-        event.preventDefault();
-        const item = libraryItemByPreviewId(card.dataset.previewId);
-        if (!item) return;
-        showContextMenu(event, item);
-      });
-      card.addEventListener('keydown', event => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        if (state.libraryMultiSelect) {
-          toggleMultiCard(card.dataset.previewId);
-          return;
-        }
-        var projItem = libraryItemByPreviewId(card.dataset.previewId);
-        if (projItem && projItem.isCaseProjectCard) { openCaseProjectModal(projItem.source.id, projItem.preview && projItem.preview.material_type, projItem.preview && projItem.preview.id); void logAssetEvent('view', { source: projItem.source }); return; }
-        selectLibraryItem(card.dataset.previewId);
-      });
+  // v957：把「给一张卡绑交互」抽成单卡函数 —— 上传后就地换上的真卡也要绑（原来只有整网格
+  // 重画后 wireLibraryCards() 全量绑，就地换上的卡永远没有点击/双击/右键/键盘监听 ⇒ 用户点它
+  // 没反应，必须手动刷新整网格才恢复）。
+  function wireLibraryCard(card) {
+    if (!card) return;
+    // 双击模板 → 跳转静态DIY编辑
+    card.addEventListener('dblclick', function(event) {
+      if (event.target.closest('button')) return; // 忽略按钮上的双击
+      var item = libraryItemByPreviewId(card.dataset.previewId);
+      if (!item || !item.source) return;
+      if (isBookmarkSource(item.source)) { openLibraryBookmarkPopup(item.source.id); return; }
+      var kind = libraryKindOfSource(item.source);
+      if (kind === 'template') {
+        openLibraryTemplate(item).catch(function(e) { alert(e.message); });
+      }
     });
-    prepareDecodedLibraryImages(document.getElementById('library-grid'));
-    // 图片懒加载淡入
-    var lazyImages = document.querySelectorAll('img.lazy-img:not(.observed)');
+    card.addEventListener('click', event => {
+      // 多选模式下：点击卡片=勾选切换，点击按钮照常
+      if (state.libraryMultiSelect) {
+        if (event.target.closest('button[data-action]')) {
+          const btn = event.target.closest('button[data-action]');
+          const item = libraryItemByPreviewId(card.dataset.previewId);
+          if (!item) return;
+          handleLibraryCardAction(btn.dataset.action, item);
+          return;
+        }
+        toggleMultiCard(card.dataset.previewId);
+        return;
+      }
+      const button = event.target.closest('button[data-action]');
+      if (!button) {
+        var clickItem = libraryItemByPreviewId(card.dataset.previewId);
+        if (clickItem && isBookmarkSource(clickItem.source)) { openLibraryBookmarkPopup(clickItem.source.id); return; }
+        if (clickItem && clickItem.isCaseProjectCard) { openCaseProjectModal(clickItem.source.id, clickItem.preview && clickItem.preview.material_type, clickItem.preview && clickItem.preview.id); void logAssetEvent('view', { source: clickItem.source }); return; }
+        if (clickItem && libraryKindOfSource(clickItem.source) === 'template') return; // 模版单击不弹窗，双击打开
+        selectLibraryItem(card.dataset.previewId);
+        return;
+      }
+      const item = libraryItemByPreviewId(card.dataset.previewId);
+      if (!item) return;
+      if (button.dataset.action === 'font-menu') {
+        event.stopPropagation();
+        showFontFamilyMenu(button, item);
+        return;
+      }
+      handleLibraryCardAction(button.dataset.action, item);
+    });
+    card.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      const item = libraryItemByPreviewId(card.dataset.previewId);
+      if (!item) return;
+      showContextMenu(event, item);
+    });
+    card.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      if (state.libraryMultiSelect) {
+        toggleMultiCard(card.dataset.previewId);
+        return;
+      }
+      var projItem = libraryItemByPreviewId(card.dataset.previewId);
+      if (projItem && projItem.isCaseProjectCard) { openCaseProjectModal(projItem.source.id, projItem.preview && projItem.preview.material_type, projItem.preview && projItem.preview.id); void logAssetEvent('view', { source: projItem.source }); return; }
+      selectLibraryItem(card.dataset.previewId);
+    });
+    // 图片懒加载淡入（只观察这张卡自己的图；占位卡是 eager 图，不受影响）
+    var lazyImages = card.querySelectorAll('img.lazy-img:not(.observed)');
     if (lazyImages.length && 'IntersectionObserver' in window) {
       var observer = new IntersectionObserver(function(entries) {
         entries.forEach(function(entry) {
@@ -10843,6 +10846,11 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       }, { rootMargin: '200px' });
       lazyImages.forEach(function(img) { observer.observe(img); });
     }
+  }
+
+  function wireLibraryCards() {
+    document.querySelectorAll('.library-card').forEach(wireLibraryCard);
+    prepareDecodedLibraryImages(document.getElementById('library-grid'));
   }
 
   /* ── 右键菜单 ── */

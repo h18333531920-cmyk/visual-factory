@@ -87,7 +87,8 @@ test('upload permission allows new material and own tags but keeps shared edits 
  assert.throws(()=>restrictDataBody(uploader,patch,{title:'改名'}),{status:403});
  assert.equal(plan(uploader,'/storage/v1/object/vf-library/'+uid+'/previews/s1/a.png','POST').read,false);
  assert.throws(()=>plan(uploader,'/storage/v1/object/vf-library/someone/previews/s1/a.png','POST'),{status:403});
- assert.throws(()=>plan(uploader,'/storage/v1/object/vf-library/'+uid+'/previews/s1/a.png','DELETE'),{status:403});
+ assert.equal(plan(uploader,'/storage/v1/object/vf-library/'+uid+'/previews/s1/a.png','DELETE').uploadDelete,true);
+ assert.throws(()=>plan(uploader,'/storage/v1/object/vf-library/someone/previews/s1/a.png','DELETE'),{status:403});
  assert.throws(()=>plan(uploader,'/rest/v1/vf_categories','POST'),{status:403});
  const plain={...diy,account:{features:['library'],product:'diy',status:'active'}};
  assert.throws(()=>plan(plain,'/rest/v1/vf_source_files','POST'),{status:403});
@@ -102,4 +103,24 @@ test('material bytes revalidate privately per login while other data remains unc
  assert.equal(dataResponseHeaders(plan(diy,'/rest/v1/vf_source_files'),request,response).get('Cache-Control'),'no-store');
  assert.equal(dataResponseHeaders(asset,new Request(request,{headers:{Range:'bytes=0-10'}}),response).get('Cache-Control'),'no-store');
  assert.equal(dataResponseHeaders(asset,request,new Response(null,{status:403})).get('Cache-Control'),'no-store');
+});
+
+test('v958 uploader can delete own material rows and files only',()=>{
+ const uploader={...diy,account:{features:['library','upload'],product:'diy',status:'active'}};
+ // 行删除：放行并限死 uploaded_by=自己
+ const del=plan(uploader,'/rest/v1/vf_source_files','DELETE');assert.equal(del.uploadDelete,true);
+ assert.equal(del.target.searchParams.get('uploaded_by'),'eq.'+uid);
+ // 存储批量删：自己的目录放行，别人的目录 / 越权路径 403
+ const remove=plan(uploader,'/storage/v1/object/vf-library','DELETE');assert.equal(remove.uploadDelete,true);
+ assert.equal(restrictDataBody(uploader,remove,{paths:[uid+'/previews/s1/a.png',uid+'/files/s1/source.png']}).paths.length,2);
+ assert.throws(()=>restrictDataBody(uploader,remove,{paths:['someone/previews/s1/a.png']}),{status:403});
+ assert.throws(()=>restrictDataBody(uploader,remove,{paths:['../escape.png']}),{status:403});
+ // 无 upload 权限的账号依旧不能删
+ const plain={...diy,account:{features:['library'],product:'diy',status:'active'}};
+ assert.throws(()=>plan(plain,'/rest/v1/vf_source_files','DELETE'),{status:403});
+ assert.throws(()=>plan(plain,'/storage/v1/object/vf-library','DELETE'),{status:403});
+ // 维护模式不受影响：可删任意路径，plan 不标 uploadDelete
+ const admin={...diy,maintenance:{role:'admin'}};
+ assert.equal(plan(admin,'/rest/v1/vf_source_files','DELETE').uploadDelete,false);
+ assert.equal(restrictDataBody(admin,plan(admin,'/storage/v1/object/vf-library','DELETE'),{paths:['someone/a.png']}).paths.length,1);
 });

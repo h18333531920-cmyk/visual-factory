@@ -44,7 +44,10 @@ export function dataPlan(ctx, path, method, base, headers) {
   const uploadInsert=uploader&&rest&&method==='POST'&&['vf_source_files','vf_asset_previews'].includes(parts[2])&&!(headers.get('prefer')||'').includes('resolution=');
   const uploadTagPatch=uploader&&rest&&method==='PATCH'&&parts[2]==='vf_source_files';
   const uploadObject=uploader&&storage&&bucket==='vf-library'&&method==='POST'&&!special&&parts.length>bucketIndex+1;
-  if(!ctx.maintenance&&!read&&!personal&&!uploadInsert&&!uploadTagPatch&&!uploadObject)throw fail('此操作需要开发者维护权限',403);
+  // v958：上传者可以删**自己上传**的素材 —— vf_source_files 行按 uploaded_by 限死、
+  // 存储对象按自己的目录前缀限死；删别人/共享素材和批量删仍需开发者维护权限。
+  const uploadDelete=uploader&&(rest&&method==='DELETE'&&parts[2]==='vf_source_files'||storage&&bucket==='vf-library'&&method==='DELETE');
+  if(!ctx.maintenance&&!read&&!personal&&!uploadInsert&&!uploadTagPatch&&!uploadObject&&!uploadDelete)throw fail('此操作需要开发者维护权限',403);
   if(profile){target.searchParams.set('id','eq.'+ctx.user.id);target.searchParams.set('select','id,email,display_name,role,status');}
   if(!ctx.maintenance&&rest&&(target.searchParams.get('select')||'').includes('('))throw fail('此查询不支持关联其他表',403);
   if(!ctx.maintenance&&ownerColumn){
@@ -55,14 +58,17 @@ export function dataPlan(ctx, path, method, base, headers) {
   }
   // 上传者改标签只允许命中自己上传的记录，命中不到时静默更新 0 行。
   if(uploadTagPatch)target.searchParams.set('uploaded_by','eq.'+ctx.user.id);
+  // v958：删除同样只准命中自己上传的记录（PostgREST 命中 0 行时静默返回成功）。
+  if(uploadDelete&&rest)target.searchParams.set('uploaded_by','eq.'+ctx.user.id);
   if(storage){
     let object;try{object=decodeURIComponent(parts.slice(bucketIndex+1).join('/'));}catch{throw fail('文件路径无效');}
     if(object&&!safePath(object))throw fail('文件路径无效',403);
     if(!ctx.maintenance&&bucket==='vf-projects'&&object&&!ownsPath(object,ctx.user.id))throw fail('不能访问其他账号的项目',403);
     if(uploadObject&&object&&!ownsPath(object,ctx.user.id))throw fail('只能上传到本账号的素材目录',403);
+    if(uploadDelete&&object&&!ownsPath(object,ctx.user.id))throw fail('只能删除本账号的素材文件',403);
   }
   const jsonBody=rest&&!ctx.maintenance&&['POST','PATCH','PUT'].includes(method)||storage&&['POST','DELETE'].includes(method)&&(['sign','list'].includes(parts[3])||parts.length===bucketIndex+1);
-  return {target,rest,storage,parts,bucket,ownerColumn,jsonBody,read,uploadInsert,uploadTagPatch};
+  return {target,rest,storage,parts,bucket,ownerColumn,jsonBody,read,uploadInsert,uploadTagPatch,uploadDelete};
 }
 export function restrictDataBody(ctx,plan,value){
   if(!value||typeof value!=='object')throw fail('请求格式错误');
@@ -95,7 +101,7 @@ export function restrictDataBody(ctx,plan,value){
   if(plan.storage){
     if(Array.isArray(value))throw fail('请求格式错误');
     for(const key of ['paths','prefixes'])if(value[key]!==undefined){
-      if(!Array.isArray(value[key])||value[key].length>1000||value[key].some(path=>!safePath(path)||!ctx.maintenance&&plan.bucket==='vf-projects'&&!ownsPath(path,ctx.user.id)))throw fail('文件路径无效',403);
+      if(!Array.isArray(value[key])||value[key].length>1000||value[key].some(path=>!safePath(path)||!ctx.maintenance&&(plan.bucket==='vf-projects'||plan.uploadDelete)&&!ownsPath(path,ctx.user.id)))throw fail('文件路径无效',403);
     }
     if(plan.parts[3]==='list'){
       if(!ctx.maintenance&&plan.bucket==='vf-projects'){
