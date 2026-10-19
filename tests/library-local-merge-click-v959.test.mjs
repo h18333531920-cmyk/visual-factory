@@ -22,7 +22,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261016-local-merge-click-v959';
+const VERSION = '20261019-upload-response-v960';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -33,10 +33,10 @@ function slice(start, end) {
 }
 
 test('v959：版本号三处一致（app.js 常量 + index.html ?v= + 本文件）', () => {
-  assert.match(source, /TOOL_UI_VERSION = '20261016-local-merge-click-v959'/, 'app.js 内部版本号必须是 v959');
-  const refs = (indexSource.match(/\?v=20261016-local-merge-click-v959/g) || []).length;
+  assert.match(source, /TOOL_UI_VERSION = '20261019-upload-response-v960'/, 'app.js 内部版本号必须是 v959');
+  const refs = (indexSource.match(/\?v=20261019-upload-response-v960/g) || []).length;
   assert.equal(refs, 5, 'index.html 必须 5 处 ?v= 引用 v959');
-  assert.equal(VERSION, '20261016-local-merge-click-v959');
+  assert.equal(VERSION, '20261019-upload-response-v960');
 });
 
 test('v959 ①：libraryItemByPreviewId 查不到时必须兜底从源数据组装（不再静默返回 null）', () => {

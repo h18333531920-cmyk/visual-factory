@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261016-uploader-delete-v958';
+const TOOL_UI_VERSION = '20261019-upload-response-v960';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -16681,7 +16681,24 @@ function libraryTagsForForm(formData, kind) {
   }
 
   function libraryItemByPreviewId(id) {
-    return state.libraryItems.find(item => item.preview.id === id);
+    const found = state.libraryItems.find(item => item.preview.id === id);
+    if (found) return found;
+    // v959：**就地合入的上传项在重画前查不到** —— applyLocalLibraryChange 只更新
+    // librarySources / libraryPreviews，libraryItems 要等下一次网格重画（renderLibraryGrid）
+    // 才重建；于是刚上传的卡事件绑了（v957）却仍点不动（点击回调查 state.libraryItems 命中
+    // 不到这张新卡，静默 return），必须手动刷新一次。这里从源数据兜底组装同一结构的 item，
+    // 与渲染同源（libraryPreviews + librarySources + 已签名 URL），让卡片立刻可点。
+    const preview = state.libraryPreviews.find(item => String(item.id) === String(id));
+    if (!preview) return null;
+    const source = state.librarySources.find(item => String(item.id) === String(preview.source_file_id));
+    if (!source) return null;
+    return {
+      preview: preview,
+      source: source,
+      url: state.libraryPreviewUrls[String(preview.preview_path || '')] || '',
+      thumbUrl: '',
+      isCaseProjectCard: isCaseProject(source)
+    };
   }
 
   function hasUploadPermission() {
