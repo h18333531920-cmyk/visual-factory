@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261019-upload-response-v960';
+const VERSION = '20261022-storage-buffer-v961';
 
 function slice(start, end) {
   const from = source.indexOf(start);

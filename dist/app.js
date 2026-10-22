@@ -977,7 +977,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261019-upload-response-v960';
+const TOOL_UI_VERSION = '20261022-storage-buffer-v961';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -13447,13 +13447,19 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
   }
   function previewImageThumbnailAndDimensions(file, maxWidth) {
     return new Promise(resolve => {
+      // v961：**任何一条路都要 resolve** —— 之前 img.onload/toBlob 偶发不回调时这个 Promise
+      // 永远 pending，上传流程卡在「图已传、进度 0%、素材不显示」，看起来就像压根没传上去。
+      // 兜底超时保证解码失败也继续走入库（大不了没有缩略图/尺寸）。
+      let settled = false;
+      const finish = payload => { if (settled) return; settled = true; resolve(payload); };
+      const guard = setTimeout(() => finish({ width: null, height: null, thumbnail: null }), 10000);
       const url = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
         URL.revokeObjectURL(url);
         const width = img.naturalWidth || null;
         const height = img.naturalHeight || null;
-        if (!width || !height) { resolve({ width, height, thumbnail: null }); return; }
+        if (!width || !height) { clearTimeout(guard); finish({ width, height, thumbnail: null }); return; }
         try {
           const ratio = Math.min(1, maxWidth / width);
           const canvas = document.createElement('canvas');
@@ -13462,15 +13468,21 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
           const context = canvas.getContext('2d');
           fillCanvasWhite(context, canvas.width, canvas.height);
           context.drawImage(img, 0, 0, canvas.width, canvas.height);
+          let toBlobDone = false;
           canvas.toBlob(blob => {
+            toBlobDone = true;
+            clearTimeout(guard);
             // 压缩后反而更大就放弃缩略图
-            resolve({ width, height, thumbnail: blob && blob.size < file.size ? blob : null });
+            finish({ width, height, thumbnail: blob && blob.size < file.size ? blob : null });
           }, 'image/jpeg', 0.7);
+          // toBlob 自身不回调时也别卡死：8 秒后放弃缩略图但保留尺寸
+          setTimeout(() => { if (!toBlobDone) { clearTimeout(guard); finish({ width, height, thumbnail: null }); } }, 8000);
         } catch (_error) {
-          resolve({ width, height, thumbnail: null });
+          clearTimeout(guard);
+          finish({ width, height, thumbnail: null });
         }
       };
-      img.onerror = () => { URL.revokeObjectURL(url); resolve({ width: null, height: null, thumbnail: null }); };
+      img.onerror = () => { clearTimeout(guard); URL.revokeObjectURL(url); finish({ width: null, height: null, thumbnail: null }); };
       img.src = url;
     });
   }
@@ -13507,6 +13519,11 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     maxSize = maxSize || 10 * 1024 * 1024; // 默认 10MB
     if (!file.type.startsWith('image/') || file.size <= maxSize) return Promise.resolve(file);
     return new Promise(function(resolve) {
+      // v961：同 previewImageThumbnailAndDimensions —— 解码/toBlob 不回调时不能永远 pending，
+      // 兜底直接传原图（最大不超过 storage 上限）。
+      var settled = false;
+      function finish(value) { if (settled) return; settled = true; resolve(value); }
+      var guard = setTimeout(function() { finish(file); }, 15000);
       var img = new Image();
       var url = URL.createObjectURL(file);
       img.onload = function() {
@@ -13521,7 +13538,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
           ctx.drawImage(img, 0, 0);
           canvas.toBlob(function(blob) {
             if (!blob || blob.size <= maxSize || q <= 0.3) {
-              resolve(blob && blob.size < file.size ? blob : file);
+              clearTimeout(guard);
+              finish(blob && blob.size < file.size ? blob : file);
             } else {
               tryQuality(q - 0.1);
             }
@@ -13529,7 +13547,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         }
         tryQuality(0.85);
       };
-      img.onerror = function() { URL.revokeObjectURL(url); resolve(file); };
+      img.onerror = function() { clearTimeout(guard); URL.revokeObjectURL(url); finish(file); };
       img.src = url;
     });
   }
@@ -13559,7 +13577,12 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         }
         const sourceId = crypto.randomUUID();
         const sourcePath = `${userId}/sources/${sourceId}/${safeStorageName(file.name)}`;
-        const sourceUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, uploadFile, { upsert: false, contentType: uploadFile.type || file.type });
+        // v960：防卡住 —— Supabase storage upload 偶发不返回（网络/代理层偶发沉默），
+        // 无限等待会让进度条永远停在 0%。加 30 秒超时，超了明确报错。
+        const sourceUpload = await Promise.race([
+          state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, uploadFile, { upsert: false, contentType: uploadFile.type || file.type }),
+          new Promise(function(_, reject) { setTimeout(function() { reject(new Error(state.lang === 'zh' ? '上传超时，请刷新页面后重试' : 'Upload timed out, please refresh and retry')); }, 30000); })
+        ]);
         if (sourceUpload.error) throw sourceUpload.error;
         uploadedPaths.push(sourcePath);
         const decoded = await previewImageThumbnailAndDimensions(uploadFile, 400);
@@ -13592,7 +13615,10 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
           var thumbBlob = decoded.thumbnail;
           if (thumbBlob) {
             thumbPath = `${userId}/sources/${sourceId}/_thumb.jpg`;
-            var thumbUpload = await state.supabase.storage.from(LIBRARY_BUCKET).upload(thumbPath, thumbBlob, { upsert: true, contentType: 'image/jpeg' });
+            var thumbUpload = await Promise.race([
+              state.supabase.storage.from(LIBRARY_BUCKET).upload(thumbPath, thumbBlob, { upsert: true, contentType: 'image/jpeg' }),
+              new Promise(function(_, reject) { setTimeout(function() { reject(new Error(state.lang === 'zh' ? '缩略图上传超时' : 'Thumbnail upload timed out')); }, 30000); })
+            ]);
             if (thumbUpload.error) { console.warn('Thumbnail upload failed:', thumbUpload.error); thumbPath = null; }
             else { uploadedPaths.push(thumbPath); }
           }

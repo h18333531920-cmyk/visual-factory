@@ -32,7 +32,11 @@ test('图片一次解码同时产出尺寸与缩略图', () => {
   const body = fnBody('previewImageThumbnailAndDimensions', '\n  function generateThumbnail(');
   assert.match(body, /img\.naturalWidth/, '尺寸取自解码结果');
   assert.match(body, /blob && blob\.size < file\.size \? blob : null/, '压缩后反而更大就放弃缩略图');
-  assert.match(body, /resolve\(\{ width: null, height: null, thumbnail: null \}\)/, '解码失败不抛错（与 readImageDimensions 一致）');
+  assert.match(body, /finish\(\{ width: null, height: null, thumbnail: null \}\)/, '解码失败不抛错（与 readImageDimensions 一致）');
+  // v961：三条路径都必须能收敛（onload 正常 / toBlob 不回调 / 整体超时），
+  // 否则 Promise 永远 pending ⇒ 上传卡在「图已传、进度 0%、素材不显示」。
+  assert.match(body, /const guard = setTimeout\(\(\) => finish\(\{ width: null, height: null, thumbnail: null \}\), 10000\)/, '整体 10 秒兜底');
+  assert.match(body, /setTimeout\(\(\) => \{ if \(!toBlobDone\) \{ clearTimeout\(guard\); finish\(\{ width, height, thumbnail: null \}\); \} \}, 8000\)/, 'toBlob 不回调时 8 秒放弃缩略图但保留尺寸');
 });
 
 test('案例项目创建：预览循环并发 6 + 按张数进度 + 每张传完就写一行', () => {

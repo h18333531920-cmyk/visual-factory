@@ -24,11 +24,22 @@ export async function onRequest({ request, env }) {
       const text=await limitedText(request,4194304);
       let value;try{value=JSON.parse(text);}catch{throw fail('请求格式错误');}
       body=JSON.stringify(restrictDataBody(ctx,plan,value));
+    } else if (plan.storage && !['GET','HEAD'].includes(method)) {
+      // v961：storage 写请求（对象上传/删除）先**完整缓冲**请求体再转发上游。
+      // 直接把 request.body（ReadableStream）透传给 fetch 时，Cloudflare 只能用 chunked
+      // 编码转发；Supabase storage 对 chunked 上传偶发挂起 —— 对象迟迟不落库、响应也不返回，
+      // 前端表现就是「进度条永远停在 0%、素材压根没传上去」。写请求体本身不大（单个素材），
+      // 缓冲后运行时自动带精确 Content-Length，转发行为与浏览器直连一致。
+      const bytes = await request.arrayBuffer();
+      if (bytes.byteLength > 80 * 1024 * 1024) throw fail('文件过大', 413);
+      body = bytes;
     }
     const headers = new Headers();
     for(const key of ['content-type','accept','prefer','range','x-upsert','cache-control','if-none-match','if-modified-since'])if(request.headers.has(key))headers.set(key,request.headers.get(key));
     headers.set('apikey',config.key);headers.set('Authorization',`Bearer ${config.key}`);
-    const response = await fetch(plan.target.href, { method, headers, body, redirect: 'manual' });
+    // v961：写操作给上游 120 秒上限 —— 避免任何一次上游挂起让整条请求无限等待（读操作不加，
+    // 大图片下载可能很久，继续交给浏览器/Range 自行控制）。
+    const response = await fetch(plan.target.href, { method, headers, body, redirect: 'manual', signal: ['GET','HEAD'].includes(method) ? undefined : AbortSignal.timeout(120000) });
     const output = dataResponseHeaders(plan,request,response);
     // v960：写操作不能把上游 Response.body 原样穿过 Pages Function 流给浏览器。
     // Supabase 已经完成了对象写入，但这条小响应偶发不结束，上传页会一直等到超时，
