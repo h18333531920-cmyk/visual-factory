@@ -24,7 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261027-gallery-upload-progress-v962';
+const VERSION = '20261027-gallery-upload-error-v963';
 
 function slice(start, end) {
   const from = source.indexOf(start);
@@ -232,7 +232,7 @@ test('v945：校验要跑在"出现进度条"之前 + 未分类拦截要有看�
   assert.match(source, /还有 ' \+ untyped\.length \+ ' 张未分类：先在缩略图上点「未分类」选分类/, '要有 toast 提醒');
   assert.match(source, /focusCaseDropUntyped\(untyped\);[\s\S]{0,600}showCaseToast\(/, '先高亮那张卡、再弹提示');
   // ④ 回滚要用的三个变量仍在 try 外面（catch 里要用）
-  assert.match(handler, /const uploadedPaths = \[\];\s*\n\s*let sourceInserted = false;\s*\n\s*let sourceId = '';\s*\n\s*try \{/, '回滚变量留在 try 外');
+  assert.match(handler, /const uploadedPaths = \[\];\s*\n\s*let sourceInserted = false;\s*\n\s*let sourceId = '';[\s\S]*?let pendingUpload = null;\s*\n\s*try \{/, '回滚变量和待上传卡都留在 try 外，失败分支可安全引用');
 });
 
 test('v947：左下角那行小字「当前物料 AI 标签」不再渲染', () => {

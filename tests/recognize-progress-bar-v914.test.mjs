@@ -394,6 +394,6 @@ test('v914 别搞混：#library-status（列表上方那行计数）不许被这
 });
 
 test('v914 版本号（index.html 5 处 + app.js 1 处）', () => {
-  assert.equal((indexSource.match(/\?v=20261027-gallery-upload-progress-v962/g) || []).length, 5);
-  assert.match(source, /const TOOL_UI_VERSION = '20261027-gallery-upload-progress-v962'/);
+  assert.equal((indexSource.match(/\?v=20261027-gallery-upload-error-v963/g) || []).length, 5);
+  assert.match(source, /const TOOL_UI_VERSION = '20261027-gallery-upload-error-v963'/);
 });

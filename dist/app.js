@@ -978,7 +978,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261027-gallery-upload-progress-v962';
+const TOOL_UI_VERSION = '20261027-gallery-upload-error-v963';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -13211,6 +13211,9 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     const uploadedPaths = [];
     let sourceInserted = false;
     let sourceId = '';
+    // 图库/模板分支也会落入同一个 catch。放在 try 外面，避免上传失败时
+    // catch 再抛 ReferenceError，导致错误提示被旧进度条盖住。
+    let pendingUpload = null;
     try {
       const formData = new FormData(form);
       const libraryKind = formData.get('library_kind') || 'gallery';
@@ -13267,7 +13270,6 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       // v938：**先在本地显示**（用户口径：「上传也是先在当前的电脑里显示，入库和刷新放在看不到的地方」）。
       // 校验已经过了、标题也有 ⇒ 立刻在素材库最前面插一张本地占位卡（图＝本机 File 的 blob URL），
       // 后台再慢慢上传/入库。视频这种读不出尺寸的就用默认比例，别为了一个比例卡住整个流程。
-      let pendingUpload = null;
       if (isCaseProject && previewFiles.length) {
         try {
           const coverFile = previewFiles[0];
@@ -13616,6 +13618,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         if (cancelled()) throw new Error(LIBRARY_UPLOAD_CANCELLED);
         activeFile = file.name;
         report();
+        try {
         // 压缩超大图片
         var uploadFile = file;
         if (file.size > 10 * 1024 * 1024) {
@@ -13687,6 +13690,11 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         void logAssetEvent('upload', { source: sourceRow, preview: { id: previewId, preview_filename: file.name, preview_path: sourcePath } });
         doneCount += 1;
         report();
+        } catch (error) {
+          if (error?.message === LIBRARY_UPLOAD_CANCELLED) throw error;
+          const reason = error?.message || (state.lang === 'zh' ? '未知错误' : 'Unknown error');
+          throw new Error(state.lang === 'zh' ? `图片「${file.name}」上传失败：${reason}` : `Image "${file.name}" failed: ${reason}`);
+        }
       });
       // 与案例库同一套「上次选的国家」记忆：图库完整上传成功后也记住，下次自动预填
       // 取消发生在收尾前：整批回滚，别留下「点了取消却多出一堆图」的结果

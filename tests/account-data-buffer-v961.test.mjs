@@ -18,7 +18,7 @@ const ROOT = join(here, '..');
 const proxy = readFileSync(join(ROOT, 'functions/api/account-data.js'), 'utf8');
 const app = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const index = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261027-gallery-upload-progress-v962';
+const VERSION = '20261027-gallery-upload-error-v963';
 
 test('v961 ①：storage 写请求体先完整缓冲再转发（不再把 request.body 流透传给上游）', () => {
   assert.match(
@@ -58,5 +58,5 @@ test('v962：版本号三处一致（app.js 常量 + index.html ?v= + 本文件�
   assert.match(app, new RegExp(`TOOL_UI_VERSION = '${VERSION}'`), 'app.js 内部版本号必须是 v962');
   const refs = (index.match(new RegExp(`\\?v=${VERSION}`, 'g')) || []).length;
   assert.equal(refs, 5, 'index.html 必须 5 处 ?v= 引用 v962');
-  assert.equal(VERSION, '20261027-gallery-upload-progress-v962');
+  assert.equal(VERSION, '20261027-gallery-upload-error-v963');
 });
