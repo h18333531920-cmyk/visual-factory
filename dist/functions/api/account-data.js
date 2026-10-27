@@ -10,6 +10,11 @@ export async function finalizeDataProxyResponse(method, response, output) {
   return new Response(response.body, { status: response.status, headers: output });
 }
 
+export function accountDataWriteTimeout(plan, method) {
+  if (['GET','HEAD'].includes(method)) return undefined;
+  return plan.storage && !plan.jsonBody && ['POST','PUT'].includes(method) ? 600000 : 120000;
+}
+
 export async function onRequest({ request, env }) {
   try {
     const ctx = await accessContext(request, env);
@@ -37,9 +42,10 @@ export async function onRequest({ request, env }) {
     const headers = new Headers();
     for(const key of ['content-type','accept','prefer','range','x-upsert','cache-control','if-none-match','if-modified-since'])if(request.headers.has(key))headers.set(key,request.headers.get(key));
     headers.set('apikey',config.key);headers.set('Authorization',`Bearer ${config.key}`);
-    // v961：写操作给上游 120 秒上限 —— 避免任何一次上游挂起让整条请求无限等待（读操作不加，
-    // 大图片下载可能很久，继续交给浏览器/Range 自行控制）。
-    const response = await fetch(plan.target.href, { method, headers, body, redirect: 'manual', signal: ['GET','HEAD'].includes(method) ? undefined : AbortSignal.timeout(120000) });
+    // 大图原文件走代理上传时可能超过 2 分钟；只对原始对象写入给 10 分钟，
+    // 其余写操作仍限 2 分钟，读操作继续由浏览器/Range 控制。
+    const writeTimeout = accountDataWriteTimeout(plan, method);
+    const response = await fetch(plan.target.href, { method, headers, body, redirect: 'manual', signal: writeTimeout ? AbortSignal.timeout(writeTimeout) : undefined });
     const output = dataResponseHeaders(plan,request,response);
     // v960：写操作不能把上游 Response.body 原样穿过 Pages Function 流给浏览器。
     // Supabase 已经完成了对象写入，但这条小响应偶发不结束，上传页会一直等到超时，

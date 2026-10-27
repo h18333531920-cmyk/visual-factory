@@ -270,6 +270,7 @@ datalist { display: none; }
 .upload-progress-bar-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #6366f1, #2563eb); transition: width 180ms ease; }
 .upload-progress-text { flex: 0 0 auto; font-size: 12.5px; font-weight: 650; color: #2563eb; font-variant-numeric: tabular-nums; }
 .upload-progress-count { flex: 0 0 auto; font-size: 12px; color: #64748b; font-variant-numeric: tabular-nums; }
+.upload-progress-note { margin-top: 5px; font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 640px) { .library-form-grid.library-form-grid-three { grid-template-columns: 1fr; } }
 /* 项目卡的信息收进封面（v735）：默认只显示封面，hover/focus 时底部浮出黑色渐变，
    上面是标题、国家/活动标签与物料数——和模板卡的悬停信息同一种形式。 */
@@ -977,7 +978,7 @@ body.is-catalog-dragging * { cursor: grabbing !important; }
 
   const config = window.VF_CONFIG || {};
   const LIBRARY_BUCKET = 'vf-library';
-const TOOL_UI_VERSION = '20261022-storage-buffer-v961';
+const TOOL_UI_VERSION = '20261027-gallery-upload-progress-v962';
 // i18n：把 Functions 返回的中文错误消息按 UI 语言兜底翻译（英文界面显示英文）
 const SERVER_ERROR_TRANSLATIONS = {
   'AI 扩图未配置：请设置 OPENAI_API_KEY，或设置 VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY。': 'AI outpaint is not configured. Set OPENAI_API_KEY, or VOLC_ACCESS_KEY_ID + VOLC_SECRET_ACCESS_KEY.',
@@ -1408,10 +1409,20 @@ let chartLibraryPromise = null;
       unlocked() { setDeveloperBallVisibility(true); setInterfaceMode('developer'); renderUserChip(); },
       locked() { setDeveloperBallVisibility(false); setInterfaceMode('user'); renderUserChip(); },
       modeSwitch(mode) { setDeveloperBallVisibility(true); setInterfaceMode(mode); renderUserChip(); },
-      changed() {
+      changed(access) {
         if (!window.VFAccountAccess.maintenance()) { state.interfaceMode = 'user'; state.uiRestricted = true; syncInterfaceModeControl(); broadcastInterfaceMode(); }
         else if (window.VFAccountAccess.snapshot()?.role === 'admin') setDeveloperBallVisibility(true);
         renderNav();
+        if (state.route === 'library' && libraryUploadRun) {
+          // 账号/权限在上传中刷新时，不能重画整页把进度弹窗从 DOM 中抹掉。
+          // 若当前账号或上传权限已经变了，停止继续领文件并在原弹窗里说明原因。
+          if ((access?.userId && state.session?.user?.id && access.userId !== state.session.user.id) || !canUploadAssets()) {
+            libraryUploadRun.cancelled = true;
+            const message = document.getElementById('library-upload-message');
+            if (message) setMessage(message, state.lang === 'zh' ? '账号或上传权限在传输中发生变化，本次上传已停止，正在清理已传文件。请重新登录上传账号。' : 'Account or upload permission changed during transfer. This upload is stopping; sign in to the uploading account again.', true);
+          }
+          return;
+        }
         if (!window.VFAccountAccess.can(state.route)) navigate(window.VFAccountAccess.firstRoute());
         else if (state.route === 'admin') void renderAdmin();
         // 功能位变化（如同步账号权限）后，素材库/首页的上传按钮要按新权限重画
@@ -2578,6 +2589,12 @@ let chartLibraryPromise = null;
   }
 
   async function renderLibrary({ homeMode = false, preserveView = false, useLoadedData = false } = {}) {
+    const uploadModal = document.getElementById('library-upload-modal');
+    if (!homeMode && state.route === 'library' && uploadModal && !uploadModal.hidden) {
+      // 背景刷新只更新网格；上传表单、文件列表、进度与失败原因保持原来的 DOM。
+      refreshLibraryLoadedUi();
+      return;
+    }
     parkActiveToolFrame();
     const previousScrollTop = preserveView && els.content ? els.content.scrollTop : 0;
     if (preserveView) rememberRenderedLibraryPreviewImages(document.getElementById('library-grid'));
@@ -13184,10 +13201,11 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
       submitButton.textContent = state.lang === 'zh' ? '上传中...' : 'Uploading...';
     }
     const message = document.getElementById('library-upload-message');
-    function setUploadProgress(pct, done, total) {
+    function setUploadProgress(pct, done, total, note) {
       const count = (typeof done === 'number' && typeof total === 'number' && total > 0)
         ? '<span class="upload-progress-count">' + done + '/' + total + ' 张</span>' : '';
-      message.innerHTML = '<div class="upload-progress-row"><div class="upload-progress-bar-wrap"><div class="upload-progress-bar-fill" style="width:' + pct + '%"></div></div><span class="upload-progress-text">' + pct + '%</span>' + count + '</div>';
+      message.innerHTML = '<div class="upload-progress-row"><div class="upload-progress-bar-wrap"><div class="upload-progress-bar-fill" style="width:' + pct + '%"></div></div><span class="upload-progress-text">' + pct + '%</span>' + count + '</div>'
+        + (note ? '<div class="upload-progress-note">' + escapeHtml(note) + '</div>' : '');
     }
     // v945：`uploadedPaths / sourceInserted / sourceId` 要留在 try 外面（catch 里要用它们回滚）
     const uploadedPaths = [];
@@ -13552,6 +13570,14 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     });
   }
 
+  function galleryUploadConcurrency(files) {
+    return (files || []).some(file => file.size > 3 * 1024 * 1024) ? 1 : 3;
+  }
+
+  function galleryUploadPercent(done, total) {
+    return total > 0 ? Math.round(90 * done / total) : 0;
+  }
+
   async function uploadGalleryAssets(formData, onProgress, run) {
     const files = Array.from(formData.getAll('gallery_files')).filter(file => file && file.size > 0);
     validateGalleryUpload(files);
@@ -13559,17 +13585,37 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     var baseTitle = formData.get('title').trim();
     const uploadedPaths = [];
     const insertedSourceIds = [];
-    // 进度按字节加权：图库一次可传多张大图，按文件数算百分比会一直卡在 0
-    const totalBytes = files.reduce((sum, file) => sum + (file.size || 1), 0);
-    let doneBytes = 0;
+    // 浏览器 SDK 不提供单张传输中的真实字节进度。这里明确按「已完成的张数」计数，
+    // 同时显示当前文件和已等待时间，避免一张 215 KB 已完成、三张大图仍在上传时
+    // 出现「1/4 张却只有 1%」的误导读数。
     let doneCount = 0;
-    const report = () => { if (onProgress) onProgress(Math.round(90 * doneBytes / (totalBytes || 1)), doneCount, files.length); };
+    const startedAt = Date.now();
+    const concurrency = galleryUploadConcurrency(files);
+    let activeFile = '';
+    const report = () => {
+      if (!onProgress || cancelled()) return;
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const note = doneCount < files.length
+        ? (state.lang === 'zh' ? `正在处理 ${concurrency === 1 ? activeFile || '图片' : '剩余图片'} · 已等待 ${elapsed} 秒（每张完成后更新）` : `Processing ${concurrency === 1 ? activeFile || 'image' : 'remaining images'} · ${elapsed}s elapsed (updates after each image)`)
+        : (state.lang === 'zh' ? '正在完成入库…' : 'Finishing import…');
+      onProgress(galleryUploadPercent(doneCount, files.length), doneCount, files.length, note);
+    };
     const cancelled = function() { return !!(run && run.cancelled); };
+    const withUploadTimeout = function(promise, errorMessage) {
+      let timer;
+      return Promise.race([
+        promise,
+        new Promise(function(_, reject) { timer = setTimeout(function() { reject(new Error(errorMessage)); }, 660000); })
+      ]).finally(function() { clearTimeout(timer); });
+    };
+    const progressTimer = setInterval(report, 1000);
     try {
       report();
-      // 并行上传（最多 3 张同时），比串行快数倍
-      await mapWithConcurrency(files, 3, async function(file) {
+      // 大文件顺序上传，避免数张图片争用窄带，每张都撞上同一个短超时。
+      await mapWithConcurrency(files, concurrency, async function(file) {
         if (cancelled()) throw new Error(LIBRARY_UPLOAD_CANCELLED);
+        activeFile = file.name;
+        report();
         // 压缩超大图片
         var uploadFile = file;
         if (file.size > 10 * 1024 * 1024) {
@@ -13577,14 +13623,15 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         }
         const sourceId = crypto.randomUUID();
         const sourcePath = `${userId}/sources/${sourceId}/${safeStorageName(file.name)}`;
-        // v960：防卡住 —— Supabase storage upload 偶发不返回（网络/代理层偶发沉默），
-        // 无限等待会让进度条永远停在 0%。加 30 秒超时，超了明确报错。
-        const sourceUpload = await Promise.race([
+        // 与代理层 10 分钟上限配套；30 秒不足以传完这类 4–6 MB 原图。
+        // 客户端略晚于服务端超时，避免请求仍在写而本地先执行失败回滚。
+        const sourceUpload = await withUploadTimeout(
           state.supabase.storage.from(LIBRARY_BUCKET).upload(sourcePath, uploadFile, { upsert: false, contentType: uploadFile.type || file.type }),
-          new Promise(function(_, reject) { setTimeout(function() { reject(new Error(state.lang === 'zh' ? '上传超时，请刷新页面后重试' : 'Upload timed out, please refresh and retry')); }, 30000); })
-        ]);
+          state.lang === 'zh' ? '图片上传超过 11 分钟，请检查网络后重试' : 'Image upload exceeded 11 minutes. Check your connection and retry.'
+        );
         if (sourceUpload.error) throw sourceUpload.error;
         uploadedPaths.push(sourcePath);
+        if (cancelled()) throw new Error(LIBRARY_UPLOAD_CANCELLED);
         const decoded = await previewImageThumbnailAndDimensions(uploadFile, 400);
         const dimensions = { width: decoded.width, height: decoded.height };
         var title = files.length === 1 ? baseTitle : (baseTitle ? baseTitle + ' · ' + stripExtension(file.name) : '');
@@ -13609,6 +13656,7 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         const sourceInsert = await state.supabase.from('vf_source_files').insert([sourceRow]);
         if (sourceInsert.error) throw sourceInsert.error;
         insertedSourceIds.push(sourceId);
+        if (cancelled()) throw new Error(LIBRARY_UPLOAD_CANCELLED);
         // 缩略图（与尺寸同一次解码产出）
         var thumbPath = null;
         try {
@@ -13637,7 +13685,6 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
         }]);
         if (previewInsert.error) throw previewInsert.error;
         void logAssetEvent('upload', { source: sourceRow, preview: { id: previewId, preview_filename: file.name, preview_path: sourcePath } });
-        doneBytes += file.size || 1;
         doneCount += 1;
         report();
       });
@@ -13651,6 +13698,8 @@ if (name && usedTypes[name] && vocab.indexOf(name) < 0) vocab.push(name);
     } catch (error) {
       await cleanupGalleryUpload(insertedSourceIds, uploadedPaths);
       throw error;
+    } finally {
+      clearInterval(progressTimer);
     }
   }
 

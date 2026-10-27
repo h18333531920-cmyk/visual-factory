@@ -18,7 +18,7 @@ const ROOT = join(here, '..');
 const proxy = readFileSync(join(ROOT, 'functions/api/account-data.js'), 'utf8');
 const app = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const index = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const VERSION = '20261022-storage-buffer-v961';
+const VERSION = '20261027-gallery-upload-progress-v962';
 
 test('v961 ①：storage 写请求体先完整缓冲再转发（不再把 request.body 流透传给上游）', () => {
   assert.match(
@@ -36,28 +36,27 @@ test('v961 ①：storage 写请求体先完整缓冲再转发（不再把 reques
   assert.match(proxy, /let body = \['GET','HEAD'\]\.includes\(method\) \? undefined : request\.body;/, '读请求保持流式');
 });
 
-test('v961 ②：写操作的上游 fetch 有 120 秒上限（读操作不加）', () => {
+test('v962：原图上传允许慢连接，其它写请求仍有限时', () => {
   assert.match(
     proxy,
-    /signal: \['GET','HEAD'\]\.includes\(method\) \? undefined : AbortSignal\.timeout\(120000\)/,
-    '写操作必须有上游超时，否则挂起会无限等待'
+    /accountDataWriteTimeout\(plan, method\)/,
+    '上游写超时由请求类型决定'
   );
 });
 
-test('v961 ③：前端图片解码/压缩全部有收敛兜底 + 上传本身有 30 秒超时', () => {
+test('v961 ③：前端图片解码/压缩全部有收敛兜底，v962 延长大图上传上限', () => {
   // previewImageThumbnailAndDimensions：整体 10 秒兜底 + toBlob 8 秒兜底
   assert.match(app, /const guard = setTimeout\(\(\) => finish\(\{ width: null, height: null, thumbnail: null \}\), 10000\);/, '整体兜底');
   assert.match(app, /setTimeout\(\(\) => \{ if \(!toBlobDone\) \{ clearTimeout\(guard\); finish\(\{ width, height, thumbnail: null \}\); \} \}, 8000\);/, 'toBlob 兜底');
   // compressImageIfNeeded：15 秒兜底直接传原图
   assert.match(app, /var guard = setTimeout\(function\(\) \{ finish\(file\); \}, 15000\);/, '压缩兜底');
-  // 上传本身：30 秒 Promise.race 超时，卡住时明确报错而不是永远 0%
-  assert.match(app, /上传超时，请刷新页面后重试/, '上传超时要给用户明确提示');
-  assert.match(app, /Promise\.race\(\[\s*state\.supabase\.storage\.from\(LIBRARY_BUCKET\)\.upload\(sourcePath, uploadFile/, 'gallery 源图上传必须包超时');
+  assert.match(app, /图片上传超过 11 分钟/, '大图上传要有可解释的长超时');
+  assert.match(app, /withUploadTimeout\(\s*state\.supabase\.storage\.from\(LIBRARY_BUCKET\)\.upload\(sourcePath, uploadFile/, 'gallery 源图上传必须包超时');
 });
 
-test('v961：版本号三处一致（app.js 常量 + index.html ?v= + 本文件）', () => {
-  assert.match(app, new RegExp(`TOOL_UI_VERSION = '${VERSION}'`), 'app.js 内部版本号必须是 v961');
+test('v962：版本号三处一致（app.js 常量 + index.html ?v= + 本文件）', () => {
+  assert.match(app, new RegExp(`TOOL_UI_VERSION = '${VERSION}'`), 'app.js 内部版本号必须是 v962');
   const refs = (index.match(new RegExp(`\\?v=${VERSION}`, 'g')) || []).length;
-  assert.equal(refs, 5, 'index.html 必须 5 处 ?v= 引用 v961');
-  assert.equal(VERSION, '20261022-storage-buffer-v961');
+  assert.equal(refs, 5, 'index.html 必须 5 处 ?v= 引用 v962');
+  assert.equal(VERSION, '20261027-gallery-upload-progress-v962');
 });

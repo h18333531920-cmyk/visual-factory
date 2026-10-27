@@ -24,7 +24,7 @@ const ROOT = join(here, '..');
 const source = readFileSync(join(ROOT, 'app.js'), 'utf8');
 const indexSource = readFileSync(join(ROOT, 'index.html'), 'utf8');
 const endpointSource = readFileSync(join(ROOT, 'functions', 'api', 'case-preview-ai-tags.js'), 'utf8');
-const VERSION = '20261022-storage-buffer-v961';
+const VERSION = '20261027-gallery-upload-progress-v962';
 
 /* ── 切片：从「＋」那一整套（v926 块）一直切到面板渲染函数结束 ───────────────── */
 

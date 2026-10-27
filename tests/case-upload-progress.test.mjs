@@ -5,6 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -55,22 +56,36 @@ test('案例项目创建：预览循环并发 6 + 按张数进度 + 每张传完
   assert.doesNotMatch(body, /previewPctEach/, '旧的按文件数平均分档已移除');
 });
 
-test('图库上传：并发 3 + 按字节加权进度', () => {
+test('图库上传：大图顺序传，小图仍可并发；进度是已完成张数', () => {
   const body = fnBody('uploadGalleryAssets', '\n  async function cleanupGalleryUpload');
-  assert.match(body, /await mapWithConcurrency\(files, 3, async function\(file\)/, '图库上传同样并发 3');
-  assert.match(body, /onProgress\(Math\.round\(90 \* doneBytes \/ \(totalBytes \|\| 1\)\), doneCount, files\.length\)/, '进度按字节加权并带计数');
+  const helpers = appSource.slice(appSource.indexOf('  function galleryUploadConcurrency('), appSource.indexOf('  async function uploadGalleryAssets('));
+  assert.equal(runInNewContext(helpers + '\ngalleryUploadConcurrency([{size:215185},{size:6367923}])'), 1);
+  assert.equal(runInNewContext(helpers + '\ngalleryUploadConcurrency([{size:215185},{size:437283}])'), 3);
+  assert.equal(runInNewContext(helpers + '\ngalleryUploadPercent(1,4)'), 23, '1/4 张显示约 23% 的上传阶段进度，不再误报 1%');
+  assert.equal(runInNewContext(helpers + '\ngalleryUploadPercent(4,4)'), 90);
+  assert.match(body, /await mapWithConcurrency\(files, concurrency, async function\(file\)/);
+  assert.match(body, /onProgress\(galleryUploadPercent\(doneCount, files\.length\), doneCount, files\.length, note\)/);
   assert.match(body, /onProgress\(95, doneCount, files\.length\)/, '收尾进度');
   assert.match(body, /var thumbBlob = decoded\.thumbnail;/, '缩略图复用同一次解码');
-  assert.doesNotMatch(body, /pctEach/, '旧的均分档已移除');
+  assert.match(body, /setInterval\(report, 1000\)/, '上传中显示已等待时间');
+});
+
+test('素材库刷新不会销毁正在展示的上传弹窗；账号权限变化会停止当前上传', () => {
+  const render = fnBody('renderLibrary', '\n  function refreshKindTabCounts');
+  assert.match(render, /state\.route === 'library' && uploadModal && !uploadModal\.hidden/);
+  assert.match(render, /refreshLibraryLoadedUi\(\);\s*return;/);
+  const changed = appSource.slice(appSource.indexOf('      changed(access) {'), appSource.indexOf('\n    });\n    patchAccountPanelForTeamRoster', appSource.indexOf('      changed(access) {')));
+  assert.match(changed, /libraryUploadRun\.cancelled = true/);
+  assert.match(changed, /账号或上传权限在传输中发生变化/);
 });
 
 test('上传进度条：有可见样式且保留百分比数字', () => {
   const body = fnBody('setUploadProgress', '\n    const uploadedPaths = [];');   // v945：切片终点换成这个稳定锚点
-  assert.match(body, /function setUploadProgress\(pct, done, total\)/);
+  assert.match(body, /function setUploadProgress\(pct, done, total, note\)/);
   assert.match(body, /upload-progress-bar-fill/);
   assert.match(body, /upload-progress-text">' \+ pct \+ '%/, '百分比数字保留');
   assert.match(body, /upload-progress-count/, '同时显示 done/total 张');
-  for (const rule of ['.upload-progress-row {', '.upload-progress-bar-wrap {', '.upload-progress-bar-fill {', '.upload-progress-text {', '.upload-progress-count {']) {
+  for (const rule of ['.upload-progress-row {', '.upload-progress-bar-wrap {', '.upload-progress-bar-fill {', '.upload-progress-text {', '.upload-progress-count {', '.upload-progress-note {']) {
     assert.ok(appSource.includes(rule), '缺少样式：' + rule);
   }
   assert.match(appSource, /\.upload-progress-bar-fill \{[^}]*width: 0;/, '进度条默认宽度为 0');
