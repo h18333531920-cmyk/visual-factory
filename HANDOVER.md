@@ -3,7 +3,7 @@
 > **这份文档是唯一正本。** 交接、接手开发、排查线上问题，先读这一份，读完就能上手。
 > 其他所有说明文档：历史性的已归档到 [`docs/archive/`](docs/archive/README.md)（**不要当现状读**）；只保留极少数"活的手册"在 §13 列出。
 >
-> - 最后核对时间：**2026-10-16**（每条都标注了核对方式，见 §14）
+> - 最后核对时间：**2026-10-27**（每条都标注了核对方式，见 §14）
 > - 维护规则：正文由"改站点的人"改；**每次发布正式站都必须更新 §0 现状速览**。
 > - 标注约定：**（实测）** = 本次联网/查库/跑测试验证过；**（代码可查）** = 有代码或 git 证据，附文件位置；**（未核实）** = 无法在本地证实，别当事实用。
 
@@ -16,12 +16,12 @@
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
 | 正式站当前部署 | 版本标识 `20261019-upload-response-v960`，由 GitHub Actions run `39266718667` 发布到 `main`。**图库真实图片仍可停在 0%，待发布并验收 v961**；v960 只处理了上游写完后的响应返回 | 实测 2026-10-27（正式首页版本 + 用户真实图片反馈） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20261019-upload-response-v960'` | 代码可查 + 发布包一致；正式域名当前从本机访问有连接超时，待用户页面刷新实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261022-storage-buffer-v961`，GitHub Actions run `39749653283` 成功。以 `project@visualfactory.app` 身份上传用户截图中的原始 `Photos.png`（1,487,081 字节）：文件 200（约 15 秒）→ 源记录 201 → 预览记录 201；测试行与对象均已清理。v961 缓冲 Storage 写请求体，并给图库图片解码、压缩和上传设置收敛边界 | 实测 2026-10-27（同图完整链路） |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261027-gallery-upload-progress-v962`，GitHub Actions run `40451945076` 成功。图库批量大图改顺序上传，单图超时从 30 秒延长至 11 分钟（代理 10 分钟）；进度按完成张数并显示当前文件/已等待时间；素材库刷新不再抹掉可见上传弹窗。**仍待用户在网页里用 4 张原图验收** | 实测 2026-10-27（部署/版本/852 项测试）；浏览器批量验收未完成 |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true`。**实测延迟 1.7–2.9 秒**（Pages Function 冷启动 + 上游调用是这个项目的基线，"点一下要等几秒"多半来在这） | 实测 2026-10-14 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
-| 本地工作区 | 分支 `tmp-deploy-v871`，当前业务基线 v961（`f511ee9`），已推送；已跟踪文件干净，`tmp/` 与 `scripts/__pycache__/` 为未跟踪本地目录 | 实测 2026-10-27 |
-| 自动化测试 | `node --check app.js && node --test tests/` → **850/850 通过**；v961 新增 4 条，已用真实 `Photos.png` 在测试站另作端到端验证 | 实测 2026-10-27 |
+| 本地工作区 | 分支 `tmp-deploy-v871`，当前业务基线 v962（`ad6f05a`），已推送；已跟踪文件干净，`tmp/` 与 `scripts/__pycache__/` 为未跟踪本地目录 | 实测 2026-10-27 |
+| 自动化测试 | `node --check app.js && node --test tests/` → **852/852 通过**；v962 新增账号刷新保留弹窗与图库大图计数等回归 | 实测 2026-10-27 |
 | 后台识别 worker | **腾讯云已装好并跑通**：`/opt/case-tags/`（脚本 + `_ai.js` + `.local/recognize.env` 0600），主机已装 Node 20.20.2 与 ffmpeg 6.1.1，cron 每 5 分钟一批。⚠️ **worker 上仍是 v924 版脚本**（v926 又改过它、加了 `manual_effect_tags` 保护，需用户重传，见 §11 v926 条）；库里已经存在人工动效标签，旧 worker 再处理对应物料时有覆盖风险 | 实测 2026-10-16（只读检查服务器脚本） |
 | 逐图 AI 标签覆盖 | **已铺满全库**：`vf_preview_ai_tags` **1942 行 / 97 个有物料的案例项目**，**全部 `status='success'`（失败 0）**；`effect_tags` 非空 83 行，`manual_tags` 非空 3 行，`manual_effect_tags` 非空 1 行，`excluded_tags` 非空 0 行。页面计数显示 98，是因为另有一条无物料的空重复记录 `SMB King Kong Promotion Header Image`（id `2ad35832-e6b5-48b7-af56-d3ed26ec5468`）；它不是识别漏项 | 实测 2026-10-16（分页查库） |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
@@ -992,6 +992,10 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
     - 改法（`functions/_account-data-policy.js`，纯后端）：新增 `uploadDelete` 放行位 —— 有 `upload` 功能的账号可 ① `DELETE vf_source_files`（代理自动注入 `uploaded_by=eq.<自己>`，删别人命中 0 行静默成功）② `DELETE vf-library` 存储对象（`restrictDataBody` 校验每个 path 必须在自己目录前缀 `<uid>/` 下，`../` 穿越与别人目录一律 403）。
     - 边界保持：删**共享/他人素材、其他表删除、批量删**仍需开发者维护权限；无 upload 权限的账号依旧不能删；admin/维护模式行为不变。
     - 测试 **840/840**（新增 1 条 + 反转 1 条旧断言）+ python 3/3；`npm run build:pages` 已跑；正式站与测试站同代码（2026-10-16 用户授权后直发 main）。
+  - **✅ v962（2026-10-27 已发测试站，正式站未动）—— 修大图批量上传时「1/4 张但 1%」、30 秒超时和弹窗被账号刷新抹掉**。
+    - 用户的四张披萨图分别为 215,185、6,367,923、4,372,836、3,976,717 字节。v961 的进度只在整张完成后按字节增加，所以第一张完成仅占约 1.4%，「1/4 张却 1%」是**显示口径误导**；同批另外三张在窄带并发下可能超过 v961 的 30 秒单图上限，之后会触发失败清理，属于**真实上传失败风险**。用户明确说没有关闭弹窗；2026-10-27 只读观察时弹窗已从 DOM 消失，当前页面账号显示「DIY静态/DIY Static · 运营」且没有上传入口，说明上传期间的账号/权限刷新或整页重绘是另一条必须防住的路径，但当时账号如何变化尚未证实。
+    - `app.js`：大文件批次顺序传，小图仍可并发；图库进度改为**已完成张数**，每秒显示当前文件和已等待时间，明确说每张完成后更新。上传时即使素材库重绘，保留已打开的表单和进度 DOM；权限或账号变更时停止继续领文件，在弹窗内说明原因。单图客户端上限改 11 分钟；`functions/api/account-data.js` 原始对象写请求上限改 10 分钟，其它写请求仍 2 分钟。提交 `ad6f05a`，测试 852/852，测试发布 [Actions run 40451945076](https://github.com/h18333531920-cmyk/visual-factory/actions/runs/40451945076)。
+    - **验收边界**：测试站版本号已核对 v962；此前单张 `Photos.png` API 全链路通过，但**v962 这四张图的网页批量上传尚待用户验收**。正式站仍为 v960；按 §8 红线，未获用户当次明确授权不得发布。
   - **✅ v961（2026-10-22 已发测试站，2026-10-27 用用户原图复核；正式站待当次授权）—— 修图库上传停在 0%**。
     - v960 只处理了**写成功之后的响应**；v961 在代理层先缓冲 Storage 写请求体再转发，并给上游写请求 120 秒上限；图库前端给图片解码、压缩和上传增加超时收敛。相关代码在 `functions/api/account-data.js` 和 `app.js`，提交 `f511ee9`。
     - 测试站版本 `20261022-storage-buffer-v961`，部署任务 [Actions run 39749653283](https://github.com/h18333531920-cmyk/visual-factory/actions/runs/39749653283) 成功。2026-10-27 用用户截图中同一张本地 `Photos.png`（1200×1200、1,487,081 字节）以 `project@visualfactory.app` 身份验证：Storage 上传 200（14–15 秒），源记录 201、预览记录 201，测试对象和行均已删除。全量测试 850/850 通过。
