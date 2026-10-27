@@ -14,14 +14,14 @@
 | 项目 | 当前值 | 依据 |
 |---|---|---|
 | 正式站 | `https://gccdesign.app`（Cloudflare Pages 项目 `visual-factory`） | 实测 |
-| 正式站当前部署 | 版本标识 `20261019-upload-response-v960`，由 GitHub Actions run `39266718667` 成功发布到 `main`（Cloudflare 部署 UUID 因本机 OAuth 失效暂未回读）；v960 修普通上传账号“文件已写入但成功响应不结束，最终被失败回滚”的问题 | 实测 2026-10-19（Actions 成功 + 测试站完整上传闭环） |
+| 正式站当前部署 | 版本标识 `20261019-upload-response-v960`，由 GitHub Actions run `39266718667` 发布到 `main`。**图库真实图片仍可停在 0%，待发布并验收 v961**；v960 只处理了上游写完后的响应返回 | 实测 2026-10-27（正式首页版本 + 用户真实图片反馈） |
 | 正式站 app.js 内部版本 | `TOOL_UI_VERSION = '20261019-upload-response-v960'` | 代码可查 + 发布包一致；正式域名当前从本机访问有连接超时，待用户页面刷新实测 |
-| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261019-upload-response-v960`：修上传写响应不结束导致的失败回滚；包含 v959 上传后卡片立即可点、v958 上传者可删自己的素材及 v956 搜索修复。GitHub Actions run `39266870987` 成功 | 实测 2026-10-19（`project@visualfactory.app` 完整上传闭环） |
+| 测试站 | `https://asset-gallery-test.visual-factory.pages.dev`，版本 `20261022-storage-buffer-v961`，GitHub Actions run `39749653283` 成功。以 `project@visualfactory.app` 身份上传用户截图中的原始 `Photos.png`（1,487,081 字节）：文件 200（约 15 秒）→ 源记录 201 → 预览记录 201；测试行与对象均已清理。v961 缓冲 Storage 写请求体，并给图库图片解码、压缩和上传设置收敛边界 | 实测 2026-10-27（同图完整链路） |
 | 健康检查 | `https://gccdesign.app/api/health` → `ready/aiReady/openaiReady/lk888Ready/volcImageReady/volcOutpaintReady` 全 `true`。**实测延迟 1.7–2.9 秒**（Pages Function 冷启动 + 上游调用是这个项目的基线，"点一下要等几秒"多半来在这） | 实测 2026-10-14 |
 | 代码仓库 | `https://github.com/h18333531920-cmyk/visual-factory`（**public**） | 实测 |
 | git `main` | `3a8ad0f`（2026-08-27，`20260827-fast-static-session-v481`），**落后线上约 6 周，不是线上基线** | 实测 |
-| 本地工作区 | 分支 `tmp-deploy-v871`，当前业务基线 v960（`9769985`）；其后两个 CI 提交只用于借 GitHub Actions 发布正式并恢复测试目标，工作流最终已恢复；已跟踪文件干净，仅 `tmp/` 未跟踪 | 实测 2026-10-19 |
-| 自动化测试 | `node --test tests/` → **846/846 通过**；v960 新增 2 条（写响应完整缓冲并带长度、GET/HEAD 继续流式），其余 v959 及更早回归全部通过 | 实测 2026-10-19 |
+| 本地工作区 | 分支 `tmp-deploy-v871`，当前业务基线 v961（`f511ee9`），已推送；已跟踪文件干净，`tmp/` 与 `scripts/__pycache__/` 为未跟踪本地目录 | 实测 2026-10-27 |
+| 自动化测试 | `node --check app.js && node --test tests/` → **850/850 通过**；v961 新增 4 条，已用真实 `Photos.png` 在测试站另作端到端验证 | 实测 2026-10-27 |
 | 后台识别 worker | **腾讯云已装好并跑通**：`/opt/case-tags/`（脚本 + `_ai.js` + `.local/recognize.env` 0600），主机已装 Node 20.20.2 与 ffmpeg 6.1.1，cron 每 5 分钟一批。⚠️ **worker 上仍是 v924 版脚本**（v926 又改过它、加了 `manual_effect_tags` 保护，需用户重传，见 §11 v926 条）；库里已经存在人工动效标签，旧 worker 再处理对应物料时有覆盖风险 | 实测 2026-10-16（只读检查服务器脚本） |
 | 逐图 AI 标签覆盖 | **已铺满全库**：`vf_preview_ai_tags` **1942 行 / 97 个有物料的案例项目**，**全部 `status='success'`（失败 0）**；`effect_tags` 非空 83 行，`manual_tags` 非空 3 行，`manual_effect_tags` 非空 1 行，`excluded_tags` 非空 0 行。页面计数显示 98，是因为另有一条无物料的空重复记录 `SMB King Kong Promotion Header Image`（id `2ad35832-e6b5-48b7-af56-d3ed26ec5468`）；它不是识别漏项 | 实测 2026-10-16（分页查库） |
 | 数据库 | Supabase 项目 `juuqvjmhzdgfggzrivbb`；测试站与正式站**共用同一个库和 `vf-library` 存储桶** | 实测（查库）+ 代码可查 |
@@ -992,8 +992,12 @@ git status --short && git log --oneline -3 && git rev-parse --abbrev-ref HEAD
     - 改法（`functions/_account-data-policy.js`，纯后端）：新增 `uploadDelete` 放行位 —— 有 `upload` 功能的账号可 ① `DELETE vf_source_files`（代理自动注入 `uploaded_by=eq.<自己>`，删别人命中 0 行静默成功）② `DELETE vf-library` 存储对象（`restrictDataBody` 校验每个 path 必须在自己目录前缀 `<uid>/` 下，`../` 穿越与别人目录一律 403）。
     - 边界保持：删**共享/他人素材、其他表删除、批量删**仍需开发者维护权限；无 upload 权限的账号依旧不能删；admin/维护模式行为不变。
     - 测试 **840/840**（新增 1 条 + 反转 1 条旧断言）+ python 3/3；`npm run build:pages` 已跑；正式站与测试站同代码（2026-10-16 用户授权后直发 main）。
-  - **✅ v960（2026-10-19，测试站与正式站均已发布）—— 修 `project@visualfactory.app` 图库上传“实际写入成功、页面却一直等，最后失败回滚”**。
-    - **实测根因**：该账号权限正确（active，`library + icons + upload`）。旧正式站探针文件已在 Supabase Storage 创建，但 `/api/account-data` 的写响应通过 Pages Function 原样流式转发后一直不结束；浏览器/客户端超时，上传 catch 随后执行清理，所以用户看到失败且库里没有图片。
+  - **✅ v961（2026-10-22 已发测试站，2026-10-27 用用户原图复核；正式站待当次授权）—— 修图库上传停在 0%**。
+    - v960 只处理了**写成功之后的响应**；v961 在代理层先缓冲 Storage 写请求体再转发，并给上游写请求 120 秒上限；图库前端给图片解码、压缩和上传增加超时收敛。相关代码在 `functions/api/account-data.js` 和 `app.js`，提交 `f511ee9`。
+    - 测试站版本 `20261022-storage-buffer-v961`，部署任务 [Actions run 39749653283](https://github.com/h18333531920-cmyk/visual-factory/actions/runs/39749653283) 成功。2026-10-27 用用户截图中同一张本地 `Photos.png`（1200×1200、1,487,081 字节）以 `project@visualfactory.app` 身份验证：Storage 上传 200（14–15 秒），源记录 201、预览记录 201，测试对象和行均已删除。全量测试 850/850 通过。
+    - 截至 2026-10-27，正式首页仍引用 v960。**没有当次明确发布授权，不得发正式站**。正式站用户反馈 0% 仍在，不能把 v960 记作已修复该症状。
+  - **✅ v960（2026-10-19，测试站与正式站均已发布）—— 修 `project@visualfactory.app` 图库上传响应返回链路；未解决真实图片 0% 问题**。
+    - **当时的局部证据**：该账号权限正确（active，`library + icons + upload`）。旧正式站一个小探针文件已在 Supabase Storage 创建，但 `/api/account-data` 的写响应没有及时结束；浏览器/客户端超时后执行清理。此证据只覆盖小文件响应，**不能据此认定完整图库上传已修复**。
     - **修法**：`functions/api/account-data.js` 的非 GET/HEAD 响应先 `arrayBuffer()` 收齐、设置精确 `Content-Length` 后返回；GET/HEAD 大素材仍保持流式，避免 Function 内存膨胀。新增导出 helper `finalizeDataProxyResponse()` 与 2 条回归测试。
     - **验证**：全量 **846/846**。测试站以 `project@visualfactory.app` 真身份完成：文件 200（约 2–4 秒）→ `vf_source_files` 201 → `vf_asset_previews` 201 → 行删除 204 / 文件删除 200，探针零残留。测试部署 Actions `39266245380` / 最终恢复工作流后的 `39266870987` 均成功；正式部署 Actions `39266718667` 成功。
     - **发布通道说明**：本机 Cloudflare OAuth 登录页循环，改用 `tmp-deploy-v871` 分支现有 GitHub Actions 密钥发布。中间提交 `b16e184` 临时把 action 目标改为 `main`，发布成功后 `0e98ad7` 已恢复 `asset-gallery-test`；远端 `main` 分支历史未改。
